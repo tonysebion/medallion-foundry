@@ -214,4 +214,4 @@ For more details, see:
 
 ---
 
-Questions? Open an issue at https://github.com/bronze-foundry/bronze-foundry/issues
+Questions? Open an issue at https://github.com/bronze-factory/bronze-foundry/issues

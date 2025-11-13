@@ -35,7 +35,7 @@ Complete documentation for bronze-foundry - a production-ready, config-driven Py
 
 ```bash
 # Clone the repository
-git clone https://github.com/tonysebion/bronze-foundry.git
+git clone https://github.com/bronze-factory/bronze-foundry.git
 cd bronze-foundry
 
 # Create virtual environment
@@ -1054,6 +1054,6 @@ MIT License - See LICENSE file for details
 ## Support
 
 For issues, questions, or contributions:
-- GitHub Issues: https://github.com/bronze-foundry/bronze-foundry/issues
+- GitHub Issues: https://github.com/bronze-factory/bronze-foundry/issues
 - Documentation: This file
 - Examples: `docs/examples/` directory

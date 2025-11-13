@@ -19,13 +19,13 @@
 cd C:\Projects
 
 # Download the project
-git clone https://github.com/tonysebion/bronze-foundry.git
+git clone https://github.com/bronze-factory/bronze-foundry.git
 cd bronze-foundry
 ```
 
 **If you don't have Git:**
 
-1. Go to https://github.com/tonysebion/bronze-foundry
+1. Go to https://github.com/bronze-factory/bronze-foundry
 2. Click the green "Code" button
 3. Click "Download ZIP"
 4. Extract the ZIP file to `C:\Projects\bronze-foundry`
@@ -270,7 +270,7 @@ Your work is done! Give the data team:
 ### 1. Install
 ```powershell
 # Clone (if you haven't already)
-git clone https://github.com/bronze-foundry/bronze-foundry.git
+git clone https://github.com/bronze-factory/bronze-foundry.git
 cd bronze-foundry
 
 # Setup virtual environment

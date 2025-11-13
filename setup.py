@@ -14,7 +14,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Tony Sebion",
-    url="https://github.com/tonysebion/bronze-foundry",
+    url="https://github.com/bronze-foundry/bronze-foundry",
     packages=find_packages(exclude=["tests", "tests.*", "docs", "docs.*"]),
     python_requires=">=3.8",
     install_requires=[
@@ -55,9 +55,9 @@ setup(
     ],
     keywords="data-engineering bronze-layer medallion-architecture etl data-pipeline storage-backends",
     project_urls={
-        "Documentation": "https://github.com/tonysebion/bronze-foundry/blob/main/README.md",
-        "Bug Reports": "https://github.com/tonysebion/bronze-foundry/issues",
-        "Source": "https://github.com/tonysebion/bronze-foundry",
-        "Changelog": "https://github.com/tonysebion/bronze-foundry/blob/main/CHANGELOG.md",
+        "Documentation": "https://github.com/bronze-foundry/bronze-foundry/blob/main/README.md",
+        "Bug Reports": "https://github.com/bronze-foundry/bronze-foundry/issues",
+        "Source": "https://github.com/bronze-foundry/bronze-foundry",
+        "Changelog": "https://github.com/bronze-foundry/bronze-foundry/blob/main/CHANGELOG.md",
     },
 )

@@ -83,7 +83,7 @@ def validate_configs(config_paths: List[str], dry_run: bool = False) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Bronze-Foundry: Config-driven data extraction framework",
+        description="Extract data from APIs or databases to Bronze layer",
         epilog="For detailed documentation, see: https://github.com/bronze-foundry/bronze-foundry"
     )
     
