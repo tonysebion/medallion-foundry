@@ -1,0 +1,21 @@
+# Database-specific dependencies for bronze-foundry
+# Install with: pip install -r requirements-db.txt
+
+# Include base requirements
+-r requirements.txt
+
+# MSSQL Server driver (for Windows, Linux, macOS)
+pymssql>=2.2.0
+
+# Additional database drivers (optional - uncomment as needed)
+# PostgreSQL
+# psycopg2-binary>=2.9.0
+
+# MySQL
+# mysql-connector-python>=8.0.0
+
+# Oracle
+# cx_Oracle>=8.3.0
+
+# MongoDB
+# pymongo>=4.0.0

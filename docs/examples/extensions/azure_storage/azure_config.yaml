@@ -1,0 +1,111 @@
+# AZURE STORAGE EXAMPLE
+# This demonstrates using Azure Blob Storage or ADLS Gen2 as the storage backend
+#
+# PREREQUISITES:
+# 1. Install Azure dependencies:
+#    pip install -r requirements-azure.txt
+#
+# 2. Copy azure_storage.py to core/:
+#    copy docs\examples\extensions\azure_storage\azure_storage.py core\azure_storage.py
+#
+# 3. Update core/storage.py factory to include Azure (see README.md in this directory)
+#
+# 4. Set up Azure credentials (choose one method below)
+
+platform:
+  bronze:
+    # Storage backend selection
+    storage_backend: "azure"  # Use Azure instead of S3
+    
+    # Azure storage settings
+    azure_container: "bronze"  # Azure container name (like S3 bucket)
+    azure_prefix: "bronze"     # Optional prefix for all paths
+    
+    partitioning:
+      use_dt_partition: true
+      partition_strategy: "date"  # Options: date, hourly, timestamp, batch_id
+    
+    output_defaults:
+      allow_csv: true
+      allow_parquet: true
+      parquet_compression: "snappy"
+
+  # Azure connection configuration
+  # Choose ONE of the following authentication methods:
+  
+  azure_connection:
+    # METHOD 1: Connection String (easiest for dev/test)
+    # Get from Azure Portal > Storage Account > Access keys > Connection string
+    connection_string_env: "AZURE_STORAGE_CONNECTION_STRING"
+    
+    # METHOD 2: Account Key (simple but less secure)
+    # Uncomment if using account key instead of connection string:
+    # account_name_env: "AZURE_STORAGE_ACCOUNT"
+    # account_key_env: "AZURE_STORAGE_KEY"
+    
+    # METHOD 3: Service Principal (recommended for production)
+    # Uncomment if using service principal:
+    # account_name_env: "AZURE_STORAGE_ACCOUNT"
+    # tenant_id_env: "AZURE_TENANT_ID"
+    # client_id_env: "AZURE_CLIENT_ID"
+    # client_secret_env: "AZURE_CLIENT_SECRET"
+    
+    # METHOD 4: Managed Identity (for Azure VMs/Functions)
+    # Uncomment if using managed identity:
+    # account_name_env: "AZURE_STORAGE_ACCOUNT"
+    # use_managed_identity: true
+
+source:
+  type: "api"
+  system: "example_system"
+  table: "example_table"
+
+  api:
+    base_url: "https://api.example.com"
+    endpoint: "/v1/data"
+    method: "GET"
+    
+    auth_type: "bearer"
+    auth_token_env: "EXAMPLE_API_TOKEN"
+    
+    params:
+      page_size: 100
+    
+    pagination:
+      type: "offset"
+      page_size_param: "page_size"
+      offset_param: "offset"
+
+  run:
+    max_file_size_mb: 256
+    parallel_workers: 4
+    write_csv: false
+    write_parquet: true
+    storage_enabled: true  # Upload to Azure
+    local_output_dir: "./output"
+
+# USAGE EXAMPLES:
+#
+# 1. Set environment variables:
+#    # Using connection string (easiest):
+#    $env:AZURE_STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;AccountName=myaccount;AccountKey=..."
+#    $env:EXAMPLE_API_TOKEN = "your-api-token"
+#    
+#    # OR using account key:
+#    $env:AZURE_STORAGE_ACCOUNT = "myaccount"
+#    $env:AZURE_STORAGE_KEY = "your-account-key"
+#    $env:EXAMPLE_API_TOKEN = "your-api-token"
+#
+# 2. Run extraction:
+#    python bronze_extract.py --config docs/examples/extensions/azure_storage/azure_config.yaml
+#
+# 3. Verify upload in Azure:
+#    - Open Azure Portal
+#    - Navigate to Storage Account > Containers > bronze
+#    - Check for files in: bronze/system=example_system/table=example_table/dt=YYYY-MM-DD/
+#
+# NOTES:
+# - Azure Blob Storage and ADLS Gen2 use the same API
+# - ADLS Gen2 is Blob Storage with hierarchical namespace enabled
+# - For ADLS Gen2, create storage account with "hierarchical namespace" enabled
+# - Data will be stored in Parquet format optimized for analytics

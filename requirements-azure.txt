@@ -1,0 +1,14 @@
+# Optional dependencies for Azure Blob Storage / ADLS Gen2 support
+#
+# Install with:
+#   pip install -r requirements-azure.txt
+#
+# Or individually:
+#   pip install azure-storage-blob azure-identity
+
+# Include base requirements
+-r requirements.txt
+
+# Azure storage dependencies
+azure-storage-blob>=12.19.0
+azure-identity>=1.15.0

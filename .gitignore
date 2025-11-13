@@ -1,3 +1,6 @@
+#config blocked for this particular project to ensure no configuration info gets added to repo
+config
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -204,4 +207,17 @@ cython_debug/
 # Marimo
 marimo/_static/
 marimo/_lsp/
+
+# Bronze Foundry Specific
+# State files for incremental loads
+.state/
+
+# Output files
+output/
+*.csv
+*.parquet
+
+# Local config files (keep examples)
+config/*.yaml
+!config/example*.yaml
 __marimo__/

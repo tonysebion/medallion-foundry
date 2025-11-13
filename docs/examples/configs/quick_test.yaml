@@ -1,0 +1,101 @@
+# QUICK TEST CONFIG
+# Use this to validate your API in under 2 minutes
+# Perfect for non-Python teams testing if their API is ready for data extraction
+
+platform:
+  bronze:
+    s3_bucket: "my-bucket"           # Change this
+    s3_prefix: "bronze"
+    partitioning:
+      use_dt_partition: true
+    output_defaults:
+      allow_csv: true
+      allow_parquet: true
+      parquet_compression: "snappy"
+
+  s3_connection:
+    endpoint_url_env: "BRONZE_S3_ENDPOINT"
+    access_key_env: "AWS_ACCESS_KEY_ID"
+    secret_key_env: "AWS_SECRET_ACCESS_KEY"
+
+source:
+  type: "api"
+  system: "my_system"                # Change this (e.g., "salesforce", "shopify")
+  table: "my_table"                  # Change this (e.g., "customers", "orders")
+
+  api:
+    base_url: "https://api.example.com"    # Change this to your API
+    endpoint: "/v1/data"                   # Change this to your endpoint
+    method: "GET"
+
+    # Authentication - uncomment the one you need:
+    
+    # Bearer token (most common)
+    auth_type: "bearer"
+    auth_token_env: "MY_API_TOKEN"
+    
+    # OR API key in header
+    # auth_type: "api_key"
+    # api_key_header: "X-API-Key"
+    # api_key_env: "MY_API_KEY"
+    
+    # OR Basic auth
+    # auth_type: "basic"
+    # basic_user_env: "API_USER"
+    # basic_pass_env: "API_PASS"
+
+    # Pagination - uncomment the one that matches your API:
+    
+    pagination:
+      type: "none"                   # Start with this - no pagination
+    
+    # OR if your API uses offset/limit
+    # pagination:
+    #   type: "offset"
+    #   page_size: 100
+    #   offset_param: "offset"
+    #   limit_param: "limit"
+    
+    # OR if your API uses page numbers
+    # pagination:
+    #   type: "page"
+    #   page_size: 100
+    #   page_param: "page"
+
+  run:
+    max_rows_per_file: 10000         # Small files for testing
+    write_csv: true                  # Easy to inspect
+    write_parquet: true              # Production format
+    s3_enabled: false                # Keep local for testing
+    local_output_dir: "./output"     # Results go here
+    timeout_seconds: 30
+
+
+# QUICK START INSTRUCTIONS:
+# 
+# 1. Copy this file:
+#    cp docs/examples/quick_test.yaml config/test.yaml
+#
+# 2. Edit config/test.yaml:
+#    - Change base_url to your API
+#    - Change endpoint to your API endpoint
+#    - Uncomment your auth type
+#    - Uncomment your pagination type (or leave as "none")
+#    - Update system and table names
+#
+# 3. Set your API token:
+#    $env:MY_API_TOKEN="your-token-here"
+#
+# 4. Run the test:
+#    python bronze_extract.py --config config/test.yaml
+#
+# 5. Check results:
+#    Look in ./output/system=my_system/table=my_table/dt=YYYY-MM-DD/
+#    Open the .csv file to see your data
+#
+# 6. If it works, you're done! Your API is ready for data extraction.
+#    Next steps:
+#    - Set s3_enabled: true
+#    - Add S3 credentials
+#    - Schedule daily runs
+#    - Hand off to data team
