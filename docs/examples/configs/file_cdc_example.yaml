@@ -24,9 +24,23 @@ source:
 
 silver:
   output_dir: ./silver_output
+  domain: retail_demo
+  entity: orders_cdc
+  version: 1
+  load_partition_name: load_date
+  include_pattern_folder: false
   write_parquet: true
   write_csv: false
   parquet_compression: snappy
   primary_keys: ["order_id"]
   order_column: changed_at
   cdc_output_name: cdc_changes
+  normalization:
+    trim_strings: true
+    empty_strings_as_null: true
+  error_handling:
+    enabled: false
+    max_bad_records: 0
+    max_bad_percent: 0.0
+  partitioning:
+    columns: []

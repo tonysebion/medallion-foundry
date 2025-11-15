@@ -6,6 +6,7 @@ import argparse
 import datetime as dt
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -122,15 +123,26 @@ def normalize_dataframe(df: pd.DataFrame, normalization_cfg: Dict[str, Any]) -> 
     return result
 
 
-def partition_dataframe(df: pd.DataFrame, partition_column: Optional[str]) -> Dict[Optional[str], pd.DataFrame]:
-    if not partition_column or partition_column not in df.columns:
-        if partition_column and partition_column not in df.columns:
-            logger.warning("Partition column '%s' not found; skipping partitioning", partition_column)
-        return {None: df}
+def _sanitize_partition_value(value: Any) -> str:
+    return re.sub(r"[^0-9A-Za-z._-]", "_", str(value))
 
-    partitions = {}
-    for value, subset in df.groupby(partition_column):
-        partitions[value] = subset
+
+def partition_dataframe(df: pd.DataFrame, partition_columns: List[str]) -> List[Tuple[List[str], pd.DataFrame]]:
+    if not partition_columns:
+        return [([], df)]
+
+    partitions = [([], df)]
+    for column in partition_columns:
+        if column not in df.columns:
+            logger.warning("Partition column '%s' not found; skipping this column", column)
+            continue
+        new_partitions: List[Tuple[List[str], pd.DataFrame]] = []
+        for path_parts, subset in partitions:
+            for value, group in subset.groupby(column):
+                safe_value = _sanitize_partition_value(value)
+                new_partitions.append((path_parts + [f"{column}={safe_value}"], group))
+        partitions = new_partitions
+
     return partitions
 
 
@@ -207,22 +219,23 @@ def write_silver_outputs(
     write_csv: bool,
     parquet_compression: str,
     artifact_names: Dict[str, str],
-    partition_column: Optional[str],
+    partition_columns: List[str],
     error_cfg: Dict[str, Any],
 ) -> Dict[str, List[Path]]:
     output_dir.mkdir(parents=True, exist_ok=True)
     outputs: Dict[str, List[Path]] = {}
 
     def process_dataset(dataset_df: pd.DataFrame, name: str) -> List[Path]:
-        partitions = partition_dataframe(dataset_df, partition_column)
+        partitions = partition_dataframe(dataset_df, partition_columns)
         written_files: List[Path] = []
-        for partition_value, partition_df in partitions.items():
+        if not partitions:
+            partitions = [([], dataset_df)]
+        for path_parts, partition_df in partitions:
             target_dir = output_dir
             suffix = ""
-            if partition_column and partition_value is not None:
-                safe_value = str(partition_value).replace("/", "_")
-                target_dir = output_dir / f"{partition_column}={safe_value}"
-                suffix = f" ({partition_column}={safe_value})"
+            for part in path_parts:
+                target_dir = target_dir / part
+                suffix += f"/{part}"
             cleaned_df = handle_error_rows(partition_df, primary_keys, error_cfg, name, target_dir)
             written_files.extend(
                 _write_dataset(
@@ -234,8 +247,8 @@ def write_silver_outputs(
                     parquet_compression,
                 )
             )
-            if partition_value is not None:
-                logger.info("Written partition%s for %s", suffix, name)
+            if path_parts:
+                logger.info("Written partition %s for %s", suffix.lstrip("/"), name)
         return written_files
 
     if pattern == LoadPattern.FULL:
@@ -272,6 +285,25 @@ def _select_config(cfgs: List[Dict[str, Any]], source_name: Optional[str]) -> Di
     if len(cfgs) == 1:
         return cfgs[0]
     raise ValueError("Config contains multiple sources; specify --source-name to select one.")
+
+
+def build_silver_partition_path(
+    base_root: Path,
+    cfg: Dict[str, Any],
+    run_date: dt.date,
+    load_pattern: LoadPattern,
+) -> Path:
+    silver_cfg = cfg["silver"]
+    domain = silver_cfg.get("domain")
+    entity = silver_cfg.get("entity")
+    version = silver_cfg.get("version", 1)
+    load_partition_name = silver_cfg.get("load_partition_name", "load_date")
+
+    path = base_root / f"domain={domain}" / f"entity={entity}" / f"v{version}"
+    if silver_cfg.get("include_pattern_folder"):
+        path /= f"pattern={load_pattern.value}"
+    path /= f"{load_partition_name}={run_date.isoformat()}"
+    return path
 
 
 def main() -> int:
@@ -428,7 +460,7 @@ def main() -> int:
         return {
             "schema": {"rename_map": {}, "column_order": None},
             "normalization": {"trim_strings": False, "empty_strings_as_null": False},
-            "partitioning": {"column": None},
+            "partitioning": {"columns": []},
             "error_handling": {"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0},
             "primary_keys": [],
             "order_column": None,
@@ -439,6 +471,11 @@ def main() -> int:
             "cdc_output_name": "cdc_changes",
             "current_output_name": "current",
             "history_output_name": "history",
+            "domain": "default",
+            "entity": "dataset",
+            "version": 1,
+            "load_partition_name": "load_date",
+            "include_pattern_folder": False,
         }
 
     silver_cfg = cfg["silver"] if cfg else _default_silver_cfg()
@@ -465,8 +502,9 @@ def main() -> int:
         "current": args.current_output_name or silver_cfg.get("current_output_name", "current"),
         "history": args.history_output_name or silver_cfg.get("history_output_name", "history"),
     }
+    partition_columns = silver_cfg.get("partitioning", {}).get("columns", [])
 
-    silver_partition = silver_base / derive_relative_partition(bronze_path)
+    silver_partition = build_silver_partition_path(silver_base, cfg, run_date, load_pattern) if cfg else silver_base / derive_relative_partition(bronze_path)
 
     logger.info("Bronze partition: %s", bronze_path)
     logger.info("Silver partition: %s", silver_partition)
@@ -483,13 +521,16 @@ def main() -> int:
 
     primary_keys = cli_primary_keys if cli_primary_keys is not None else silver_cfg.get("primary_keys", [])
     order_column = cli_order_column if cli_order_column is not None else silver_cfg.get("order_column")
-    partition_column = silver_cfg.get("partitioning", {}).get("column")
+    partition_columns = partition_columns or []
 
     primary_keys = [rename_map.get(pk, pk) for pk in primary_keys]
     if order_column:
         order_column = rename_map.get(order_column, order_column)
-    if partition_column:
-        partition_column = rename_map.get(partition_column, partition_column)
+
+    adjusted_partition_columns: List[str] = []
+    for col in partition_columns:
+        adjusted_partition_columns.append(rename_map.get(col, col))
+    partition_columns = adjusted_partition_columns
 
     normalized_df = apply_schema_settings(df, schema_cfg)
     normalized_df = normalize_dataframe(normalized_df, silver_cfg.get("normalization", {}))
@@ -506,7 +547,7 @@ def main() -> int:
         write_csv,
         parquet_compression,
         artifact_names,
-        partition_column,
+        partition_columns,
         silver_cfg.get("error_handling", {"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0}),
     )
 
@@ -519,7 +560,12 @@ def main() -> int:
             "bronze_path": str(bronze_path),
             "primary_keys": primary_keys,
             "order_column": order_column,
-            "partition_column": partition_column,
+            "domain": silver_cfg.get("domain"),
+            "entity": silver_cfg.get("entity"),
+            "version": silver_cfg.get("version"),
+            "load_partition_name": silver_cfg.get("load_partition_name"),
+            "include_pattern_folder": silver_cfg.get("include_pattern_folder"),
+            "partition_columns": partition_columns,
             "write_parquet": write_parquet,
             "write_csv": write_csv,
             "parquet_compression": parquet_compression,

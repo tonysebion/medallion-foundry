@@ -100,6 +100,9 @@ def test_partition_dataframe_groups():
             {"status": "new", "id": 3},
         ]
     )
-    partitions = partition_dataframe(df, "status")
-    assert set(partitions.keys()) == {"new", "done"}
-    assert len(partitions["new"]) == 2
+    partitions = partition_dataframe(df, ["status"])
+    labels = {tuple(parts) for parts, _ in partitions}
+    assert labels == {("status=new",), ("status=done",)}
+    for parts, subset in partitions:
+        if parts == ["status=new"]:
+            assert len(subset) == 2

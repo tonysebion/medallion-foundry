@@ -26,6 +26,11 @@ source:
 
 silver:
   output_dir: ./silver_output
+  domain: retail_demo
+  entity: orders
+  version: 1
+  load_partition_name: load_date
+  include_pattern_folder: false
   write_parquet: true
   write_csv: false
   parquet_compression: snappy
@@ -45,5 +50,5 @@ silver:
     max_bad_records: 5
     max_bad_percent: 1.0
   partitioning:
-    column: status
+    columns: ["status"]
   cdc_output_name: cdc_changes

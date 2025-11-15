@@ -229,6 +229,43 @@ python silver_extract.py --config docs/examples/configs/file_example.yaml --date
 - `silver.normalization`: toggle `trim_strings` / `empty_strings_as_null` to keep formatting consistent across datasets.
 - `silver.error_handling`: set `enabled`, `max_bad_records`, and `max_bad_percent` to quarantine bad rows into `_errors/` files instead of failing immediately (exceeds threshold → fail).
 - `silver.partitioning`: add a secondary partition column (e.g., status, region) for Silver outputs while still mirroring the Bronze folder layout.
+- `silver.domain` / `entity` / `version` / `load_partition_name`: describe the medallion layout so outputs land under `domain=<domain>/entity=<entity>/v<version>/<load partition>=YYYY-MM-DD/…`. Optional `include_pattern_folder: true` inserts `pattern=<load_pattern>` before the load partition.
+
+Example Silver section:
+
+```yaml
+silver:
+  domain: claims
+  entity: claim_header
+  version: 1
+  load_partition_name: load_date
+  include_pattern_folder: false
+  write_parquet: true
+  partitioning:
+    columns: ["status", "is_current"]
+  schema:
+    column_order: ["claim_id", "member_id", "status", "is_current", "load_timestamp"]
+  normalization:
+    trim_strings: true
+    empty_strings_as_null: true
+  error_handling:
+    enabled: true
+    max_bad_records: 25
+    max_bad_percent: 1.5
+```
+
+This produces a layout such as:
+
+```
+silver_output/
+  domain=claims/
+    entity=claim_header/
+      v1/
+        load_date=2025-11-01/
+          status=approved/
+            is_current=1/
+              claim_snapshot.parquet
+```
 
 ### Core Features
 - ✅ Proper Python package structure

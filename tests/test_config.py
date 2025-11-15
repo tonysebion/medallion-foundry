@@ -57,6 +57,9 @@ class TestConfigLoading:
         loaded_config = load_config(str(config_file))
         assert loaded_config["source"]["system"] == "test_system"
         assert loaded_config["platform"]["bronze"]["s3_bucket"] == "test-bucket"
+        assert loaded_config["silver"]["domain"] == "test_system"
+        assert loaded_config["silver"]["entity"] == "test_table"
+        assert loaded_config["silver"]["partitioning"]["columns"] == []
         assert loaded_config["source"]["run"]["load_pattern"] == "full"
 
     def test_missing_config_file(self):

@@ -12,6 +12,11 @@ from typing import Iterable, List, Dict
 BASE_DIR = Path(__file__).resolve().parents[1] / "docs" / "examples" / "data" / "bronze_samples"
 
 
+FULL_DATES = ["2025-11-13", "2025-11-14"]
+CDC_DATES = ["2025-11-13", "2025-11-14"]
+CURRENT_HISTORY_DATES = ["2025-11-13", "2025-11-14"]
+
+
 def _write_csv(path: Path, rows: Iterable[Dict[str, object]]) -> None:
     rows = list(rows)
     if not rows:
@@ -36,103 +41,114 @@ def _write_metadata(target_dir: Path, pattern: str, record_count: int, chunk_cou
 
 
 def generate_full_snapshot(seed: int = 42, row_count: int = 500) -> None:
-    rng = Random(seed)
-    base_dir = BASE_DIR / "full" / "system=retail_demo" / "table=orders" / "pattern=full" / "dt=2025-11-01"
-    rows: List[Dict[str, object]] = []
-    start = datetime(2025, 9, 1)
-    for order_id in range(1, row_count + 1):
-        order_time = start + timedelta(hours=order_id)
-        rows.append(
-            {
-                "order_id": f"ORD-{order_id:05d}",
-                "customer_id": f"CUST-{rng.randint(1000, 9999)}",
-                "status": rng.choice(["new", "processing", "shipped", "delivered", "returned"]),
-                "order_total": round(rng.uniform(25.0, 500.0), 2),
-                "updated_at": order_time.isoformat() + "Z",
-            }
-        )
+    for day_offset, date_str in enumerate(FULL_DATES):
+        rng = Random(seed + day_offset)
+        base_dir = BASE_DIR / "full" / "system=retail_demo" / "table=orders" / "pattern=full" / f"dt={date_str}"
+        rows: List[Dict[str, object]] = []
+        start = datetime.fromisoformat(f"{date_str}T00:00:00")
+        total_rows = row_count + day_offset * 50
+        for order_id in range(1, total_rows + 1):
+            order_time = start + timedelta(hours=order_id)
+            rows.append(
+                {
+                    "order_id": f"ORD-{order_id + day_offset * 1000:05d}",
+                    "customer_id": f"CUST-{rng.randint(1000, 9999)}",
+                    "status": rng.choice(["new", "processing", "shipped", "delivered", "returned"]),
+                    "order_total": round(rng.uniform(25.0, 500.0), 2),
+                    "updated_at": order_time.isoformat() + "Z",
+                    "run_date": date_str,
+                }
+            )
 
-    chunk_path = base_dir / "full-part-0001.csv"
-    _write_csv(chunk_path, rows)
-    _write_metadata(base_dir, "full", len(rows), 1)
+        chunk_path = base_dir / "full-part-0001.csv"
+        _write_csv(chunk_path, rows)
+        _write_metadata(base_dir, "full", len(rows), 1)
 
 
 def generate_cdc(seed: int = 99, row_count: int = 400) -> None:
-    rng = Random(seed)
-    base_dir = BASE_DIR / "cdc" / "system=retail_demo" / "table=orders" / "pattern=cdc" / "dt=2025-11-02"
-    rows: List[Dict[str, object]] = []
-    start = datetime(2025, 11, 2, 8)
-
     change_types = ["insert", "update", "delete"]
-    for idx in range(1, row_count + 1):
-        change_time = start + timedelta(minutes=idx * 3)
-        rows.append(
-            {
-                "order_id": f"ORD-{rng.randint(1, 600):05d}",
-                "customer_id": f"CUST-{rng.randint(1000, 9999)}",
-                "change_type": rng.choice(change_types),
-                "changed_at": change_time.isoformat() + "Z",
-                "status": rng.choice(["processing", "shipped", "cancelled"]),
-                "order_total": round(rng.uniform(10.0, 800.0), 2),
-            }
-        )
+    for day_offset, date_str in enumerate(CDC_DATES):
+        rng = Random(seed + day_offset)
+        base_dir = BASE_DIR / "cdc" / "system=retail_demo" / "table=orders" / "pattern=cdc" / f"dt={date_str}"
+        rows: List[Dict[str, object]] = []
+        start = datetime.fromisoformat(f"{date_str}T08:00:00")
 
-    chunk_path = base_dir / "cdc-part-0001.csv"
-    _write_csv(chunk_path, rows)
-    _write_metadata(base_dir, "cdc", len(rows), 1)
+        total_rows = row_count + day_offset * 60
+        for idx in range(1, total_rows + 1):
+            change_time = start + timedelta(minutes=idx * 3)
+            rows.append(
+                {
+                    "order_id": f"ORD-{rng.randint(1, 800):05d}",
+                    "customer_id": f"CUST-{rng.randint(1000, 9999)}",
+                    "change_type": rng.choice(change_types),
+                    "changed_at": change_time.isoformat() + "Z",
+                    "status": rng.choice(["processing", "shipped", "cancelled"]),
+                    "order_total": round(rng.uniform(10.0, 800.0), 2),
+                    "run_date": date_str,
+                }
+            )
+
+        chunk_path = base_dir / "cdc-part-0001.csv"
+        _write_csv(chunk_path, rows)
+        _write_metadata(base_dir, "cdc", len(rows), 1)
 
 
 def generate_current_history(seed: int = 7, current_rows: int = 200, history_rows: int = 600) -> None:
-    rng = Random(seed)
-    base_dir = (
-        BASE_DIR
-        / "current_history"
-        / "system=retail_demo"
-        / "table=orders"
-        / "pattern=current_history"
-        / "dt=2025-11-03"
-    )
+    for day_offset, date_str in enumerate(CURRENT_HISTORY_DATES):
+        rng = Random(seed + day_offset)
+        base_dir = (
+            BASE_DIR
+            / "current_history"
+            / "system=retail_demo"
+            / "table=orders"
+            / "pattern=current_history"
+            / f"dt={date_str}"
+        )
 
-    def build_history_rows() -> List[Dict[str, object]]:
-        rows: List[Dict[str, object]] = []
-        base_time = datetime(2024, 1, 1)
-        for idx in range(1, history_rows + 1):
-            start_ts = base_time + timedelta(days=rng.randint(0, 365))
-            end_ts = start_ts + timedelta(days=rng.randint(5, 120))
-            rows.append(
-                {
-                    "order_id": f"ORD-{rng.randint(1, 1000):05d}",
-                    "customer_id": f"CUST-{rng.randint(1000, 9999)}",
-                    "status": rng.choice(["active", "expired", "suspended"]),
-                    "effective_start": start_ts.isoformat() + "Z",
-                    "effective_end": end_ts.isoformat() + "Z",
-                    "current_flag": 0,
-                    "updated_at": (end_ts + timedelta(hours=2)).isoformat() + "Z",
-                }
-            )
-        return rows
+        def build_history_rows() -> List[Dict[str, object]]:
+            rows: List[Dict[str, object]] = []
+            base_time = datetime(2024, 1, 1) + timedelta(days=day_offset * 30)
+            total_rows = history_rows + day_offset * 80
+            for idx in range(1, total_rows + 1):
+                start_ts = base_time + timedelta(days=rng.randint(0, 365))
+                end_ts = start_ts + timedelta(days=rng.randint(5, 120))
+                rows.append(
+                    {
+                        "order_id": f"ORD-{rng.randint(1, 1200):05d}",
+                        "customer_id": f"CUST-{rng.randint(1000, 9999)}",
+                        "status": rng.choice(["active", "expired", "suspended"]),
+                        "effective_start": start_ts.isoformat() + "Z",
+                        "effective_end": end_ts.isoformat() + "Z",
+                        "current_flag": 0,
+                        "updated_at": (end_ts + timedelta(hours=2)).isoformat() + "Z",
+                        "run_date": date_str,
+                    }
+                )
+            return rows
 
-    def build_current_rows() -> List[Dict[str, object]]:
-        rows: List[Dict[str, object]] = []
-        start_time = datetime(2025, 10, 1)
-        for idx in range(1, current_rows + 1):
-            rows.append(
-                {
-                    "order_id": f"ORD-{idx + 900:05d}",
-                    "customer_id": f"CUST-{rng.randint(2000, 9999)}",
-                    "status": rng.choice(["active", "pending", "suspended"]),
-                    "effective_start": "",
-                    "effective_end": "",
-                    "current_flag": 1,
-                    "updated_at": (start_time + timedelta(hours=idx)).isoformat() + "Z",
-                }
-            )
-        return rows
+        def build_current_rows() -> List[Dict[str, object]]:
+            rows: List[Dict[str, object]] = []
+            start_time = datetime.fromisoformat(f"{date_str}T00:00:00")
+            total_rows = current_rows + day_offset * 40
+            for idx in range(1, total_rows + 1):
+                rows.append(
+                    {
+                        "order_id": f"ORD-{idx + 900 + day_offset * 500:05d}",
+                        "customer_id": f"CUST-{rng.randint(2000, 9999)}",
+                        "status": rng.choice(["active", "pending", "suspended"]),
+                        "effective_start": "",
+                        "effective_end": "",
+                        "current_flag": 1,
+                        "updated_at": (start_time + timedelta(hours=idx)).isoformat() + "Z",
+                        "run_date": date_str,
+                    }
+                )
+            return rows
 
-    history_data = build_history_rows()
-    current_data = build_current_rows()
-    _write_csv(base_dir / "current-history-part-0001.csv", history_data + current_data)
-    _write_metadata(base_dir, "current_history", len(history_data) + len(current_data), 1)
+        history_data = build_history_rows()
+        current_data = build_current_rows()
+        _write_csv(base_dir / "current-history-part-0001.csv", history_data + current_data)
+        _write_metadata(base_dir, "current_history", len(history_data) + len(current_data), 1)
 
 
 def main() -> None:
