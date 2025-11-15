@@ -223,3 +223,4 @@ config/*.yaml
 !config/example*.yaml
 __marimo__/
 _metadata.json
+_checksums.json
