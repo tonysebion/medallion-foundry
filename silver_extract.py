@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import itertools
 import json
 import logging
 import re
@@ -41,22 +42,26 @@ def discover_load_pattern(bronze_path: Path) -> Optional[LoadPattern]:
     return None
 
 
-def load_bronze_records(bronze_path: Path) -> pd.DataFrame:
+def _iter_bronze_frames(bronze_path: Path):
     csv_files = sorted(bronze_path.glob("*.csv"))
     parquet_files = sorted(bronze_path.glob("*.parquet"))
 
-    frames: List[pd.DataFrame] = []
     for csv_path in csv_files:
         logger.debug("Reading CSV chunk %s", csv_path.name)
-        frames.append(pd.read_csv(csv_path))
+        yield pd.read_csv(csv_path)
     for parquet_path in parquet_files:
         logger.debug("Reading Parquet chunk %s", parquet_path.name)
-        frames.append(pd.read_parquet(parquet_path))
+        yield pd.read_parquet(parquet_path)
 
-    if not frames:
+
+def load_bronze_records(bronze_path: Path) -> pd.DataFrame:
+    frame_iter = _iter_bronze_frames(bronze_path)
+    try:
+        first_frame = next(frame_iter)
+    except StopIteration:
         raise FileNotFoundError(f"No chunk files found in {bronze_path}")
 
-    return pd.concat(frames, ignore_index=True)
+    return pd.concat(itertools.chain([first_frame], frame_iter), ignore_index=True)
 
 
 def derive_relative_partition(bronze_path: Path) -> Path:

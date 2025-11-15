@@ -15,7 +15,26 @@ logger = logging.getLogger(__name__)
 
 def estimate_record_size(record: Dict[str, Any]) -> int:
     """Estimate the memory size of a single record in bytes."""
-    return sys.getsizeof(str(record))
+    if record is None:
+        return 0
+
+    if isinstance(record, bytes):
+        return len(record)
+
+    if isinstance(record, str):
+        return len(record.encode("utf-8"))
+
+    if isinstance(record, dict):
+        try:
+            payload = json.dumps(record, ensure_ascii=False)
+        except TypeError:
+            payload = str(record)
+        return len(payload.encode("utf-8"))
+
+    if isinstance(record, (list, tuple)):
+        return sum(estimate_record_size(item) for item in record) + len(record)
+
+    return sys.getsizeof(record)
 
 
 def chunk_records(
