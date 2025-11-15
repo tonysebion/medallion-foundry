@@ -19,19 +19,19 @@
 cd C:\Projects
 
 # Download the project
-git clone https://github.com/bronze-factory/bronze-foundry.git
-cd bronze-foundry
+git clone https://github.com/bronze-factory/medallion-foundry.git
+cd medallion-foundry
 ```
 
 **If you don't have Git:**
 
-1. Go to https://github.com/bronze-factory/bronze-foundry
+1. Go to https://github.com/bronze-factory/medallion-foundry
 2. Click the green "Code" button
 3. Click "Download ZIP"
-4. Extract the ZIP file to `C:\Projects\bronze-foundry`
+4. Extract the ZIP file to `C:\Projects\medallion-foundry`
 5. Open PowerShell and navigate there:
    ```powershell
-   cd C:\Projects\bronze-foundry
+   cd C:\Projects\medallion-foundry
    ```
 
 ---
@@ -202,7 +202,7 @@ INFO - Extraction complete!
 **Open File Explorer** and navigate to the output folder:
 
 ```
-C:\Projects\bronze-foundry\output\system=myproduct\table=customers\dt=2025-11-12\
+C:\Projects\medallion-foundry\output\system=myproduct\table=customers\dt=2025-11-12\
 ```
 
 You should see files like:
@@ -270,8 +270,8 @@ Your work is done! Give the data team:
 ### 1. Install
 ```powershell
 # Clone (if you haven't already)
-git clone https://github.com/bronze-factory/bronze-foundry.git
-cd bronze-foundry
+git clone https://github.com/bronze-factory/medallion-foundry.git
+cd medallion-foundry
 
 # Setup virtual environment
 python -m venv .venv

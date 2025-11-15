@@ -1,4 +1,4 @@
-"""CLI entrypoint for bronze-foundry.
+"""CLI entrypoint for medallion-foundry.
 
 This file wires together:
 
@@ -43,7 +43,7 @@ def list_storage_backends() -> List[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Extract data from APIs or databases to Bronze layer",
-        epilog="For detailed documentation, see: https://github.com/bronze-foundry/bronze-foundry"
+        epilog="For detailed documentation, see: https://github.com/medallion-foundry/medallion-foundry"
     )
     
     # Core arguments
@@ -91,7 +91,7 @@ def main() -> int:
     parser.add_argument(
         "--version",
         action="version",
-        version=f"bronze-foundry {__version__}",
+        version=f"medallion-foundry {__version__}",
         help="Show version and exit"
     )
     parser.add_argument(

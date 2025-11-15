@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Test runner script for bronze-foundry.
+Test runner script for medallion-foundry.
 
 This script provides a simple way to run tests locally or in CI/CD environments
 without requiring GitHub Actions. Supports multiple testing modes and quality checks.
@@ -38,7 +38,7 @@ def run_command(cmd: list, description: str) -> bool:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run bronze-foundry tests and quality checks")
+    parser = argparse.ArgumentParser(description="Run medallion-foundry tests and quality checks")
     parser.add_argument("--unit", action="store_true", help="Run only unit tests")
     parser.add_argument("--integration", action="store_true", help="Run only integration tests")
     parser.add_argument("--coverage", action="store_true", help="Run tests with coverage report")

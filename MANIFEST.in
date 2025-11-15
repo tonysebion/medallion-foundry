@@ -1,4 +1,4 @@
-# MANIFEST.in - Package distribution manifest for bronze-foundry
+# MANIFEST.in - Package distribution manifest for medallion-foundry
 
 # Include important documentation files
 include README.md

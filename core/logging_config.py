@@ -1,4 +1,4 @@
-"""Logging configuration for bronze-foundry.
+"""Logging configuration for medallion-foundry.
 
 This module provides flexible logging configuration with support for:
 - Environment variable-based log level control
@@ -106,7 +106,7 @@ def get_log_level_from_env() -> int:
     Get log level from environment variable.
     
     Environment variables checked (in order):
-    1. BRONZE_LOG_LEVEL - Bronze-foundry specific
+    1. BRONZE_LOG_LEVEL - medallion-foundry specific
     2. LOG_LEVEL - Generic
     
     Returns:
@@ -148,7 +148,7 @@ def setup_logging(
     include_context: bool = False
 ) -> None:
     """
-    Configure logging for bronze-foundry.
+    Configure logging for medallion-foundry.
     
     Args:
         level: Logging level (defaults to BRONZE_LOG_LEVEL or INFO)

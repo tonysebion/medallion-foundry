@@ -1,12 +1,12 @@
-# Bronze-Foundry Documentation Site
+# medallion-foundry Documentation Site
 
-site_name: Bronze-Foundry
+site_name: medallion-foundry
 site_description: Config-driven Python framework for landing data into Bronze layer
 site_author: Bronze Foundry Contributors
-site_url: https://bronze-foundry.github.io/bronze-foundry/
+site_url: https://medallion-foundry.github.io/medallion-foundry/
 
-repo_name: bronze-foundry/bronze-foundry
-repo_url: https://github.com/bronze-foundry/bronze-foundry
+repo_name: medallion-foundry/medallion-foundry
+repo_url: https://github.com/medallion-foundry/medallion-foundry
 edit_uri: edit/main/docs/
 
 theme:
@@ -83,8 +83,8 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/bronze-foundry/bronze-foundry
+      link: https://github.com/medallion-foundry/medallion-foundry
     - icon: fontawesome/brands/python
-      link: https://pypi.org/project/bronze-foundry/
+      link: https://pypi.org/project/medallion-foundry/
 
 copyright: Copyright &copy; 2025 Bronze Foundry Contributors

@@ -119,7 +119,7 @@ write_batch_metadata(
 ## 📦 Installation
 
 ```bash
-# Install bronze-foundry
+# Install medallion-foundry
 pip install -e .
 
 # Install development dependencies

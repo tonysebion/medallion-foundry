@@ -1,4 +1,4 @@
-# Database-specific dependencies for bronze-foundry
+# Database-specific dependencies for medallion-foundry
 # Install with: pip install -r requirements-db.txt
 
 # Include base requirements

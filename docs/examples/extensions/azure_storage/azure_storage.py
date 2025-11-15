@@ -1,6 +1,6 @@
 """Azure Blob Storage / ADLS Gen2 backend example.
 
-This is an EXAMPLE implementation showing how to extend bronze-foundry
+This is an EXAMPLE implementation showing how to extend medallion-foundry
 with Azure storage support. To use this:
 
 1. Install dependencies:

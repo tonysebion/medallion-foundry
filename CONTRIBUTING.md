@@ -1,6 +1,6 @@
-# Contributing to Bronze-Foundry
+# Contributing to medallion-foundry
 
-Thank you for considering contributing to Bronze-Foundry! This document provides guidelines and instructions for contributing.
+Thank you for considering contributing to medallion-foundry! This document provides guidelines and instructions for contributing.
 
 ## Table of Contents
 
@@ -26,11 +26,11 @@ Thank you for considering contributing to Bronze-Foundry! This document provides
 
 ```bash
 # Fork the repository on GitHub, then clone your fork
-git clone https://github.com/YOUR-USERNAME/bronze-foundry.git
-cd bronze-foundry
+git clone https://github.com/YOUR-USERNAME/medallion-foundry.git
+cd medallion-foundry
 
 # Add upstream remote
-git remote add upstream https://github.com/bronze-foundry/bronze-foundry.git
+git remote add upstream https://github.com/medallion-foundry/medallion-foundry.git
 ```
 
 ### 2. Set Up Development Environment
@@ -312,7 +312,7 @@ python run_tests.py --coverage --html-coverage
 ## Project Structure
 
 ```
-bronze-foundry/
+medallion-foundry/
 ├── core/               # Core framework modules
 │   ├── config.py      # Configuration loading and validation
 │   ├── runner.py      # Main extraction orchestration
@@ -393,4 +393,4 @@ Contributors are recognized in:
 - Release notes
 - Special mentions for significant contributions
 
-Thank you for contributing to Bronze-Foundry! 🎉
+Thank you for contributing to medallion-foundry! 🎉

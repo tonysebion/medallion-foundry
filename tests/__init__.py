@@ -1,1 +1,1 @@
-"""Test suite for bronze-foundry."""
+"""Test suite for medallion-foundry."""

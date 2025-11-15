@@ -1,6 +1,6 @@
 # Example: Adding Azure Blob Storage / ADLS Gen2 Support
 
-This document demonstrates how to extend bronze-foundry to support Azure Blob Storage or Azure Data Lake Storage Gen2 (ADLS Gen2) as an alternative to S3-compatible storage.
+This document demonstrates how to extend medallion-foundry to support Azure Blob Storage or Azure Data Lake Storage Gen2 (ADLS Gen2) as an alternative to S3-compatible storage.
 
 > **Status**: This is a **complete, working example** provided in `docs/examples/`. Azure storage is not included in core v1.0 to keep dependencies minimal, but you can add it yourself by following the steps below.
 
@@ -112,7 +112,7 @@ The Azure backend (`AzureStorage` class) implements the `StorageBackend` interfa
 ### Implementation Architecture
 
 ```
-bronze-foundry/
+medallion-foundry/
 ├── core/
 │   ├── storage.py          # ✅ Already in core - abstract base class
 │   ├── s3.py              # ✅ Already in core - S3 implementation
@@ -437,7 +437,7 @@ All files are production-ready and fully documented.
 
 ## Summary
 
-Adding Azure storage support to bronze-foundry is straightforward:
+Adding Azure storage support to medallion-foundry is straightforward:
 
 1. Install dependencies (`pip install -r requirements-azure.txt`)
 2. Copy backend file (`azure_storage_example.py` → `core/azure_storage.py`)

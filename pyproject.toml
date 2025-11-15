@@ -3,7 +3,7 @@ requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "bronze-foundry"
+name = "medallion-foundry"
 version = "1.0.0"
 description = "Config-driven Python framework for landing data into Bronze layer with pluggable storage backends"
 readme = "README.md"
@@ -61,11 +61,11 @@ db = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/bronze-foundry/bronze-foundry"
-Documentation = "https://github.com/bronze-foundry/bronze-foundry/blob/main/README.md"
-Repository = "https://github.com/bronze-foundry/bronze-foundry"
-"Bug Reports" = "https://github.com/bronze-foundry/bronze-foundry/issues"
-Changelog = "https://github.com/bronze-foundry/bronze-foundry/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/medallion-foundry/medallion-foundry"
+Documentation = "https://github.com/medallion-foundry/medallion-foundry/blob/main/README.md"
+Repository = "https://github.com/medallion-foundry/medallion-foundry"
+"Bug Reports" = "https://github.com/medallion-foundry/medallion-foundry/issues"
+Changelog = "https://github.com/medallion-foundry/medallion-foundry/blob/main/CHANGELOG.md"
 
 [project.scripts]
 bronze-extract = "bronze_extract:main"

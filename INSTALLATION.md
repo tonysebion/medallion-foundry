@@ -11,8 +11,8 @@
 ### Clone Repository
 
 ```bash
-git clone https://github.com/bronze-foundry/bronze-foundry.git
-cd bronze-foundry
+git clone https://github.com/medallion-foundry/medallion-foundry.git
+cd medallion-foundry
 ```
 
 ### 2. Create a Virtual Environment

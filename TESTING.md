@@ -1,6 +1,6 @@
 # Testing Guide
 
-This document explains how to run tests and quality checks for bronze-foundry.
+This document explains how to run tests and quality checks for medallion-foundry.
 
 ## Quick Start
 
@@ -294,7 +294,7 @@ ptw -- --cov=core --cov=extractors
 Ensure you're in the project root and virtual environment is activated:
 
 ```bash
-cd /path/to/bronze-foundry
+cd /path/to/medallion-foundry
 source .venv/bin/activate  # Linux/Mac
 .venv\Scripts\activate     # Windows
 ```

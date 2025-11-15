@@ -1,4 +1,4 @@
-"""Storage backend abstraction for bronze-foundry.
+"""Storage backend abstraction for medallion-foundry.
 
 This module provides the abstract interface for storage backends,
 allowing the framework to support multiple storage systems (S3, Azure, GCS, etc.)

@@ -1,4 +1,4 @@
-"""Setup configuration for bronze-foundry package."""
+"""Setup configuration for medallion-foundry package."""
 
 from setuptools import setup, find_packages
 from pathlib import Path
@@ -8,13 +8,13 @@ readme_file = Path(__file__).parent / "README.md"
 long_description = readme_file.read_text(encoding="utf-8") if readme_file.exists() else ""
 
 setup(
-    name="bronze-foundry",
+    name="medallion-foundry",
     version="1.0.0",
     description="Config-driven Python framework for landing data into Bronze layer with pluggable storage backends",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Tony Sebion",
-    url="https://github.com/bronze-foundry/bronze-foundry",
+    url="https://github.com/medallion-foundry/medallion-foundry",
     packages=find_packages(exclude=["tests", "tests.*", "docs", "docs.*"]),
     python_requires=">=3.8",
     install_requires=[
@@ -55,9 +55,9 @@ setup(
     ],
     keywords="data-engineering bronze-layer medallion-architecture etl data-pipeline storage-backends",
     project_urls={
-        "Documentation": "https://github.com/bronze-foundry/bronze-foundry/blob/main/README.md",
-        "Bug Reports": "https://github.com/bronze-foundry/bronze-foundry/issues",
-        "Source": "https://github.com/bronze-foundry/bronze-foundry",
-        "Changelog": "https://github.com/bronze-foundry/bronze-foundry/blob/main/CHANGELOG.md",
+        "Documentation": "https://github.com/medallion-foundry/medallion-foundry/blob/main/README.md",
+        "Bug Reports": "https://github.com/medallion-foundry/medallion-foundry/issues",
+        "Source": "https://github.com/medallion-foundry/medallion-foundry",
+        "Changelog": "https://github.com/medallion-foundry/medallion-foundry/blob/main/CHANGELOG.md",
     },
 )

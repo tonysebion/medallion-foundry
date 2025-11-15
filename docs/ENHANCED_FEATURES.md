@@ -1,6 +1,6 @@
 # Enhanced Features Guide
 
-This guide covers the advanced features added to bronze-foundry for production-scale data extraction.
+This guide covers the advanced features added to medallion-foundry for production-scale data extraction.
 
 ## Table of Contents
 
@@ -185,7 +185,7 @@ Query engines with cost-based optimizers uses partition pruning to skip irreleva
 
 ## Parallel Extraction
 
-Extract multiple data sources concurrently to reduce total runtime. Bronze-foundry supports **two levels of parallelism**:
+Extract multiple data sources concurrently to reduce total runtime. medallion-foundry supports **two levels of parallelism**:
 
 1. **Config-level parallelism**: Run multiple config files concurrently (via CLI `--parallel-workers`)
 2. **Chunk-level parallelism**: Process chunks within a single extraction concurrently (via config `parallel_workers`)

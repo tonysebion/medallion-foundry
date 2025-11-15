@@ -1,6 +1,6 @@
-# Bronze-Foundry Examples
+# medallion-foundry Examples
 
-This directory contains complete, working examples demonstrating how to use and extend bronze-foundry.
+This directory contains complete, working examples demonstrating how to use and extend medallion-foundry.
 
 ## Directory Structure
 
@@ -219,4 +219,4 @@ For more details, see:
 
 ---
 
-Questions? Open an issue at https://github.com/bronze-factory/bronze-foundry/issues
+Questions? Open an issue at https://github.com/bronze-factory/medallion-foundry/issues

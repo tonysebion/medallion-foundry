@@ -1,4 +1,4 @@
-"""S3-compatible storage backend for bronze-foundry."""
+"""S3-compatible storage backend for medallion-foundry."""
 
 import logging
 from typing import Dict, Any, List

@@ -1,6 +1,6 @@
 # Storage Backend Architecture
 
-This document describes the pluggable storage backend architecture implemented in bronze-foundry v1.0.
+This document describes the pluggable storage backend architecture implemented in medallion-foundry v1.0.
 
 ## Overview
 

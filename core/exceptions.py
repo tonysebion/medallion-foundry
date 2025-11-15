@@ -1,4 +1,4 @@
-"""Custom exception classes for bronze-foundry.
+"""Custom exception classes for medallion-foundry.
 
 This module provides specific exception types for better error handling and debugging.
 """
@@ -7,11 +7,11 @@ from typing import Optional, Dict, Any
 
 
 class BronzeFoundryError(Exception):
-    """Base exception for all bronze-foundry errors."""
+    """Base exception for all medallion-foundry errors."""
     
     def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
         """
-        Initialize bronze-foundry exception.
+        Initialize medallion-foundry exception.
         
         Args:
             message: Human-readable error message

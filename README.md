@@ -1,38 +1,38 @@
-﻿# bronze-foundry
+# medallion-foundry
 
-`bronze-foundry` is a **production-ready**, config-driven Python framework for landing data from **APIs**, **databases**, or **custom sources** into a **Bronze layer** with **pluggable storage backends** (S3, Azure, GCS, local filesystem), using conventions that support future analytics platforms and medallion-style architectures.
+`medallion-foundry` is a **production-ready**, config-driven Python framework for landing data from **APIs**, **databases**, or **custom sources** into a **Bronze layer** with **pluggable storage backends** (S3, Azure, GCS, local filesystem), using conventions that support future analytics platforms and medallion-style architectures.
 
 This framework is intentionally lightweight and orchestration-neutral: you can run it from any scheduler or workflow orchestrator that can invoke a Python CLI.
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## ✨ Key Features
+## ? Key Features
 
 ### Core Capabilities
-- **🔌 Multiple Source Types** - APIs (REST), databases (SQL), local files, or custom Python extractors
-- **🔐 Authentication** - Bearer tokens, API keys, Basic auth, and custom headers
-- **📄 Pagination** - Offset-based, page-based, cursor-based, or none
-- **🔄 Incremental Loading** - State management for efficient delta loads
-- **📊 Multiple Formats** - CSV (debugging) and Parquet (analytics) with compression
-- **☁️ Pluggable Storage** - S3, Azure Blob/ADLS, Google Cloud Storage, or local filesystem
-- **🔁 Retry Logic** - Automatic retries with exponential backoff for network operations
-- **🧹 Error Handling** - Comprehensive error handling with automatic cleanup on failure
-- **📝 Extensive Logging** - Structured logging for observability
-- **✅ Production Ready** - Complete implementations, not just stubs
+- **?? Multiple Source Types** - APIs (REST), databases (SQL), local files, or custom Python extractors
+- **?? Authentication** - Bearer tokens, API keys, Basic auth, and custom headers
+- **?? Pagination** - Offset-based, page-based, cursor-based, or none
+- **?? Incremental Loading** - State management for efficient delta loads
+- **?? Multiple Formats** - CSV (debugging) and Parquet (analytics) with compression
+- **?? Pluggable Storage** - S3, Azure Blob/ADLS, Google Cloud Storage, or local filesystem
+- **?? Retry Logic** - Automatic retries with exponential backoff for network operations
+- **?? Error Handling** - Comprehensive error handling with automatic cleanup on failure
+- **?? Extensive Logging** - Structured logging for observability
+- **? Production Ready** - Complete implementations, not just stubs
 
-### 🎯 Enhanced Features
-- **📏 File Size Control** - Configurable `max_file_size_mb` for query-optimized file sizes (128MB-1GB)
-- **⏰ Multiple Daily Loads** - Hourly, timestamp, or batch-ID partitioning for intraday extractions
-- **⚡ Parallel Extraction** - Two levels of parallelism:
+### ?? Enhanced Features
+- **?? File Size Control** - Configurable `max_file_size_mb` for query-optimized file sizes (128MB-1GB)
+- **? Multiple Daily Loads** - Hourly, timestamp, or batch-ID partitioning for intraday extractions
+- **? Parallel Extraction** - Two levels of parallelism:
   - **Config-level**: Multi-threaded processing across different config files (`--parallel-workers`)
   - **Chunk-level**: Concurrent chunk processing within single extraction (`parallel_workers` in config)
-- **📊 Batch Metadata** - Automatic `_metadata.json` tracking for monitoring and idempotent loads
-- **🔌 Extensible Architecture** - Clean abstractions for adding new storage backends or data sources
+- **?? Batch Metadata** - Automatic `_metadata.json` tracking for monitoring and idempotent loads
+- **?? Extensible Architecture** - Clean abstractions for adding new storage backends or data sources
 
 *See [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) for detailed documentation on advanced features.*
 
-## 🏗️ Architecture Principles
+## ??? Architecture Principles
 
 - **Single CLI, many sources**  
   One entrypoint (`bronze_extract.py`) that reads a YAML config and chooses the appropriate extractor (`api`, `db`, or `custom`).
@@ -55,16 +55,16 @@ This framework is intentionally lightweight and orchestration-neutral: you can r
 - **Formats and file splitting**  
   - CSV for human-readable debugging (optional)
   - Parquet (with Snappy) for analytics
-  - Configurable `max_rows_per_file` to split large extracts into part files (e.g., `part-0001`, `part-0002`, …).
+  - Configurable `max_rows_per_file` to split large extracts into part files (e.g., `part-0001`, `part-0002`, �).
 
 - **Orchestration friendly**  
   - CLI takes `--config` and optional `--date`
   - Uses exit codes (0 = success, non-zero = failure)
   - Structured logging with levels and timestamps
 
-## 🚀 Quick start
+## ?? Quick start
 
-### 🎯 Testing Your API (For Product/API Teams)
+### ?? Testing Your API (For Product/API Teams)
 
 **Not familiar with Python?** No problem! [QUICKSTART.md](QUICKSTART.md) has a complete step-by-step walkthrough.
 
@@ -90,11 +90,11 @@ python bronze_extract.py --config config/test.yaml
 # 5. Check ./output/ folder - if you see data, you're done!
 ```
 
-**👉 See [QUICKSTART.md](QUICKSTART.md) for detailed instructions with screenshots and troubleshooting.**
+**?? See [QUICKSTART.md](QUICKSTART.md) for detailed instructions with screenshots and troubleshooting.**
 
-### 🧪 Offline Local Quick Test
+### ?? Offline Local Quick Test
 
-Need proof the tooling works but don’t have API credentials yet? Use the bundled sample data.
+Need proof the tooling works but don�t have API credentials yet? Use the bundled sample data.
 
 ```bash
 # 0. (Once) prepare the sandbox data
@@ -115,7 +115,7 @@ This workflow uses only local files, so a non-Python user can validate everythin
 
 ---
 
-### 📚 Full Setup (For Data Teams)
+### ?? Full Setup (For Data Teams)
 
 Complete production setup:
 
@@ -161,26 +161,26 @@ Complete production setup:
    ls -la output/system=*/table=*/dt=*/hour=*/
    ```
 
-## 📦 What's Included
+## ?? What's Included
 
 ### API Extractor
-- ✅ Bearer token authentication
-- ✅ API key authentication
-- ✅ Basic authentication
-- ✅ Offset-based pagination
-- ✅ Page-based pagination
-- ✅ Cursor-based pagination
-- ✅ Retry logic with exponential backoff
-- ✅ Custom headers support
-- ✅ Flexible response parsing
+- ? Bearer token authentication
+- ? API key authentication
+- ? Basic authentication
+- ? Offset-based pagination
+- ? Page-based pagination
+- ? Cursor-based pagination
+- ? Retry logic with exponential backoff
+- ? Custom headers support
+- ? Flexible response parsing
 
 ### Database Extractor
-- ✅ SQL Server, PostgreSQL, MySQL support (via ODBC)
-- ✅ Incremental loading with cursor tracking
-- ✅ State file management
-- ✅ Batch fetching
-- ✅ Automatic WHERE clause injection
-- ✅ Retry logic for failed queries
+- ? SQL Server, PostgreSQL, MySQL support (via ODBC)
+- ? Incremental loading with cursor tracking
+- ? State file management
+- ? Batch fetching
+- ? Automatic WHERE clause injection
+- ? Retry logic for failed queries
 
 
 ### Local File Extractor
@@ -228,7 +228,7 @@ python silver_extract.py \
 - Full snapshot (500 rows): `docs/examples/data/bronze_samples/full/system=retail_demo/table=orders/pattern=full/dt=2025-11-01/`
 - CDC stream (400 events): `docs/examples/data/bronze_samples/cdc/system=retail_demo/table=orders/pattern=cdc/dt=2025-11-02/`
 - Current + history mix (800 rows): `docs/examples/data/bronze_samples/current_history/system=retail_demo/table=orders/pattern=current_history/dt=2025-11-03/`
-- Silver curated samples per model: `docs/examples/data/silver_samples/<load_pattern>/<silver_model>/domain=<domain>/entity=<entity>/v<version>/load_date=<YYYY-MM-DD>/`. Run `python scripts/generate_silver_samples.py` to regenerate the Bronze → Silver outputs for every supported Silver model.
+- Silver curated samples per model: `docs/examples/data/silver_samples/<load_pattern>/<silver_model>/domain=<domain>/entity=<entity>/v<version>/load_date=<YYYY-MM-DD>/`. Run `python scripts/generate_silver_samples.py` to regenerate the Bronze ? Silver outputs for every supported Silver model.
 - Matching configs: `file_example.yaml` (full), `file_cdc_example.yaml` (cdc), `file_current_history_example.yaml`
 
 ### Sample Configs
@@ -293,15 +293,15 @@ python silver_extract.py --config docs/examples/configs/file_example.yaml --date
 ### Silver Refinement Options
 - `silver.schema`: rename or reorder columns for standardized curated tables.
 - `silver.normalization`: toggle `trim_strings` / `empty_strings_as_null` to keep formatting consistent across datasets.
-- `silver.error_handling`: set `enabled`, `max_bad_records`, and `max_bad_percent` to quarantine bad rows into `_errors/` files instead of failing immediately (exceeds threshold → fail).
+- `silver.error_handling`: set `enabled`, `max_bad_records`, and `max_bad_percent` to quarantine bad rows into `_errors/` files instead of failing immediately (exceeds threshold ? fail).
 - `silver.partitioning`: add a secondary partition column (e.g., status, region) for Silver outputs while still mirroring the Bronze folder layout.
-- `silver.domain` / `entity` / `version` / `load_partition_name`: describe the medallion layout so outputs land under `domain=<domain>/entity=<entity>/v<version>/<load partition>=YYYY-MM-DD/…`. Optional `include_pattern_folder: true` inserts `pattern=<load_pattern>` before the load partition.
+- `silver.domain` / `entity` / `version` / `load_partition_name`: describe the medallion layout so outputs land under `domain=<domain>/entity=<entity>/v<version>/<load partition>=YYYY-MM-DD/�`. Optional `include_pattern_folder: true` inserts `pattern=<load_pattern>` before the load partition.
 - `silver.model`: choose the Silver asset type to emit. Available options now mirror the requested asset catalogue:
-  - `scd_type_1` – deduplicated current view (SCD Type 1).
-  - `scd_type_2` – current + full history split with an `is_current` flag (SCD Type 2).
-  - `incremental_merge` – incremental change set from the Bronze data (CDC/timestamp).
-  - `full_merge_dedupe` – full snapshot deduplicated by the configured keys/order column, ready for full merges.
-  - `periodic_snapshot` – exact Bronze snapshot for periodic refreshes.
+  - `scd_type_1` � deduplicated current view (SCD Type 1).
+  - `scd_type_2` � current + full history split with an `is_current` flag (SCD Type 2).
+  - `incremental_merge` � incremental change set from the Bronze data (CDC/timestamp).
+  - `full_merge_dedupe` � full snapshot deduplicated by the configured keys/order column, ready for full merges.
+  - `periodic_snapshot` � exact Bronze snapshot for periodic refreshes.
 
 Example Silver section:
 
@@ -352,27 +352,27 @@ silver_output/
 
 ### What Silver Will *Not* Do
 
-- ❌ Business logic or row-level filtering—Silver only standardizes structure.
-- ❌ Custom transformations per dataset beyond the declarative `schema`/`normalization` options.
-- ❌ Silent drops of bad data—use `silver.error_handling` to quarantine and alert.
+- ? Business logic or row-level filtering�Silver only standardizes structure.
+- ? Custom transformations per dataset beyond the declarative `schema`/`normalization` options.
+- ? Silent drops of bad data�use `silver.error_handling` to quarantine and alert.
 
 ### Core Features
-- ✅ Proper Python package structure
-- ✅ Comprehensive configuration validation
-- ✅ Structured logging system
-- ✅ Error handling with cleanup
-- ✅ CSV and Parquet output
-- ✅ S3 upload with retries
-- ✅ File chunking for large datasets
-- ✅ Test suite with pytest
-- ✅ Extensible architecture
+- ? Proper Python package structure
+- ? Comprehensive configuration validation
+- ? Structured logging system
+- ? Error handling with cleanup
+- ? CSV and Parquet output
+- ? S3 upload with retries
+- ? File chunking for large datasets
+- ? Test suite with pytest
+- ? Extensible architecture
 
-## 📖 Documentation
+## ?? Documentation
 
-- [OPS_PLAYBOOK.md](docs/OPS_PLAYBOOK.md) – day-two operations, hooks, and monitoring tips.
-- [GOLD_CONTRACTS.md](docs/GOLD_CONTRACTS.md) – guidance for documenting downstream contracts and expectations.
-- [QUICKSTART.md](QUICKSTART.md) – detailed tutorial with screenshots.
-- [DOCUMENTATION.md](DOCUMENTATION.md) – architecture concepts and FAQs.
-- [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) – advanced configuration & features.
-- [CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) – exhaustive list of config options.
-- [TESTING.md](TESTING.md) – how to run tests and interpret results.
+- [OPS_PLAYBOOK.md](docs/OPS_PLAYBOOK.md) � day-two operations, hooks, and monitoring tips.
+- [GOLD_CONTRACTS.md](docs/GOLD_CONTRACTS.md) � guidance for documenting downstream contracts and expectations.
+- [QUICKSTART.md](QUICKSTART.md) � detailed tutorial with screenshots.
+- [DOCUMENTATION.md](DOCUMENTATION.md) � architecture concepts and FAQs.
+- [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) � advanced configuration & features.
+- [CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) � exhaustive list of config options.
+- [TESTING.md](TESTING.md) � how to run tests and interpret results.

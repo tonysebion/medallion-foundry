@@ -1,6 +1,6 @@
-# Bronze-Foundry Documentation
+# medallion-foundry Documentation
 
-Complete documentation for bronze-foundry - a production-ready, config-driven Python framework for landing data from APIs, databases, or custom sources into Bronze layer with pluggable storage backends (S3, Azure, GCS, local filesystem).
+Complete documentation for medallion-foundry - a production-ready, config-driven Python framework for landing data from APIs, databases, or custom sources into Bronze layer with pluggable storage backends (S3, Azure, GCS, local filesystem).
 
 > **📚 Documentation Navigation:**
 > - **README.md** - Project overview and key features
@@ -20,7 +20,7 @@ Complete documentation for bronze-foundry - a production-ready, config-driven Py
 3. [Architecture](#architecture)
 4. [Configuration Reference](#configuration-reference)
 5. [Features](#features)
-6. [Extending Bronze-Foundry](#extending-bronze-foundry)
+6. [Extending medallion-foundry](#extending-medallion-foundry)
    - [Custom Extractors](#custom-extractors)
    - [Storage Backends](#extending-storage-backends)
 7. [Examples](#examples)
@@ -35,8 +35,8 @@ Complete documentation for bronze-foundry - a production-ready, config-driven Py
 
 ```bash
 # Clone the repository
-git clone https://github.com/bronze-factory/bronze-foundry.git
-cd bronze-foundry
+git clone https://github.com/bronze-factory/medallion-foundry.git
+cd medallion-foundry
 
 # Create virtual environment
 python -m venv .venv
@@ -154,7 +154,7 @@ Simple `BaseExtractor` interface for new source types while reusing Bronze writi
 ### Directory Structure
 
 ```
-bronze-foundry/
+medallion-foundry/
 ├── bronze_extract.py          # CLI entrypoint
 ├── core/                      # Core framework
 │   ├── config.py             # Config loading & validation
@@ -319,7 +319,7 @@ source:
     
     # Headers
     headers:
-      User-Agent: "bronze-foundry/1.0"
+      User-Agent: "medallion-foundry/1.0"
     
     # Query parameters
     params:
@@ -467,7 +467,7 @@ WHERE dt = DATE '2025-01-12' AND hour = 14;
 
 ### Two-Level Parallelism
 
-Bronze-foundry supports **two independent levels of parallelism**:
+medallion-foundry supports **two independent levels of parallelism**:
 
 #### Level 1: Config-Level (Multiple Configs)
 
@@ -548,7 +548,7 @@ Each extraction creates `_metadata.json`:
 
 ---
 
-## Extending Bronze-Foundry
+## Extending medallion-foundry
 
 ### Creating Custom Extractors
 
@@ -917,7 +917,7 @@ python bronze_extract.py \
 
 ## Future Platform Integration
 
-> **Note**: Bronze-foundry creates standard Parquet files with Hive-style partitioning that can be consumed by various analytics platforms when available.
+> **Note**: medallion-foundry creates standard Parquet files with Hive-style partitioning that can be consumed by various analytics platforms when available.
 
 ### Example Table Creation
 
@@ -1053,6 +1053,6 @@ MIT License - See LICENSE file for details
 ## Support
 
 For issues, questions, or contributions:
-- GitHub Issues: https://github.com/bronze-factory/bronze-foundry/issues
+- GitHub Issues: https://github.com/bronze-factory/medallion-foundry/issues
 - Documentation: This file
 - Examples: `docs/examples/` directory
