@@ -239,3 +239,7 @@ silver:
 - `require_checksum` �?" when `true`, `silver_extract` enforces the checksum manifest that Bronze writes to `_checksums.json`. You can also pass `--require-checksum` on the CLI; Silver aborts if the manifest is missing, mismatched, or reports a different load pattern. This keeps Bronze and Silver in lockstep before promoting data.
 
 If the `silver` section is omitted, `silver_extract` falls back to sensible defaults and you can override individual settings with CLI switches.
+
+### Developer notes: typed Silver schema
+
+If you need to enforce new validations or defaults, edit the dataclasses in `core/config_models.py`. The `SilverConfig` model (and its child classes such as `SilverSchema`, `SilverNormalization`, etc.) backs `_normalize_silver_config` in `core/config.py`, so every CLI automatically inherits the same behavior. This keeps docs and implementation aligned—update the dataclass once, add a test, and both Bronze and Silver parsing flows receive the new rules.

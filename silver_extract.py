@@ -7,6 +7,7 @@ import datetime as dt
 import json
 import logging
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -210,6 +211,88 @@ def _write_dataset(
     return files
 
 
+class DatasetWriter:
+    """Write datasets with partition/error policies."""
+
+    def __init__(
+        self,
+        base_dir: Path,
+        primary_keys: List[str],
+        partition_columns: List[str],
+        error_cfg: Dict[str, Any],
+        write_parquet: bool,
+        write_csv: bool,
+        parquet_compression: str,
+    ) -> None:
+        self.base_dir = base_dir
+        self.primary_keys = primary_keys
+        self.partition_columns = partition_columns
+        self.error_cfg = error_cfg
+        self.write_parquet = write_parquet
+        self.write_csv = write_csv
+        self.parquet_compression = parquet_compression
+
+    def write_dataset(self, dataset_name: str, dataset_df: pd.DataFrame) -> List[Path]:
+        partitions = partition_dataframe(dataset_df, self.partition_columns) or [([], dataset_df)]
+        written_files: List[Path] = []
+
+        for path_parts, partition_df in partitions:
+            target_dir = self.base_dir
+            for part in path_parts:
+                target_dir = target_dir / part
+            cleaned_df = handle_error_rows(partition_df, self.primary_keys, self.error_cfg, dataset_name, target_dir)
+            written_files.extend(
+                _write_dataset(
+                    cleaned_df,
+                    dataset_name,
+                    target_dir,
+                    self.write_parquet,
+                    self.write_csv,
+                    self.parquet_compression,
+                )
+            )
+            if path_parts:
+                suffix = "/".join(path_parts)
+                logger.info("Written partition %s for %s", suffix, dataset_name)
+
+        return written_files
+
+
+class SilverOutputPlanner:
+    """Generate Silver artifacts for a given load pattern."""
+
+    def __init__(self, writer: DatasetWriter, primary_keys: List[str], order_column: str | None) -> None:
+        self.writer = writer
+        self.primary_keys = primary_keys
+        self.order_column = order_column
+
+    def render(
+        self,
+        df: pd.DataFrame,
+        pattern: LoadPattern,
+        artifact_names: Dict[str, str],
+    ) -> Dict[str, List[Path]]:
+        outputs: Dict[str, List[Path]] = {}
+
+        if pattern == LoadPattern.FULL:
+            name = artifact_names.get("full_snapshot", "full_snapshot")
+            outputs[name] = self.writer.write_dataset(name, df)
+        elif pattern == LoadPattern.CDC:
+            name = artifact_names.get("cdc", "cdc_changes")
+            outputs[name] = self.writer.write_dataset(name, df)
+        elif pattern == LoadPattern.CURRENT_HISTORY:
+            history_name = artifact_names.get("history", "history")
+            outputs[history_name] = self.writer.write_dataset(history_name, df)
+
+            current_df = build_current_view(df, self.primary_keys, self.order_column)
+            current_name = artifact_names.get("current", "current")
+            outputs[current_name] = self.writer.write_dataset(current_name, current_df)
+        else:
+            raise ValueError(f"Unsupported load pattern {pattern}")
+
+        return outputs
+
+
 def write_silver_outputs(
     df: pd.DataFrame,
     output_dir: Path,
@@ -223,52 +306,41 @@ def write_silver_outputs(
     partition_columns: List[str],
     error_cfg: Dict[str, Any],
 ) -> Dict[str, List[Path]]:
-    output_dir.mkdir(parents=True, exist_ok=True)
-    outputs: Dict[str, List[Path]] = {}
+    writer = DatasetWriter(
+        base_dir=output_dir,
+        primary_keys=primary_keys,
+        partition_columns=partition_columns,
+        error_cfg=error_cfg,
+        write_parquet=write_parquet,
+        write_csv=write_csv,
+        parquet_compression=parquet_compression,
+    )
+    planner = SilverOutputPlanner(writer, primary_keys, order_column)
+    return planner.render(df, pattern, artifact_names)
 
-    def process_dataset(dataset_df: pd.DataFrame, name: str) -> List[Path]:
-        partitions = partition_dataframe(dataset_df, partition_columns)
-        written_files: List[Path] = []
-        if not partitions:
-            partitions = [([], dataset_df)]
-        for path_parts, partition_df in partitions:
-            target_dir = output_dir
-            suffix = ""
-            for part in path_parts:
-                target_dir = target_dir / part
-                suffix += f"/{part}"
-            cleaned_df = handle_error_rows(partition_df, primary_keys, error_cfg, name, target_dir)
-            written_files.extend(
-                _write_dataset(
-                    cleaned_df,
-                    name,
-                    target_dir,
-                    write_parquet,
-                    write_csv,
-                    parquet_compression,
-                )
-            )
-            if path_parts:
-                logger.info("Written partition %s for %s", suffix.lstrip("/"), name)
-        return written_files
 
-    if pattern == LoadPattern.FULL:
-        name = artifact_names.get("full_snapshot", "full_snapshot")
-        outputs[name] = process_dataset(df, name)
-    elif pattern == LoadPattern.CDC:
-        name = artifact_names.get("cdc", "cdc_changes")
-        outputs[name] = process_dataset(df, name)
-    elif pattern == LoadPattern.CURRENT_HISTORY:
-        history_name = artifact_names.get("history", "history")
-        outputs[history_name] = process_dataset(df, history_name)
-
-        current_df = build_current_view(df, primary_keys, order_column)
-        current_name = artifact_names.get("current", "current")
-        outputs[current_name] = process_dataset(current_df, current_name)
-    else:
-        raise ValueError(f"Unsupported load pattern {pattern}")
-
-    return outputs
+def _default_silver_cfg() -> Dict[str, Any]:
+    return {
+        "schema": {"rename_map": {}, "column_order": None},
+        "normalization": {"trim_strings": False, "empty_strings_as_null": False},
+        "partitioning": {"columns": []},
+        "error_handling": {"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0},
+        "primary_keys": [],
+        "order_column": None,
+        "write_parquet": True,
+        "write_csv": False,
+        "parquet_compression": "snappy",
+        "full_output_name": "full_snapshot",
+        "cdc_output_name": "cdc_changes",
+        "current_output_name": "current",
+        "history_output_name": "history",
+        "domain": "default",
+        "entity": "dataset",
+        "version": 1,
+        "load_partition_name": "load_date",
+        "include_pattern_folder": False,
+        "require_checksum": False,
+    }
 
 
 def _derive_bronze_path_from_config(cfg: Dict[str, Any], run_date: dt.date) -> Path:
@@ -288,7 +360,316 @@ def _select_config(cfgs: List[Dict[str, Any]], source_name: Optional[str]) -> Di
     raise ValueError("Config contains multiple sources; specify --source-name to select one.")
 
 
-def main() -> int:
+@dataclass
+class PromotionContext:
+    cfg: Optional[Dict[str, Any]]
+    run_date: dt.date
+    bronze_path: Path
+    silver_partition: Path
+    load_pattern: LoadPattern
+    require_checksum: bool
+    primary_keys: List[str]
+    order_column: Optional[str]
+    write_parquet: bool
+    write_csv: bool
+    parquet_compression: str
+    artifact_names: Dict[str, str]
+    partition_columns: List[str]
+    schema_cfg: Dict[str, Any]
+    normalization_cfg: Dict[str, Any]
+    error_cfg: Dict[str, Any]
+    domain: Any
+    entity: Any
+    version: int
+    load_partition_name: str
+    include_pattern_folder: bool
+
+
+class SilverPromotionService:
+    """High-level orchestrator for Silver CLI operations."""
+
+    def __init__(self, parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+        self.parser = parser
+        self.args = args
+        self.cfg_list = load_configs(args.config) if args.config else None
+        self._silver_identity: Optional[Tuple[Any, Any, int, str, bool]] = None
+
+    def execute(self) -> int:
+        if self.args.validate_only:
+            self._handle_validate_only()
+            return 0
+
+        cfg = self._select_config()
+        run_date = self._resolve_run_date()
+        bronze_path = self._resolve_bronze_path(cfg, run_date)
+        if not bronze_path.exists() or not bronze_path.is_dir():
+            raise FileNotFoundError(f"Bronze path '{bronze_path}' does not exist or is not a directory")
+
+        load_pattern = self._resolve_load_pattern(cfg, bronze_path)
+        silver_partition = self._resolve_silver_partition(cfg, bronze_path, load_pattern, run_date)
+        logger.info("Bronze partition: %s", bronze_path)
+        logger.info("Silver partition: %s", silver_partition)
+        logger.info("Load pattern: %s", load_pattern.value)
+        context = self._build_context(cfg, bronze_path, silver_partition, load_pattern, run_date)
+        self._maybe_verify_checksum(context)
+
+        if self.args.dry_run:
+            logger.info("Dry run complete; no files written")
+            return 0
+
+        df = load_bronze_records(bronze_path)
+        normalized_df = apply_schema_settings(df, context.schema_cfg)
+        normalized_df = normalize_dataframe(normalized_df, context.normalization_cfg)
+        logger.info("Loaded %s records from Bronze path %s", len(normalized_df), bronze_path)
+
+        outputs = write_silver_outputs(
+            normalized_df,
+            silver_partition,
+            context.load_pattern,
+            context.primary_keys,
+            context.order_column,
+            context.write_parquet,
+            context.write_csv,
+            context.parquet_compression,
+            context.artifact_names,
+            context.partition_columns,
+            context.error_cfg,
+        )
+
+        self._write_metadata(normalized_df, outputs, context)
+
+        for label, paths in outputs.items():
+            for path in paths:
+                logger.info("Created Silver artifact '%s': %s", label, path)
+
+        logger.info("Silver promotion complete")
+        return 0
+
+    def _handle_validate_only(self) -> None:
+        if not self.cfg_list:
+            self.parser.error("--config is required when using --validate-only")
+        if self.args.source_name:
+            cfg = _select_config(self.cfg_list, self.args.source_name)
+            logger.info("Silver configuration valid for %s", cfg["source"]["config_name"])
+        else:
+            for cfg in self.cfg_list:
+                logger.info("Silver configuration valid for %s", cfg["source"]["config_name"])
+
+    def _select_config(self) -> Optional[Dict[str, Any]]:
+        if not self.cfg_list:
+            return None
+        try:
+            return _select_config(self.cfg_list, self.args.source_name)
+        except ValueError as exc:
+            self.parser.error(str(exc))
+
+    def _resolve_run_date(self) -> dt.date:
+        return dt.date.fromisoformat(self.args.date) if self.args.date else dt.date.today()
+
+    def _resolve_bronze_path(self, cfg: Optional[Dict[str, Any]], run_date: dt.date) -> Path:
+        if self.args.bronze_path:
+            return Path(self.args.bronze_path).resolve()
+        if not cfg:
+            self.parser.error("Either --bronze-path or --config must be supplied")
+        return _derive_bronze_path_from_config(cfg, run_date)
+
+    def _resolve_load_pattern(self, cfg: Optional[Dict[str, Any]], bronze_path: Path) -> LoadPattern:
+        metadata_pattern = discover_load_pattern(bronze_path) if self.args.pattern == "auto" else None
+        if self.args.pattern != "auto":
+            return LoadPattern.normalize(self.args.pattern)
+
+        config_pattern = LoadPattern.normalize(cfg["source"]["run"].get("load_pattern")) if cfg else LoadPattern.FULL
+        if metadata_pattern and cfg and metadata_pattern != config_pattern:
+            logger.warning(
+                "Config load_pattern (%s) differs from Bronze metadata (%s); using metadata value",
+                config_pattern.value,
+                metadata_pattern.value,
+            )
+            return metadata_pattern
+        return metadata_pattern or config_pattern
+
+    def _resolve_silver_partition(
+        self,
+        cfg: Optional[Dict[str, Any]],
+        bronze_path: Path,
+        load_pattern: LoadPattern,
+        run_date: dt.date,
+    ) -> Path:
+        silver_base = Path(self.args.silver_base).resolve() if self.args.silver_base else None
+        silver_cfg = cfg["silver"] if cfg else _default_silver_cfg()
+
+        domain, entity, version, load_partition_name, include_pattern_folder = self._extract_identity(cfg, silver_cfg)
+        self._silver_identity = (domain, entity, version, load_partition_name, include_pattern_folder)
+
+        if not silver_base:
+            if cfg:
+                silver_base = Path(silver_cfg.get("output_dir", "./silver_output")).resolve()
+            else:
+                silver_base = Path("./silver_output").resolve()
+
+        if cfg:
+            partition = build_silver_partition_path(
+                silver_base,
+                domain,
+                entity,
+                version,
+                load_partition_name,
+                include_pattern_folder,
+                load_pattern,
+                run_date,
+            )
+        else:
+            partition = silver_base / derive_relative_partition(bronze_path)
+
+        return partition
+
+    def _extract_identity(
+        self,
+        cfg: Optional[Dict[str, Any]],
+        silver_cfg: Dict[str, Any],
+    ) -> Tuple[Any, Any, int, str, bool]:
+        if cfg:
+            domain = silver_cfg.get("domain", cfg["source"]["system"])
+            entity = silver_cfg.get("entity", cfg["source"]["table"])
+        else:
+            domain = silver_cfg.get("domain", "default")
+            entity = silver_cfg.get("entity", "dataset")
+        version = silver_cfg.get("version", 1)
+        load_partition_name = silver_cfg.get("load_partition_name", "load_date")
+        include_pattern_folder = silver_cfg.get("include_pattern_folder", False)
+        return domain, entity, version, load_partition_name, include_pattern_folder
+
+    def _build_context(
+        self,
+        cfg: Optional[Dict[str, Any]],
+        bronze_path: Path,
+        silver_partition: Path,
+        load_pattern: LoadPattern,
+        run_date: dt.date,
+    ) -> PromotionContext:
+        silver_cfg = cfg["silver"] if cfg else _default_silver_cfg()
+        schema_cfg = silver_cfg.get("schema", {"rename_map": {}, "column_order": None})
+        normalization_cfg = silver_cfg.get("normalization", {"trim_strings": False, "empty_strings_as_null": False})
+        error_cfg = silver_cfg.get("error_handling", {"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0})
+
+        cli_primary = parse_primary_keys(self.args.primary_key) if self.args.primary_key is not None else None
+        primary_keys = cli_primary if cli_primary is not None else silver_cfg.get("primary_keys", [])
+
+        cli_order_column = self.args.order_column if self.args.order_column is not None else None
+        order_column = cli_order_column if cli_order_column is not None else silver_cfg.get("order_column")
+
+        rename_map = schema_cfg.get("rename_map") or {}
+        primary_keys = [rename_map.get(pk, pk) for pk in primary_keys]
+        if order_column:
+            order_column = rename_map.get(order_column, order_column)
+
+        partition_columns = silver_cfg.get("partitioning", {}).get("columns", [])
+        partition_columns = [rename_map.get(col, col) for col in partition_columns]
+
+        write_parquet = (
+            self.args.write_parquet if self.args.write_parquet is not None else silver_cfg.get("write_parquet", True)
+        )
+        write_csv = self.args.write_csv if self.args.write_csv is not None else silver_cfg.get("write_csv", False)
+        if not write_parquet and not write_csv:
+            self.parser.error("At least one output format (Parquet or CSV) must be enabled")
+
+        parquet_compression = (
+            self.args.parquet_compression
+            if self.args.parquet_compression
+            else silver_cfg.get("parquet_compression", "snappy")
+        )
+
+        artifact_names = {
+            "full_snapshot": self.args.full_output_name or silver_cfg.get("full_output_name", "full_snapshot"),
+            "cdc": self.args.cdc_output_name or silver_cfg.get("cdc_output_name", "cdc_changes"),
+            "current": self.args.current_output_name or silver_cfg.get("current_output_name", "current"),
+            "history": self.args.history_output_name or silver_cfg.get("history_output_name", "history"),
+        }
+
+        require_checksum = (
+            self.args.require_checksum
+            if self.args.require_checksum is not None
+            else silver_cfg.get("require_checksum", False)
+        )
+
+        domain, entity, version, load_partition_name, include_pattern_folder = (
+            self._silver_identity
+            if self._silver_identity
+            else self._extract_identity(cfg, silver_cfg)
+        )
+
+        silver_partition.mkdir(parents=True, exist_ok=True)
+
+        return PromotionContext(
+            cfg=cfg,
+            run_date=run_date,
+            bronze_path=bronze_path,
+            silver_partition=silver_partition,
+            load_pattern=load_pattern,
+            require_checksum=require_checksum,
+            primary_keys=primary_keys,
+            order_column=order_column,
+            write_parquet=write_parquet,
+            write_csv=write_csv,
+            parquet_compression=parquet_compression,
+            artifact_names=artifact_names,
+            partition_columns=partition_columns,
+            schema_cfg=schema_cfg,
+            normalization_cfg=normalization_cfg,
+            error_cfg=error_cfg,
+            domain=domain,
+            entity=entity,
+            version=version,
+            load_partition_name=load_partition_name,
+            include_pattern_folder=include_pattern_folder,
+        )
+
+    def _maybe_verify_checksum(self, context: PromotionContext) -> None:
+        if not context.require_checksum:
+            return
+        manifest = verify_checksum_manifest(context.bronze_path, expected_pattern=context.load_pattern.value)
+        manifest_path = context.bronze_path / "_checksums.json"
+        logger.info(
+            "Verified %s checksum entries from %s",
+            len(manifest.get("files", [])),
+            manifest_path,
+        )
+
+    def _write_metadata(
+        self,
+        df: pd.DataFrame,
+        outputs: Dict[str, List[Path]],
+        context: PromotionContext,
+    ) -> None:
+        metadata_path = write_batch_metadata(
+            context.silver_partition,
+            record_count=len(df),
+            chunk_count=len(outputs),
+            extra_metadata={
+                "load_pattern": context.load_pattern.value,
+                "bronze_path": str(context.bronze_path),
+                "primary_keys": context.primary_keys,
+                "order_column": context.order_column,
+                "domain": context.domain,
+                "entity": context.entity,
+                "version": context.version,
+                "load_partition_name": context.load_partition_name,
+                "include_pattern_folder": context.include_pattern_folder,
+                "partition_columns": context.partition_columns,
+                "write_parquet": context.write_parquet,
+                "write_csv": context.write_csv,
+                "parquet_compression": context.parquet_compression,
+                "normalization": context.normalization_cfg,
+                "schema": context.schema_cfg,
+                "error_handling": context.error_cfg,
+                "artifacts": {label: [p.name for p in paths] for label, paths in outputs.items()},
+                "require_checksum": context.require_checksum,
+            },
+        )
+        logger.debug("Wrote Silver metadata to %s", metadata_path)
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Promote Bronze data to Silver layer with configurable load patterns",
     )
@@ -388,228 +769,16 @@ def main() -> int:
         default=None,
         help="Log format (default: human)",
     )
+    return parser
 
+
+def main() -> int:
+    parser = build_parser()
     args = parser.parse_args()
     setup_logging(level=logging.DEBUG if args.verbose else logging.INFO, format_type=args.log_format)
 
-    cfg_list = load_configs(args.config) if args.config else None
-    if args.validate_only:
-        if not cfg_list:
-            parser.error("--config is required when using --validate-only")
-        if args.source_name:
-            cfg = _select_config(cfg_list, args.source_name)
-            logger.info("Silver configuration valid for %s", cfg["source"]["config_name"])
-        else:
-            for cfg in cfg_list:
-                logger.info("Silver configuration valid for %s", cfg["source"]["config_name"])
-        return 0
-
-    run_date = dt.date.fromisoformat(args.date) if args.date else dt.date.today()
-
-    cfg = None
-    if cfg_list:
-        try:
-            cfg = _select_config(cfg_list, args.source_name)
-        except ValueError as exc:
-            parser.error(str(exc))
-
-    bronze_path = Path(args.bronze_path).resolve() if args.bronze_path else None
-    if bronze_path is None:
-        if not cfg:
-            parser.error("Either --bronze-path or --config must be supplied")
-        bronze_path = _derive_bronze_path_from_config(cfg, run_date)
-
-    if not bronze_path.exists() or not bronze_path.is_dir():
-        raise FileNotFoundError(f"Bronze path '{bronze_path}' does not exist or is not a directory")
-
-    silver_base_arg = args.silver_base
-    if silver_base_arg:
-        silver_base = Path(silver_base_arg).resolve()
-    elif cfg:
-        silver_base = Path(cfg["silver"].get("output_dir", "./silver_output")).resolve()
-    else:
-        silver_base = Path("./silver_output").resolve()
-
-    metadata_pattern = discover_load_pattern(bronze_path) if args.pattern == "auto" else None
-    if args.pattern != "auto":
-        load_pattern = LoadPattern.normalize(args.pattern)
-    elif metadata_pattern:
-        load_pattern = metadata_pattern
-    elif cfg:
-        load_pattern = LoadPattern.normalize(cfg["source"]["run"].get("load_pattern"))
-    else:
-        load_pattern = LoadPattern.FULL
-
-    if cfg and metadata_pattern and metadata_pattern != load_pattern:
-        logger.warning(
-            "Config load_pattern (%s) differs from Bronze metadata (%s); using metadata value",
-            load_pattern.value,
-            metadata_pattern.value,
-        )
-        load_pattern = metadata_pattern
-
-    cli_primary_keys = parse_primary_keys(args.primary_key) if args.primary_key is not None else None
-    cli_order_column = args.order_column if args.order_column is not None else None
-
-    def _default_silver_cfg() -> Dict[str, Any]:
-        return {
-            "schema": {"rename_map": {}, "column_order": None},
-            "normalization": {"trim_strings": False, "empty_strings_as_null": False},
-            "partitioning": {"columns": []},
-            "error_handling": {"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0},
-            "primary_keys": [],
-            "order_column": None,
-            "write_parquet": True,
-            "write_csv": False,
-            "parquet_compression": "snappy",
-            "full_output_name": "full_snapshot",
-            "cdc_output_name": "cdc_changes",
-            "current_output_name": "current",
-            "history_output_name": "history",
-            "domain": "default",
-            "entity": "dataset",
-            "version": 1,
-            "load_partition_name": "load_date",
-            "include_pattern_folder": False,
-            "require_checksum": False,
-        }
-
-    silver_cfg = cfg["silver"] if cfg else _default_silver_cfg()
-    require_checksum = (
-        args.require_checksum
-        if args.require_checksum is not None
-        else silver_cfg.get("require_checksum", False)
-    )
-
-    write_parquet = (
-        args.write_parquet if args.write_parquet is not None else silver_cfg.get("write_parquet", True)
-    )
-    write_csv = (
-        args.write_csv if args.write_csv is not None else silver_cfg.get("write_csv", False)
-    )
-
-    if not write_parquet and not write_csv:
-        parser.error("At least one output format (Parquet or CSV) must be enabled")
-
-    parquet_compression = (
-        args.parquet_compression
-        if args.parquet_compression
-        else silver_cfg.get("parquet_compression", "snappy")
-    )
-
-    artifact_names = {
-        "full_snapshot": args.full_output_name or silver_cfg.get("full_output_name", "full_snapshot"),
-        "cdc": args.cdc_output_name or silver_cfg.get("cdc_output_name", "cdc_changes"),
-        "current": args.current_output_name or silver_cfg.get("current_output_name", "current"),
-        "history": args.history_output_name or silver_cfg.get("history_output_name", "history"),
-    }
-    partition_columns = silver_cfg.get("partitioning", {}).get("columns", [])
-
-    if cfg:
-        domain = silver_cfg.get("domain", cfg["source"]["system"])
-        entity = silver_cfg.get("entity", cfg["source"]["table"])
-        version = silver_cfg.get("version", 1)
-        load_partition_name = silver_cfg.get("load_partition_name", "load_date")
-        include_pattern_folder = silver_cfg.get("include_pattern_folder", False)
-        silver_partition = build_silver_partition_path(
-            silver_base,
-            domain,
-            entity,
-            version,
-            load_partition_name,
-            include_pattern_folder,
-            load_pattern,
-            run_date,
-        )
-    else:
-        silver_partition = silver_base / derive_relative_partition(bronze_path)
-
-    logger.info("Bronze partition: %s", bronze_path)
-    logger.info("Silver partition: %s", silver_partition)
-    logger.info("Load pattern: %s", load_pattern.value)
-
-    if require_checksum:
-        manifest = verify_checksum_manifest(bronze_path, expected_pattern=load_pattern.value)
-        manifest_path = bronze_path / "_checksums.json"
-        logger.info(
-            "Verified %s checksum entries from %s",
-            len(manifest.get("files", [])),
-            manifest_path,
-        )
-
-    if args.dry_run:
-        logger.info("Dry run complete; no files written")
-        return 0
-
-    df = load_bronze_records(bronze_path)
-
-    schema_cfg = silver_cfg.get("schema", {})
-    rename_map = schema_cfg.get("rename_map") or {}
-
-    primary_keys = cli_primary_keys if cli_primary_keys is not None else silver_cfg.get("primary_keys", [])
-    order_column = cli_order_column if cli_order_column is not None else silver_cfg.get("order_column")
-    partition_columns = partition_columns or []
-
-    primary_keys = [rename_map.get(pk, pk) for pk in primary_keys]
-    if order_column:
-        order_column = rename_map.get(order_column, order_column)
-
-    adjusted_partition_columns: List[str] = []
-    for col in partition_columns:
-        adjusted_partition_columns.append(rename_map.get(col, col))
-    partition_columns = adjusted_partition_columns
-
-    normalized_df = apply_schema_settings(df, schema_cfg)
-    normalized_df = normalize_dataframe(normalized_df, silver_cfg.get("normalization", {}))
-    df = normalized_df
-    logger.info("Loaded %s records from Bronze path %s", len(df), bronze_path)
-
-    outputs = write_silver_outputs(
-        df,
-        silver_partition,
-        load_pattern,
-        primary_keys,
-        order_column,
-        write_parquet,
-        write_csv,
-        parquet_compression,
-        artifact_names,
-        partition_columns,
-        silver_cfg.get("error_handling", {"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0}),
-    )
-
-    write_batch_metadata(
-        silver_partition,
-        record_count=len(df),
-        chunk_count=len(outputs),
-        extra_metadata={
-            "load_pattern": load_pattern.value,
-            "bronze_path": str(bronze_path),
-            "primary_keys": primary_keys,
-            "order_column": order_column,
-            "domain": silver_cfg.get("domain"),
-            "entity": silver_cfg.get("entity"),
-            "version": silver_cfg.get("version"),
-            "load_partition_name": silver_cfg.get("load_partition_name"),
-            "include_pattern_folder": silver_cfg.get("include_pattern_folder"),
-            "partition_columns": partition_columns,
-            "write_parquet": write_parquet,
-            "write_csv": write_csv,
-            "parquet_compression": parquet_compression,
-            "normalization": silver_cfg.get("normalization", {}),
-            "schema": schema_cfg,
-            "error_handling": silver_cfg.get("error_handling", {}),
-            "artifacts": {label: [p.name for p in paths] for label, paths in outputs.items()},
-            "require_checksum": require_checksum,
-        },
-    )
-
-    for label, paths in outputs.items():
-        for path in paths:
-            logger.info("Created Silver artifact '%s': %s", label, path)
-
-    logger.info("Silver promotion complete")
-    return 0
+    service = SilverPromotionService(parser, args)
+    return service.execute()
 
 
 if __name__ == "__main__":
