@@ -237,6 +237,7 @@ silver:
 - `normalization.trim_strings` / `empty_strings_as_null` �?" safe string clean-up routines for Silver.
 - `error_handling` �?" optionally route invalid records to `_errors/<artifact>.csv` before failing hard.
 - `require_checksum` �?" when `true`, `silver_extract` enforces the checksum manifest that Bronze writes to `_checksums.json`. You can also pass `--require-checksum` on the CLI; Silver aborts if the manifest is missing, mismatched, or reports a different load pattern. This keeps Bronze and Silver in lockstep before promoting data.
+- `model` – choose the curated Silver asset type. Supported values: `scd_type_1`, `scd_type_2`, `incremental_merge`, `full_merge_dedupe`, `periodic_snapshot`. Defaults derive from the Bronze load pattern (`full` -> `periodic_snapshot`, `cdc` -> `incremental_merge`, `current_history` -> `scd_type_2`). Override via `silver.model` or the CLI `--silver-model` flag.
 
 If the `silver` section is omitted, `silver_extract` falls back to sensible defaults and you can override individual settings with CLI switches.
 

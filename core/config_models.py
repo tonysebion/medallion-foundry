@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from core.patterns import LoadPattern
+from core.silver_models import SilverModel
 
 
 def _ensure_type(value: Any, expected: type, message: str) -> Any:
@@ -174,6 +175,7 @@ class SilverConfig:
     normalization: SilverNormalization
     error_handling: SilverErrorHandling
     partitioning: SilverPartitioning
+    model: SilverModel
 
     @classmethod
     def from_raw(
@@ -246,6 +248,12 @@ class SilverConfig:
         normalization = SilverNormalization.from_dict(data.get("normalization"))
         error_handling = SilverErrorHandling.from_dict(data.get("error_handling"))
         partitioning = SilverPartitioning.from_dict(data.get("partitioning"))
+        model_value = data.get("model")
+        if model_value is not None:
+            _ensure_str(model_value, "silver.model must be a string")
+            model = SilverModel.normalize(model_value)
+        else:
+            model = SilverModel.default_for_load_pattern(load_pattern)
 
         if load_pattern == LoadPattern.CURRENT_HISTORY:
             if not primary_keys:
@@ -274,6 +282,7 @@ class SilverConfig:
             normalization=normalization,
             error_handling=error_handling,
             partitioning=partitioning,
+            model=model,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -298,5 +307,5 @@ class SilverConfig:
             "normalization": self.normalization.to_dict(),
             "error_handling": self.error_handling.to_dict(),
             "partitioning": self.partitioning.to_dict(),
+            "model": self.model.value,
         }
-

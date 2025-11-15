@@ -29,6 +29,7 @@ from core.catalog import (
 from core.hooks import fire_webhooks
 from core.run_options import RunOptions
 from silver_stream import stream_silver_promotion
+from core.silver_models import SilverModel
 
 logger = logging.getLogger(__name__)
 
@@ -277,39 +278,86 @@ class DatasetWriter:
         return written_files
 
 
-class SilverOutputPlanner:
-    """Generate Silver artifacts for a given load pattern."""
+class SilverModelPlanner:
+    """Generate Silver artifacts for a given asset model."""
 
-    def __init__(self, writer: DatasetWriter, primary_keys: List[str], order_column: str | None) -> None:
+    def __init__(
+        self,
+        writer: DatasetWriter,
+        primary_keys: List[str],
+        order_column: str | None,
+        artifact_names: Dict[str, str],
+        silver_model: SilverModel,
+    ) -> None:
         self.writer = writer
         self.primary_keys = primary_keys
         self.order_column = order_column
+        self.artifact_names = {
+            "full_snapshot": artifact_names.get("full_snapshot", "full_snapshot"),
+            "cdc": artifact_names.get("cdc", "cdc_changes"),
+            "history": artifact_names.get("history", "history"),
+            "current": artifact_names.get("current", "current"),
+        }
+        self.silver_model = silver_model
 
-    def render(
-        self,
-        df: pd.DataFrame,
-        pattern: LoadPattern,
-        artifact_names: Dict[str, str],
-    ) -> Dict[str, List[Path]]:
+    def render(self, df: pd.DataFrame) -> Dict[str, List[Path]]:
+        artifact_frames = self.prepare_artifacts(df)
         outputs: Dict[str, List[Path]] = {}
 
-        if pattern == LoadPattern.FULL:
-            name = artifact_names.get("full_snapshot", "full_snapshot")
-            outputs[name] = self.writer.write_dataset(name, df)
-        elif pattern == LoadPattern.CDC:
-            name = artifact_names.get("cdc", "cdc_changes")
-            outputs[name] = self.writer.write_dataset(name, df)
-        elif pattern == LoadPattern.CURRENT_HISTORY:
-            history_name = artifact_names.get("history", "history")
-            outputs[history_name] = self.writer.write_dataset(history_name, df)
-
-            current_df = build_current_view(df, self.primary_keys, self.order_column)
-            current_name = artifact_names.get("current", "current")
-            outputs[current_name] = self.writer.write_dataset(current_name, current_df)
-        else:
-            raise ValueError(f"Unsupported load pattern {pattern}")
+        for label, dataset_df in artifact_frames.items():
+            if dataset_df.empty:
+                continue
+            target_name = self.artifact_names.get(label, label)
+            outputs[target_name] = self.writer.write_dataset(target_name, dataset_df)
 
         return outputs
+
+    def prepare_artifacts(self, df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+        return self._build_artifacts(df)
+
+    def _build_artifacts(self, df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+        if self.silver_model == SilverModel.PERIODIC_SNAPSHOT:
+            return {"full_snapshot": df}
+        if self.silver_model == SilverModel.INCREMENTAL_MERGE:
+            return {"cdc": df}
+        if self.silver_model == SilverModel.FULL_MERGE_DEDUPE:
+            deduped = self._dedupe_frame(df)
+            return {"full_snapshot": deduped}
+        if self.silver_model == SilverModel.SCD_TYPE_1:
+            deduped = self._dedupe_frame(df)
+            return {"current": deduped}
+        if self.silver_model == SilverModel.SCD_TYPE_2:
+            deduped = self._dedupe_frame(df)
+            history = self._build_history_frame(df, deduped)
+            return {"history": history, "current": deduped}
+        raise ValueError(f"Unsupported silver model '{self.silver_model.value}'")
+
+    def _dedupe_frame(self, df: pd.DataFrame) -> pd.DataFrame:
+        if not self.primary_keys:
+            raise ValueError("Primary keys are required for deduplicated Silver models")
+        if not self.order_column:
+            raise ValueError("order_column is required for deduplicated Silver models")
+        if self.order_column not in df.columns:
+            raise ValueError(f"order_column '{self.order_column}' not found in Bronze data")
+        return build_current_view(df, self.primary_keys, self.order_column)
+
+    def _build_history_frame(self, df: pd.DataFrame, current_df: pd.DataFrame) -> pd.DataFrame:
+        history = df.copy()
+        if not self.primary_keys or not self.order_column:
+            return history
+
+        current_index = {
+            (tuple(row[pk] for pk in self.primary_keys), row[self.order_column])
+            for _, row in current_df.iterrows()
+        }
+
+        def mark_current(row: pd.Series) -> int:
+            key = tuple(row.get(pk) for pk in self.primary_keys)
+            key_tuple = (key, row.get(self.order_column))
+            return 1 if key_tuple in current_index else 0
+
+        history["is_current"] = history.apply(mark_current, axis=1)
+        return history
 
 
 def write_silver_outputs(
@@ -324,6 +372,7 @@ def write_silver_outputs(
     artifact_names: Dict[str, str],
     partition_columns: List[str],
     error_cfg: Dict[str, Any],
+    silver_model: SilverModel,
 ) -> Dict[str, List[Path]]:
     writer = DatasetWriter(
         base_dir=output_dir,
@@ -334,8 +383,8 @@ def write_silver_outputs(
         write_csv=write_csv,
         parquet_compression=parquet_compression,
     )
-    planner = SilverOutputPlanner(writer, primary_keys, order_column)
-    return planner.render(df, pattern, artifact_names)
+    planner = SilverModelPlanner(writer, primary_keys, order_column, artifact_names, silver_model)
+    return planner.render(df)
 
 
 def _default_silver_cfg() -> Dict[str, Any]:
@@ -359,6 +408,7 @@ def _default_silver_cfg() -> Dict[str, Any]:
         "load_partition_name": "load_date",
         "include_pattern_folder": False,
         "require_checksum": False,
+        "model": SilverModel.PERIODIC_SNAPSHOT.value,
     }
 
 
@@ -385,6 +435,7 @@ class PromotionOptions:
     schema_cfg: Dict[str, Any]
     normalization_cfg: Dict[str, Any]
     error_cfg: Dict[str, Any]
+    silver_model: SilverModel
 
     @classmethod
     def from_inputs(
@@ -437,11 +488,24 @@ class PromotionOptions:
             on_failure_webhooks=args.on_failure_webhook or [],
         )
 
+        model_override = args.silver_model or silver_cfg.get("model")
+        if model_override is not None:
+            silver_model = SilverModel.normalize(model_override)
+        else:
+            silver_model = SilverModel.default_for_load_pattern(load_pattern)
+
+        if silver_model.requires_dedupe:
+            if not primary_keys:
+                raise ValueError(f"{silver_model.describe()} requires silver.primary_keys to be defined")
+            if not order_column:
+                raise ValueError(f"{silver_model.describe()} requires silver.order_column to be defined")
+
         return cls(
             run_options=run_options,
             schema_cfg=schema_cfg,
             normalization_cfg=normalization_cfg,
             error_cfg=error_cfg,
+            silver_model=silver_model,
         )
 
 
@@ -458,6 +522,7 @@ class PromotionContext:
     version: int
     load_partition_name: str
     include_pattern_folder: bool
+    silver_model: SilverModel
 
 
 class SilverPromotionService:
@@ -504,6 +569,7 @@ class SilverPromotionService:
             config_name=context.cfg["source"].get("config_name") if context.cfg else None,
             domain=context.domain,
             entity=context.entity,
+            silver_model=context.silver_model.value,
         )
         self._run_options = context.options.run_options
         self._maybe_verify_checksum(context)
@@ -517,11 +583,11 @@ class SilverPromotionService:
             outputs, chunk_count, record_count, schema_snapshot = stream_silver_promotion(
                 bronze_path,
                 silver_partition,
-                context.load_pattern,
                 run_opts,
                 context.options.schema_cfg,
                 context.options.normalization_cfg,
                 context.options.error_cfg,
+                context.silver_model,
             )
             logger.info("Streamed %s records from Bronze path %s", record_count, bronze_path)
         else:
@@ -530,18 +596,19 @@ class SilverPromotionService:
             normalized_df = normalize_dataframe(normalized_df, context.options.normalization_cfg)
             logger.info("Loaded %s records from Bronze path %s", len(normalized_df), bronze_path)
             outputs = write_silver_outputs(
-                normalized_df,
-                silver_partition,
-                context.load_pattern,
-                run_opts.primary_keys,
-                run_opts.order_column,
-                run_opts.write_parquet,
-                run_opts.write_csv,
-                run_opts.parquet_compression,
-                run_opts.artifact_names,
-                run_opts.partition_columns,
-                context.options.error_cfg,
-            )
+            normalized_df,
+            silver_partition,
+            context.load_pattern,
+            run_opts.primary_keys,
+            run_opts.order_column,
+            run_opts.write_parquet,
+            run_opts.write_csv,
+            run_opts.parquet_compression,
+            run_opts.artifact_names,
+            run_opts.partition_columns,
+            context.options.error_cfg,
+            context.silver_model,
+        )
             schema_snapshot = [
                 {"name": col, "dtype": str(dtype)} for col, dtype in normalized_df.dtypes.items()
             ]
@@ -686,6 +753,7 @@ class SilverPromotionService:
             version=version,
             load_partition_name=load_partition_name,
             include_pattern_folder=include_pattern_folder,
+            silver_model=options.silver_model,
         )
 
     def _maybe_verify_checksum(self, context: PromotionContext) -> None:
@@ -729,6 +797,7 @@ class SilverPromotionService:
                 "error_handling": context.options.error_cfg,
                 "artifacts": {label: [p.name for p in paths] for label, paths in outputs.items()},
                 "require_checksum": context.options.run_options.require_checksum,
+                "silver_model": context.silver_model.value,
             },
         )
         logger.debug("Wrote Silver metadata to %s", metadata_path)
@@ -847,6 +916,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--order-column",
         help="Column used to identify the latest record when building current views",
+    )
+    parser.add_argument(
+        "--silver-model",
+        choices=SilverModel.choices(),
+        help="Silver asset model to produce (overrides defaults derived from Bronze load pattern)",
     )
     parser.add_argument(
         "--write-parquet",

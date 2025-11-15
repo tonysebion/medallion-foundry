@@ -284,6 +284,7 @@ python silver_extract.py --config docs/examples/configs/file_example.yaml --date
   - `--config`, `--date`, `--dry-run`, `--validate-only`, `--pattern {full|cdc|current_history}`
   - Output controls: `--write-parquet/--no-write-parquet`, `--write-csv/--no-write-csv`, `--parquet-compression`
   - Naming overrides: `--full-output-name`, `--cdc-output-name`, `--current-output-name`, `--history-output-name`
+  - Asset model controls: `--silver-model {scd_type_1|scd_type_2|incremental_merge|full_merge_dedupe|periodic_snapshot}` to request one of the supported Silver asset types (defaults are derived from the Bronze load pattern)
   - Partition overrides still available via `--bronze-path`/`--silver-base` when you need to promote ad-hoc data
 - Under the hood, the CLI flows through `SilverPromotionService` and `DatasetWriter` (see `silver_extract.py`), so extending behavior means overriding a focused class instead of editing a 600-line script. Shared defaults/validation now live in the typed dataclasses inside `core/config_models.py`, keeping Bronze and Silver configs perfectly aligned.
 - Define many inputs in a single YAML by using the `sources:` list (each item holds its own `source` and optional `silver` overrides). Bronze automatically runs every entry; Silver uses `--source-name <entry>` to pick the one you want when the config contains multiple sources.
@@ -294,6 +295,12 @@ python silver_extract.py --config docs/examples/configs/file_example.yaml --date
 - `silver.error_handling`: set `enabled`, `max_bad_records`, and `max_bad_percent` to quarantine bad rows into `_errors/` files instead of failing immediately (exceeds threshold → fail).
 - `silver.partitioning`: add a secondary partition column (e.g., status, region) for Silver outputs while still mirroring the Bronze folder layout.
 - `silver.domain` / `entity` / `version` / `load_partition_name`: describe the medallion layout so outputs land under `domain=<domain>/entity=<entity>/v<version>/<load partition>=YYYY-MM-DD/…`. Optional `include_pattern_folder: true` inserts `pattern=<load_pattern>` before the load partition.
+- `silver.model`: choose the Silver asset type to emit. Available options now mirror the requested asset catalogue:
+  - `scd_type_1` – deduplicated current view (SCD Type 1).
+  - `scd_type_2` – current + full history split with an `is_current` flag (SCD Type 2).
+  - `incremental_merge` – incremental change set from the Bronze data (CDC/timestamp).
+  - `full_merge_dedupe` – full snapshot deduplicated by the configured keys/order column, ready for full merges.
+  - `periodic_snapshot` – exact Bronze snapshot for periodic refreshes.
 
 Example Silver section:
 

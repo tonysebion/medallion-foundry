@@ -8,8 +8,8 @@ from collections import defaultdict
 from typing import Any, Dict, Iterable, List, Tuple
 
 import pandas as pd
-from core.patterns import LoadPattern
 from core.run_options import RunOptions
+from core.silver_models import SilverModel
 
 logger = logging.getLogger(__name__)
 
@@ -124,11 +124,11 @@ def _iter_bronze_frames(bronze_path: Path) -> Iterable[pd.DataFrame]:
 def stream_silver_promotion(
     bronze_path: Path,
     output_dir: Path,
-    pattern: LoadPattern,
     run_opts: RunOptions,
     schema_cfg: Dict[str, Any],
     normalization_cfg: Dict[str, Any],
     error_cfg: Dict[str, Any],
+    silver_model: SilverModel,
 ) -> Tuple[Dict[str, List[Path]], int, int, List[Dict[str, str]]]:
     writer = StreamingSilverWriter(output_dir, run_opts, error_cfg)
     state = CurrentHistoryState(run_opts.primary_keys, run_opts.order_column)
@@ -150,28 +150,50 @@ def stream_silver_promotion(
             continue
 
         record_count += len(normalized)
-        chunk_count += 1
         if not schema_snapshot:
             schema_snapshot = [{"name": col, "dtype": str(dtype)} for col, dtype in normalized.dtypes.items()]
 
-        if pattern == LoadPattern.FULL:
-            target_name = full_name
-        elif pattern == LoadPattern.CDC:
-            target_name = cdc_name
-        else:
-            target_name = history_name
-
         chunk_tag = f"{chunk_index:04d}"
-        outputs[target_name].extend(writer.write_chunk(target_name, normalized, chunk_tag))
 
-        if pattern == LoadPattern.CURRENT_HISTORY and run_opts.primary_keys:
+        if silver_model == SilverModel.PERIODIC_SNAPSHOT:
+            chunk_count += 1
+            outputs[full_name].extend(writer.write_chunk(full_name, normalized, chunk_tag))
+        elif silver_model == SilverModel.INCREMENTAL_MERGE:
+            chunk_count += 1
+            outputs[cdc_name].extend(writer.write_chunk(cdc_name, normalized, chunk_tag))
+        elif silver_model == SilverModel.SCD_TYPE_2:
+            chunk_count += 1
+            outputs[history_name].extend(writer.write_chunk(history_name, normalized, chunk_tag))
             state.update(normalized)
+        elif silver_model in {SilverModel.SCD_TYPE_1, SilverModel.FULL_MERGE_DEDUPE}:
+            state.update(normalized)
+        else:
+            raise ValueError(f"Unsupported silver model '{silver_model.value}'")
 
-    if pattern == LoadPattern.CURRENT_HISTORY and not state.snapshot().empty:
-        chunk_count += 1
+    if silver_model == SilverModel.SCD_TYPE_1:
         current_df = state.snapshot()
-        outputs[current_name].extend(writer.write_chunk(current_name, current_df, f"current-{chunk_count:04d}"))
-        record_count += len(current_df)
+        if not current_df.empty:
+            chunk_count += 1
+            outputs[current_name].extend(
+                writer.write_chunk(current_name, current_df, f"current-{chunk_count:04d}")
+            )
+            record_count += len(current_df)
+    elif silver_model == SilverModel.FULL_MERGE_DEDUPE:
+        full_df = state.snapshot()
+        if not full_df.empty:
+            chunk_count += 1
+            outputs[full_name].extend(
+                writer.write_chunk(full_name, full_df, f"full-{chunk_count:04d}")
+            )
+            record_count += len(full_df)
+    elif silver_model == SilverModel.SCD_TYPE_2:
+        current_df = state.snapshot()
+        if not current_df.empty:
+            chunk_count += 1
+            outputs[current_name].extend(
+                writer.write_chunk(current_name, current_df, f"current-{chunk_count:04d}")
+            )
+            record_count += len(current_df)
 
     return dict(outputs), chunk_count, record_count, schema_snapshot
 
