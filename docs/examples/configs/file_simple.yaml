@@ -5,12 +5,20 @@ platform:
 
 source:
   type: "file"
-  system: "local_demo"
-  table: "flat_orders"
+  system: "local_demo"           # appears in Bronze path (system=<name>)
+  table: "flat_orders"           # appears in Bronze path (table=<name>)
   file:
-    path: "./data/sample_orders.csv"
+    path: "./data/sample_orders.csv"  # relative path to the source file
   run:
-    load_pattern: "full"
-    # Optional:
-    # write_csv: true
-    # limit_rows: 1000
+    load_pattern: "full"          # required load pattern for promotable Bronze data
+    # Optional Bronze tuning:
+    # write_csv: true             # enable small CSV chunks for debugging
+    # limit_rows: 1000            # useful when previewing data locally
+
+silver:
+  # Silver inherits defaults; override only when you need different normalization/partitioning.
+  write_parquet: true
+  # normalization:
+  #   trim_strings: true
+  # partitioning:
+  #   columns: ["status"]

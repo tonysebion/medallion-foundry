@@ -8,12 +8,12 @@ source:
   system: "customers"
   table: "base"
   db:
-    conn_str_env: "CUSTOMER_DB_CONN"
+    conn_str_env: "CUSTOMER_DB_CONN"  # env var holding the connection string
     base_query: |
       SELECT CustomerID, Name, UpdatedAt
       FROM dbo.Customers
   run:
     load_pattern: "full"
-    # Optional adjustments:
+    # Optional adjustments for Bronze chunking:
     # max_rows_per_file: 200000
     # write_csv: true

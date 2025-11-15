@@ -21,6 +21,8 @@ source:
     incremental:
       cursor_field: "LastModifiedDate"
       cursor_type: "timestamp"
+      # cursor_type = "string" if the extractor returns textual cursors
+      # state_file can be omitted for stateless runs (e.g., demo mode)
     # If you need a different auth flow, swap the extractor module/class or add OAuth params here.
     # Example OAuth placeholders:
     # oauth_client_id: "..."
@@ -32,6 +34,7 @@ run:
     max_rows_per_file: 100000
     parallel_workers: 6
     require_checksum: true
+    # Choose between CSV/Parquet via write_csv / write_parquet overrides
 
 silver:
   write_parquet: true

@@ -14,8 +14,8 @@ source:
     endpoint: "/orders"
     method: "GET"
   run:
-    load_pattern: "full"
-    # Optional overrides:
+    load_pattern: "full"  # Required pattern for full snapshots
+    # Optional runtime tuning:
     # max_rows_per_file: 500000
     # write_parquet: true
     # parallel_workers: 1

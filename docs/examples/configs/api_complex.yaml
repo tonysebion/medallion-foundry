@@ -3,8 +3,8 @@ platform:
     s3_bucket: "integration-bronze"
     s3_prefix: "bronze/orders"
     partitioning:
-      use_dt_partition: true
-      partition_strategy: "batch_id"
+      use_dt_partition: true         # adds dt=YYYY-MM-DD partitions
+      partition_strategy: "batch_id" # custom batch identifier folder
     output_defaults:
       allow_csv: true
       allow_parquet: true
@@ -20,6 +20,12 @@ source:
     method: "GET"
     auth_type: "bearer"
     auth_token_env: "ORDERS_API_TOKEN"
+    # Only one auth_type can be active; uncomment the section below for the alternative.
+    # auth_type: "basic"
+    # auth_user_env: "API_USER"
+    # auth_pass_env: "API_PASS"
+    # auth_type: "api_key"
+    # api_key_env: "ORDERS_API_KEY"
     # Alternative authentication:
     # auth_type: "basic"
     # auth_user_env: "API_USER"
@@ -46,7 +52,7 @@ source:
     max_rows_per_file: 250000
     parallel_workers: 4
     require_checksum: true
-    # Additional advanced tuning:
+    # Optional performance knobs:
     # max_file_size_mb: 512
     # cleanup_on_failure: false
 
