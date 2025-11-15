@@ -92,6 +92,27 @@ python bronze_extract.py --config config/test.yaml
 
 **👉 See [QUICKSTART.md](QUICKSTART.md) for detailed instructions with screenshots and troubleshooting.**
 
+### 🧪 Offline Local Quick Test
+
+Need proof the tooling works but don’t have API credentials yet? Use the bundled sample data.
+
+```bash
+# 0. (Once) prepare the sandbox data
+python scripts/generate_sample_data.py
+
+# 1. Run Bronze with the file-based config
+python bronze_extract.py --config docs/examples/configs/file_example.yaml --date 2025-11-13
+
+# 2. Promote the same run into Silver
+python silver_extract.py --config docs/examples/configs/file_example.yaml --date 2025-11-13
+
+# 3. Inspect the outputs
+tree output/system=retail_demo
+tree silver_output/domain=retail_demo
+```
+
+This workflow uses only local files, so a non-Python user can validate everything end-to-end before wiring real APIs or databases.
+
 ---
 
 ### 📚 Full Setup (For Data Teams)
@@ -208,6 +229,44 @@ python silver_extract.py \
 - Current + history mix (800 rows): `docs/examples/data/bronze_samples/current_history/system=retail_demo/table=orders/pattern=current_history/dt=2025-11-03/`
 - Matching configs: `file_example.yaml` (full), `file_cdc_example.yaml` (cdc), `file_current_history_example.yaml`
 
+### Multi-Source Pipelines (One YAML, Many Jobs)
+
+Group related extracts into a single config by using the `sources:` array. Shared settings (storage, schema, normalization) live at the top, while each entry supplies only the bits that differ.
+
+```yaml
+platform:
+  bronze: { ... }
+silver:
+  output_dir: ./silver_output
+sources:
+  - name: claims_header
+    source:
+      system: claims
+      table: header
+      type: file
+      file: { path: ./data/claim_header.csv, format: csv }
+      run: { load_pattern: full }
+    silver:
+      domain: claims
+      entity: claim_header
+  - name: claims_cdc
+    source:
+      system: claims
+      table: header_cdc
+      type: file
+      file: { path: ./data/claim_header_cdc.csv, format: csv }
+      run: { load_pattern: cdc }
+```
+
+Run both layers with the same file:
+
+```bash
+python bronze_extract.py --config pipeline.yaml
+python silver_extract.py --config pipeline.yaml --source-name claims_cdc
+```
+
+This keeps medallion assets in sync without juggling dozens of CLI flags or bespoke Python scripts.
+
 ### Shared Bronze/Silver Configs
 - Every example config now contains a `silver` section with the same vocabulary as `source.run` (e.g., `write_parquet`, `write_csv`, `output_dir`, `primary_keys`, `order_column`)
 - Run both stages with the same file so settings stay in sync:
@@ -266,6 +325,23 @@ silver_output/
             is_current=1/
               claim_snapshot.parquet
 ```
+
+| Key | Description | Default |
+| --- | --- | --- |
+| `silver.domain` / `silver.entity` | Medallion folders (`domain=<domain>/entity=<entity>`) | `source.system` / `source.table` |
+| `silver.version` | Version folder (e.g., `v1`) | `1` |
+| `silver.load_partition_name` | Load-level partition name | `load_date` |
+| `silver.partitioning.columns` | Additional partition folders (e.g., `status`, `is_current`) | `[]` |
+| `silver.schema.rename_map` / `column_order` | Structural column cleanup | `None` |
+| `silver.normalization.trim_strings` / `empty_strings_as_null` | Consistent string handling | `False` / `False` |
+| `silver.error_handling.enabled` | Quarantine rows missing primary keys | `False` |
+| `silver.error_handling.max_bad_records` / `max_bad_percent` | Threshold before failing | `0` / `0.0` |
+
+### What Silver Will *Not* Do
+
+- ❌ Business logic or row-level filtering—Silver only standardizes structure.
+- ❌ Custom transformations per dataset beyond the declarative `schema`/`normalization` options.
+- ❌ Silent drops of bad data—use `silver.error_handling` to quarantine and alert.
 
 ### Core Features
 - ✅ Proper Python package structure

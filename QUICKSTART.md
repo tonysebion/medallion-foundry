@@ -348,6 +348,25 @@ python bronze_extract.py --config config/my_api.yaml
 
 Output will be in `./output/system=my_system/table=my_data/dt=2025-11-12/`
 
+### Optional: Offline Local Test (No API Required)
+
+Want to see the pipeline without calling a real API? Use the bundled file example:
+
+```powershell
+# Prepare sample data (one-time)
+python scripts/generate_sample_data.py
+
+# Run Bronze + Silver with the same config
+python bronze_extract.py --config docs/examples/configs/file_example.yaml --date 2025-11-13
+python silver_extract.py --config docs/examples/configs/file_example.yaml --date 2025-11-13
+
+# Inspect outputs
+tree output/system=retail_demo
+tree silver_output/domain=retail_demo
+```
+
+Great for demos, workshops, or air-gapped laptops.
+
 ## 📋 Common Scenarios
 
 ### API with Bearer Token

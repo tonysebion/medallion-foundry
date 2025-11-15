@@ -44,6 +44,11 @@ examples/
 - Shows how to use custom extractors
 - Extensibility example
 
+**`file_example*.yaml`** - Offline/full, CDC, and current+history examples
+- Point to `docs/examples/data/bronze_samples/...`
+- Pair with `silver_extract.py` to test medallion layouts
+- Regenerate the sample input files anytime with `python scripts/generate_sample_data.py`
+
 ### Advanced Configuration
 
 **`enhanced_example.yaml`** - Production-ready features:

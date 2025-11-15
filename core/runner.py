@@ -11,7 +11,13 @@ from extractors.api_extractor import ApiExtractor
 from extractors.db_extractor import DbExtractor
 from extractors.file_extractor import FileExtractor
 
-from core.io import chunk_records, write_csv_chunk, write_parquet_chunk, write_batch_metadata
+from core.io import (
+    chunk_records,
+    write_csv_chunk,
+    write_parquet_chunk,
+    write_batch_metadata,
+    write_checksum_manifest,
+)
 from core.storage import StorageBackend, get_storage_backend
 from core.patterns import LoadPattern
 
@@ -235,6 +241,14 @@ def run_extract(
             },
         )
         created_files.append(metadata_path)
+
+        checksum_metadata = {
+            "system": source_cfg["system"],
+            "table": source_cfg["table"],
+            "run_date": run_date.isoformat(),
+            "config_name": source_cfg.get("config_name"),
+        }
+        checksum_path = write_checksum_manifest(out_dir, created_files, load_pattern.value, checksum_metadata)
         
         if storage_enabled and storage_backend:
             remote_path = f"{relative_path}{metadata_path.name}"

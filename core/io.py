@@ -154,3 +154,48 @@ def write_batch_metadata(
 
     logger.info(f"Wrote metadata to {metadata_path}")
     return metadata_path
+
+
+def write_checksum_manifest(
+    out_dir: Path,
+    files: List[Path],
+    load_pattern: str,
+    extra_metadata: Optional[Dict[str, Any]] = None,
+) -> Path:
+    """
+    Write a checksum manifest containing hashes of produced files.
+    """
+    import json
+    import hashlib
+    from datetime import datetime
+
+    manifest = {
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "load_pattern": load_pattern,
+        "files": [],
+    }
+
+    for file_path in files:
+        if not file_path.exists():
+            continue
+        hasher = hashlib.sha256()
+        with file_path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                hasher.update(chunk)
+        manifest["files"].append(
+            {
+                "path": file_path.name,
+                "size_bytes": file_path.stat().st_size,
+                "sha256": hasher.hexdigest(),
+            }
+        )
+
+    if extra_metadata:
+        manifest.update(extra_metadata)
+
+    manifest_path = out_dir / "_checksums.json"
+    with manifest_path.open("w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, indent=2)
+
+    logger.info(f"Wrote checksum manifest to {manifest_path}")
+    return manifest_path
