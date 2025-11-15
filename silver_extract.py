@@ -366,23 +366,82 @@ def _select_config(cfgs: List[Dict[str, Any]], source_name: Optional[str]) -> Di
 
 
 @dataclass
+class PromotionOptions:
+    schema_cfg: Dict[str, Any]
+    normalization_cfg: Dict[str, Any]
+    error_cfg: Dict[str, Any]
+    primary_keys: List[str]
+    order_column: Optional[str]
+    partition_columns: List[str]
+    write_parquet: bool
+    write_csv: bool
+    parquet_compression: str
+    artifact_names: Dict[str, str]
+    require_checksum: bool
+
+    @classmethod
+    def from_inputs(cls, silver_cfg: Dict[str, Any], args: argparse.Namespace) -> "PromotionOptions":
+        schema_cfg = silver_cfg.get("schema") or {"rename_map": {}, "column_order": None}
+        normalization_cfg = silver_cfg.get("normalization") or {"trim_strings": False, "empty_strings_as_null": False}
+        error_cfg = silver_cfg.get("error_handling") or {"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0}
+
+        cli_primary = parse_primary_keys(args.primary_key) if args.primary_key is not None else None
+        primary_keys = list(cli_primary if cli_primary is not None else silver_cfg.get("primary_keys", []))
+
+        cli_order_column = args.order_column if args.order_column is not None else None
+        order_column = cli_order_column if cli_order_column is not None else silver_cfg.get("order_column")
+
+        partition_columns = list(silver_cfg.get("partitioning", {}).get("columns", []))
+
+        rename_map = schema_cfg.get("rename_map") or {}
+        primary_keys = [rename_map.get(pk, pk) for pk in primary_keys]
+        if order_column:
+            order_column = rename_map.get(order_column, order_column)
+        partition_columns = [rename_map.get(col, col) for col in partition_columns]
+
+        write_parquet = args.write_parquet if args.write_parquet is not None else silver_cfg.get("write_parquet", True)
+        write_csv = args.write_csv if args.write_csv is not None else silver_cfg.get("write_csv", False)
+        if not write_parquet and not write_csv:
+            raise ValueError("At least one output format (Parquet or CSV) must be enabled")
+
+        parquet_compression = (
+            args.parquet_compression if args.parquet_compression else silver_cfg.get("parquet_compression", "snappy")
+        )
+
+        artifact_names = {
+            "full_snapshot": args.full_output_name or silver_cfg.get("full_output_name", "full_snapshot"),
+            "cdc": args.cdc_output_name or silver_cfg.get("cdc_output_name", "cdc_changes"),
+            "current": args.current_output_name or silver_cfg.get("current_output_name", "current"),
+            "history": args.history_output_name or silver_cfg.get("history_output_name", "history"),
+        }
+
+        require_checksum = (
+            args.require_checksum if args.require_checksum is not None else silver_cfg.get("require_checksum", False)
+        )
+
+        return cls(
+            schema_cfg=schema_cfg,
+            normalization_cfg=normalization_cfg,
+            error_cfg=error_cfg,
+            primary_keys=primary_keys,
+            order_column=order_column,
+            partition_columns=partition_columns,
+            write_parquet=write_parquet,
+            write_csv=write_csv,
+            parquet_compression=parquet_compression,
+            artifact_names=artifact_names,
+            require_checksum=require_checksum,
+        )
+
+
+@dataclass
 class PromotionContext:
     cfg: Optional[Dict[str, Any]]
     run_date: dt.date
     bronze_path: Path
     silver_partition: Path
     load_pattern: LoadPattern
-    require_checksum: bool
-    primary_keys: List[str]
-    order_column: Optional[str]
-    write_parquet: bool
-    write_csv: bool
-    parquet_compression: str
-    artifact_names: Dict[str, str]
-    partition_columns: List[str]
-    schema_cfg: Dict[str, Any]
-    normalization_cfg: Dict[str, Any]
-    error_cfg: Dict[str, Any]
+    options: PromotionOptions
     domain: Any
     entity: Any
     version: int
@@ -423,22 +482,22 @@ class SilverPromotionService:
             return 0
 
         df = load_bronze_records(bronze_path)
-        normalized_df = apply_schema_settings(df, context.schema_cfg)
-        normalized_df = normalize_dataframe(normalized_df, context.normalization_cfg)
+        normalized_df = apply_schema_settings(df, context.options.schema_cfg)
+        normalized_df = normalize_dataframe(normalized_df, context.options.normalization_cfg)
         logger.info("Loaded %s records from Bronze path %s", len(normalized_df), bronze_path)
 
         outputs = write_silver_outputs(
             normalized_df,
             silver_partition,
             context.load_pattern,
-            context.primary_keys,
-            context.order_column,
-            context.write_parquet,
-            context.write_csv,
-            context.parquet_compression,
-            context.artifact_names,
-            context.partition_columns,
-            context.error_cfg,
+            context.options.primary_keys,
+            context.options.order_column,
+            context.options.write_parquet,
+            context.options.write_csv,
+            context.options.parquet_compression,
+            context.options.artifact_names,
+            context.options.partition_columns,
+            context.options.error_cfg,
         )
 
         self._write_metadata(normalized_df, outputs, context)
@@ -553,49 +612,10 @@ class SilverPromotionService:
         run_date: dt.date,
     ) -> PromotionContext:
         silver_cfg = cfg["silver"] if cfg else _default_silver_cfg()
-        schema_cfg = silver_cfg.get("schema", {"rename_map": {}, "column_order": None})
-        normalization_cfg = silver_cfg.get("normalization", {"trim_strings": False, "empty_strings_as_null": False})
-        error_cfg = silver_cfg.get("error_handling", {"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0})
-
-        cli_primary = parse_primary_keys(self.args.primary_key) if self.args.primary_key is not None else None
-        primary_keys = cli_primary if cli_primary is not None else silver_cfg.get("primary_keys", [])
-
-        cli_order_column = self.args.order_column if self.args.order_column is not None else None
-        order_column = cli_order_column if cli_order_column is not None else silver_cfg.get("order_column")
-
-        rename_map = schema_cfg.get("rename_map") or {}
-        primary_keys = [rename_map.get(pk, pk) for pk in primary_keys]
-        if order_column:
-            order_column = rename_map.get(order_column, order_column)
-
-        partition_columns = silver_cfg.get("partitioning", {}).get("columns", [])
-        partition_columns = [rename_map.get(col, col) for col in partition_columns]
-
-        write_parquet = (
-            self.args.write_parquet if self.args.write_parquet is not None else silver_cfg.get("write_parquet", True)
-        )
-        write_csv = self.args.write_csv if self.args.write_csv is not None else silver_cfg.get("write_csv", False)
-        if not write_parquet and not write_csv:
-            self.parser.error("At least one output format (Parquet or CSV) must be enabled")
-
-        parquet_compression = (
-            self.args.parquet_compression
-            if self.args.parquet_compression
-            else silver_cfg.get("parquet_compression", "snappy")
-        )
-
-        artifact_names = {
-            "full_snapshot": self.args.full_output_name or silver_cfg.get("full_output_name", "full_snapshot"),
-            "cdc": self.args.cdc_output_name or silver_cfg.get("cdc_output_name", "cdc_changes"),
-            "current": self.args.current_output_name or silver_cfg.get("current_output_name", "current"),
-            "history": self.args.history_output_name or silver_cfg.get("history_output_name", "history"),
-        }
-
-        require_checksum = (
-            self.args.require_checksum
-            if self.args.require_checksum is not None
-            else silver_cfg.get("require_checksum", False)
-        )
+        try:
+            options = PromotionOptions.from_inputs(silver_cfg, self.args)
+        except ValueError as exc:
+            self.parser.error(str(exc))
 
         domain, entity, version, load_partition_name, include_pattern_folder = (
             self._silver_identity
@@ -611,17 +631,7 @@ class SilverPromotionService:
             bronze_path=bronze_path,
             silver_partition=silver_partition,
             load_pattern=load_pattern,
-            require_checksum=require_checksum,
-            primary_keys=primary_keys,
-            order_column=order_column,
-            write_parquet=write_parquet,
-            write_csv=write_csv,
-            parquet_compression=parquet_compression,
-            artifact_names=artifact_names,
-            partition_columns=partition_columns,
-            schema_cfg=schema_cfg,
-            normalization_cfg=normalization_cfg,
-            error_cfg=error_cfg,
+            options=options,
             domain=domain,
             entity=entity,
             version=version,
@@ -630,7 +640,7 @@ class SilverPromotionService:
         )
 
     def _maybe_verify_checksum(self, context: PromotionContext) -> None:
-        if not context.require_checksum:
+        if not context.options.require_checksum:
             return
         manifest = verify_checksum_manifest(context.bronze_path, expected_pattern=context.load_pattern.value)
         manifest_path = context.bronze_path / "_checksums.json"
@@ -653,22 +663,22 @@ class SilverPromotionService:
             extra_metadata={
                 "load_pattern": context.load_pattern.value,
                 "bronze_path": str(context.bronze_path),
-                "primary_keys": context.primary_keys,
-                "order_column": context.order_column,
+                "primary_keys": context.options.primary_keys,
+                "order_column": context.options.order_column,
                 "domain": context.domain,
                 "entity": context.entity,
                 "version": context.version,
                 "load_partition_name": context.load_partition_name,
                 "include_pattern_folder": context.include_pattern_folder,
-                "partition_columns": context.partition_columns,
-                "write_parquet": context.write_parquet,
-                "write_csv": context.write_csv,
-                "parquet_compression": context.parquet_compression,
-                "normalization": context.normalization_cfg,
-                "schema": context.schema_cfg,
-                "error_handling": context.error_cfg,
+                "partition_columns": context.options.partition_columns,
+                "write_parquet": context.options.write_parquet,
+                "write_csv": context.options.write_csv,
+                "parquet_compression": context.options.parquet_compression,
+                "normalization": context.options.normalization_cfg,
+                "schema": context.options.schema_cfg,
+                "error_handling": context.options.error_cfg,
                 "artifacts": {label: [p.name for p in paths] for label, paths in outputs.items()},
-                "require_checksum": context.require_checksum,
+                "require_checksum": context.options.require_checksum,
             },
         )
         logger.debug("Wrote Silver metadata to %s", metadata_path)
