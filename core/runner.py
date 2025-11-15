@@ -23,6 +23,7 @@ from core.io import (
 )
 from core.storage import StorageBackend, get_storage_backend
 from core.patterns import LoadPattern
+from core.catalog import report_schema_snapshot, report_quality_snapshot, report_run_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -155,6 +156,7 @@ class ExtractJob:
         self.load_pattern: Optional[LoadPattern] = None
         self.output_formats: Dict[str, bool] = {"csv": True, "parquet": True}
         self._out_dir = self.local_output_base / self.relative_path
+        self.schema_snapshot: List[Dict[str, str]] = []
 
     @property
     def source_cfg(self) -> Dict[str, Any]:
@@ -177,6 +179,8 @@ class ExtractJob:
         if not records:
             logger.warning("No records returned from extractor")
             return 0
+
+        self.schema_snapshot = self._infer_schema(records)
 
         chunk_count, chunk_files = self._process_chunks(records)
         self.created_files.extend(chunk_files)
@@ -229,6 +233,21 @@ class ExtractJob:
         chunk_files = processor.process(chunks)
         return len(chunks), chunk_files
 
+    def _infer_schema(self, records: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+        if not records:
+            return []
+        keys = sorted(
+            {key for record in records if isinstance(record, dict) for key in record.keys()}
+        )
+        schema_snapshot: List[Dict[str, str]] = []
+        for key in keys:
+            value = next(
+                (record.get(key) for record in records if isinstance(record, dict) and key in record),
+                None,
+            )
+            schema_snapshot.append({"name": key, "dtype": type(value).__name__ if value is not None else "unknown"})
+        return schema_snapshot
+
     def _emit_metadata(self, record_count: int, chunk_count: int, cursor: Optional[str]) -> None:
         metadata_path = write_batch_metadata(
             self._out_dir,
@@ -253,6 +272,17 @@ class ExtractJob:
             "run_date": self.run_date.isoformat(),
             "config_name": self.source_cfg.get("config_name"),
         }
+        stats = {
+            "record_count": record_count,
+            "chunk_count": chunk_count,
+            "artifact_count": len(self.created_files),
+        }
+        extra_meta = {
+            "schema": self.schema_snapshot,
+            "stats": stats,
+            "load_pattern": self.load_pattern.value if self.load_pattern else LoadPattern.FULL.value,
+        }
+        checksum_metadata.update(extra_meta)
         write_checksum_manifest(
             self._out_dir,
             self.created_files,
@@ -263,6 +293,20 @@ class ExtractJob:
         if self.storage_plan:
             self.storage_plan.upload(metadata_path)
 
+        dataset_id = f"bronze:{self.source_cfg['system']}.{self.source_cfg['table']}"
+        report_schema_snapshot(dataset_id, self.schema_snapshot)
+        report_quality_snapshot(dataset_id, stats)
+        report_run_metadata(
+            dataset_id,
+            {
+                "run_date": self.run_date.isoformat(),
+                "load_pattern": self.load_pattern.value if self.load_pattern else LoadPattern.FULL.value,
+                "chunk_count": chunk_count,
+                "record_count": record_count,
+                "relative_path": self.relative_path,
+                "status": "success",
+            },
+        )
         if cursor:
             logger.info(f"Extractor returned new_cursor={cursor!r}")
 
