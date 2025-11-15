@@ -28,6 +28,7 @@ from core.catalog import (
 )
 from core.hooks import fire_webhooks
 from core.run_options import RunOptions
+from silver_stream import stream_silver_promotion
 
 logger = logging.getLogger(__name__)
 
@@ -511,28 +512,44 @@ class SilverPromotionService:
             logger.info("Dry run complete; no files written")
             return 0
 
-        df = load_bronze_records(bronze_path)
-        normalized_df = apply_schema_settings(df, context.options.schema_cfg)
-        normalized_df = normalize_dataframe(normalized_df, context.options.normalization_cfg)
-        logger.info("Loaded %s records from Bronze path %s", len(normalized_df), bronze_path)
-
         run_opts = context.options.run_options
-        outputs = write_silver_outputs(
-            normalized_df,
-            silver_partition,
-            context.load_pattern,
-            run_opts.primary_keys,
-            run_opts.order_column,
-            run_opts.write_parquet,
-            run_opts.write_csv,
-            run_opts.parquet_compression,
-            run_opts.artifact_names,
-            run_opts.partition_columns,
-            context.options.error_cfg,
-        )
+        if self.args.stream_mode:
+            outputs, chunk_count, record_count, schema_snapshot = stream_silver_promotion(
+                bronze_path,
+                silver_partition,
+                context.load_pattern,
+                run_opts,
+                context.options.schema_cfg,
+                context.options.normalization_cfg,
+                context.options.error_cfg,
+            )
+            logger.info("Streamed %s records from Bronze path %s", record_count, bronze_path)
+        else:
+            df = load_bronze_records(bronze_path)
+            normalized_df = apply_schema_settings(df, context.options.schema_cfg)
+            normalized_df = normalize_dataframe(normalized_df, context.options.normalization_cfg)
+            logger.info("Loaded %s records from Bronze path %s", len(normalized_df), bronze_path)
+            outputs = write_silver_outputs(
+                normalized_df,
+                silver_partition,
+                context.load_pattern,
+                run_opts.primary_keys,
+                run_opts.order_column,
+                run_opts.write_parquet,
+                run_opts.write_csv,
+                run_opts.parquet_compression,
+                run_opts.artifact_names,
+                run_opts.partition_columns,
+                context.options.error_cfg,
+            )
+            schema_snapshot = [
+                {"name": col, "dtype": str(dtype)} for col, dtype in normalized_df.dtypes.items()
+            ]
+            record_count = len(normalized_df)
+            chunk_count = len(outputs)
 
-        self._write_metadata(normalized_df, outputs, context)
-        self._write_checksum_manifest(normalized_df, outputs, context)
+        self._write_metadata(record_count, chunk_count, context, outputs)
+        self._write_checksum_manifest(outputs, context, schema_snapshot, record_count, chunk_count)
 
         for label, paths in outputs.items():
             for path in paths:
@@ -684,14 +701,15 @@ class SilverPromotionService:
 
     def _write_metadata(
         self,
-        df: pd.DataFrame,
-        outputs: Dict[str, List[Path]],
+        record_count: int,
+        chunk_count: int,
         context: PromotionContext,
+        outputs: Dict[str, List[Path]],
     ) -> None:
         metadata_path = write_batch_metadata(
             context.silver_partition,
-            record_count=len(df),
-            chunk_count=len(outputs),
+            record_count=record_count,
+            chunk_count=chunk_count,
             extra_metadata={
                 "load_pattern": context.load_pattern.value,
                 "bronze_path": str(context.bronze_path),
@@ -717,9 +735,11 @@ class SilverPromotionService:
 
     def _write_checksum_manifest(
         self,
-        df: pd.DataFrame,
         outputs: Dict[str, List[Path]],
         context: PromotionContext,
+        schema_snapshot: List[Dict[str, str]],
+        record_count: int,
+        chunk_count: int,
     ) -> None:
         files = [path for paths in outputs.values() for path in paths]
         if not files:
@@ -727,9 +747,9 @@ class SilverPromotionService:
             return
 
         dataset_id = f"silver:{context.domain}.{context.entity}"
-        schema_snapshot = [{"name": name, "dtype": str(dtype)} for name, dtype in df.dtypes.items()]
         stats = {
-            "record_count": int(len(df)),
+            "record_count": record_count,
+            "chunk_count": chunk_count,
             "primary_key_count": len(context.options.run_options.primary_keys),
         }
 
@@ -855,6 +875,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.set_defaults(write_csv=None)
     parser.add_argument("--parquet-compression", help="Parquet compression codec (default: snappy)")
+    parser.add_argument(
+        "--stream",
+        dest="stream_mode",
+        action="store_true",
+        help="Use the streaming writer that processes Bronze chunks incrementally",
+    )
     parser.add_argument("--full-output-name", help="Base name for full snapshot files")
     parser.add_argument("--current-output-name", help="Base name for current view files")
     parser.add_argument("--history-output-name", help="Base name for history view files")
