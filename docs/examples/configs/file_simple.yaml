@@ -1,0 +1,16 @@
+platform:
+  bronze:
+    s3_bucket: "example-bronze"
+    s3_prefix: "bronze"
+
+source:
+  type: "file"
+  system: "local_demo"
+  table: "flat_orders"
+  file:
+    path: "./data/sample_orders.csv"
+  run:
+    load_pattern: "full"
+    # Optional:
+    # write_csv: true
+    # limit_rows: 1000

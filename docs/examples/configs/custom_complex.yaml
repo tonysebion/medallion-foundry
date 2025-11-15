@@ -1,0 +1,57 @@
+platform:
+  bronze:
+    s3_bucket: "enterprise-bronze"
+    s3_prefix: "bronze/custom"
+    partitioning:
+      use_dt_partition: true
+
+source:
+  type: "custom"
+  system: "salesforce"
+  table: "accounts"
+  custom_extractor:
+    module: "custom_extractors.salesforce"
+    class_name: "SalesforceExtractor"
+  salesforce:
+    username_env: "SF_USER"
+    password_env: "SF_PASS"
+    token_env: "SF_TOKEN"
+    soql_query: |
+      SELECT Id, Name, LastModifiedDate FROM Account WHERE IsDeleted = false
+    incremental:
+      cursor_field: "LastModifiedDate"
+      cursor_type: "timestamp"
+    # If you need a different auth flow, swap the extractor module/class or add OAuth params here.
+    # Example OAuth placeholders:
+    # oauth_client_id: "..."
+    # oauth_client_secret_env: "SF_SECRET"
+run:
+    load_pattern: "cdc"
+    write_parquet: true
+    write_csv: true
+    max_rows_per_file: 100000
+    parallel_workers: 6
+    require_checksum: true
+
+silver:
+  write_parquet: true
+  write_csv: true
+  partitioning:
+    columns: ["is_current"]
+  schema:
+    rename_map:
+      Id: account_id
+      LastModifiedDate: updated_at
+    column_order:
+      - account_id
+      - name
+      - updated_at
+      - is_current
+  normalization:
+    trim_strings: true
+    empty_strings_as_null: true
+  error_handling:
+    enabled: true
+    max_bad_records: 25
+    max_bad_percent: 0.25
+  require_checksum: true

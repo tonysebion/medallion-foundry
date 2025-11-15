@@ -1,0 +1,52 @@
+platform:
+  bronze:
+    s3_bucket: "enterprise-bronze"
+    s3_prefix: "bronze/files"
+    output_defaults:
+      allow_csv: true
+      allow_parquet: true
+      parquet_compression: "zstd"
+
+source:
+  type: "file"
+  system: "retail_demo"
+  table: "orders_snapshot"
+  file:
+    path: "./data/bronze_samples/current_history/system=retail_demo/table=orders/pattern=current_history/dt=2025-11-03/"
+    format: "parquet"
+    limit_rows: 5000
+    columns:
+      - OrderID
+      - Status
+      - UpdatedAt
+    # To read CSV/JSON files instead, update format/delimiter and adjust columns.
+  run:
+    load_pattern: "current_history"
+    write_parquet: true
+    write_csv: false
+    max_rows_per_file: 200000
+    parallel_workers: 4
+    require_checksum: true
+    # Uncomment to enable streaming when Bronze partitions grow too large:
+    # --stream flag via CLI
+
+silver:
+  write_parquet: true
+  write_csv: false
+  partitioning:
+    columns: ["status"]
+  schema:
+    rename_map:
+      OrderID: order_id
+      UpdatedAt: updated_at
+    column_order:
+      - order_id
+      - status
+      - updated_at
+  normalization:
+    trim_strings: true
+  error_handling:
+    enabled: true
+    max_bad_records: 25
+    max_bad_percent: 0.5
+  require_checksum: true

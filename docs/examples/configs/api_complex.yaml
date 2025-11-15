@@ -1,0 +1,72 @@
+platform:
+  bronze:
+    s3_bucket: "integration-bronze"
+    s3_prefix: "bronze/orders"
+    partitioning:
+      use_dt_partition: true
+      partition_strategy: "batch_id"
+    output_defaults:
+      allow_csv: true
+      allow_parquet: true
+      parquet_compression: "snappy"
+
+source:
+  type: "api"
+  system: "orders"
+  table: "orders_full"
+  api:
+    base_url: "https://api.example.com"
+    endpoint: "/orders"
+    method: "GET"
+    auth_type: "bearer"
+    auth_token_env: "ORDERS_API_TOKEN"
+    # Alternative authentication:
+    # auth_type: "basic"
+    # auth_user_env: "API_USER"
+    # auth_pass_env: "API_PASS"
+    # auth_type: "api_key"
+    # api_key_env: "ORDERS_API_KEY"
+    params:
+      page_size: 1000
+      include_inactive: false
+    pagination:
+      type: "page"
+      page_param: "page"
+      start_page: 1
+      max_pages: 1000
+    incremental:
+      enabled: true
+      cursor_field: "updated_at"
+      cursor_param: "updated_since"
+      initial_cursor_value: "2025-01-01T00:00:00Z"
+  run:
+    load_pattern: "current_history"
+    write_parquet: true
+    write_csv: false
+    max_rows_per_file: 250000
+    parallel_workers: 4
+    require_checksum: true
+    # Additional advanced tuning:
+    # max_file_size_mb: 512
+    # cleanup_on_failure: false
+
+silver:
+  write_parquet: true
+  write_csv: true
+  partitioning:
+    columns: ["status"]
+  schema:
+    rename_map:
+      OrderID: order_id
+    column_order:
+      - order_id
+      - status
+      - updated_at
+  normalization:
+    trim_strings: true
+    empty_strings_as_null: true
+  error_handling:
+    enabled: true
+    max_bad_records: 100
+    max_bad_percent: 2.0
+  require_checksum: true

@@ -1,0 +1,19 @@
+platform:
+  bronze:
+    s3_bucket: "example-bronze"
+    s3_prefix: "bronze"
+
+source:
+  type: "db"
+  system: "customers"
+  table: "base"
+  db:
+    conn_str_env: "CUSTOMER_DB_CONN"
+    base_query: |
+      SELECT CustomerID, Name, UpdatedAt
+      FROM dbo.Customers
+  run:
+    load_pattern: "full"
+    # Optional adjustments:
+    # max_rows_per_file: 200000
+    # write_csv: true

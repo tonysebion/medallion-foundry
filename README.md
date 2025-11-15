@@ -230,6 +230,9 @@ python silver_extract.py \
 - Current + history mix (800 rows): `docs/examples/data/bronze_samples/current_history/system=retail_demo/table=orders/pattern=current_history/dt=2025-11-03/`
 - Matching configs: `file_example.yaml` (full), `file_cdc_example.yaml` (cdc), `file_current_history_example.yaml`
 
+### Sample Configs
+- `docs/examples/configs/` contains `_simple.yaml` starter configs plus `_complex.yaml` versions that showcase advanced options for each extractor type (API, DB, file, custom). Use the simple configs to get Bronze/Silver running quickly and refer to the complex ones when you need to enable partitioning, normalization, error handling, or streaming mode.
+
 ### Multi-Source Pipelines (One YAML, Many Jobs)
 
 Group related extracts into a single config by using the `sources:` array. Shared settings (storage, schema, normalization) live at the top, while each entry supplies only the bits that differ.

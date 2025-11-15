@@ -1,5 +1,11 @@
 # Real-World Example Configurations
 
+- API: `api_simple.yaml` / `api_complex.yaml`
+- DB: `db_simple.yaml` / `db_complex.yaml`
+- File-based: `file_simple.yaml` / `file_complex.yaml`
+- Custom extractor: `custom_simple.yaml` / `custom_complex.yaml`
+
+
 Example configurations for popular SaaS platforms and APIs.
 
 ## Shopify API

@@ -1,0 +1,21 @@
+platform:
+  bronze:
+    # Target bucket/prefix for Bronze files
+    s3_bucket: "example-bronze"
+    s3_prefix: "bronze"
+
+source:
+  # Use the API extractor for HTTP sources
+  type: "api"
+  system: "orders"      # Logical system name used in partition path
+  table: "orders"       # Logical table name used in partition path
+  api:
+    base_url: "https://api.example.com"
+    endpoint: "/orders"
+    method: "GET"
+  run:
+    load_pattern: "full"
+    # Optional overrides:
+    # max_rows_per_file: 500000
+    # write_parquet: true
+    # parallel_workers: 1

@@ -1,0 +1,17 @@
+platform:
+  bronze:
+    s3_bucket: "example-bronze"
+    s3_prefix: "bronze/custom"
+
+source:
+  type: "custom"
+  system: "salesforce"
+  table: "accounts"
+  custom_extractor:
+    module: "custom_extractors.salesforce"
+    class_name: "SalesforceExtractor"
+  run:
+    load_pattern: "full"
+    # Optional parameters:
+    # parallel_workers: 2
+    # write_csv: true

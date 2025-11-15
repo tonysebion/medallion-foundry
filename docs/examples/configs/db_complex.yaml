@@ -1,0 +1,59 @@
+platform:
+  bronze:
+    s3_bucket: "enterprise-bronze"
+    s3_prefix: "bronze/customers"
+    partitioning:
+      use_dt_partition: true
+      partition_strategy: "hourly"
+    output_defaults:
+      allow_csv: false
+      allow_parquet: true
+      parquet_compression: "zstd"
+
+source:
+  type: "db"
+  system: "customers_dw"
+  table: "customer_snapshot"
+  db:
+    conn_str_env: "CUSTOMER_DB_CONN"
+    base_query: |
+      SELECT CustomerID, Name, Email, UpdatedAt FROM dbo.Customers WHERE UpdatedAt >= ? AND UpdatedAt < ?
+    incremental:
+      enabled: true
+      cursor_column: "UpdatedAt"
+      state_file: "./state/customers.cursor"
+      cursor_type: "datetime"
+      # Use cursor_type "string" if your cursor stores text, or omit state_file for stateless runs.
+  run:
+    load_pattern: "current_history"
+    write_parquet: true
+    write_csv: false
+    parallel_workers: 8
+    max_file_size_mb: 512
+    require_checksum: true
+    cleanup_on_failure: true
+    # Toggle parallel_workers based on available CPU/memory.
+
+silver:
+  write_parquet: true
+  write_csv: false
+  partitioning:
+    columns: ["region"]
+  normalization:
+    trim_strings: true
+    empty_strings_as_null: true
+  schema:
+    rename_map:
+      CustomerID: customer_id
+      UpdatedAt: updated_at
+    column_order:
+      - customer_id
+      - name
+      - email
+      - region
+      - updated_at
+  error_handling:
+    enabled: true
+    max_bad_records: 50
+    max_bad_percent: 1.0
+  require_checksum: true
