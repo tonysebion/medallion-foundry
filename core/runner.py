@@ -9,9 +9,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from extractors.base import BaseExtractor
 from extractors.api_extractor import ApiExtractor
 from extractors.db_extractor import DbExtractor
+from extractors.file_extractor import FileExtractor
 
 from core.io import chunk_records, write_csv_chunk, write_parquet_chunk, write_batch_metadata
 from core.storage import StorageBackend, get_storage_backend
+from core.patterns import LoadPattern
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,8 @@ def build_extractor(cfg: Dict[str, Any]) -> BaseExtractor:
         module = importlib.import_module(module_name)
         cls = getattr(module, class_name)
         return cls()
+    elif src_type == "file":
+        return FileExtractor()
     else:
         raise ValueError(f"Unknown source.type: {src_type}")
 
@@ -47,7 +51,8 @@ def _process_chunk(
     parquet_compression: str,
     storage_enabled: bool,
     storage_backend: Optional[StorageBackend],
-    relative_path: str
+    relative_path: str,
+    chunk_prefix: str,
 ) -> Tuple[int, List[Path], Optional[Exception]]:
     """
     Process a single chunk: write to disk and optionally upload to storage.
@@ -69,7 +74,7 @@ def _process_chunk(
     """
     created_files = []
     try:
-        suffix = f"part-{chunk_index:04d}"
+        suffix = f"{chunk_prefix}-part-{chunk_index:04d}"
         
         # Write CSV
         if write_csv:
@@ -127,6 +132,9 @@ def run_extract(
 
         # Prepare output settings
         run_cfg = source_cfg["run"]
+        load_pattern = LoadPattern.normalize(run_cfg.get("load_pattern"))
+        chunk_prefix = load_pattern.chunk_prefix
+        logger.info(f"Load pattern: {load_pattern.value} ({load_pattern.describe()})")
         max_rows_per_file = int(run_cfg.get("max_rows_per_file", 0))
         max_file_size_mb = run_cfg.get("max_file_size_mb")  # Can be None
 
@@ -171,7 +179,8 @@ def run_extract(
                         parquet_compression,
                         storage_enabled,
                         storage_backend,
-                        relative_path
+                        relative_path,
+                        chunk_prefix,
                     )
                     futures[future] = chunk_index
                 
@@ -199,7 +208,8 @@ def run_extract(
                     parquet_compression,
                     storage_enabled,
                     storage_backend,
-                    relative_path
+                    relative_path,
+                    chunk_prefix,
                 )
                 
                 if error:
@@ -208,29 +218,21 @@ def run_extract(
                 created_files.extend(chunk_files)
                 part_index += 1
 
-        # Write batch metadata
-        batch_metadata = {
-            "batch_timestamp": datetime.now().isoformat(),
-            "run_date": run_date.isoformat(),
-            "system": source_cfg["system"],
-            "table": source_cfg["table"],
-            "total_records": len(records),
-            "num_files": len(chunks),
-            "partition_path": relative_path,
-            "file_formats": {
-                "csv": write_csv,
-                "parquet": write_parquet
-            }
-        }
-        
-        if new_cursor:
-            batch_metadata["new_cursor"] = new_cursor
-        
-        # Write metadata with new signature
+        # Write metadata with extra context (load pattern, partition info, etc.)
         metadata_path = write_batch_metadata(
             out_dir,
             record_count=len(records),
-            chunk_count=len(chunks)
+            chunk_count=len(chunks),
+            cursor=new_cursor,
+            extra_metadata={
+                "batch_timestamp": datetime.now().isoformat(),
+                "run_date": run_date.isoformat(),
+                "system": source_cfg["system"],
+                "table": source_cfg["table"],
+                "partition_path": relative_path,
+                "file_formats": {"csv": write_csv, "parquet": write_parquet},
+                "load_pattern": load_pattern.value,
+            },
         )
         created_files.append(metadata_path)
         

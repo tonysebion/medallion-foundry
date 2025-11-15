@@ -1,0 +1,32 @@
+platform:
+  bronze:
+    storage_backend: local
+    local_path: ./output
+    partitioning:
+      use_dt_partition: true
+    output_defaults:
+      allow_csv: true
+      allow_parquet: true
+      parquet_compression: snappy
+
+source:
+  type: file
+  system: retail_demo
+  table: orders
+  file:
+    path: ./docs/examples/data/bronze_samples/cdc/system=retail_demo/table=orders/pattern=cdc/dt=2025-11-02/cdc-part-0001.csv
+    format: csv
+  run:
+    write_csv: true
+    write_parquet: false
+    local_output_dir: ./output
+    load_pattern: cdc
+
+silver:
+  output_dir: ./silver_output
+  write_parquet: true
+  write_csv: false
+  parquet_compression: snappy
+  primary_keys: ["order_id"]
+  order_column: changed_at
+  cdc_output_name: cdc_changes

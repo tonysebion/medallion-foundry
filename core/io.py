@@ -114,7 +114,8 @@ def write_batch_metadata(
     chunk_count: int,
     cursor: Optional[str] = None,
     performance_metrics: Optional[Dict[str, Any]] = None,
-    quality_metrics: Optional[Dict[str, Any]] = None
+    quality_metrics: Optional[Dict[str, Any]] = None,
+    extra_metadata: Optional[Dict[str, Any]] = None,
 ) -> Path:
     """
     Write metadata file for batch tracking and monitoring.
@@ -143,6 +144,9 @@ def write_batch_metadata(
     
     if quality_metrics:
         metadata["quality"] = quality_metrics
+
+    if extra_metadata:
+        metadata.update(extra_metadata)
 
     metadata_path = out_dir / "_metadata.json"
     with metadata_path.open("w", encoding="utf-8") as f:

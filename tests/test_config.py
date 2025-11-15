@@ -5,7 +5,7 @@ import tempfile
 from pathlib import Path
 import yaml
 
-from core.config import load_config, build_relative_path
+from core.config import load_config, load_configs, build_relative_path
 from datetime import date
 
 
@@ -57,6 +57,7 @@ class TestConfigLoading:
         loaded_config = load_config(str(config_file))
         assert loaded_config["source"]["system"] == "test_system"
         assert loaded_config["platform"]["bronze"]["s3_bucket"] == "test-bucket"
+        assert loaded_config["source"]["run"]["load_pattern"] == "full"
 
     def test_missing_config_file(self):
         """Test that missing config file raises FileNotFoundError."""
@@ -112,6 +113,127 @@ class TestConfigLoading:
         with pytest.raises(ValueError, match="Invalid source.type"):
             load_config(str(config_file))
 
+    def test_file_source_requires_path(self, tmp_path):
+        """Test that file sources require a path."""
+        config = {
+            "platform": {
+                "bronze": {"s3_bucket": "test", "s3_prefix": "bronze"},
+                "s3_connection": {}
+            },
+            "source": {
+                "type": "file",
+                "system": "offline",
+                "table": "sample",
+                "file": {},
+                "run": {}
+            }
+        }
+        config_file = tmp_path / "file_config.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config, f)
+
+        with pytest.raises(ValueError, match="source.file requires 'path'"):
+            load_config(str(config_file))
+
+    def test_file_source_validates_format(self, tmp_path):
+        """Test that invalid file formats are rejected."""
+        config = {
+            "platform": {
+                "bronze": {"s3_bucket": "test", "s3_prefix": "bronze"},
+                "s3_connection": {}
+            },
+            "source": {
+                "type": "file",
+                "system": "offline",
+                "table": "sample",
+                "file": {
+                    "path": "./data/sample.txt",
+                    "format": "unsupported"
+                },
+                "run": {}
+            }
+        }
+        config_file = tmp_path / "file_config.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config, f)
+
+        with pytest.raises(ValueError, match="source.file.format"):
+            load_config(str(config_file))
+
+    def test_load_configs_multiple_sources(self, tmp_path):
+        """Test loading configs with multiple sources in one file."""
+        config = {
+            "platform": {
+                "bronze": {
+                    "s3_bucket": "test-bucket",
+                    "s3_prefix": "bronze",
+                    "output_defaults": {"allow_csv": True, "allow_parquet": True},
+                },
+                "s3_connection": {},
+            },
+            "silver": {
+                "output_dir": "./silver_output",
+                "primary_keys": ["id"],
+            },
+            "sources": [
+                {
+                    "name": "full_orders",
+                    "source": {
+                        "type": "file",
+                        "system": "demo",
+                        "table": "orders",
+                        "file": {"path": "./data/orders_full.csv", "format": "csv"},
+                        "run": {"load_pattern": "full"},
+                    },
+                },
+                {
+                    "name": "cdc_orders",
+                    "source": {
+                        "type": "file",
+                        "system": "demo",
+                        "table": "orders_cdc",
+                        "file": {"path": "./data/orders_cdc.csv", "format": "csv"},
+                        "run": {"load_pattern": "cdc"},
+                    },
+                },
+            ],
+        }
+        config_file = tmp_path / "multi.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config, f)
+
+        configs = load_configs(str(config_file))
+        assert len(configs) == 2
+        names = [cfg["source"]["config_name"] for cfg in configs]
+        assert names == ["full_orders", "cdc_orders"]
+
+    def test_invalid_load_pattern(self, tmp_path):
+        """Test that invalid load patterns raise ValueError."""
+        config = {
+            "platform": {
+                "bronze": {"s3_bucket": "test", "s3_prefix": "bronze"},
+                "s3_connection": {}
+            },
+            "source": {
+                "type": "api",
+                "system": "offline",
+                "table": "sample",
+                "api": {
+                    "base_url": "https://example.com",
+                    "endpoint": "/records"
+                },
+                "run": {
+                    "load_pattern": "invalid"
+                }
+            }
+        }
+        config_file = tmp_path / "pattern_config.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config, f)
+
+        with pytest.raises(ValueError, match="load pattern"):
+            load_config(str(config_file))
+
 
 class TestBuildRelativePath:
     """Test relative path building."""
@@ -133,7 +255,7 @@ class TestBuildRelativePath:
         run_date = date(2025, 11, 12)
         path = build_relative_path(config, run_date)
         
-        assert path == "system=test_sys/table=test_tbl/dt=2025-11-12/"
+        assert path == "system=test_sys/table=test_tbl/pattern=full/dt=2025-11-12/"
 
     def test_build_path_without_dt_partition(self):
         """Test path building without dt partition."""
@@ -152,4 +274,4 @@ class TestBuildRelativePath:
         run_date = date(2025, 11, 12)
         path = build_relative_path(config, run_date)
         
-        assert path == "system=test_sys/table=test_tbl/"
+        assert path == "system=test_sys/table=test_tbl/pattern=full/"

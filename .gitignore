@@ -214,6 +214,7 @@ marimo/_lsp/
 
 # Output files
 output/
+silver_output/
 *.csv
 *.parquet
 
@@ -221,3 +222,4 @@ output/
 config/*.yaml
 !config/example*.yaml
 __marimo__/
+_metadata.json

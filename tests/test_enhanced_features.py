@@ -68,7 +68,7 @@ def test_partition_strategy_date():
     run_date = date(2025, 1, 12)
     path = build_relative_path(cfg, run_date)
     
-    assert path == "system=test_system/table=test_table/dt=2025-01-12/"
+    assert path == "system=test_system/table=test_table/pattern=full/dt=2025-01-12/"
 
 
 def test_partition_strategy_hourly():
@@ -93,7 +93,7 @@ def test_partition_strategy_hourly():
     path = build_relative_path(cfg, run_date)
     
     # Should include hour partition
-    assert path.startswith("system=test_system/table=test_table/dt=2025-01-12/hour=")
+    assert path.startswith("system=test_system/table=test_table/pattern=full/dt=2025-01-12/hour=")
     assert path.endswith("/")
 
 
@@ -120,7 +120,7 @@ def test_partition_strategy_batch_id():
     run_date = date(2025, 1, 12)
     path = build_relative_path(cfg, run_date)
     
-    assert path == "system=test_system/table=test_table/dt=2025-01-12/batch_id=test_batch_123/"
+    assert path == "system=test_system/table=test_table/pattern=full/dt=2025-01-12/batch_id=test_batch_123/"
 
 
 def test_write_batch_metadata(tmp_path):
@@ -174,7 +174,7 @@ def test_partition_no_dt():
     path = build_relative_path(cfg, run_date)
     
     # Should not include dt partition
-    assert path == "system=test_system/table=test_table/"
+    assert path == "system=test_system/table=test_table/pattern=full/"
     assert "dt=" not in path
 
 

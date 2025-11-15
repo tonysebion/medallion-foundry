@@ -20,11 +20,12 @@ import datetime as dt
 from pathlib import Path
 from typing import List
 
-from core.config import load_config, build_relative_path
+from core.config import load_configs, build_relative_path
 from core.runner import run_extract
 from core.parallel import run_parallel_extracts
 from core.logging_config import setup_logging
 from core.storage import get_storage_backend
+from core.patterns import LoadPattern
 
 __version__ = "1.0.0"
 
@@ -36,7 +37,11 @@ def list_storage_backends() -> List[str]:
     return ["s3", "azure", "gcs", "local"]
 
 
-def validate_configs(config_paths: List[str], dry_run: bool = False) -> int:
+def validate_configs(
+    config_paths: List[str],
+    dry_run: bool = False,
+    override_pattern: str | None = None,
+) -> int:
     """
     Validate configuration files.
     
@@ -52,27 +57,30 @@ def validate_configs(config_paths: List[str], dry_run: bool = False) -> int:
     for config_path in config_paths:
         try:
             logger.info(f"Validating config: {config_path}")
-            cfg = load_config(config_path)
-            
-            # Additional validation checks
-            source = cfg["source"]
-            logger.info(f"  ✓ System: {source['system']}, Table: {source['table']}, Type: {source.get('type', 'api')}")
-            
-            # Check storage backend configuration
-            platform = cfg["platform"]
-            storage_backend = platform["bronze"].get("storage_backend", "s3")
-            logger.info(f"  ✓ Storage backend: {storage_backend}")
-            
-            # Test storage backend initialization (dry-run mode)
-            if dry_run:
-                try:
-                    backend = get_storage_backend(platform)
-                    logger.info(f"  ✓ Storage backend initialized: {backend.get_backend_type()}")
-                except Exception as e:
-                    logger.warning(f"  ⚠ Storage backend validation failed: {e}")
-            
-            logger.info(f"  ✓ Config valid: {config_path}")
-            
+            cfgs = load_configs(config_path)
+            for cfg in cfgs:
+                if override_pattern:
+                    cfg["source"]["run"]["load_pattern"] = LoadPattern.normalize(override_pattern).value
+
+                source = cfg["source"]
+                logger.info(
+                    f"  ✓ System: {source['system']}, Table: {source['table']}, Type: {source.get('type', 'api')}, Config: {source.get('config_name')}"
+                )
+                logger.info(f"  ✓ Load pattern: {source.get('run', {}).get('load_pattern', LoadPattern.FULL.value)}")
+
+                platform = cfg["platform"]
+                storage_backend = platform["bronze"].get("storage_backend", "s3")
+                logger.info(f"  ✓ Storage backend: {storage_backend}")
+
+                if dry_run:
+                    try:
+                        backend = get_storage_backend(platform)
+                        logger.info(f"  ✓ Storage backend initialized: {backend.get_backend_type()}")
+                    except Exception as e:
+                        logger.warning(f"  ⚠ Storage backend validation failed: {e}")
+
+            logger.info(f"  ✓ Config valid: {config_path} ({len(cfgs)} source(s))")
+
         except Exception as e:
             logger.error(f"  ✗ Config invalid: {config_path}")
             logger.error(f"    Error: {e}")
@@ -101,6 +109,11 @@ def main() -> int:
         type=int,
         default=1,
         help="Number of parallel workers for multi-config extraction (default: 1 = sequential)"
+    )
+    parser.add_argument(
+        "--load-pattern",
+        choices=LoadPattern.choices(),
+        help="Override load pattern for all configs (full, cdc, current_history)"
     )
     
     # New flags
@@ -167,19 +180,22 @@ def main() -> int:
     # Handle validation-only mode
     if args.validate_only:
         logger.info("Running configuration validation (no connection tests)")
-        return validate_configs(config_paths, dry_run=False)
+        return validate_configs(config_paths, dry_run=False, override_pattern=args.load_pattern)
     
     # Handle dry-run mode
     if args.dry_run:
         logger.info("Running in dry-run mode (validation + connection tests, no extraction)")
-        return validate_configs(config_paths, dry_run=True)
+        return validate_configs(config_paths, dry_run=True, override_pattern=args.load_pattern)
     
     # Load all configs
     configs = []
     for config_path in config_paths:
         try:
-            cfg = load_config(config_path)
-            configs.append(cfg)
+            cfgs = load_configs(config_path)
+            for cfg in cfgs:
+                if args.load_pattern:
+                    cfg["source"]["run"]["load_pattern"] = LoadPattern.normalize(args.load_pattern).value
+            configs.extend(cfgs)
         except Exception as e:
             logger.error(f"Failed to load config {config_path}: {e}", exc_info=True)
             return 1

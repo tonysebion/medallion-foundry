@@ -1,4 +1,4 @@
-# bronze-foundry
+﻿# bronze-foundry
 
 `bronze-foundry` is a **production-ready**, config-driven Python framework for landing data from **APIs**, **databases**, or **custom sources** into a **Bronze layer** with **pluggable storage backends** (S3, Azure, GCS, local filesystem), using conventions that support future analytics platforms and medallion-style architectures.
 
@@ -10,7 +10,7 @@ This framework is intentionally lightweight and orchestration-neutral: you can r
 ## ✨ Key Features
 
 ### Core Capabilities
-- **🔌 Multiple Source Types** - APIs (REST), databases (SQL), or custom Python extractors
+- **🔌 Multiple Source Types** - APIs (REST), databases (SQL), local files, or custom Python extractors
 - **🔐 Authentication** - Bearer tokens, API keys, Basic auth, and custom headers
 - **📄 Pagination** - Offset-based, page-based, cursor-based, or none
 - **🔄 Incremental Loading** - State management for efficient delta loads
@@ -161,6 +161,69 @@ Complete production setup:
 - ✅ Automatic WHERE clause injection
 - ✅ Retry logic for failed queries
 
+
+### Local File Extractor
+- Read CSV, TSV, JSON, JSONL, or Parquet files that live next to your code
+- Optional column selection and `limit_rows` keep fixtures tiny for tests
+- Reuses the same `source.run` options so Bronze writing stays identical
+- Great for demos, workshops, or development on machines without network access
+
+```yaml
+source:
+  type: file
+  system: local_demo
+  table: offline_sample
+  file:
+    path: ./data/sample.csv
+    format: csv          # csv, tsv, json, jsonl, parquet (auto if omitted)
+    columns: ['id', 'name']
+    limit_rows: 100
+  run:
+    write_csv: true
+    write_parquet: false
+```
+
+### Load Patterns & Silver Promotion
+- Configure the Bronze CLI with `--load-pattern` (or `source.run.load_pattern`) to label outputs as `full`, `cdc`, or `current_history`
+- Bronze partition paths now include the load pattern (`system=foo/table=bar/pattern=current_history/...`) so downstream jobs can select data easily
+- Use the new `silver_extract.py` helper to pull Bronze chunks into curated Silver tables; it mirrors the partition layout and writes metadata for later stages
+- Example:
+
+```bash
+# Bronze full snapshot with explicit pattern override
+python bronze_extract.py --config config/my_api.yaml --load-pattern full
+
+# Promote a Bronze partition into Silver, building current/history views
+python silver_extract.py \
+  --bronze-path output/system=my/table=orders/pattern=current_history/dt=2025-11-14/ \
+  --silver-base ./silver_output \
+  --primary-key order_id \
+  --order-column updated_at
+```
+
+### Sample Data Sets
+- Regenerate fixtures anytime with `python scripts/generate_sample_data.py`
+- Full snapshot (500 rows): `docs/examples/data/bronze_samples/full/system=retail_demo/table=orders/pattern=full/dt=2025-11-01/`
+- CDC stream (400 events): `docs/examples/data/bronze_samples/cdc/system=retail_demo/table=orders/pattern=cdc/dt=2025-11-02/`
+- Current + history mix (800 rows): `docs/examples/data/bronze_samples/current_history/system=retail_demo/table=orders/pattern=current_history/dt=2025-11-03/`
+- Matching configs: `file_example.yaml` (full), `file_cdc_example.yaml` (cdc), `file_current_history_example.yaml`
+
+### Shared Bronze/Silver Configs
+- Every example config now contains a `silver` section with the same vocabulary as `source.run` (e.g., `write_parquet`, `write_csv`, `output_dir`, `primary_keys`, `order_column`)
+- Run both stages with the same file so settings stay in sync:
+
+```bash
+python bronze_extract.py --config docs/examples/configs/file_example.yaml --date 2025-11-14
+python silver_extract.py --config docs/examples/configs/file_example.yaml --date 2025-11-14
+```
+
+- Silver CLI highlights:
+  - `--config`, `--date`, `--dry-run`, `--validate-only`, `--pattern {full|cdc|current_history}`
+  - Output controls: `--write-parquet/--no-write-parquet`, `--write-csv/--no-write-csv`, `--parquet-compression`
+  - Naming overrides: `--full-output-name`, `--cdc-output-name`, `--current-output-name`, `--history-output-name`
+  - Partition overrides still available via `--bronze-path`/`--silver-base` when you need to promote ad-hoc data
+- Define many inputs in a single YAML by using the `sources:` list (each item holds its own `source` and optional `silver` overrides). Bronze automatically runs every entry; Silver uses `--source-name <entry>` to pick the one you want when the config contains multiple sources.
+
 ### Core Features
 - ✅ Proper Python package structure
 - ✅ Comprehensive configuration validation
@@ -173,3 +236,4 @@ Complete production setup:
 - ✅ Extensible architecture (see [Azure Storage example](docs/examples/AZURE_STORAGE_EXTENSION.md))
 
 ## 📖 Documentation
+

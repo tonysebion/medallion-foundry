@@ -1,0 +1,36 @@
+platform:
+  bronze:
+    storage_backend: local
+    local_path: ./output
+    partitioning:
+      use_dt_partition: true
+    output_defaults:
+      allow_csv: true
+      allow_parquet: true
+      parquet_compression: snappy
+  # No cloud connection info needed for local testing
+
+source:
+  type: file
+  system: retail_demo
+  table: orders
+  file:
+    path: ./docs/examples/data/bronze_samples/full/system=retail_demo/table=orders/pattern=full/dt=2025-11-01/full-part-0001.csv
+    format: csv
+  run:
+    write_csv: true
+    write_parquet: false
+    local_output_dir: ./output
+    max_rows_per_file: 200
+    load_pattern: full
+
+silver:
+  output_dir: ./silver_output
+  write_parquet: true
+  write_csv: false
+  parquet_compression: snappy
+  primary_keys: ["order_id"]
+  order_column: updated_at
+  current_output_name: current
+  history_output_name: history
+  cdc_output_name: cdc_changes
