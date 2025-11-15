@@ -19,7 +19,7 @@ from core.io import write_batch_metadata, verify_checksum_manifest, write_checks
 from core.logging_config import setup_logging
 from core.patterns import LoadPattern
 from core.paths import build_silver_partition_path
-from core.catalog import notify_catalog
+from core.catalog import notify_catalog, report_schema_snapshot
 from core.hooks import fire_webhooks
 
 logger = logging.getLogger(__name__)
@@ -734,6 +734,7 @@ class SilverPromotionService:
             extra_metadata=extra,
         )
         logger.info("Wrote Silver checksum manifest to %s", manifest_path)
+        report_schema_snapshot(f"{context.domain}.{context.entity}", schema_snapshot)
 
     def _fire_hooks(self, success: bool, extra: Optional[Dict[str, Any]] = None) -> None:
         payload: Dict[str, Any] = {
