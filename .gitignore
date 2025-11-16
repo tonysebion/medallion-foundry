@@ -224,3 +224,6 @@ config/*.yaml
 __marimo__/
 _metadata.json
 _checksums.json
+!/config/README.md
+/config/*
+/config/*.*
