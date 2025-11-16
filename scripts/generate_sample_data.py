@@ -15,8 +15,16 @@ BASE_DIR = Path(__file__).resolve().parents[1] / "docs" / "examples" / "data" / 
 FULL_DATES = ["2025-11-13", "2025-11-14"]
 CDC_DATES = ["2025-11-13", "2025-11-14"]
 CURRENT_HISTORY_DATES = ["2025-11-13", "2025-11-14"]
-HYBRID_REFERENCE_DATE = datetime(2025, 11, 13).date()
+HYBRID_REFERENCE_INITIAL = datetime(2025, 11, 13).date()
+HYBRID_REFERENCE_SECOND = datetime(2025, 11, 21).date()
 HYBRID_DELTA_DAYS = 14
+HYBRID_REFERENCE_SWITCH_DAY = 8
+HYBRID_COMBOS = [
+    ("hybrid_cdc_point", "cdc", "point_in_time"),
+    ("hybrid_cdc_cumulative", "cdc", "cumulative"),
+    ("hybrid_incremental_point", "incremental_merge", "point_in_time"),
+    ("hybrid_incremental_cumulative", "incremental_merge", "cumulative"),
+]
 
 
 def _write_csv(path: Path, rows: Iterable[Dict[str, object]]) -> None:
@@ -108,7 +116,9 @@ def generate_full_snapshot(seed: int = 42, row_count: int = 500) -> None:
         _write_metadata(base_dir, "full", total_records, chunk_count)
 
 
-def _write_hybrid_reference(base_dir: Path, date_str: str, seed: int, delta_patterns: List[str]) -> None:
+def _write_hybrid_reference(
+    base_dir: Path, date_str: str, seed: int, delta_patterns: List[str], delta_mode: str
+) -> None:
     rng = Random(seed)
     rows: List[Dict[str, object]] = []
     start = datetime.fromisoformat(f"{date_str}T00:00:00")
@@ -134,9 +144,10 @@ def _write_hybrid_reference(base_dir: Path, date_str: str, seed: int, delta_patt
             "role": "reference",
             "cadence_days": 7,
             "delta_patterns": delta_patterns,
-            "reference_run_date": date_str,
-        },
-    )
+        "reference_run_date": date_str,
+        "delta_mode": delta_mode,
+    },
+)
 
 
 def _write_hybrid_delta(
@@ -147,6 +158,7 @@ def _write_hybrid_delta(
     role: str,
     rows: List[Dict[str, object]],
     delta_mode: str,
+    reference_run_date: dt.date,
 ) -> None:
     base_dir.mkdir(parents=True, exist_ok=True)
     rng = Random(seed)
@@ -160,10 +172,28 @@ def _write_hybrid_delta(
         reference_mode={
             "role": role,
             "delta_patterns": [delta_pattern],
-            "reference_run_date": HYBRID_REFERENCE_DATE.isoformat(),
+            "reference_run_date": reference_run_date.isoformat(),
             "delta_mode": delta_mode,
         },
     )
+
+
+def _build_delta_rows(delta_pattern: str, date_str: str, seed: int) -> List[Dict[str, object]]:
+    rng = Random(seed)
+    start = datetime.fromisoformat(f"{date_str}T08:00:00")
+    rows: List[Dict[str, object]] = []
+    for idx in range(1, 51):
+        rows.append(
+            {
+                "order_id": f"HYB-{idx + 150:05d}",
+                "change_type": rng.choice(["insert", "update"]),
+                "changed_at": (start + timedelta(minutes=idx * 5)).isoformat() + "Z",
+                "order_total": round(rng.uniform(15.0, 300.0), 2),
+                "delta_tag": f"{delta_pattern}-{date_str}",
+                "run_date": date_str,
+            }
+        )
+    return rows
 
 
 def generate_cdc(seed: int = 99, row_count: int = 400) -> None:
@@ -344,53 +374,45 @@ def _build_delta_rows(delta_pattern: str, date_str: str, seed: int) -> List[Dict
 
 
 def generate_hybrid_combinations(seed: int = 123) -> None:
-    combos = [
-        ("hybrid_cdc", "cdc"),
-        ("hybrid_incremental", "incremental_merge"),
-    ]
-    for combo_name, delta_pattern in combos:
-        reference_dir = (
+    for combo_name, delta_pattern, delta_mode in HYBRID_COMBOS:
+        base_pattern_dir = (
             BASE_DIR
             / combo_name
             / "system=retail_demo"
             / "table=orders"
             / f"pattern={combo_name}"
-            / f"dt={HYBRID_REFERENCE_DATE.isoformat()}"
         )
-        _write_hybrid_reference(reference_dir / "reference", HYBRID_REFERENCE_DATE.isoformat(), seed, [delta_pattern])
+        for ref_date in (HYBRID_REFERENCE_INITIAL, HYBRID_REFERENCE_SECOND):
+            ref_dir = base_pattern_dir / f"dt={ref_date.isoformat()}" / "reference"
+            _write_hybrid_reference(
+                ref_dir,
+                ref_date.isoformat(),
+                seed,
+                [delta_pattern],
+                delta_mode,
+            )
         cumulative_rows: List[Dict[str, object]] = []
         for offset in range(1, HYBRID_DELTA_DAYS + 1):
-            delta_date = HYBRID_REFERENCE_DATE + timedelta(days=offset)
+            delta_date = HYBRID_REFERENCE_INITIAL + timedelta(days=offset)
             rows = _build_delta_rows(delta_pattern, delta_date.isoformat(), seed + offset * 10)
-            cumulative_rows.extend(rows)
-            point_dir = (
-                BASE_DIR
-                / combo_name
-                / "system=retail_demo"
-                / "table=orders"
-                / f"pattern={combo_name}"
-                / f"dt={delta_date.isoformat()}"
-                / "delta"
-                / "point"
+            if delta_mode == "cumulative":
+                cumulative_rows.extend(rows)
+                rows_to_write = cumulative_rows.copy()
+            else:
+                rows_to_write = rows
+            delta_dir = base_pattern_dir / f"dt={delta_date.isoformat()}" / "delta"
+            reference_run_date = (
+                HYBRID_REFERENCE_INITIAL if offset < HYBRID_REFERENCE_SWITCH_DAY else HYBRID_REFERENCE_SECOND
             )
-            cumulative_dir = point_dir.parent / "cumulative"
             _write_hybrid_delta(
-                point_dir,
+                delta_dir,
                 delta_date.isoformat(),
                 delta_pattern,
                 seed + offset * 10,
                 "delta",
-                rows,
-                "point_in_time",
-            )
-            _write_hybrid_delta(
-                cumulative_dir,
-                delta_date.isoformat(),
-                delta_pattern,
-                seed + offset * 10,
-                "delta",
-                cumulative_rows.copy(),
-                "cumulative",
+                rows_to_write,
+                delta_mode,
+                reference_run_date,
             )
 
 
@@ -404,3 +426,9 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+HYBRID_COMBOS = [
+    ("hybrid_cdc_point", "cdc", "point_in_time"),
+    ("hybrid_cdc_cumulative", "cdc", "cumulative"),
+    ("hybrid_incremental_point", "incremental_merge", "point_in_time"),
+    ("hybrid_incremental_cumulative", "incremental_merge", "cumulative"),
+]

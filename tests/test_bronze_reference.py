@@ -11,10 +11,20 @@ from pathlib import Path
 import pytest
 
 from core.io import write_batch_metadata
-from scripts.generate_sample_data import HYBRID_DELTA_DAYS, HYBRID_REFERENCE_DATE
+from scripts.generate_sample_data import (
+    HYBRID_DELTA_DAYS,
+    HYBRID_REFERENCE_INITIAL,
+    HYBRID_REFERENCE_SECOND,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HYBRID_DIR = REPO_ROOT / "docs" / "examples" / "data" / "bronze_samples"
+HYBRID_COMBOS = [
+    ("hybrid_cdc_point", "point_in_time"),
+    ("hybrid_cdc_cumulative", "cumulative"),
+    ("hybrid_incremental_point", "point_in_time"),
+    ("hybrid_incremental_cumulative", "cumulative"),
+]
 
 
 def _write_metadata_with_reference(
@@ -79,32 +89,22 @@ def test_reference_then_incremental_delta(tmp_path: Path) -> None:
 
 
 def test_hybrid_samples_cover_delta_sequence() -> None:
-    for combo in ("hybrid_cdc", "hybrid_incremental"):
-        base = HYBRID_DIR / combo / "system=retail_demo" / "table=orders" / f"pattern={combo}"
-        reference_meta_path = base / f"dt={HYBRID_REFERENCE_DATE.isoformat()}" / "reference" / "_metadata.json"
-        assert reference_meta_path.exists()
-        reference_meta = json.loads(reference_meta_path.read_text())
-        assert reference_meta["reference_mode"]["reference_run_date"] == HYBRID_REFERENCE_DATE.isoformat()
+    for combo_name, delta_mode in HYBRID_COMBOS:
+        base = HYBRID_DIR / combo_name / "system=retail_demo" / "table=orders" / f"pattern={combo_name}"
+        for ref_date in (HYBRID_REFERENCE_INITIAL, HYBRID_REFERENCE_SECOND):
+            reference_meta_path = base / f"dt={ref_date.isoformat()}" / "reference" / "_metadata.json"
+            assert reference_meta_path.exists()
+            reference_meta = json.loads(reference_meta_path.read_text())
+            assert reference_meta["reference_mode"]["reference_run_date"] == ref_date.isoformat()
+            assert reference_meta["reference_mode"]["delta_mode"] == delta_mode
         for offset in range(1, HYBRID_DELTA_DAYS + 1):
-            delta_date = HYBRID_REFERENCE_DATE + dt.timedelta(days=offset)
-            delta_meta_path = (
-                base
-                / f"dt={delta_date.isoformat()}"
-                / "delta"
-                / "point"
-                / "_metadata.json"
-            )
+            delta_date = HYBRID_REFERENCE_INITIAL + dt.timedelta(days=offset)
+            delta_meta_path = base / f"dt={delta_date.isoformat()}" / "delta" / "_metadata.json"
             assert delta_meta_path.exists()
             delta_meta = json.loads(delta_meta_path.read_text())
-            assert delta_meta["reference_mode"]["reference_run_date"] == HYBRID_REFERENCE_DATE.isoformat()
             assert delta_meta["reference_mode"]["role"] == "delta"
-            cumulative_meta_path = (
-                base
-                / f"dt={delta_date.isoformat()}"
-                / "delta"
-                / "cumulative"
-                / "_metadata.json"
+            assert delta_meta["reference_mode"]["delta_mode"] == delta_mode
+            assert delta_meta["reference_mode"]["reference_run_date"] in (
+                HYBRID_REFERENCE_INITIAL.isoformat(),
+                HYBRID_REFERENCE_SECOND.isoformat(),
             )
-            assert cumulative_meta_path.exists()
-            cumulative_meta = json.loads(cumulative_meta_path.read_text())
-            assert cumulative_meta["reference_mode"]["delta_mode"] == "cumulative"
