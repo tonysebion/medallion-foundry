@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from core.patterns import LoadPattern
-from core.silver_models import SilverModel
+from core.silver_models import SilverModel, MODEL_PROFILES, resolve_profile
 
 
 def _ensure_type(value: Any, expected: type, message: str) -> Any:
@@ -175,6 +175,7 @@ class SilverConfig:
     normalization: SilverNormalization
     error_handling: SilverErrorHandling
     partitioning: SilverPartitioning
+    model_profile: Optional[str]
     model: SilverModel
 
     @classmethod
@@ -248,10 +249,23 @@ class SilverConfig:
         normalization = SilverNormalization.from_dict(data.get("normalization"))
         error_handling = SilverErrorHandling.from_dict(data.get("error_handling"))
         partitioning = SilverPartitioning.from_dict(data.get("partitioning"))
+        profile_value = data.get("model_profile")
+        profile_model = None
+        if profile_value is not None:
+            _ensure_str(profile_value, "silver.model_profile must be a string")
+            profile_model = resolve_profile(profile_value)
+            if profile_model is None:
+                raise ValueError(
+                    f"Unknown silver.model_profile '{profile_value}'. "
+                    f"Valid options: {', '.join(MODEL_PROFILES.keys())}"
+                )
+
         model_value = data.get("model")
         if model_value is not None:
             _ensure_str(model_value, "silver.model must be a string")
             model = SilverModel.normalize(model_value)
+        elif profile_model:
+            model = profile_model
         else:
             model = SilverModel.default_for_load_pattern(load_pattern)
 
@@ -283,6 +297,7 @@ class SilverConfig:
             error_handling=error_handling,
             partitioning=partitioning,
             model=model,
+            model_profile=profile_value,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -308,4 +323,5 @@ class SilverConfig:
             "error_handling": self.error_handling.to_dict(),
             "partitioning": self.partitioning.to_dict(),
             "model": self.model.value,
+            "model_profile": self.model_profile,
         }

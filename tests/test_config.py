@@ -7,6 +7,7 @@ import yaml
 
 from core.config import load_config, load_configs, build_relative_path
 from datetime import date
+from core.silver_models import SilverModel
 
 
 class TestConfigLoading:
@@ -303,6 +304,28 @@ class TestConfigLoading:
 
         with pytest.raises(ValueError, match="silver\\.require_checksum"):
             load_config(str(config_file))
+
+    def test_silver_model_profile_applied(self, tmp_path):
+        config = {
+            "platform": {
+                "bronze": {"s3_bucket": "test", "s3_prefix": "bronze"},
+                "s3_connection": {},
+            },
+            "silver": {"model_profile": "analytics"},
+            "source": {
+                "type": "file",
+                "system": "demo",
+                "table": "orders",
+                "file": {"path": "./data/orders.csv", "format": "csv"},
+                "run": {"load_pattern": "full"},
+            },
+        }
+        config_file = tmp_path / "silver_profile.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config, f)
+
+        loaded_config = load_config(str(config_file))
+        assert loaded_config["silver"]["model"] == SilverModel.SCD_TYPE_2.value
 
 
 class TestBuildRelativePath:

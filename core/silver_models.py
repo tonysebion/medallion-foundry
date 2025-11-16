@@ -60,6 +60,21 @@ class SilverModel(str, Enum):
         return descriptions.get(self, self.value)
 
 
+MODEL_PROFILES: Dict[str, "SilverModel"] = {
+    "analytics": SilverModel.SCD_TYPE_2,
+    "operational": SilverModel.SCD_TYPE_1,
+    "merge_ready": SilverModel.FULL_MERGE_DEDUPE,
+    "cdc_delta": SilverModel.INCREMENTAL_MERGE,
+    "snapshot": SilverModel.PERIODIC_SNAPSHOT,
+}
+
+
+def resolve_profile(profile_name: str | None) -> "SilverModel" | None:
+    if profile_name is None:
+        return None
+    key = profile_name.strip().lower()
+    return MODEL_PROFILES.get(key)
+
 SILVER_MODEL_ALIASES: Mapping[str, str] = {
     "scd_type_1": "scd_type_1",
     "scd1": "scd_type_1",
