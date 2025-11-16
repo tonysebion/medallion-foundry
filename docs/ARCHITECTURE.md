@@ -1,162 +1,26 @@
-# Architecture
+# Medallion Foundry Architecture
 
-This project provides a **single Bronze extraction primitive** that can be reused across many domains and source systems.
+This page is the visual anchor for how Bronze → Silver → Gold (and storage backends) fit together. Use the referenced documents for runbooks or configuration details.
 
-At a high level:
+## Platform layers
 
-```text
-          +-------------------+
-          |   Orchestration   |
-          |  (Any scheduler   |
-          |  or orchestrator) |
-          +---------+---------+
-                    |
-                    v
-           python bronze_extract.py
-                    |
-                    v
-       +------------+------------+
-       |   Config (YAML file)   |
-       +------------+------------+
-                    |
-                    v
-       +------------+------------+
-       |    Extractor Selector   |
-       |  (api / db / custom)   |
-       +------------+------------+
-                    |
-                    v
-       +------------+------------+
-       |     Extractor (code)    |
-       |  -> fetch_records()     |
-       +------------+------------+
-                    |
-          list[dict] records, new_cursor
-                    |
-                    v
-       +------------+------------+
-       | Bronze Writer / S3 Uploader |
-       +------------+------------+
-                    |
-                    v
-bronze/system=<system>/table=<table>/dt=YYYY-MM-DD/part-0001.parquet
-```
+- **Bronze** captures raw extracts from sources. `bronze_extract.py` validates `platform` + `source`, slices data into chunks, applies schema/normalization, and writes metadata/checksum files. Bronze can target S3, Azure, GCS, or local storage, chooseable in `platform.bronze.storage_backend`.
+- **Silver** promotes Bronze partitions into curated artifacts. It supports multiple Silver models (`SilverModel`) and output formats (Parquet/CSV), plus streaming mode for large Bronze partitions. Silver metadata includes runtime, model, and storage metrics to help governance decisions.
+- **Storage layer** is now fully plugin-based (`core/storage_registry`). The Azure backend (`core/azure_storage.py`) and S3/GCS/local backends register themselves via `core/storage_plugins.py`, so you can drop in new providers without editing `core/storage.py`.
 
-## Key components
+## Config paths
 
-### 1. CLI (`bronze_extract.py`)
+- Quick start & configs: `README.md` outlines how to run Bronze/Silver. `docs/CONFIG_REFERENCE.md` lists every configurable option (including storage metadata, `storage_scope`, and Silver model/profile presets).  
+- Architecture deep dive: This page plus `docs/EXTRACTION_GUIDANCE.md` explain when to pick each Bronze/Silver model and highlight the newly generated sample datasets under `docs/examples/data`.
+- Operational procedures: See `docs/OPERATIONS.md` for governance, testing, and sample regeneration playbooks.
 
-The CLI:
+## Samples & Tests
 
-- accepts `--config` (path to YAML)
-- accepts `--date` (logical run date, default = today)
-- loads and validates config
-- builds an extractor based on `source.type`
-- invokes `extractor.fetch_records(cfg, run_date)`
-- writes CSV/Parquet locally
-- optionally uploads to S3
-- updates incremental state if configured
-- exits with 0 on success, non-zero on error
+- Bronze sample data resides in `docs/examples/data/bronze_samples/` (full/CDC/current_history).  
+- Silver samples mirror each Bronze pattern + Silver model under `docs/examples/data/silver_samples/<pattern>/<model>/`; each folder now includes a `README.md` describing the artifacts and how to regenerate them (`scripts/generate_silver_samples.py --formats both`).  
+- Tests like `tests/test_silver_formats.py`, the integration suite, and `tests/test_silver_samples_generation.py` confirm both writers and the sample generator stay healthy.
 
-### 2. Config
+## Next steps
 
-Each YAML file has two major sections:
-
-- `platform`: owned by the data platform team
-  - Bronze bucket/prefix
-  - Partitioning conventions (e.g., `dt=YYYY-MM-DD`)
-  - Output defaults (CSV vs Parquet, compression)
-  - S3 connection env vars
-- `source`: owned by the domain/product/data team
-  - `type`: `api`, `db`, or `custom`
-  - `system` and `table` identifiers
-  - Extractor-specific settings (`api`, `db`, or `custom_extractor`)
-  - Run-time hints (`max_rows_per_file`, `local_output_dir`, `s3_enabled`, etc.)
-
-See `docs/CONFIG_REFERENCE.md` for details.
-
-### 3. Extractor interface
-
-The core extensibility point is `BaseExtractor`:
-
-```python
-class BaseExtractor(ABC):
-    @abstractmethod
-    def fetch_records(
-        self,
-        cfg: Dict[str, Any],
-        run_date: date,
-    ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-        ...
-```
-
-Built-in implementations:
-
-- `ApiExtractor`: reads from REST APIs, can use `dlt` state for incremental
-- `DbExtractor`: reads from databases using `pyodbc`, supports incremental via a cursor column + local state file
-
-Custom implementations can be added by teams in their own modules and referenced via:
-
-```yaml
-source:
-  type: "custom"
-  custom_extractor:
-    module: "my_org.custom_extractors.salesforce"
-    class_name: "SalesforceExtractor"
-```
-
-### 4. Bronze layout
-
-By default, data is written to the following logical pattern:
-
-```text
-system=<system>/table=<table>/dt=<YYYY-MM-DD>/part-0001.parquet
-```
-
-The base path is:
-
-- Local: `<local_output_dir>/<relative_path>`
-- S3: `s3://<bucket>/<prefix>/<relative_path>`
-
-Where:
-
-- `<system>` is from `source.system`
-- `<table>` is from `source.table`
-- `dt` is either the supplied `--date` or `today()`
-
-This layout is intentionally friendly for:
-
-- Hive-style catalogs and query engines
-- Future table formats that expect partition columns
-- Path-based access control policies
-
-### 5. Incremental state
-
-Incremental loading is supported differently for API and DB sources:
-
-- **API**: via dlt-based state (example only; you can swap to another state store)
-- **DB**: via a simple local state file storing the last cursor value
-
-The extractor returns `(records, new_cursor)` and the runner is responsible for applying that state in a consistent way.
-
-### 6. Orchestration neutrality
-
-The project avoids coupling to any one orchestrator:
-
-- All logic is in Python
-- The CLI is parameterized
-- No interactive input or prompts
-- Logs are printed to stdout/stderr
-
-This means you can run it from any scheduler, workflow orchestrator, or automation tool that can invoke a Python CLI.
-
-### 7. Future evolution
-
-The scaffold is designed so you can:
-
-- Add concurrency / threading in the extractors
-- Add row- or size-based splitting strategies
-- Add metrics, OpenLineage, or OpenMetadata hooks
-- Introduce more extractor types (e.g., message queues, file watchers)
-
-See `docs/ROADMAP.md` for ideas.
+- For more detail on storage backends see `docs/STORAGE_BACKEND_ARCHITECTURE.md`.  
+- To plug in new storage providers, follow `core/storage_registry.py` + `core/storage_plugins.py` and register your factory.

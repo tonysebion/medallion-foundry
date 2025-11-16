@@ -1,4 +1,4 @@
-﻿# medallion-foundry
+# medallion-foundry
 
 `medallion-foundry` is a **production-ready**, config-driven Python framework for landing data from **APIs**, **databases**, or **custom sources** into a **Bronze layer** with **pluggable storage backends** (S3, Azure, GCS, local filesystem), using conventions that support future analytics platforms and medallion-style architectures.
 
@@ -55,7 +55,7 @@ This framework is intentionally lightweight and orchestration-neutral: you can r
 - **Formats and file splitting**  
   - CSV for human-readable debugging (optional)
   - Parquet (with Snappy) for analytics
-  - Configurable `max_rows_per_file` to split large extracts into part files (e.g., `part-0001`, `part-0002`, �).
+  - Configurable `max_rows_per_file` to split large extracts into part files (e.g., `part-0001`, `part-0002`, ï¿½).
 
 - **Orchestration friendly**  
   - CLI takes `--config` and optional `--date`
@@ -94,7 +94,7 @@ python bronze_extract.py --config config/test.yaml
 
 ### ?? Offline Local Quick Test
 
-Need proof the tooling works but don�t have API credentials yet? Use the bundled sample data.
+Need proof the tooling works but donï¿½t have API credentials yet? Use the bundled sample data.
 
 ```bash
 # 0. (Once) prepare the sandbox data
@@ -228,7 +228,10 @@ python silver_extract.py \
 - Full snapshot (500 rows): `docs/examples/data/bronze_samples/full/system=retail_demo/table=orders/pattern=full/dt=2025-11-01/`
 - CDC stream (400 events): `docs/examples/data/bronze_samples/cdc/system=retail_demo/table=orders/pattern=cdc/dt=2025-11-02/`
 - Current + history mix (800 rows): `docs/examples/data/bronze_samples/current_history/system=retail_demo/table=orders/pattern=current_history/dt=2025-11-03/`
-- Silver curated samples per model: `docs/examples/data/silver_samples/<load_pattern>/<silver_model>/domain=<domain>/entity=<entity>/v<version>/load_date=<YYYY-MM-DD>/`. Run `python scripts/generate_silver_samples.py` to regenerate the Bronze ? Silver outputs for every supported Silver model.
+- Silver curated samples per model: `docs/examples/data/silver_samples/<load_pattern>/<silver_model>/domain=<domain>/entity=<entity>/v<version>/load_date=<YYYY-MM-DD>/`. Run `python scripts/generate_silver_samples.py --formats both` to regenerate the Bronze -> Silver outputs for every supported Silver model.
+- Documentation structure:
+  - **Architecture overview**: `docs/ARCHITECTURE.md` sketches Bronze/Silver/storage flows plus the plugin registry and sample references.
+  - **Operations & governance**: `docs/OPERATIONS.md` describes validation, sample generation, storage policy, and log/metric practices so different roles know where to look.
 - Matching configs: `file_example.yaml` (full), `file_cdc_example.yaml` (cdc), `file_current_history_example.yaml`
 
 ### Sample Configs
@@ -290,19 +293,6 @@ python silver_extract.py --config docs/examples/configs/file_example.yaml --date
 - Under the hood, the CLI flows through `SilverPromotionService` and `DatasetWriter` (see `silver_extract.py`), so extending behavior means overriding a focused class instead of editing a 600-line script. Shared defaults/validation now live in the typed dataclasses inside `core/config_models.py`, keeping Bronze and Silver configs perfectly aligned.
 - Define many inputs in a single YAML by using the `sources:` list (each item holds its own `source` and optional `silver` overrides). Bronze automatically runs every entry; Silver uses `--source-name <entry>` to pick the one you want when the config contains multiple sources.
 
-### Silver Refinement Options
-- `silver.schema`: rename or reorder columns for standardized curated tables.
-- `silver.normalization`: toggle `trim_strings` / `empty_strings_as_null` to keep formatting consistent across datasets.
-- `silver.error_handling`: set `enabled`, `max_bad_records`, and `max_bad_percent` to quarantine bad rows into `_errors/` files instead of failing immediately (exceeds threshold ? fail).
-- `silver.partitioning`: add a secondary partition column (e.g., status, region) for Silver outputs while still mirroring the Bronze folder layout.
-- `silver.domain` / `entity` / `version` / `load_partition_name`: describe the medallion layout so outputs land under `domain=<domain>/entity=<entity>/v<version>/<load partition>=YYYY-MM-DD/�`. Optional `include_pattern_folder: true` inserts `pattern=<load_pattern>` before the load partition.
-- `silver.model`: choose the Silver asset type to emit. Available options now mirror the requested asset catalogue:
-  - `scd_type_1` � deduplicated current view (SCD Type 1).
-  - `scd_type_2` � current + full history split with an `is_current` flag (SCD Type 2).
-  - `incremental_merge` � incremental change set from the Bronze data (CDC/timestamp).
-  - `full_merge_dedupe` � full snapshot deduplicated by the configured keys/order column, ready for full merges.
-  - `periodic_snapshot` � exact Bronze snapshot for periodic refreshes.
-
 Example Silver section:
 
 ```yaml
@@ -352,9 +342,9 @@ silver_output/
 
 ### What Silver Will *Not* Do
 
-- ? Business logic or row-level filtering�Silver only standardizes structure.
+- ? Business logic or row-level filteringï¿½Silver only standardizes structure.
 - ? Custom transformations per dataset beyond the declarative `schema`/`normalization` options.
-- ? Silent drops of bad data�use `silver.error_handling` to quarantine and alert.
+- ? Silent drops of bad dataï¿½use `silver.error_handling` to quarantine and alert.
 
 ### Core Features
 - ? Proper Python package structure
@@ -369,10 +359,83 @@ silver_output/
 
 ## ?? Documentation
 
-- [OPS_PLAYBOOK.md](docs/OPS_PLAYBOOK.md) � day-two operations, hooks, and monitoring tips.
-- [GOLD_CONTRACTS.md](docs/GOLD_CONTRACTS.md) � guidance for documenting downstream contracts and expectations.
-- [QUICKSTART.md](QUICKSTART.md) � detailed tutorial with screenshots.
-- [DOCUMENTATION.md](DOCUMENTATION.md) � architecture concepts and FAQs.
-- [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) � advanced configuration & features.
-- [CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) � exhaustive list of config options.
-- [TESTING.md](TESTING.md) � how to run tests and interpret results.
+- [OPS_PLAYBOOK.md](docs/OPS_PLAYBOOK.md) ï¿½ day-two operations, hooks, and monitoring tips.
+- [GOLD_CONTRACTS.md](docs/GOLD_CONTRACTS.md) ï¿½ guidance for documenting downstream contracts and expectations.
+- [QUICKSTART.md](QUICKSTART.md) ï¿½ detailed tutorial with screenshots.
+- [DOCUMENTATION.md](DOCUMENTATION.md) ï¿½ architecture concepts and FAQs.
+- [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) ï¿½ advanced configuration & features.
+- [CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) ï¿½ exhaustive list of config options.
+- [TESTING.md](TESTING.md) ï¿½ how to run tests and interpret results.
+### Silver Refinement Options\n- silver.schema: rename or reorder columns for standardized curated tables.\n- silver.normalization: toggle 	rim_strings / empty_strings_as_null to keep formatting consistent across datasets.\n- silver.error_handling: set enabled, max_bad_records, and max_bad_percent to quarantine bad rows into _errors/ files instead of failing immediately.\n- silver.partitioning: add a secondary partition column (e.g., status, region) for Silver outputs while still mirroring the Bronze folder layout.\n- silver.domain / entity / ersion / load_partition_name: describe the medallion layout so outputs land under domain=<domain>/entity=<entity>/v<version>/<load partition>=YYYY-MM-DD/.. Optional include_pattern_folder: true inserts pattern=<load_pattern> before the load partition.\n- silver.model: choose the Silver asset type to emit. Available options now mirror the requested asset catalogue:\n  - scd_type_1 â€“ deduplicated current view (SCD Type 1).\n  - scd_type_2 â€“ current + full history split with an is_current flag (SCD Type 2).\n  - incremental_merge â€“ incremental change set from the Bronze data (CDC/timestamp).\n  - ull_merge_dedupe â€“ full snapshot deduplicated by the configured keys/order column, ready for full merges.\n  - periodic_snapshot â€“ exact Bronze snapshot for periodic refreshes.\n  - silver.model_profile â€“ pick a named preset (analytics, operational, merge_ready, cdc_delta, snapshot) that maps to silver.model.\n- storage_metadata: classify your storage target with oundary, provider_type, and cloud_provider. Use --storage-scope onprem to force an on-prem policy.\n\nExample Silver section:
+
+```yaml
+silver:
+  domain: claims
+  entity: claim_header
+  version: 1
+  load_partition_name: load_date
+  include_pattern_folder: false
+  write_parquet: true
+  partitioning:
+    columns: ["status", "is_current"]
+  schema:
+    column_order: ["claim_id", "member_id", "status", "is_current", "load_timestamp"]
+  normalization:
+    trim_strings: true
+    empty_strings_as_null: true
+  error_handling:
+    enabled: true
+    max_bad_records: 25
+    max_bad_percent: 1.5
+```
+
+This produces a layout such as:
+
+```
+silver_output/
+  domain=claims/
+    entity=claim_header/
+      v1/
+        load_date=2025-11-01/
+          status=approved/
+            is_current=1/
+              claim_snapshot.parquet
+```
+
+| Key | Description | Default |
+| --- | --- | --- |
+| `silver.domain` / `silver.entity` | Medallion folders (`domain=<domain>/entity=<entity>`) | `source.system` / `source.table` |
+| `silver.version` | Version folder (e.g., `v1`) | `1` |
+| `silver.load_partition_name` | Load-level partition name | `load_date` |
+| `silver.partitioning.columns` | Additional partition folders (e.g., `status`, `is_current`) | `[]` |
+| `silver.schema.rename_map` / `column_order` | Structural column cleanup | `None` |
+| `silver.normalization.trim_strings` / `empty_strings_as_null` | Consistent string handling | `False` / `False` |
+| `silver.error_handling.enabled` | Quarantine rows missing primary keys | `False` |
+| `silver.error_handling.max_bad_records` / `max_bad_percent` | Threshold before failing | `0` / `0.0` |
+
+### What Silver Will *Not* Do
+
+- ? Business logic or row-level filteringï¿½Silver only standardizes structure.
+- ? Custom transformations per dataset beyond the declarative `schema`/`normalization` options.
+- ? Silent drops of bad dataï¿½use `silver.error_handling` to quarantine and alert.
+
+### Core Features
+- ? Proper Python package structure
+- ? Comprehensive configuration validation
+- ? Structured logging system
+- ? Error handling with cleanup
+- ? CSV and Parquet output
+- ? S3 upload with retries
+- ? File chunking for large datasets
+- ? Test suite with pytest
+- ? Extensible architecture
+
+## ?? Documentation
+
+- [OPS_PLAYBOOK.md](docs/OPS_PLAYBOOK.md) ï¿½ day-two operations, hooks, and monitoring tips.
+- [GOLD_CONTRACTS.md](docs/GOLD_CONTRACTS.md) ï¿½ guidance for documenting downstream contracts and expectations.
+- [QUICKSTART.md](QUICKSTART.md) ï¿½ detailed tutorial with screenshots.
+- [DOCUMENTATION.md](DOCUMENTATION.md) ï¿½ architecture concepts and FAQs.
+- [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) ï¿½ advanced configuration & features.
+- [CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) ï¿½ exhaustive list of config options.
+- [TESTING.md](TESTING.md) ï¿½ how to run tests and interpret results.

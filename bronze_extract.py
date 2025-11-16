@@ -113,6 +113,13 @@ def main() -> int:
         help="Enforce storage classification policy (onprem rejects cloud backends).",
     )
     parser.add_argument(
+        "--onprem-only",
+        dest="storage_scope",
+        action="store_const",
+        const="onprem",
+        help="Shortcut for `--storage-scope onprem` to enforce on-prem-only storage.",
+    )
+    parser.add_argument(
         "--on-success-webhook",
         action="append",
         dest="on_success_webhook",

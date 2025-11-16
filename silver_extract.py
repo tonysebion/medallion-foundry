@@ -1031,6 +1031,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Enforce storage classification policy (onprem rejects cloud storage endpoints).",
     )
     parser.add_argument(
+        "--onprem-only",
+        dest="storage_scope",
+        action="store_const",
+        const="onprem",
+        help="Alias for `--storage-scope onprem` to enforce on-prem-only storage.",
+    )
+    parser.add_argument(
         "--on-success-webhook",
         action="append",
         dest="on_success_webhook",
