@@ -5,6 +5,28 @@ All notable changes to medallion-foundry will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Typed configuration models (Pydantic) exposed via `__typed_model__` on loaded configs for gradual adoption.
+- Public `SilverArtifactWriter` protocol and `DefaultSilverArtifactWriter` implementation.
+- Partition abstraction classes: `BronzePartition`, `SilverPartition` used in `silver_extract` path resolution.
+- Explicit sample bootstrap command (`core.samples.bootstrap`) for deterministic Bronze fixtures.
+- Structured deprecation & compatibility warning framework (`core.deprecation`).
+
+### Deprecated
+- Implicit fallback from `platform.bronze.output_dir` to `platform.bronze.local_path` (CFG001, removal in 1.3.0).
+- Legacy `source.api.url` key (CFG002, removal in 1.3.0) – use `base_url`.
+- Missing `source.api.endpoint` defaulting to '/' (CFG003, removal in 1.3.0).
+- Positional legacy wrapper `write_silver_outputs` (API001, removal in 1.3.0) – migrate to `DefaultSilverArtifactWriter`.
+
+### Changed
+- `generate_silver_samples.py` no longer auto-synthesizes Bronze data; tests and users should call bootstrap command explicitly.
+
+### Migration Guidance
+Add explicit `platform.bronze.local_path`; rename `source.api.url` to `base_url`; specify `source.api.endpoint`; replace calls to `write_silver_outputs` wrapper with `DefaultSilverArtifactWriter().write(...)` before v1.3.0.
+
+
 ## [1.0.0] - 2025-11-12
 
 ### Added

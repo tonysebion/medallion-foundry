@@ -39,43 +39,13 @@ PATTERN_LOAD = {
 }
 
 
-def _ensure_minimum_bronze_samples() -> None:
-    """Create a minimal Bronze sample set if none exist (backwards compatibility).
-
-    Tests expect sample generation to succeed even on a fresh clone. If the user
-    hasn't run the Bronze sample generation yet, synthesize a tiny fixture set
-    for the supported patterns so Silver samples can still be produced.
-    """
-    if BRONZE_SAMPLE_ROOT.exists() and any(BRONZE_SAMPLE_ROOT.rglob("*.csv")):
-        return
-    # Construct minimal partitions for today's date
-    import datetime as _dt
-    run_date = _dt.date.today().isoformat()
-    samples = [
-        ("full", ["order_id,customer_id,status,order_total,updated_at", f"1,10,NEW,12.50,{run_date}T00:00:00Z"]),
-        ("cdc", ["order_id,customer_id,status,order_total,changed_at", f"1,10,NEW,12.50,{run_date}T01:00:00Z"]),
-        ("current_history", ["order_id,customer_id,status,current_flag,effective_start,effective_end,updated_at", f"1,10,NEW,true,{run_date},{run_date},{run_date}T02:00:00Z"]),
-    ]
-    for pattern, lines in samples:
-        dir_path = (
-            BRONZE_SAMPLE_ROOT
-            / pattern
-            / "system=retail_demo"
-            / "table=orders"
-            / f"pattern={pattern}"
-            / f"dt={run_date}"
-        )
-        dir_path.mkdir(parents=True, exist_ok=True)
-        filename = {
-            "full": "full-part-0001.csv",
-            "cdc": "cdc-part-0001.csv",
-            "current_history": "current-history-part-0001.csv",
-        }[pattern]
-        (dir_path / filename).write_text("\n".join(lines) + "\n", encoding="utf-8")
+# Ensure project root on sys.path when executed as standalone script
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 
 def _find_brone_partitions() -> Iterable[Dict[str, object]]:
-    _ensure_minimum_bronze_samples()
     seen: set[str] = set()
     # Accept any partition directory containing at least one CSV even if metadata file absent
     for dir_path in BRONZE_SAMPLE_ROOT.rglob("dt=*"):

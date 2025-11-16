@@ -47,7 +47,7 @@ markdown_extensions:
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.details
-    - pymdownx.emoji
+  - pymdownx.emoji
   - tables
   - toc:
       permalink: true

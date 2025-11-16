@@ -5,6 +5,7 @@ import logging
 from typing import Any, Dict
 
 from .models import SilverConfig
+from core.deprecation import emit_compat, emit_deprecation, DeprecationSpec
 from core.patterns import LoadPattern
 from core.storage.policy import validate_storage_metadata
 
@@ -56,14 +57,21 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
         if "azure_container" not in bronze:
             raise ValueError("Azure backend requires platform.bronze.azure_container")
     elif storage_backend == "local":
-        # Backwards compatibility: older configs used only output_dir for local storage.
-        # If local_path is missing but output_dir provided, treat output_dir as local_path.
         if "local_path" not in bronze:
             legacy_output_dir = bronze.get("output_dir")
             if legacy_output_dir:
                 bronze["local_path"] = legacy_output_dir
-                logger.debug(
-                    "Backfilled platform.bronze.local_path from output_dir for legacy local config"
+                emit_compat(
+                    "Using platform.bronze.output_dir as local_path; add explicit local_path to silence warning",
+                    code="CFG001",
+                )
+                emit_deprecation(
+                    DeprecationSpec(
+                        code="CFG001",
+                        message="Implicit local_path fallback will be removed; define platform.bronze.local_path",
+                        since="1.1.0",
+                        remove_in="1.3.0",
+                    )
                 )
             else:
                 raise ValueError("Local backend requires platform.bronze.local_path")
@@ -128,14 +136,28 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     if source_type == "api":
         api = source["api"]
-        # Backwards compatibility: allow legacy 'url' key and missing endpoint.
         if "base_url" not in api and "url" in api:
             api["base_url"] = api["url"]
-            logger.debug("Backfilled source.api.base_url from legacy 'url' key")
+            emit_compat("source.api.url key is deprecated; use base_url", code="CFG002")
+            emit_deprecation(
+                DeprecationSpec(
+                    code="CFG002",
+                    message="Legacy 'url' field will be removed; rename to base_url",
+                    since="1.1.0",
+                    remove_in="1.3.0",
+                )
+            )
         if "endpoint" not in api:
-            # Default to root endpoint when omitted in legacy minimal configs.
             api["endpoint"] = "/"
-            logger.debug("Defaulted source.api.endpoint to '/' for legacy config")
+            emit_compat("Defaulting missing endpoint to '/'", code="CFG003")
+            emit_deprecation(
+                DeprecationSpec(
+                    code="CFG003",
+                    message="Implicit endpoint default will be removed; specify source.api.endpoint explicitly",
+                    since="1.1.0",
+                    remove_in="1.3.0",
+                )
+            )
         if "base_url" not in api:
             raise ValueError("source.api requires 'base_url'")
         if "endpoint" not in api:

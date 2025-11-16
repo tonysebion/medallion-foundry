@@ -20,6 +20,7 @@ from core.io import write_batch_metadata, verify_checksum_manifest, write_checks
 from core.logging_config import setup_logging
 from core.patterns import LoadPattern
 from core.paths import build_silver_partition_path
+from core.partitioning import build_bronze_partition
 from core.catalog import (
     notify_catalog,
     report_schema_snapshot,
@@ -31,6 +32,7 @@ from core.hooks import fire_webhooks
 from core.run_options import RunOptions
 from core.storage.policy import enforce_storage_scope
 from core.silver.stream import stream_silver_promotion
+from core.deprecation import emit_deprecation, DeprecationSpec
 from core.silver.artifacts import (
     apply_schema_settings,
     build_current_view,
@@ -68,6 +70,14 @@ def write_silver_outputs(
                                        parquet_compression, artifact_names, partition_columns,
                                        error_cfg, silver_model, output_dir)
     """
+    emit_deprecation(
+        DeprecationSpec(
+            code="API001",
+            message="Legacy positional write_silver_outputs wrapper is deprecated; use DefaultSilverArtifactWriter instead",
+            since="1.1.0",
+            remove_in="1.3.0",
+        )
+    )
     artifact_names = artifact_names or {
         "full_snapshot": "full_snapshot",
         "cdc": "cdc_changes",
@@ -438,7 +448,8 @@ class SilverPromotionService:
         if self.args.bronze_path:
             bronze_path = Path(self.args.bronze_path).resolve()
         else:
-            bronze_path = (local_output_dir / relative_path).resolve()
+            part = build_bronze_partition(cfg, run_date)
+            bronze_path = (local_output_dir / part.relative_path()).resolve()
         load_pattern_override = None if (self.args.pattern in (None, "auto")) else self.args.pattern
         return build_run_context(
             cfg,

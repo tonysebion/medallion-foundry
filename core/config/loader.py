@@ -9,6 +9,7 @@ import logging
 import yaml
 
 from .validation import validate_config_dict
+from .typed_models import parse_root_config, RootConfig
 from core.paths import build_bronze_relative_path
 
 logger = logging.getLogger(__name__)
@@ -33,14 +34,25 @@ def _read_yaml(path: str) -> Dict[str, Any]:
     return cfg
 
 
-def load_config(path: str) -> Dict[str, Any]:
+def load_config(path: str) -> Dict[str, Any | RootConfig]:
+    """Load a single config file and return both dict and typed model.
+
+    For backward compatibility we still return a validated dict, but attach
+    a typed model instance under reserved key '__typed_model__'.
+    """
     cfg = _read_yaml(path)
     if "sources" in cfg:
         raise ValueError("Config contains multiple sources; use load_configs() instead.")
-    return validate_config_dict(cfg)
+    validated = validate_config_dict(cfg)
+    try:
+        typed = parse_root_config(validated)
+        validated["__typed_model__"] = typed
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Typed config parse failed; proceeding with dict only: %s", exc)
+    return validated
 
 
-def load_configs(path: str) -> List[Dict[str, Any]]:
+def load_configs(path: str) -> List[Dict[str, Any | RootConfig]]:
     raw = _read_yaml(path)
     if "sources" not in raw:
         return [validate_config_dict(raw)]
@@ -77,7 +89,13 @@ def load_configs(path: str) -> List[Dict[str, Any]]:
         if name:
             merged_cfg["source"]["config_name"] = name
         merged_cfg["source"]["_source_list_index"] = idx
-        results.append(validate_config_dict(merged_cfg))
+        validated = validate_config_dict(merged_cfg)
+        try:
+            typed = parse_root_config(validated)
+            validated["__typed_model__"] = typed
+        except Exception as exc:  # pragma: no cover
+            logger.warning("Typed config parse failed for source index %s: %s", idx, exc)
+        results.append(validated)
 
     return results
 
