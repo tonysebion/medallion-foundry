@@ -20,3 +20,7 @@ silver_join:
       - parquet
       - csv
     checkpoint_dir: ./output/silver_joined/.join_progress
+    join_key_pairs:
+      - left: order_id
+        right: order_identifier
+    performance_profile: auto

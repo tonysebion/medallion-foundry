@@ -128,6 +128,85 @@ def chunk_dataframe(df: pd.DataFrame, chunk_size: int) -> List[pd.DataFrame]:
     return [df.iloc[i : i + chunk_size] for i in range(0, len(df), chunk_size)]
 
 
+def _guess_join_pairs_from_metadata(left_df: pd.DataFrame, right_df: pd.DataFrame, metadata_list: List[Dict[str, Any]]) -> List[Tuple[str, str]]:
+    if len(metadata_list) < 2:
+        raise ValueError("Insufficient metadata for auto join key resolution")
+    left_pks = metadata_list[0].get("primary_keys", []) or []
+    right_pks = metadata_list[1].get("primary_keys", []) or []
+    pairs: List[Tuple[str, str]] = []
+    for left_pk, right_pk in zip(left_pks, right_pks):
+        if left_pk in left_df.columns and right_pk in right_df.columns:
+            pairs.append((left_pk, right_pk))
+    if pairs:
+        return pairs
+    common_keys = sorted(set(left_df.columns).intersection(right_df.columns))
+    if common_keys:
+        return [(key, key) for key in common_keys[: min(3, len(common_keys))]]
+    raise ValueError("Auto join key resolution failed; specify explicit join_key_pairs")
+
+
+def _resolve_join_pairs(
+    output_cfg: Dict[str, Any],
+    left_df: pd.DataFrame,
+    right_df: pd.DataFrame,
+    metadata_list: List[Dict[str, Any]],
+) -> List[Tuple[str, str]]:
+    raw_mapping = output_cfg.get("join_key_pairs") or output_cfg.get("join_key_mapping")
+    if raw_mapping:
+        if not isinstance(raw_mapping, (list, tuple)):
+            raise ValueError("join_key_pairs must be a list of mappings")
+        pairs: List[Tuple[str, str]] = []
+        for entry in raw_mapping:
+            if isinstance(entry, str):
+                pairs.append((entry, entry))
+            elif isinstance(entry, dict):
+                left_key = entry.get("left") or entry.get("source")
+                right_key = entry.get("right") or entry.get("target")
+                if not left_key or not right_key:
+                    raise ValueError("Each join_key_pairs entry must contain 'left' and 'right'")
+                pairs.append((str(left_key), str(right_key)))
+            else:
+                raise ValueError("join_key_pairs entries must be strings or mappings")
+        return pairs
+
+    raw_keys = output_cfg.get("join_keys")
+    if isinstance(raw_keys, str) and raw_keys.strip().lower() == "auto":
+        return _guess_join_pairs_from_metadata(left_df, right_df, metadata_list)
+
+    normalized = normalize_join_keys(raw_keys)
+    if normalized:
+        return [(key, key) for key in normalized]
+
+    # Fallback to auto behavior when nothing provided
+    return _guess_join_pairs_from_metadata(left_df, right_df, metadata_list)
+
+
+def _resolve_chunk_size(
+    output_cfg: Dict[str, Any],
+    left_df: pd.DataFrame,
+    metadata_list: List[Dict[str, Any]],
+) -> int:
+    explicit = output_cfg.get("chunk_size")
+    if explicit is not None:
+        return max(0, int(explicit))
+
+    profile = (output_cfg.get("performance_profile") or "auto").strip().lower()
+    if profile == "single":
+        return 0
+
+    estimated = metadata_list[0].get("record_count") if metadata_list else len(left_df)
+    estimated = estimated or len(left_df)
+    estimated = max(estimated, 1)
+
+    if profile == "chunked":
+        return max(1000, min(50000, estimated // 4))
+
+    # auto profile
+    if estimated <= 5000:
+        return 0
+    return max(1000, min(40000, estimated // 6))
+
+
 def normalize_join_keys(raw_keys: Any) -> List[str]:
     if not raw_keys:
         return []
@@ -362,6 +441,8 @@ def build_run_options(output_cfg: Dict[str, Any], metadata_list: List[Dict[str, 
 def perform_join(
     left: pd.DataFrame,
     right: pd.DataFrame,
+    join_pairs: List[Tuple[str, str]],
+    chunk_size: int,
     output_cfg: Dict[str, Any],
     progress_tracker: Optional[JoinProgressTracker] = None,
 ) -> Tuple[pd.DataFrame, JoinRunStats]:
@@ -369,25 +450,33 @@ def perform_join(
     if join_type not in VALID_JOIN_TYPES:
         raise ValueError(f"join_type must be one of {', '.join(VALID_JOIN_TYPES)}")
 
-    join_keys = normalize_join_keys(output_cfg.get("join_keys"))
-    if not join_keys:
-        raise ValueError("silver_join.output.join_keys must list at least one key")
+    if not join_pairs:
+        raise ValueError("At least one join pair must be configured")
 
-    chunk_size = max(int(output_cfg.get("chunk_size") or 0), 0)
-    cache = RightPartitionCache(right, join_keys)
+    rename_right: Dict[str, str] = {}
+    canonical_keys: List[str] = []
+    for left_key, right_key in join_pairs:
+        canonical_keys.append(left_key)
+        if right_key != left_key:
+            rename_right[right_key] = left_key
+
+    left_aligned = left.copy()
+    right_aligned = right.rename(columns=rename_right).copy()
+
+    cache = RightPartitionCache(right_aligned, canonical_keys)
     matched_right_keys: Set[Any] = set()
     chunk_frames: List[pd.DataFrame] = []
     chunk_count = 0
 
-    for chunk in chunk_dataframe(left, chunk_size):
+    for chunk in chunk_dataframe(left_aligned, chunk_size):
         if chunk.empty:
             continue
         chunk_count += 1
-        key_set = _extract_join_key_set(chunk, join_keys)
+        key_set = _extract_join_key_set(chunk, canonical_keys)
         right_subset = cache.batch_for_keys(key_set)
-        merged_chunk = pd.merge(chunk, right_subset, how=join_type, on=join_keys, suffixes=DEFAULT_SUFFIXES)
+        merged_chunk = pd.merge(chunk, right_subset, how=join_type, on=canonical_keys, suffixes=DEFAULT_SUFFIXES)
         chunk_frames.append(merged_chunk)
-        matched_right_keys.update(_extract_join_key_set(right_subset, join_keys))
+        matched_right_keys.update(_extract_join_key_set(right_subset, canonical_keys))
         if progress_tracker:
             progress_tracker.record_chunk(chunk_count, len(merged_chunk), key_set)
 
@@ -396,8 +485,8 @@ def perform_join(
     right_only_rows = 0
     if join_type in {"right", "outer"} and unmatched_keys:
         right_only_df = cache.batch_for_keys(unmatched_keys)
-        left_template = pd.DataFrame(columns=left.columns)
-        right_only = pd.merge(left_template, right_only_df, how="right", on=join_keys, suffixes=DEFAULT_SUFFIXES)
+        left_template = pd.DataFrame(columns=left_aligned.columns)
+        right_only = pd.merge(left_template, right_only_df, how="right", on=canonical_keys, suffixes=DEFAULT_SUFFIXES)
         chunk_frames.append(right_only)
         right_only_rows = len(right_only)
 
@@ -405,7 +494,7 @@ def perform_join(
         progress_tracker.finalize()
 
     if not chunk_frames:
-        merged = pd.merge(left, right, how=join_type, on=join_keys, suffixes=DEFAULT_SUFFIXES)
+        merged = pd.merge(left_aligned, right_aligned, how=join_type, on=canonical_keys, suffixes=DEFAULT_SUFFIXES)
     else:
         merged = pd.concat(chunk_frames, ignore_index=True)
 
@@ -429,6 +518,8 @@ def write_output(
     source_audits: List[Dict[str, Any]],
     progress_summary: Dict[str, Any],
     join_stats: JoinRunStats,
+    join_pairs: List[Tuple[str, str]],
+    chunk_size: int,
 ) -> None:
     base_dir.mkdir(parents=True, exist_ok=True)
     outputs = write_silver_outputs(
@@ -452,8 +543,6 @@ def write_output(
         "requested_model": output_cfg.get("model"),
         "formats": {"parquet": run_opts.write_parquet, "csv": run_opts.write_csv},
         "join_type": output_cfg.get("join_type"),
-        "join_keys": normalize_join_keys(output_cfg.get("join_keys")),
-        "chunk_size": output_cfg.get("chunk_size"),
         "projection": output_cfg.get("select_columns") or output_cfg.get("projection"),
         "lineage": [meta.get("silver_path") or "<missing>" for meta in metadata_list],
         "inputs": source_audits,
@@ -464,6 +553,8 @@ def write_output(
             "unmatched_right_keys": join_stats.unmatched_right_keys,
             "right_only_rows": join_stats.right_only_rows,
         },
+        "join_key_pairs": [{"left": left_key, "right": right_key} for left_key, right_key in join_pairs],
+        "chunk_size": chunk_size,
     }
     write_batch_metadata(
         base_dir,
@@ -515,7 +606,16 @@ def main() -> int:
         metadata_list = [left_meta, right_meta]
         left_df = read_silver_data(left_path)
         right_df = read_silver_data(right_path)
-        joined_df, join_stats = perform_join(left_df, right_df, output_cfg, progress_tracker)
+        join_pairs = _resolve_join_pairs(output_cfg, left_df, right_df, metadata_list)
+        chunk_size = _resolve_chunk_size(output_cfg, left_df, metadata_list)
+        joined_df, join_stats = perform_join(
+            left_df,
+            right_df,
+            join_pairs,
+            chunk_size,
+            output_cfg,
+            progress_tracker,
+        )
 
     source_audits = [build_input_audit(meta) for meta in metadata_list]
     requested_model = output_cfg.get("model") or SilverModel.default_for_load_pattern(LoadPattern.FULL).value
@@ -533,6 +633,8 @@ def main() -> int:
         source_audits,
         progress_summary,
         join_stats,
+        join_pairs,
+        chunk_size,
     )
     logger.info("Joined silver asset written to %s (model=%s)", output_cfg["path"], model.value)
     return 0

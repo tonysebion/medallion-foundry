@@ -24,10 +24,12 @@ def test_perform_join_streaming_with_progress(tmp_path: Path) -> None:
             "amount": [100, 200, 300],
         }
     )
-    output_cfg = {"join_type": "outer", "join_keys": ["id"], "chunk_size": 2}
+    output_cfg = {"join_type": "outer"}
     tracker = JoinProgressTracker(tmp_path / "progress")
 
-    joined, stats = perform_join(left, right, output_cfg, tracker)
+    join_pairs = [("id", "id")]
+    chunk_size = 2
+    joined, stats = perform_join(left, right, join_pairs, chunk_size, output_cfg, tracker)
 
     expected = pd.merge(
         left,
