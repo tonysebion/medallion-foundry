@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from core.extractors.async_http import AsyncApiClient, is_async_enabled, HTTPX_AVAILABLE
+from core.exceptions import RetryExhaustedError
 
 
 @pytest.mark.skipif(not HTTPX_AVAILABLE, reason="httpx not installed")
@@ -162,6 +163,39 @@ def test_async_client_handles_timeout():
             result = await client.get("/timeout")
             assert result["ok"] == "timeout-recovered"
             assert mock_get.count == 2
+
+    asyncio.run(_inner())
+
+
+@pytest.mark.skipif(not HTTPX_AVAILABLE, reason="httpx not installed")
+def test_async_client_retry_exhausts(monkeypatch):
+    async def _inner():
+        with patch("core.extractors.async_http.httpx") as mock_httpx:
+            mock_response = MagicMock()
+            mock_response.status_code = 500
+            mock_response.headers = {}
+
+            class HTTPStatusError(Exception):
+                def __init__(self, response):
+                    self.response = response
+                    super().__init__("server error")
+
+            exc = HTTPStatusError(mock_response)
+            type(exc).__module__ = "httpx"
+            type(exc).__name__ = "HTTPStatusError"
+
+            async def mock_get(*args, **kwargs):
+                raise exc
+
+            mock_client = AsyncMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client.get = mock_get
+            mock_httpx.AsyncClient.return_value = mock_client
+
+            client = AsyncApiClient("https://api.example.com", headers={}, timeout=1)
+            with pytest.raises(RetryExhaustedError):
+                await client.get("/fail")
 
     asyncio.run(_inner())
 

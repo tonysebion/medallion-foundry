@@ -7,32 +7,35 @@ This framework is intentionally lightweight and orchestration-neutral: you can r
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## ? Key Features
+## Key Features
 
 ### Core Capabilities
-- **?? Multiple Source Types** - APIs (REST), databases (SQL), local files, or custom Python extractors
-- **?? Authentication** - Bearer tokens, API keys, Basic auth, and custom headers
-- **?? Pagination** - Offset-based, page-based, cursor-based, or none
-- **?? Incremental Loading** - State management for efficient delta loads
-- **?? Multiple Formats** - CSV (debugging) and Parquet (analytics) with compression
-- **?? Pluggable Storage** - S3, Azure Blob/ADLS, or local filesystem
-- **?? Retry Logic** - Automatic retries with exponential backoff for network operations
-- **?? Error Handling** - Comprehensive error handling with automatic cleanup on failure
-- **?? Extensive Logging** - Structured logging for observability
-- **? Production Ready** - Complete implementations, not just stubs
+- **Multiple Source Types** – APIs (REST), databases (SQL), local files, or custom Python extractors
+- **Authentication** – Bearer tokens, API keys, Basic auth, and custom headers
+- **Pagination** – Offset, page, cursor, or none
+- **Incremental Loading** – State + checkpoint resume for efficient delta and recovery
+- **Multiple Formats** – Parquet (Snappy) for analytics; optional CSV for debugging
+- **Pluggable Storage** – S3, Azure Blob/ADLS, local filesystem
+- **Resilience** – Unified retry + circuit breaker + rate limiting
+- **Error Taxonomy** – Standardized error codes for routing & ops
+- **Structured Logging & Tracing** – Rich logs plus optional OpenTelemetry spans
+- **Production Ready** – Idempotent writes, atomic Silver promotion, consistent layout
 
-### ?? Enhanced Features
-- **?? File Size Control** - Configurable `max_file_size_mb` for query-optimized file sizes (128MB-1GB)
-- **? Multiple Daily Loads** - Hourly, timestamp, or batch-ID partitioning for intraday extractions
-- **? Parallel Extraction** - Two levels of parallelism:
-  - **Config-level**: Multi-threaded processing across different config files (`--parallel-workers`)
-  - **Chunk-level**: Concurrent chunk processing within single extraction (`parallel_workers` in config)
-- **?? Batch Metadata** - Automatic `_metadata.json` tracking for monitoring and idempotent loads
-- **?? Extensible Architecture** - Clean abstractions for adding new storage backends or data sources
+### Enhanced Features
+- **File Size Control** – Configurable `max_file_size_mb` (128MB–1GB) and row splitting
+- **Intraday Partitioning** – Hourly / batch-id / timestamp partition strategies
+- **Parallel Extraction** –
+  - Config-level: multi-thread across configs (`--parallel-workers`)
+  - Chunk-level: concurrent chunk processing (`parallel_workers`)
+- **Async HTTP Path** – httpx-based extractor with prefetch pagination & backpressure
+- **Batch Metadata** – Automatic `_metadata.json` for monitoring and idempotency
+- **Checkpoint Resume** – Safe restart of long running Silver streaming jobs (`--resume`)
+- **Benchmark Harness** – Performance scenarios (sync vs async, rate limit impact)
+- **Extensible Architecture** – Clean interfaces for new storage backends or extractors
 
-*See [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) for detailed documentation on advanced features.*
+*See [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) and [PERFORMANCE_TUNING.md](docs/PERFORMANCE_TUNING.md) for deep dives.*
 
-## ??? Architecture Principles
+## Architecture Principles
 
 - **Single CLI, many sources**  
   One entrypoint (`bronze_extract.py`) that reads a YAML config and chooses the appropriate extractor (`api`, `db`, or `custom`).
@@ -55,16 +58,16 @@ This framework is intentionally lightweight and orchestration-neutral: you can r
 - **Formats and file splitting**  
   - CSV for human-readable debugging (optional)
   - Parquet (with Snappy) for analytics
-  - Configurable `max_rows_per_file` to split large extracts into part files (e.g., `part-0001`, `part-0002`, ï¿½).
+  - Configurable `max_rows_per_file` to split large extracts into part files (e.g., `part-0001`, `part-0002`, ...).
 
 - **Orchestration friendly**  
   - CLI takes `--config` and optional `--date`
   - Uses exit codes (0 = success, non-zero = failure)
   - Structured logging with levels and timestamps
 
-## ?? Quick start
+## Quick Start
 
-### ?? Testing Your API (For Product/API Teams)
+### Testing Your API (For Product/API Teams)
 
 **Not familiar with Python?** No problem! [docs/QUICKSTART.md](docs/QUICKSTART.md) has a complete step-by-step walkthrough.
 
@@ -90,11 +93,11 @@ python bronze_extract.py --config config/test.yaml
 # 5. Check ./output/ folder - if you see data, you're done!
 ```
 
-**?? See [docs/QUICKSTART.md](docs/QUICKSTART.md) for detailed instructions with screenshots and troubleshooting.**
+**See [docs/QUICKSTART.md](docs/QUICKSTART.md) for detailed instructions with screenshots and troubleshooting.**
 
-### ?? Offline Local Quick Test
+### Offline Local Quick Test
 
-Need proof the tooling works but donï¿½t have API credentials yet? Use the bundled sample data.
+Need proof the tooling works but don't have API credentials yet? Use the bundled sample data.
 
 ```bash
 # 0. (Once) prepare the sandbox data
@@ -115,7 +118,7 @@ This workflow uses only local files, so a non-Python user can validate everythin
 
 ---
 
-### ?? Full Setup (For Data Teams)
+### Full Setup (For Data Teams)
 
 Complete production setup:
 

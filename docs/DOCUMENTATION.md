@@ -546,6 +546,41 @@ Each extraction creates `_metadata.json`:
 - Incremental cursor tracking
 - Data lineage & auditing
 
+### Resilience & Async Extraction
+
+Modern extractions require stability under rate limits, intermittent failures, and bursty traffic. medallion-foundry bakes in:
+
+**Retry + Circuit Breaker**  
+Unified exponential backoff with transient error predicates (HTTP 429/5xx) and a circuit breaker preventing hot looping when a downstream repeatedly fails.
+
+**Async HTTP Path**  
+Enable with `api.async: true` (or environment `BRONZE_ASYNC_HTTP=1`). Uses `httpx` + task prefetch pagination for higher throughput under moderate latency, with cooperative backpressure.
+
+**Rate Limiting**  
+Fine-grained token bucket:
+```yaml
+api:
+  rate_limit:
+    rps: 5.0          # requests per second
+run:
+  rate_limit_rps: 4.0 # fallback if api.rate_limit.rps absent
+```
+Priority order: `api.rate_limit.rps` → `run.rate_limit_rps` → env `BRONZE_API_RPS`. Fractional RPS supported.
+
+**Tracing**  
+Set `BRONZE_TRACING=1` to emit OpenTelemetry spans (no-op if instrumentation absent). Useful around retries, chunk writes, and Silver streaming promotion.
+
+**Streaming Resume (Silver)**  
+Use `silver_extract.py --stream --resume` to resume a partially processed promotion safely; checkpoints track completed chunks.
+
+**Benchmark Harness & Performance Guidance**  
+Included script `scripts/benchmark.py` plus tuning strategies in [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md).
+
+**Operational Error Codes**  
+Standardized categories documented in [ERROR_CODES.md](ERROR_CODES.md) for alert routing and triage.
+
+See also: [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) & [ERROR_CODES.md](ERROR_CODES.md) for deeper coverage.
+
 ---
 
 ## Extending medallion-foundry
@@ -1040,6 +1075,8 @@ For deeper technical details, see:
 - **[Enhanced Features](ENHANCED_FEATURES.md)** - Advanced features for production use
 - **[Architecture](ARCHITECTURE.md)** - Core framework design principles
 - **[Configuration Reference](CONFIG_REFERENCE.md)** - Complete YAML configuration guide
+- **[Performance Tuning](PERFORMANCE_TUNING.md)** - Benchmark scenarios and optimization strategies
+- **[Error Codes](ERROR_CODES.md)** - Unified operational error taxonomy
 
 ---
 
