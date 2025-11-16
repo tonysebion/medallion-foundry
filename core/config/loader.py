@@ -11,6 +11,7 @@ import yaml
 from .validation import validate_config_dict
 from .typed_models import parse_root_config, RootConfig
 from .v2_validation import validate_v2_config_dict
+from .env_substitution import apply_env_substitution
 from core.deprecation import emit_compat
 from core.paths import build_bronze_relative_path
 
@@ -36,13 +37,20 @@ def _read_yaml(path: str) -> Dict[str, Any]:
     return cfg
 
 
-def load_config(path: str, *, strict: bool = False) -> Dict[str, Any | RootConfig]:
+def load_config(path: str, *, strict: bool = False, enable_env_substitution: bool = True) -> Dict[str, Any | RootConfig]:
     """Load a single config file and return both dict and typed model.
 
     For backward compatibility we still return a validated dict, but attach
     a typed model instance under reserved key '__typed_model__'.
+    
+    Args:
+        path: Path to config YAML file
+        strict: Enable strict validation (require config_version, enforce v2 rules)
+        enable_env_substitution: Substitute ${VAR} and ${VAR:default} with environment variables
     """
     cfg = _read_yaml(path)
+    if enable_env_substitution:
+        cfg = apply_env_substitution(cfg)
     if "sources" in cfg:
         raise ValueError("Config contains multiple sources; use load_configs() instead.")
     validated = validate_config_dict(cfg)
@@ -60,8 +68,17 @@ def load_config(path: str, *, strict: bool = False) -> Dict[str, Any | RootConfi
     return validated
 
 
-def load_configs(path: str, *, strict: bool = False) -> List[Dict[str, Any | RootConfig]]:
+def load_configs(path: str, *, strict: bool = False, enable_env_substitution: bool = True) -> List[Dict[str, Any | RootConfig]]:
+    """Load multi-source config file.
+    
+    Args:
+        path: Path to config YAML file
+        strict: Enable strict validation
+        enable_env_substitution: Substitute ${VAR} with environment variables
+    """
     raw = _read_yaml(path)
+    if enable_env_substitution:
+        raw = apply_env_substitution(raw)
     if "sources" not in raw:
         return [validate_config_dict(raw)]
 

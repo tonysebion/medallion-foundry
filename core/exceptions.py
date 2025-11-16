@@ -9,24 +9,30 @@ from typing import Optional, Dict, Any
 class BronzeFoundryError(Exception):
     """Base exception for all medallion-foundry errors."""
     
-    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+    error_code: str = "ERR000"  # Override in subclasses
+    
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None, error_code: Optional[str] = None):
         """
         Initialize medallion-foundry exception.
         
         Args:
             message: Human-readable error message
             details: Optional dictionary with additional context
+            error_code: Optional error code override
         """
         super().__init__(message)
         self.message = message
         self.details = details or {}
+        if error_code:
+            self.error_code = error_code
     
     def __str__(self) -> str:
-        """Return string representation with details if available."""
+        """Return string representation with error code and details."""
+        parts = [f"[{self.error_code}] {self.message}"]
         if self.details:
             detail_str = ", ".join(f"{k}={v}" for k, v in self.details.items())
-            return f"{self.message} ({detail_str})"
-        return self.message
+            parts.append(f"({detail_str})")
+        return " ".join(parts)
 
 
 class ConfigValidationError(BronzeFoundryError):
@@ -38,6 +44,8 @@ class ConfigValidationError(BronzeFoundryError):
         - Type mismatches in configuration
         - Backend-specific validation failures
     """
+    
+    error_code = "CFG001"
     
     def __init__(self, message: str, config_path: Optional[str] = None, key: Optional[str] = None):
         """
@@ -66,6 +74,8 @@ class ExtractionError(BronzeFoundryError):
         - Authentication errors
         - Data parsing errors
     """
+    
+    error_code = "EXT001"
     
     def __init__(
         self, 
@@ -110,6 +120,8 @@ class StorageError(BronzeFoundryError):
         - Permission errors
         - Network connectivity issues
     """
+    
+    error_code = "STG001"
     
     def __init__(
         self,
@@ -158,6 +170,8 @@ class AuthenticationError(ExtractionError):
         - OAuth token refresh failures
     """
     
+    error_code = "AUTH001"
+    
     def __init__(self, message: str, auth_type: Optional[str] = None, env_var: Optional[str] = None):
         """
         Initialize authentication error.
@@ -186,6 +200,8 @@ class PaginationError(ExtractionError):
         - Invalid cursor value
         - Page size exceeds API limits
     """
+    
+    error_code = "PAGE001"
     
     def __init__(
         self,
@@ -224,6 +240,8 @@ class StateManagementError(BronzeFoundryError):
         - State file lock conflicts
         - Invalid cursor format
     """
+    
+    error_code = "STATE001"
     
     def __init__(
         self,
@@ -265,6 +283,8 @@ class DataQualityError(BronzeFoundryError):
         - Data type mismatches
     """
     
+    error_code = "QUAL001"
+    
     def __init__(
         self,
         message: str,
@@ -304,6 +324,8 @@ class RetryExhaustedError(BronzeFoundryError):
         - Temporary service outage
         - Rate limit exceeded
     """
+    
+    error_code = "RETRY001"
     
     def __init__(
         self,
