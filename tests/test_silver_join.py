@@ -9,6 +9,7 @@ import pytest
 
 from core.patterns import LoadPattern
 from core.run_options import RunOptions
+from core.silver_models import SilverModel
 
 from silver_join import (
     JoinProgressTracker,
@@ -18,6 +19,7 @@ from silver_join import (
     build_input_audit,
     perform_join,
     run_quality_guards,
+    write_output,
 )
 
 
@@ -193,3 +195,83 @@ def test_run_quality_guards_failure() -> None:
     with pytest.raises(QualityGuardError) as exc:
         run_quality_guards(df, cfg)
     assert any(result["status"] == "fail" for result in exc.value.results)
+
+
+def test_reference_metadata_in_join_output(tmp_path: Path) -> None:
+    left_dir = tmp_path / "left"
+    right_dir = tmp_path / "right"
+    left_dir.mkdir()
+    right_dir.mkdir()
+
+    left_df = pd.DataFrame({"key": [1], "value": ["ref"]})
+    right_df = pd.DataFrame({"key": [1], "value": ["delta"]})
+    left_df.to_csv(left_dir / "part.csv", index=False)
+    right_df.to_csv(right_dir / "part.csv", index=False)
+
+    left_meta = {
+        "silver_path": str(left_dir),
+        "record_count": 1,
+        "chunk_count": 1,
+        "reference_mode": {"role": "reference", "cadence_days": 7},
+    }
+    right_meta = {
+        "silver_path": str(right_dir),
+        "record_count": 1,
+        "chunk_count": 1,
+        "reference_mode": {"role": "delta"},
+    }
+    (left_dir / "_metadata.json").write_text(json.dumps(left_meta), encoding="utf-8")
+    (right_dir / "_metadata.json").write_text(json.dumps(right_meta), encoding="utf-8")
+
+    tracker = JoinProgressTracker(tmp_path / "progress")
+    join_pairs = [("key", "key")]
+    output_cfg = {"formats": ["parquet"], "join_type": "inner", "checkpoint_dir": str(tmp_path / ".join_progress")}
+    joined, stats, column_origin, join_metrics = perform_join(
+        left_df,
+        right_df,
+        join_pairs,
+        chunk_size=1,
+        output_cfg=output_cfg,
+        progress_tracker=tracker,
+        spill_dir=None,
+    )
+    joined, column_lineage = apply_projection(joined, output_cfg, column_origin)
+    guard_results = run_quality_guards(joined, {})
+    run_opts = RunOptions(
+        load_pattern=LoadPattern.FULL,
+        require_checksum=False,
+        write_parquet=True,
+        write_csv=False,
+        parquet_compression="snappy",
+        primary_keys=["key"],
+        order_column=None,
+        partition_columns=[],
+        artifact_names=RunOptions.default_artifacts(),
+    )
+    metadata_out = tmp_path / "out"
+    source_audits = [
+        build_input_audit(left_meta),
+        build_input_audit(right_meta),
+    ]
+    source_paths = [str(left_dir), str(right_dir)]
+    progress_summary = tracker.summary()
+    write_output(
+        joined,
+        metadata_out,
+        SilverModel.PERIODIC_SNAPSHOT,
+        run_opts,
+        [left_meta, right_meta],
+        output_cfg,
+        source_paths,
+        source_audits,
+        progress_summary,
+        stats,
+        join_pairs,
+        chunk_size=1,
+        column_lineage=column_lineage,
+        quality_guards=guard_results,
+        join_metrics=join_metrics,
+    )
+    metadata_json = json.loads((metadata_out / "_metadata.json").read_text(encoding="utf-8"))
+    inputs = metadata_json.get("inputs", [])
+    assert any(input_meta.get("reference_mode") for input_meta in inputs)
