@@ -106,7 +106,7 @@ class AzureStorage(StorageBackend):
     def upload_file(self, local_path: str, remote_path: str) -> bool:
         blob_path = self._remote_path(remote_path)
 
-        def _retry_if(exc: BaseException) -> bool:  # type: ignore[name-defined]
+        def _retry_if(exc: BaseException) -> bool:
             if isinstance(exc, ResourceNotFoundError):
                 return False
             return isinstance(exc, AzureError)
@@ -141,7 +141,7 @@ class AzureStorage(StorageBackend):
     def download_file(self, remote_path: str, local_path: str) -> bool:
         blob_path = self._remote_path(remote_path)
 
-        def _retry_if(exc: BaseException) -> bool:  # type: ignore[name-defined]
+        def _retry_if(exc: BaseException) -> bool:
             if isinstance(exc, ResourceNotFoundError):
                 return False
             return isinstance(exc, AzureError)
@@ -178,7 +178,7 @@ class AzureStorage(StorageBackend):
     def list_files(self, prefix: str) -> List[str]:
         blob_prefix = self._remote_path(prefix)
 
-        def _retry_if(exc: BaseException) -> bool:  # type: ignore[name-defined]
+        def _retry_if(exc: BaseException) -> bool:
             return isinstance(exc, AzureError) and not isinstance(
                 exc, ResourceNotFoundError
             )
@@ -214,7 +214,7 @@ class AzureStorage(StorageBackend):
     def delete_file(self, remote_path: str) -> bool:
         blob_path = self._remote_path(remote_path)
 
-        def _retry_if(exc: BaseException) -> bool:  # type: ignore[name-defined]
+        def _retry_if(exc: BaseException) -> bool:
             return isinstance(exc, AzureError) and not isinstance(
                 exc, ResourceNotFoundError
             )

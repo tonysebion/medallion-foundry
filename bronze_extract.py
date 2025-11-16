@@ -388,14 +388,14 @@ class BronzeOrchestrator:
         self, configs: List[Dict[str, Any]], run_date: dt.date
     ) -> RunOptions:
         # Prefer typed model if available to reduce dict key errors.
-        typed: RootConfig | None = configs[0].get("__typed_model__")  # type: ignore[assignment]
+        typed: RootConfig | None = configs[0].get("__typed_model__")
         if typed and typed.silver:
             run_cfg = typed.source.run
             load_pattern = LoadPattern.normalize(
                 run_cfg.load_pattern.value
                 if hasattr(run_cfg.load_pattern, "value")
                 else run_cfg.load_pattern
-            )  # type: ignore[arg-type]
+            )
             silver_cfg = typed.silver
             return RunOptions(
                 load_pattern=load_pattern,

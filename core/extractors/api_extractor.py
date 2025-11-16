@@ -102,7 +102,7 @@ class ApiExtractor(BaseExtractor):
         # The limiter is injected via closure when called from paginate
 
         def _once() -> requests.Response:
-            if getattr(self, "_limiter", None):  # type: ignore[attr-defined]
+            if getattr(self, "_limiter", None):
                 self._limiter.acquire()  # type: ignore[attr-defined]
             with trace_span("api.request"):
                 resp = session.get(
@@ -117,7 +117,7 @@ class ApiExtractor(BaseExtractor):
                 raise http_err
             return resp
 
-        def _retry_if(exc: BaseException) -> bool:  # type: ignore[name-defined]
+        def _retry_if(exc: BaseException) -> bool:
             # Retry for timeouts/connection errors
             if isinstance(
                 exc, (requests.exceptions.Timeout, requests.exceptions.ConnectionError)
@@ -220,7 +220,7 @@ class ApiExtractor(BaseExtractor):
 
         timeout = run_cfg.get("timeout_seconds", 30)
         # set up per-extractor rate limiter, used by _make_request via attribute
-        self._limiter = RateLimiter.from_config(api_cfg, run_cfg)  # type: ignore[attr-defined]
+        self._limiter = RateLimiter.from_config(api_cfg, run_cfg)
         pagination_cfg = api_cfg.get("pagination", {})
         pagination_type = pagination_cfg.get("type", "none")
 

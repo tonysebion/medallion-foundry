@@ -117,7 +117,7 @@ class S3Storage(StorageBackend):
         """
         key = self._build_key(remote_path)
 
-        def _retry_if(exc: BaseException) -> bool:  # type: ignore[name-defined]
+        def _retry_if(exc: BaseException) -> bool:
             if isinstance(exc, BotoCoreError):
                 return True
             if isinstance(exc, ClientError):
@@ -208,7 +208,7 @@ class S3Storage(StorageBackend):
         """
         key = self._build_key(remote_path)
 
-        def _retry_if(exc: BaseException) -> bool:  # type: ignore[name-defined]
+        def _retry_if(exc: BaseException) -> bool:
             if isinstance(exc, BotoCoreError):
                 return True
             if isinstance(exc, ClientError):
@@ -296,7 +296,7 @@ class S3Storage(StorageBackend):
         """
         full_prefix = self._build_key(prefix)
 
-        def _retry_if(exc: BaseException) -> bool:  # type: ignore[name-defined]
+        def _retry_if(exc: BaseException) -> bool:
             if isinstance(exc, BotoCoreError):
                 return True
             if isinstance(exc, ClientError):
@@ -387,7 +387,7 @@ class S3Storage(StorageBackend):
         """
         key = self._build_key(remote_path)
 
-        def _retry_if(exc: BaseException) -> bool:  # type: ignore[name-defined]
+        def _retry_if(exc: BaseException) -> bool:
             if isinstance(exc, BotoCoreError):
                 return True
             if isinstance(exc, ClientError):

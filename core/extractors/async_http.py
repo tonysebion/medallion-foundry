@@ -22,7 +22,7 @@ try:
     HTTPX_AVAILABLE = True
 except ImportError:
     HTTPX_AVAILABLE = False
-    httpx = None  # type: ignore
+    httpx = None
 
 
 class AsyncApiClient:
@@ -95,7 +95,7 @@ class AsyncApiClient:
                     return True
                 # httpx.HTTPStatusError
                 if hasattr(exc, "response"):
-                    status = getattr(exc.response, "status_code", None)  # type: ignore[attr-defined]
+                    status = getattr(exc.response, "status_code", None)
                     if status:
                         return status == 429 or 500 <= status < 600
             return False
@@ -106,7 +106,7 @@ class AsyncApiClient:
             if hasattr(exc, "response"):
                 resp = getattr(exc, "response", None)
                 if resp and hasattr(resp, "headers"):
-                    retry_after = resp.headers.get("Retry-After")  # type: ignore[attr-defined]
+                    retry_after = resp.headers.get("Retry-After")
                     if retry_after:
                         try:
                             return float(retry_after)
