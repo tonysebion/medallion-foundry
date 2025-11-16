@@ -9,7 +9,10 @@ from abc import ABC, abstractmethod
 from typing import Dict, List
 import logging
 
+from core.storage_registry import BACKEND_REGISTRY
+
 logger = logging.getLogger(__name__)
+
 
 class StorageBackend(ABC):
     """Abstract base class for storage backends.
@@ -92,6 +95,7 @@ class StorageBackend(ABC):
 
 _STORAGE_BACKEND_CACHE: Dict[int, StorageBackend] = {}
 
+
 def get_storage_backend(config: dict, use_cache: bool = True) -> StorageBackend:
     """Factory function to create appropriate storage backend.
     
@@ -104,50 +108,24 @@ def get_storage_backend(config: dict, use_cache: bool = True) -> StorageBackend:
         
     Raises:
         ValueError: If backend type is unknown or unsupported
-        ImportError: If required dependencies are not installed
     """
     cache_key = id(config)
     if use_cache and cache_key in _STORAGE_BACKEND_CACHE:
         return _STORAGE_BACKEND_CACHE[cache_key]
 
-    backend_type = config.get("bronze", {}).get("storage_backend", "s3")
-    
-    if backend_type == "s3":
-        from core.s3 import S3Storage
-        backend = S3Storage(config)
-    
-    elif backend_type == "azure":
-        try:
-            from core.azure_storage import AzureStorage
-            backend = AzureStorage(config)
-        except ImportError as e:
-            raise ImportError(
-                f"Azure storage backend requires additional packages. "
-                f"Install with: pip install azure-storage-blob azure-identity\n"
-                f"Original error: {e}"
-            )
-    
-    elif backend_type == "gcs":
-        try:
-            from core.gcs_storage import GCSStorage
-            backend = GCSStorage(config)
-        except ImportError as e:
-            raise ImportError(
-                f"Google Cloud Storage backend requires additional packages. "
-                f"Install with: pip install google-cloud-storage\n"
-                f"Original error: {e}"
-            )
-    
-    elif backend_type == "local":
-        from core.local_storage import LocalStorage
-        backend = LocalStorage(config)
-    
-    else:
+    backend_type = config.get("bronze", {}).get("storage_backend", "s3").lower()
+    factory = BACKEND_REGISTRY.get(backend_type)
+    if not factory:
         raise ValueError(
             f"Unknown storage backend: '{backend_type}'. "
-            f"Supported backends: s3, azure, gcs, local"
+            f"Supported backends: {', '.join(BACKEND_REGISTRY.keys())}"
         )
+
+    backend = factory(config)
 
     if use_cache:
         _STORAGE_BACKEND_CACHE[cache_key] = backend
     return backend
+
+
+import core.storage_plugins  # noqa: F401 register built-in backends

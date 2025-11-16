@@ -11,10 +11,12 @@ from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient, ContainerClient
 
 from core.storage import StorageBackend
+from core.storage_registry import register_backend
 
 logger = logging.getLogger(__name__)
 
 
+@register_backend("azure")
 class AzureStorage(StorageBackend):
     """Azure Blob Storage / ADLS Gen2 backend."""
 
