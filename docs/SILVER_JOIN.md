@@ -27,9 +27,29 @@ silver_join:
     path: "./output/silver_joined"
     model: "scd_type_2"
     formats: ["parquet", "csv"]
+    join_type: "inner"
+    join_keys:
+      - order_id
+    chunk_size: 100000
+    select_columns:
+      - order_id
+      - status
+      - total_amount
+
+Each source entry can include a `platform` block that mirrors the Bronze configuration (`platform.bronze.storage_backend`, credentials, `storage_metadata`, the optional `azure_connection` block, etc.). If a source points to remote storage, `silver_join` downloads the files to a temporary workspace before joining. The top-level `platform` block is reused for storage policy enforcement so you can still pass `--storage-scope onprem` or `--onprem-only` to guard Azure or cloud-backed paths at runtime.
 ```
 
-The CLI reads metadata from each silver asset, concatenates the data, and writes the requested Silver model. If the desired model requires primary keys/order columns and upstream metadata lacks them, the join falls back through a deterministic order (`scd_type_2`, `full_merge_dedupe`, `scd_type_1`, `periodic_snapshot`, `incremental_merge`) until a compatible model is found. Each input entry can point to local directories or remote storage by specifying the same `platform.bronze.storage_backend` + `azure_connection`/`s3` credentials you would use for Bronze; `silver_join` downloads the files before processing and respects storage metadata/scope for governance.
+The CLI reads metadata from each silver asset (falling back to a minimal stub if a `_metadata.json` file is not present), joins the data, and writes the requested Silver model. If the desired model requires primary keys or an order column and the upstream metadata lacks that information, the join falls back through a deterministic order (`scd_type_2`, `full_merge_dedupe`, `scd_type_1`, `periodic_snapshot`, `incremental_merge`) until a compatible model can be produced.
+
+The `output` block controls the join semantics:
+
+- `formats`: choose one or both of `["parquet", "csv"]`; the join writes whichever formats are enabled and records them in the resulting `_metadata.json`.
+- `join_type`: controls the SQL-style merge (`inner`, `left`, `right`, `outer`); the default is `inner`.
+- `join_keys`: the business keys that appear in both inputs; at least one key is required.
+- `chunk_size`: optionally break the left-hand input into chunks to mitigate memory pressure before merging; set to `0` or omit to join in a single operation.
+- `select_columns`/`projection`: trim the output to a specific column order after the join so downstream Silver writers stay predictable.
+
+You can still point each asset at cloud storage by reusing `platform.bronze.storage_backend`, supply the right credentials (`s3`, Azure, etc.), and add the same `storage_metadata` fields you use for Bronze. `silver_join` enforces the same storage policy, so running with `--storage-scope onprem` (or `--onprem-only`) rejects any cloud backend that does not advertise `storage_metadata.boundary=onprem` while logging which assets contributed to the new lineage.
 
 ## Running
 
