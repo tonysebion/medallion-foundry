@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from core.patterns import LoadPattern
-from core.silver_models import SilverModel
+from core.silver.models import SilverModel
 from silver_extract import SilverModelPlanner, write_silver_outputs
 
 

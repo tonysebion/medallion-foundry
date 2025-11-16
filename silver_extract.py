@@ -28,15 +28,15 @@ from core.catalog import (
 )
 from core.hooks import fire_webhooks
 from core.run_options import RunOptions
-from core.storage_policy import enforce_storage_scope
+from core.storage.policy import enforce_storage_scope
 from silver_stream import stream_silver_promotion
-from core.silver_artifacts import (
+from core.silver.artifacts import (
     apply_schema_settings,
     build_current_view,
     normalize_dataframe,
     write_silver_outputs,
 )
-from core.silver_models import SilverModel
+from core.silver.models import SilverModel
 
 logger = logging.getLogger(__name__)
 

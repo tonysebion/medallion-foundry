@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, Any
 
-from core.storage_metadata import (
+from .metadata import (
     VALID_BOUNDARIES,
     VALID_PROVIDER_TYPES,
     VALID_CLOUD_PROVIDERS,

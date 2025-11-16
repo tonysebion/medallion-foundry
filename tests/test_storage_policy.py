@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.storage_policy import validate_storage_metadata, enforce_storage_scope
+from core.storage.policy import validate_storage_metadata, enforce_storage_scope
 
 
 def _platform(metadata: dict | None = None, backend: str = "s3") -> dict:

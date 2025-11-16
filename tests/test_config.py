@@ -7,7 +7,7 @@ import yaml
 
 from core.config import load_config, load_configs, build_relative_path
 from datetime import date
-from core.silver_models import SilverModel
+from core.silver.models import SilverModel
 
 
 class TestConfigLoading:

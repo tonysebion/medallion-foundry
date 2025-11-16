@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List
 
-from core.storage_registry import BACKEND_REGISTRY, register_backend
+from .registry import BACKEND_REGISTRY, register_backend
 
 
 def list_backends() -> List[str]:

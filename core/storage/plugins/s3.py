@@ -9,7 +9,7 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from core.storage import StorageBackend
+from core.storage.backend import StorageBackend
 
 logger = logging.getLogger(__name__)
 

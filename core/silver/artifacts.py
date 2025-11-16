@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Tuple
 import pandas as pd
 
 from core.patterns import LoadPattern
-from core.silver_models import SilverModel
+from core.silver.models import SilverModel
 
 logger = logging.getLogger(__name__)
 

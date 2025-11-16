@@ -10,7 +10,7 @@ from typing import Dict, List
 import pytest
 import yaml
 
-from core.silver_models import SilverModel
+from core.silver.models import SilverModel
 from scripts.generate_silver_samples import PATTERN_CONFIG
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

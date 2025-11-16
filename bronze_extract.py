@@ -29,7 +29,7 @@ from core.patterns import LoadPattern
 from core.catalog import notify_catalog, report_lineage, report_quality_snapshot, report_run_metadata
 from core.hooks import fire_webhooks
 from core.run_options import RunOptions
-from core.storage_policy import enforce_storage_scope
+from core.storage.policy import enforce_storage_scope
 
 __version__ = "1.0.0"
 

@@ -9,7 +9,7 @@ import pytest
 
 from core.patterns import LoadPattern
 from core.run_options import RunOptions
-from core.silver_models import SilverModel
+from core.silver.models import SilverModel
 
 from silver_join import (
     JoinProgressTracker,

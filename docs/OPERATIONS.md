@@ -27,5 +27,5 @@ This quick reference highlights the key operational playbooks for running Bronze
 
 ## Extendability
 
-- Add new storage providers by registering them in `core/storage_plugins.py` (or anywhere that imports `core.storage_registry.register_backend`).  
+- Add new storage providers by registering them in `core/storage/plugin_factories.py` (or anywhere that imports `core/storage/registry.py::register_backend`).  
 - Silver models/profiles live in `core/silver_models.py`; update `MODEL_PROFILES` when you want new named behaviors and document them in `docs/CONFIG_REFERENCE.md`.

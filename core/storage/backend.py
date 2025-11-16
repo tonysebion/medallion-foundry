@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Dict, Any
 import logging
 
-from core.storage_plugin_manager import get_backend_factory, resolve_backend_type
+from core.storage.plugin_manager import get_backend_factory, resolve_backend_type
 
 logger = logging.getLogger(__name__)
 
@@ -48,4 +48,4 @@ def get_storage_backend(config: Dict[str, Any], use_cache: bool = True) -> Stora
     return backend
 
 
-import core.storage_plugins  # noqa: F401 register built-in backends
+import core.storage.plugin_factories  # noqa: F401 register built-in backends

@@ -6,7 +6,7 @@ This page is the visual anchor for how Bronze → Silver → Gold (and storage b
 
 - **Bronze** captures raw extracts from sources. `bronze_extract.py` validates `platform` + `source`, slices data into chunks, applies schema/normalization, and writes metadata/checksum files. Bronze can target S3, Azure, GCS, or local storage, chooseable in `platform.bronze.storage_backend`.
 - **Silver** promotes Bronze partitions into curated artifacts. It supports multiple Silver models (`SilverModel`) and output formats (Parquet/CSV), plus streaming mode for large Bronze partitions. Silver metadata includes runtime, model, and storage metrics to help governance decisions.
-- **Storage layer** is now fully plugin-based (`core/storage_registry`). The Azure backend (`core/azure_storage.py`) and S3/GCS/local backends register themselves via `core/storage_plugins.py`, so you can drop in new providers without editing `core/storage.py`.
+- **Storage layer** is now fully plugin-based (`core/storage/registry.py`). The Azure backend (`core/storage/plugins/azure_storage.py`) and S3/GCS/local backends register themselves via `core/storage/plugin_factories.py`, so you can drop in new providers without editing `core/storage/backend.py`.
 
 ## Config paths
 
@@ -23,4 +23,4 @@ This page is the visual anchor for how Bronze → Silver → Gold (and storage b
 ## Next steps
 
 - For more detail on storage backends see `docs/STORAGE_BACKEND_ARCHITECTURE.md`.  
-- To plug in new storage providers, follow `core/storage_registry.py` + `core/storage_plugins.py` and register your factory.
+- To plug in new storage providers, follow `core/storage/registry.py` + `core/storage/plugin_factories.py` and register your factory.
