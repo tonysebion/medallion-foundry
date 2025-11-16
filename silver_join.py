@@ -507,6 +507,17 @@ def perform_join(
     return merged, stats
 
 
+def apply_projection(df: pd.DataFrame, output_cfg: Dict[str, Any]) -> pd.DataFrame:
+    projection = output_cfg.get("select_columns") or output_cfg.get("projection")
+    if not projection:
+        return df
+    cols = [str(col) for col in projection]
+    missing = [col for col in cols if col not in df.columns]
+    if missing:
+        raise ValueError(f"Projection references missing columns: {missing}")
+    return df[cols]
+
+
 def write_output(
     df: pd.DataFrame,
     base_dir: Path,
@@ -555,6 +566,7 @@ def write_output(
         },
         "join_key_pairs": [{"left": left_key, "right": right_key} for left_key, right_key in join_pairs],
         "chunk_size": chunk_size,
+        "output_columns": list(df.columns),
     }
     write_batch_metadata(
         base_dir,
@@ -616,6 +628,7 @@ def main() -> int:
             output_cfg,
             progress_tracker,
         )
+        joined_df = apply_projection(joined_df, output_cfg)
 
     source_audits = [build_input_audit(meta) for meta in metadata_list]
     requested_model = output_cfg.get("model") or SilverModel.default_for_load_pattern(LoadPattern.FULL).value
