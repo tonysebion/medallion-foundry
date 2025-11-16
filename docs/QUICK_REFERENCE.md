@@ -261,8 +261,8 @@ grep "metadata" logs/*.log
 ## 📚 Documentation Links
 
 - **Complete Guide:** [DOCUMENTATION.md](DOCUMENTATION.md)
-- **Enhanced Features:** [docs/ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md)
-- **Config Reference:** [docs/CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md)
+- **Enhanced Features:** [ENHANCED_FEATURES.md](ENHANCED_FEATURES.md)
+- **Config Reference:** [CONFIG_REFERENCE.md](CONFIG_REFERENCE.md)
 - **Quick Start:** [QUICKSTART.md](QUICKSTART.md)
 
 ---
@@ -325,4 +325,4 @@ WHERE dt = CURRENT_DATE AND hour = HOUR(CURRENT_TIMESTAMP);
 
 ---
 
-**Need Help?** See [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) for detailed documentation.
+**Need Help?** See [ENHANCED_FEATURES.md](ENHANCED_FEATURES.md) for detailed documentation.

@@ -4,6 +4,7 @@ from pathlib import Path
 from datetime import date, datetime
 
 from core.patterns import LoadPattern
+from core.partitioning import build_bronze_partition
 
 
 def build_bronze_relative_path(cfg: dict, run_date: date) -> str:
@@ -30,7 +31,8 @@ def build_bronze_relative_path(cfg: dict, run_date: date) -> str:
         return base_path
 
     if partition_strategy == "date":
-        return f"{base_path}dt={run_date.isoformat()}/"
+        partition = build_bronze_partition(cfg, run_date)
+        return partition.relative_path().as_posix() + "/"
     elif partition_strategy == "hourly":
         current_hour = datetime.now().strftime("%H")
         return f"{base_path}dt={run_date.isoformat()}/hour={current_hour}/"

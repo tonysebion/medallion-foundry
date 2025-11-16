@@ -4,7 +4,6 @@ site_name: medallion-foundry
 site_description: Config-driven Python framework for landing data into Bronze layer
 site_author: Bronze Foundry Contributors
 site_url: https://medallion-foundry.github.io/medallion-foundry/
-
 repo_name: medallion-foundry/medallion-foundry
 repo_url: https://github.com/medallion-foundry/medallion-foundry
 edit_uri: edit/main/docs/
@@ -64,14 +63,14 @@ nav:
     - Quick Reference: QUICK_REFERENCE.md
   - Documentation:
     - Complete Guide: DOCUMENTATION.md
-    - Architecture: docs/ARCHITECTURE.md
-    - Configuration Reference: docs/CONFIG_REFERENCE.md
-    - Enhanced Features: docs/ENHANCED_FEATURES.md
-    - First Production Run: docs/FIRST_RUN_CHECKLIST.md
+    - Architecture: ARCHITECTURE.md
+    - Configuration Reference: CONFIG_REFERENCE.md
+    - Enhanced Features: ENHANCED_FEATURES.md
+    - First Production Run: FIRST_RUN_CHECKLIST.md
   - Extending:
-    - Custom Extractors: docs/EXTENDING_EXTRACTORS.md
-    - Storage Backends: docs/STORAGE_BACKEND_ARCHITECTURE.md
-    - Examples: docs/examples/README.md
+    - Custom Extractors: EXTENDING_EXTRACTORS.md
+    - Storage Backends: STORAGE_BACKEND_ARCHITECTURE.md
+    - Examples: examples/README.md
   - Development:
     - Contributing: CONTRIBUTING.md
     - Testing: TESTING.md

@@ -1,15 +1,27 @@
-"""Streaming helpers for Silver promotions without building a giant DataFrame."""
+"""Streaming helpers for Silver promotions without building a giant DataFrame.
+
+Refactored to reuse `DatasetWriter` from artifacts for consistent partition/error
+handling and compression settings. This avoids divergence between streaming and
+batch promotion paths.
+"""
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
 from collections import defaultdict
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Dict, Iterable, List, Tuple, DefaultDict
 
 import pandas as pd
 from core.run_options import RunOptions
 from core.silver.models import SilverModel
+from core.silver.artifacts import (
+    apply_schema_settings,
+    normalize_dataframe,
+    partition_dataframe,
+    handle_error_rows,
+    DatasetWriter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,98 +30,6 @@ def _sanitize_partition_value(value: Any) -> str:
     return str(value).replace("/", "_").replace(" ", "_")
 
 
-def apply_schema_settings(df: pd.DataFrame, schema_cfg: Dict[str, Any]) -> pd.DataFrame:
-    rename_map = schema_cfg.get("rename_map") or {}
-    column_order = schema_cfg.get("column_order")
-
-    result = df.copy()
-    if rename_map:
-        missing = [col for col in rename_map if col not in result.columns]
-        if missing:
-            logger.debug("schema.rename_map references missing columns: %s", missing)
-        result = result.rename(columns=rename_map)
-
-    if column_order:
-        ordered = [col for col in column_order if col in result.columns]
-        remaining = [col for col in result.columns if col not in ordered]
-        result = result[ordered + remaining]
-
-    return result
-
-
-def normalize_dataframe(df: pd.DataFrame, normalization_cfg: Dict[str, Any]) -> pd.DataFrame:
-    trim_strings = normalization_cfg.get("trim_strings", False)
-    empty_as_null = normalization_cfg.get("empty_strings_as_null", False)
-
-    result = df.copy()
-    if not (trim_strings or empty_as_null):
-        return result
-
-    object_cols = result.select_dtypes(include="object").columns
-    for col in object_cols:
-        if trim_strings:
-            result[col] = result[col].apply(lambda val: val.strip() if isinstance(val, str) else val)
-        if empty_as_null:
-            result[col] = result[col].apply(lambda val: None if isinstance(val, str) and val == "" else val)
-    return result
-
-
-def handle_error_rows(
-    df: pd.DataFrame,
-    primary_keys: List[str],
-    error_cfg: Dict[str, Any],
-    dataset_name: str,
-    output_dir: Path,
-) -> pd.DataFrame:
-    if not error_cfg.get("enabled") or not primary_keys:
-        return df
-
-    missing_cols = [col for col in primary_keys if col not in df.columns]
-    if missing_cols:
-        logger.warning("Primary key columns %s not found; skipping error handling for %s", missing_cols, dataset_name)
-        return df
-
-    invalid_mask = df[primary_keys].isnull().any(axis=1)
-    invalid_count = int(invalid_mask.sum())
-    if invalid_count == 0:
-        return df
-
-    error_dir = output_dir / "_errors"
-    error_dir.mkdir(parents=True, exist_ok=True)
-    error_path = error_dir / f"{dataset_name}.csv"
-    df.loc[invalid_mask].to_csv(error_path, index=False)
-    logger.warning("Wrote %s invalid rows to %s", invalid_count, error_path)
-
-    max_records = error_cfg.get("max_bad_records", 0)
-    max_percent = error_cfg.get("max_bad_percent", 0.0)
-    total_rows = len(df)
-    percent = (invalid_count / total_rows) * 100 if total_rows else 0
-
-    if (max_records == 0 and invalid_count > 0) or (max_records and invalid_count > max_records and percent > max_percent):
-        raise ValueError(
-            f"Error threshold exceeded for {dataset_name}: {invalid_count} invalid rows ({percent:.2f}%)"
-        )
-
-    return df.loc[~invalid_mask].copy()
-
-
-def partition_dataframe(df: pd.DataFrame, partition_columns: List[str]) -> List[Tuple[List[str], pd.DataFrame]]:
-    if not partition_columns:
-        return [([], df)]
-
-    partitions = [([], df)]
-    for column in partition_columns:
-        if column not in df.columns:
-            logger.warning("Partition column '%s' not found; skipping", column)
-            continue
-        new_partitions: List[Tuple[List[str], pd.DataFrame]] = []
-        for path_parts, subset in partitions:
-            for value, group in subset.groupby(column):
-                safe_value = _sanitize_partition_value(value)
-                new_partitions.append((path_parts + [f"{column}={safe_value}"], group))
-        partitions = new_partitions
-
-    return partitions
 
 
 def _iter_bronze_frames(bronze_path: Path) -> Iterable[pd.DataFrame]:
@@ -130,9 +50,17 @@ def stream_silver_promotion(
     error_cfg: Dict[str, Any],
     silver_model: SilverModel,
 ) -> Tuple[Dict[str, List[Path]], int, int, List[Dict[str, str]]]:
-    writer = StreamingSilverWriter(output_dir, run_opts, error_cfg)
+    dataset_writer = DatasetWriter(
+        base_dir=output_dir,
+        primary_keys=run_opts.primary_keys,
+        partition_columns=run_opts.partition_columns,
+        error_cfg=error_cfg,
+        write_parquet=run_opts.write_parquet,
+        write_csv=run_opts.write_csv,
+        parquet_compression=run_opts.parquet_compression,
+    )
     state = CurrentHistoryState(run_opts.primary_keys, run_opts.order_column)
-    outputs: DefaultDict[str, List[Path]] = DefaultDict(list)
+    outputs: DefaultDict[str, List[Path]] = defaultdict(list)
     schema_snapshot: List[Dict[str, str]] = []
     record_count = 0
     chunk_count = 0
@@ -157,13 +85,13 @@ def stream_silver_promotion(
 
         if silver_model == SilverModel.PERIODIC_SNAPSHOT:
             chunk_count += 1
-            outputs[full_name].extend(writer.write_chunk(full_name, normalized, chunk_tag))
+            outputs[full_name].extend(dataset_writer.write_dataset_chunk(full_name, normalized, chunk_tag))
         elif silver_model == SilverModel.INCREMENTAL_MERGE:
             chunk_count += 1
-            outputs[cdc_name].extend(writer.write_chunk(cdc_name, normalized, chunk_tag))
+            outputs[cdc_name].extend(dataset_writer.write_dataset_chunk(cdc_name, normalized, chunk_tag))
         elif silver_model == SilverModel.SCD_TYPE_2:
             chunk_count += 1
-            outputs[history_name].extend(writer.write_chunk(history_name, normalized, chunk_tag))
+            outputs[history_name].extend(dataset_writer.write_dataset_chunk(history_name, normalized, chunk_tag))
             state.update(normalized)
         elif silver_model in {SilverModel.SCD_TYPE_1, SilverModel.FULL_MERGE_DEDUPE}:
             state.update(normalized)
@@ -175,7 +103,7 @@ def stream_silver_promotion(
         if not current_df.empty:
             chunk_count += 1
             outputs[current_name].extend(
-                writer.write_chunk(current_name, current_df, f"current-{chunk_count:04d}")
+                dataset_writer.write_dataset_chunk(current_name, current_df, f"current-{chunk_count:04d}")
             )
             record_count += len(current_df)
     elif silver_model == SilverModel.FULL_MERGE_DEDUPE:
@@ -183,7 +111,7 @@ def stream_silver_promotion(
         if not full_df.empty:
             chunk_count += 1
             outputs[full_name].extend(
-                writer.write_chunk(full_name, full_df, f"full-{chunk_count:04d}")
+                dataset_writer.write_dataset_chunk(full_name, full_df, f"full-{chunk_count:04d}")
             )
             record_count += len(full_df)
     elif silver_model == SilverModel.SCD_TYPE_2:
@@ -191,7 +119,7 @@ def stream_silver_promotion(
         if not current_df.empty:
             chunk_count += 1
             outputs[current_name].extend(
-                writer.write_chunk(current_name, current_df, f"current-{chunk_count:04d}")
+                dataset_writer.write_dataset_chunk(current_name, current_df, f"current-{chunk_count:04d}")
             )
             record_count += len(current_df)
 
@@ -250,29 +178,8 @@ class CurrentHistoryState:
         return pd.DataFrame(list(self.state.values()))
 
 
-class StreamingSilverWriter:
-    def __init__(self, output_dir: Path, run_opts: RunOptions, error_cfg: Dict[str, Any]):
-        self.output_dir = output_dir
-        self.run_opts = run_opts
-        self.error_cfg = error_cfg
-
-    def write_chunk(self, dataset_name: str, df: pd.DataFrame, chunk_tag: str) -> List[Path]:
-        partitions = partition_dataframe(df, self.run_opts.partition_columns) or [([], df)]
-        written: List[Path] = []
-        for path_parts, partition_df in partitions:
-            target_dir = self.output_dir
-            for part in path_parts:
-                target_dir = target_dir / part
-            cleaned_df = handle_error_rows(partition_df, self.run_opts.primary_keys, self.error_cfg, dataset_name, target_dir)
-            written.extend(
-                _write_dataset_chunk(
-                    cleaned_df,
-                    dataset_name,
-                    target_dir,
-                    self.run_opts.write_parquet,
-                    self.run_opts.write_csv,
-                    self.run_opts.parquet_compression,
-                    chunk_tag,
-                )
-            )
-        return written
+class StreamingSilverWriter:  # retained for backward import compatibility
+    def __init__(self, *args: Any, **kwargs: Any):  # pragma: no cover - deprecated path
+        logger.warning(
+            "StreamingSilverWriter is deprecated; streaming now reuses DatasetWriter directly"
+        )

@@ -622,6 +622,6 @@ WHERE dt = DATE '2025-01-12'
 
 ## Next Steps
 
-- See [CONFIG_REFERENCE.md](../docs/CONFIG_REFERENCE.md) for complete configuration options
-- See [QUICKSTART.md](../QUICKSTART.md) for basic usage
-- See [EXTENDING_EXTRACTORS.md](../docs/EXTENDING_EXTRACTORS.md) for custom extractors
+- See [CONFIG_REFERENCE.md](CONFIG_REFERENCE.md) for complete configuration options
+- See [QUICKSTART.md](QUICKSTART.md) for basic usage
+- See [EXTENDING_EXTRACTORS.md](EXTENDING_EXTRACTORS.md) for custom extractors

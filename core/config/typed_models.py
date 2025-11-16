@@ -128,6 +128,7 @@ class PlatformConfig(BaseModel):
     azure_connection: Optional[Dict[str, Any]] = None
 
 class RootConfig(BaseModel):
+    config_version: int = 1
     platform: PlatformConfig
     source: SourceConfig
     silver: Optional[SilverConfig] = None
@@ -138,4 +139,5 @@ class RootConfig(BaseModel):
 # Factory parsing entry point
 
 def parse_root_config(data: Dict[str, Any]) -> RootConfig:
+    # Accept missing version; default to 1 while emitting warning externally.
     return RootConfig(**data)

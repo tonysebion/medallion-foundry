@@ -10,6 +10,7 @@ import yaml
 
 from .validation import validate_config_dict
 from .typed_models import parse_root_config, RootConfig
+from core.deprecation import emit_compat
 from core.paths import build_bronze_relative_path
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,8 @@ def load_config(path: str) -> Dict[str, Any | RootConfig]:
     validated = validate_config_dict(cfg)
     try:
         typed = parse_root_config(validated)
+        if "config_version" not in validated:
+            emit_compat("Config missing config_version; defaulting to 1", code="CFG004")
         validated["__typed_model__"] = typed
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("Typed config parse failed; proceeding with dict only: %s", exc)
@@ -92,6 +95,8 @@ def load_configs(path: str) -> List[Dict[str, Any | RootConfig]]:
         validated = validate_config_dict(merged_cfg)
         try:
             typed = parse_root_config(validated)
+            if "config_version" not in validated:
+                emit_compat("Config missing config_version; defaulting to 1", code="CFG004")
             validated["__typed_model__"] = typed
         except Exception as exc:  # pragma: no cover
             logger.warning("Typed config parse failed for source index %s: %s", idx, exc)

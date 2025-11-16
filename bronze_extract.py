@@ -30,6 +30,7 @@ from core.catalog import notify_catalog, report_lineage, report_quality_snapshot
 from core.context import build_run_context, RunContext
 from core.hooks import fire_webhooks
 from core.run_options import RunOptions
+from core.config.typed_models import RootConfig
 from core.storage.policy import enforce_storage_scope
 
 __version__ = "1.0.0"
@@ -141,7 +142,7 @@ def main() -> int:
         print("Available storage backends:")
         for backend in backends:
             print(f"  - {backend}")
-        print("\nNote: Azure requires additional dependencies. See INSTALLATION.md")
+        print("\nNote: Azure requires additional dependencies. See docs/INSTALLATION.md")
         return 0
     
     # Configure logging based on flags
@@ -321,6 +322,32 @@ class BronzeOrchestrator:
                 self._hook_context[key] = value
 
     def _build_run_options(self, configs: List[Dict[str, Any]], run_date: dt.date) -> RunOptions:
+        # Prefer typed model if available to reduce dict key errors.
+        typed: RootConfig | None = configs[0].get("__typed_model__")  # type: ignore[assignment]
+        if typed and typed.silver:
+            run_cfg = typed.source.run
+            load_pattern = LoadPattern.normalize(run_cfg.load_pattern.value if hasattr(run_cfg.load_pattern, 'value') else run_cfg.load_pattern)  # type: ignore[arg-type]
+            silver_cfg = typed.silver
+            return RunOptions(
+                load_pattern=load_pattern,
+                require_checksum=False,  # placeholder, legacy field not yet in typed model
+                write_parquet=silver_cfg.write_parquet,
+                write_csv=silver_cfg.write_csv,
+                parquet_compression=silver_cfg.parquet_compression,
+                primary_keys=silver_cfg.primary_keys,
+                order_column=silver_cfg.order_column,
+                partition_columns=silver_cfg.partitioning.columns,
+                artifact_names={
+                    "current": silver_cfg.current_output_name,
+                    "history": silver_cfg.history_output_name,
+                    "cdc": silver_cfg.cdc_output_name,
+                    "full_snapshot": silver_cfg.full_output_name,
+                },
+                on_success_webhooks=self.args.on_success_webhook or [],
+                on_failure_webhooks=self.args.on_failure_webhook or [],
+            )
+
+        # Fallback to dict-based extraction if typed model missing.
         run_cfg = configs[0]["source"]["run"]
         silver_cfg = configs[0].get("silver", {})
         load_pattern = LoadPattern.normalize(run_cfg.get("load_pattern"))

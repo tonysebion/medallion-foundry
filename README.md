@@ -66,7 +66,7 @@ This framework is intentionally lightweight and orchestration-neutral: you can r
 
 ### ?? Testing Your API (For Product/API Teams)
 
-**Not familiar with Python?** No problem! [QUICKSTART.md](QUICKSTART.md) has a complete step-by-step walkthrough.
+**Not familiar with Python?** No problem! [docs/QUICKSTART.md](docs/QUICKSTART.md) has a complete step-by-step walkthrough.
 
 **Quick summary:**
 
@@ -90,7 +90,7 @@ python bronze_extract.py --config config/test.yaml
 # 5. Check ./output/ folder - if you see data, you're done!
 ```
 
-**?? See [QUICKSTART.md](QUICKSTART.md) for detailed instructions with screenshots and troubleshooting.**
+**?? See [docs/QUICKSTART.md](docs/QUICKSTART.md) for detailed instructions with screenshots and troubleshooting.**
 
 ### ?? Offline Local Quick Test
 
@@ -363,8 +363,8 @@ silver_output/
 
 - [OPS_PLAYBOOK.md](docs/OPS_PLAYBOOK.md) ï¿½ day-two operations, hooks, and monitoring tips.
 - [GOLD_CONTRACTS.md](docs/GOLD_CONTRACTS.md) ï¿½ guidance for documenting downstream contracts and expectations.
-- [QUICKSTART.md](QUICKSTART.md) ï¿½ detailed tutorial with screenshots.
-- [DOCUMENTATION.md](DOCUMENTATION.md) ï¿½ architecture concepts and FAQs.
+- [docs/QUICKSTART.md](docs/QUICKSTART.md) ï¿½ detailed tutorial with screenshots.
+- [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) ï¿½ architecture concepts and FAQs.
 - [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) ï¿½ advanced configuration & features.
 - [CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) ï¿½ exhaustive list of config options.
 - [TESTING.md](TESTING.md) ï¿½ how to run tests and interpret results.
@@ -436,8 +436,8 @@ silver_output/
 
 - [OPS_PLAYBOOK.md](docs/OPS_PLAYBOOK.md) ï¿½ day-two operations, hooks, and monitoring tips.
 - [GOLD_CONTRACTS.md](docs/GOLD_CONTRACTS.md) ï¿½ guidance for documenting downstream contracts and expectations.
-- [QUICKSTART.md](QUICKSTART.md) ï¿½ detailed tutorial with screenshots.
-- [DOCUMENTATION.md](DOCUMENTATION.md) ï¿½ architecture concepts and FAQs.
+- [docs/QUICKSTART.md](docs/QUICKSTART.md) ï¿½ detailed tutorial with screenshots.
+- [docs/DOCUMENTATION.md](docs/DOCUMENTATION.md) ï¿½ architecture concepts and FAQs.
 - [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) ï¿½ advanced configuration & features.
 - [CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) ï¿½ exhaustive list of config options.
 - [TESTING.md](TESTING.md) ï¿½ how to run tests and interpret results.

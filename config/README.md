@@ -217,7 +217,7 @@ echo $MY_API_TOKEN
 
 ## Need Help?
 
-- **Quick Start**: See [QUICKSTART.md](../QUICKSTART.md)
+- **Quick Start**: See [docs/QUICKSTART.md](../docs/QUICKSTART.md)
 - **Full Documentation**: See [DOCUMENTATION.md](../DOCUMENTATION.md)
 - **Examples**: Browse [docs/examples/](../docs/examples/)
 - **Issues**: Open a GitHub issue

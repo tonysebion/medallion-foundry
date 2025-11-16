@@ -13,12 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Partition abstraction classes: `BronzePartition`, `SilverPartition` used in `silver_extract` path resolution.
 - Explicit sample bootstrap command (`core.samples.bootstrap`) for deterministic Bronze fixtures.
 - Structured deprecation & compatibility warning framework (`core.deprecation`).
+- Config schema versioning (`config_version`, default 1) with compatibility warning (CFG004 when missing).
+- Streaming Silver promotion now reuses `DatasetWriter` chunk APIs (consistent partition/error handling).
 
 ### Deprecated
 - Implicit fallback from `platform.bronze.output_dir` to `platform.bronze.local_path` (CFG001, removal in 1.3.0).
 - Legacy `source.api.url` key (CFG002, removal in 1.3.0) – use `base_url`.
 - Missing `source.api.endpoint` defaulting to '/' (CFG003, removal in 1.3.0).
 - Positional legacy wrapper `write_silver_outputs` (API001, removal in 1.3.0) – migrate to `DefaultSilverArtifactWriter`.
+- `StreamingSilverWriter` class (replaced by direct `DatasetWriter` usage in streaming path; removal in 1.3.0).
 
 ### Changed
 - `generate_silver_samples.py` no longer auto-synthesizes Bronze data; tests and users should call bootstrap command explicitly.
@@ -79,7 +82,7 @@ Add explicit `platform.bronze.local_path`; rename `source.api.url` to `base_url`
   - Coverage goals
 
 #### Documentation
-- **CONTRIBUTING.md**: Complete contribution guidelines
+- **docs/CONTRIBUTING.md**: Complete contribution guidelines
   - Development workflow
   - Code style requirements
   - Testing requirements

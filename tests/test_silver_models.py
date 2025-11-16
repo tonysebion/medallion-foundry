@@ -10,7 +10,8 @@ import pytest
 
 from core.patterns import LoadPattern
 from core.silver.models import SilverModel
-from silver_extract import SilverModelPlanner, write_silver_outputs
+from silver_extract import SilverModelPlanner
+from core.silver.writer import DefaultSilverArtifactWriter
 
 
 PRIMARY_KEYS = ["order_id"]
@@ -112,12 +113,11 @@ def test_silver_output_files_saved_to_sample_structure(
     primary_keys = PRIMARY_KEYS if silver_model.requires_dedupe else []
     order_column = ORDER_COLUMN if silver_model.requires_dedupe else None
 
-    outputs = write_silver_outputs(
-        sample_df,
-        base_dir,
-        bronze_pattern,
-        primary_keys,
-        order_column,
+    writer = DefaultSilverArtifactWriter()
+    outputs = writer.write(
+        df=sample_df,
+        primary_keys=primary_keys,
+        order_column=order_column,
         write_parquet=False,
         write_csv=True,
         parquet_compression="snappy",
@@ -125,6 +125,7 @@ def test_silver_output_files_saved_to_sample_structure(
         partition_columns=[],
         error_cfg={"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0},
         silver_model=silver_model,
+        output_dir=base_dir,
     )
 
     assert base_dir.exists(), "Sample structure should be created"

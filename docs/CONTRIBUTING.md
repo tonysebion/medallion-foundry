@@ -348,7 +348,7 @@ To add a new extractor (e.g., `FileExtractor`):
 7. Add tests in `tests/test_extractors.py`
 8. Update documentation
 
-See [EXTENDING_EXTRACTORS.md](docs/EXTENDING_EXTRACTORS.md) for details.
+See [EXTENDING_EXTRACTORS.md](EXTENDING_EXTRACTORS.md) for details.
 
 ### 2. New Storage Backend
 
@@ -358,14 +358,14 @@ To add a new storage backend (e.g., `GoogleCloudStorage`):
 2. Implement `StorageBackend` interface
 3. Add example configuration
 4. Add README with setup instructions
-5. Update `docs/STORAGE_BACKEND_ARCHITECTURE.md`
+5. Update `STORAGE_BACKEND_ARCHITECTURE.md`
 
-See [STORAGE_BACKEND_ARCHITECTURE.md](docs/STORAGE_BACKEND_ARCHITECTURE.md) for details.
+See [STORAGE_BACKEND_ARCHITECTURE.md](STORAGE_BACKEND_ARCHITECTURE.md) for details.
 
 ### 3. New Configuration Options
 
 1. Add validation in `core/config.py`
-2. Update `docs/CONFIG_REFERENCE.md`
+2. Update `CONFIG_REFERENCE.md`
 3. Add example in `docs/examples/configs/`
 4. Update YAML examples
 5. Add tests for validation

@@ -41,7 +41,7 @@ class DefaultSilverArtifactWriter:
         silver_model: Any,
         output_dir,
     ) -> Mapping[str, List[Path]]:
-        return _artifact_write_silver_outputs(
+        outputs = _artifact_write_silver_outputs(
             df,
             primary_keys,
             order_column,
@@ -54,3 +54,12 @@ class DefaultSilverArtifactWriter:
             silver_model,
             output_dir,
         )
+        return outputs
+
+def get_silver_writer(kind: str | None = None) -> SilverArtifactWriter:
+    """Factory for selecting a silver artifact writer.
+
+    Currently only returns the default implementation; `kind` reserved
+    for future extensions (e.g., transactional writers).
+    """
+    return DefaultSilverArtifactWriter()

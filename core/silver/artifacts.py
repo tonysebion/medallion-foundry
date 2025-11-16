@@ -156,6 +156,29 @@ def _write_dataset(
         files.append(csv_path)
     return files
 
+def _write_dataset_chunk(
+    df: pd.DataFrame,
+    base_name: str,
+    output_dir: Path,
+    write_parquet: bool,
+    write_csv: bool,
+    parquet_compression: str,
+    chunk_tag: str,
+) -> List[Path]:
+    """Chunked variant used by streaming promotions (suffix with -<chunk_tag>)."""
+    files: List[Path] = []
+    output_dir.mkdir(parents=True, exist_ok=True)
+    suffix = f"-{chunk_tag}"
+    if write_parquet:
+        parquet_path = output_dir / f"{base_name}{suffix}.parquet"
+        df.to_parquet(parquet_path, index=False, compression=parquet_compression)
+        files.append(parquet_path)
+    if write_csv:
+        csv_path = output_dir / f"{base_name}{suffix}.csv"
+        df.to_csv(csv_path, index=False)
+        files.append(csv_path)
+    return files
+
 
 class DatasetWriter:
     """Write datasets with partition/error policies."""
@@ -201,6 +224,28 @@ class DatasetWriter:
                 suffix = "/".join(path_parts)
                 logger.info("Written partition %s for %s", suffix, dataset_name)
 
+        return written_files
+
+    def write_dataset_chunk(self, dataset_name: str, dataset_df: pd.DataFrame, chunk_tag: str) -> List[Path]:
+        """Write a chunk of a dataset with partition/error policies, suffixing filenames."""
+        partitions = partition_dataframe(dataset_df, self.partition_columns) or [([], dataset_df)]
+        written_files: List[Path] = []
+        for path_parts, partition_df in partitions:
+            target_dir = self.base_dir
+            for part in path_parts:
+                target_dir = target_dir / part
+            cleaned_df = handle_error_rows(partition_df, self.primary_keys, self.error_cfg, dataset_name, target_dir)
+            written_files.extend(
+                _write_dataset_chunk(
+                    cleaned_df,
+                    dataset_name,
+                    target_dir,
+                    self.write_parquet,
+                    self.write_csv,
+                    self.parquet_compression,
+                    chunk_tag,
+                )
+            )
         return written_files
 
 
