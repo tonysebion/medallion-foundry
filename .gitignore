@@ -158,6 +158,7 @@ venv.bak/
 /site
 # allow example data README files
 !/docs/examples/data/README.md
+/docs/examples/data/*
 
 # mypy
 .mypy_cache/

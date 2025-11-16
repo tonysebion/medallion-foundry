@@ -76,7 +76,7 @@ def fetch_asset_local(entry: Dict[str, Any], tmp_dir: Path, global_platform: Dic
     validate_storage_metadata(platform_cfg)
     enforce_storage_scope(platform_cfg, storage_scope)
 
-    backend = get_storage_backend({"platform": platform_cfg})
+    backend = get_storage_backend(platform_cfg)
     requested_path = Path(entry["path"])
     if requested_path.exists():
         return requested_path
@@ -371,11 +371,21 @@ class RightPartitionCache:
             raise ValueError("Join keys must be configured to partition the right-hand asset.")
         self.df = df
         self.join_keys = join_keys
-        self._cache: Dict[Any, pd.DataFrame] = {}
-        self._grouped = df.groupby(join_keys, sort=False, dropna=False)
-        self._all_keys = set(self._grouped.groups.keys())
+        self._cache: Dict[Tuple[Any, ...], pd.DataFrame] = {}
+        self._lookup: Dict[Tuple[Any, ...], List[int]] = {}
+        for idx, row in df.iterrows():
+            key = self._build_key(row)
+            self._lookup.setdefault(key, []).append(idx)
+        self._all_keys = set(self._lookup.keys())
 
-    def batch_for_keys(self, keys: Iterable[Any]) -> pd.DataFrame:
+    def _build_key(self, row: pd.Series) -> Tuple[Any, ...]:
+        return tuple(self._normalize_value(row[col]) for col in self.join_keys)
+
+    @staticmethod
+    def _normalize_value(value: Any) -> Any:
+        return "__silver_join_null__" if pd.isna(value) else value
+
+    def batch_for_keys(self, keys: Iterable[Tuple[Any, ...]]) -> pd.DataFrame:
         frames: List[pd.DataFrame] = []
         for key in keys:
             frames.append(self._get_group(key))
@@ -383,18 +393,25 @@ class RightPartitionCache:
             return pd.concat(frames, ignore_index=True)
         return self.df.iloc[0:0]
 
-    def _get_group(self, key: Any) -> pd.DataFrame:
+    def _get_group(self, key: Tuple[Any, ...]) -> pd.DataFrame:
         if key in self._cache:
             return self._cache[key]
-        try:
-            frame = self._grouped.get_group(key)
-        except KeyError:
-            frame = self.df.iloc[0:0]
+        idxs = self._lookup.get(key) or []
+        frame = self.df.loc[idxs] if idxs else self.df.iloc[0:0]
         self._cache[key] = frame
         return frame
 
-    def all_keys(self) -> Set[Any]:
+    def all_keys(self) -> Set[Tuple[Any, ...]]:
         return set(self._all_keys)
+
+    def normalize_query_keys(self, keys: Iterable[Any]) -> Set[Tuple[Any, ...]]:
+        normalized: Set[Tuple[Any, ...]] = set()
+        for key in keys:
+            if isinstance(key, tuple):
+                normalized.add(tuple(self._normalize_value(value) for value in key))
+            else:
+                normalized.add((self._normalize_value(key),))
+        return normalized
 
 
 @dataclass
@@ -614,7 +631,7 @@ def perform_join(
     right_aligned = right.rename(columns=rename_right).copy()
 
     cache = RightPartitionCache(right_aligned, canonical_keys)
-    matched_right_keys: Set[Any] = set()
+    matched_right_keys: Set[Tuple[Any, ...]] = set()
     chunk_frames: List[pd.DataFrame] = []
     chunk_count = 0
 
@@ -625,7 +642,8 @@ def perform_join(
         chunk_count += 1
         start = time.perf_counter()
         key_set = _extract_join_key_set(chunk, canonical_keys)
-        right_subset = cache.batch_for_keys(key_set)
+        normalized_keys = cache.normalize_query_keys(key_set)
+        right_subset = cache.batch_for_keys(normalized_keys)
         if spill_dir:
             spill_file = spill_dir / f"chunk_{chunk_count:04d}.parquet"
             spill_dir.mkdir(parents=True, exist_ok=True)
@@ -641,7 +659,9 @@ def perform_join(
             }
         )
         chunk_frames.append(merged_chunk)
-        matched_right_keys.update(_extract_join_key_set(right_subset, canonical_keys))
+        matched_right_keys.update(
+            cache.normalize_query_keys(_extract_join_key_set(right_subset, canonical_keys))
+        )
         if progress_tracker:
             progress_tracker.record_chunk(chunk_count, len(merged_chunk), key_set, duration)
 
