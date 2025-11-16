@@ -7,7 +7,14 @@ import pandas as pd
 import pandas.testing as pdt
 import pytest
 
-from silver_join import JoinProgressTracker, apply_projection, build_input_audit, perform_join
+from silver_join import (
+    JoinProgressTracker,
+    QualityGuardError,
+    apply_projection,
+    build_input_audit,
+    perform_join,
+    run_quality_guards,
+)
 
 
 def test_perform_join_streaming_with_progress(tmp_path: Path) -> None:
@@ -141,3 +148,28 @@ def test_datetime_alignment_preserves_timezone(tmp_path: Path) -> None:
     right_entry = next(entry for entry in lineage if entry["column"] == "event_time_right")
     assert event_entry["source"] == "left"
     assert right_entry["source"] == "right"
+
+
+def test_run_quality_guards_success() -> None:
+    df = pd.DataFrame({"key": [1, 2], "value": [None, 10]})
+    cfg = {
+        "row_count": {"min": 1, "max": 5},
+        "null_ratio": [{"column": "value", "max_ratio": 0.6}],
+        "unique_keys": [{"columns": ["key"]}],
+    }
+    results = run_quality_guards(df, cfg)
+    names = {result["name"] for result in results}
+    assert "row_count_range" in names
+    assert any(result["status"] == "pass" for result in results)
+
+
+def test_run_quality_guards_failure() -> None:
+    df = pd.DataFrame({"key": [1, 1], "value": [1, None]})
+    cfg = {
+        "row_count": {"min": 1, "max": 5},
+        "null_ratio": [{"column": "value", "max_ratio": 0.1}],
+        "unique_keys": [{"columns": ["key"]}],
+    }
+    with pytest.raises(QualityGuardError) as exc:
+        run_quality_guards(df, cfg)
+    assert any(result["status"] == "fail" for result in exc.value.results)

@@ -53,6 +53,7 @@ The `output` block controls the join semantics:
 - `checkpoint_dir`: override where `progress.json` is written (defaults to `<output path>/.join_progress`). The tracker records the chunk index, row counts, and sample join keys so retries can pick up where the last successful chunk ended.
 - `join_key_pairs`: when the two Silver assets use different column names, map them explicitly. Each entry can be a string (matching names) or a mapping (`left`/`source` and `right`/`target`). If you omit this field, `silver_join` will try to infer the join keys from metadata/column intersections.
 - `performance_profile`: one of `auto`, `chunked`, or `single`. The default `auto` derives a chunk size from the source metadata, `chunked` forces a chunked merge even for small inputs, and `single` runs the join in a single batch regardless of size. You can still override `chunk_size` manually if you want precise control.
+- `quality_guards`: safeguard the merged dataset with configurable checks (`row_count`, `null_ratio`, and `unique_keys`). Guard failures abort the run with a descriptive error and do not write outputs; successful guards are listed in `_metadata.json`.
 
 If you configure `select_columns`/`projection`, the join enforces that projection after the merge – missing column names raise an error, and the columns are written in the order you list them so downstream consumers always see a predictable output schema.
 

@@ -257,6 +257,85 @@ def _build_column_origin(
     return origin
 
 
+class QualityGuardError(Exception):
+    def __init__(self, results: List[Dict[str, Any]]) -> None:
+        self.results = results
+        failures = [result for result in results if result["status"] != "pass"]
+        names = ", ".join(result["name"] for result in failures)
+        super().__init__(f"Quality guard failure(s): {names}")
+
+
+def _evaluate_row_count(df: pd.DataFrame, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    name = "row_count_range"
+    count = len(df)
+    min_expected = cfg.get("min")
+    max_expected = cfg.get("max")
+    passed = True
+    details = {"actual": count}
+    if min_expected is not None:
+        details["min"] = min_expected
+        if count < min_expected:
+            passed = False
+    if max_expected is not None:
+        details["max"] = max_expected
+        if count > max_expected:
+            passed = False
+    return {"name": name, "status": "pass" if passed else "fail", "details": details}
+
+
+def _evaluate_null_ratio(df: pd.DataFrame, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    name = f"null_ratio:{cfg.get('column')}"
+    column = cfg["column"]
+    if column not in df.columns:
+        raise ValueError(f"Null ratio guard references unknown column '{column}'")
+    threshold = cfg.get("max_ratio")
+    ratio = df[column].isna().mean()
+    details = {"column": column, "actual": ratio, "max_ratio": threshold}
+    status = "pass"
+    if threshold is not None and ratio > float(threshold):
+        status = "fail"
+    return {"name": name, "status": status, "details": details}
+
+
+def _evaluate_unique_keys(df: pd.DataFrame, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    columns = cfg.get("columns") or cfg.get("keys") or []
+    if not columns:
+        raise ValueError("Unique key guard requires at least one column")
+    for column in columns:
+        if column not in df.columns:
+            raise ValueError(f"Unique guard references unknown column '{column}'")
+    has_duplicates = df.duplicated(subset=columns).any()
+    details = {"columns": columns, "duplicates": int(has_duplicates)}
+    status = "fail" if has_duplicates else "pass"
+    return {"name": f"unique_keys:{'+'.join(columns)}", "status": status, "details": details}
+
+
+def run_quality_guards(df: pd.DataFrame, guard_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if not guard_cfg:
+        return []
+    results: List[Dict[str, Any]] = []
+    failures: List[Dict[str, Any]] = []
+    row_cfg = guard_cfg.get("row_count")
+    if row_cfg:
+        result = _evaluate_row_count(df, row_cfg)
+        results.append(result)
+        if result["status"] != "pass":
+            failures.append(result)
+    for entry in guard_cfg.get("null_ratio", []):
+        result = _evaluate_null_ratio(df, entry)
+        results.append(result)
+        if result["status"] != "pass":
+            failures.append(result)
+    for entry in guard_cfg.get("unique_keys", []):
+        result = _evaluate_unique_keys(df, entry)
+        results.append(result)
+        if result["status"] != "pass":
+            failures.append(result)
+    if failures:
+        raise QualityGuardError(results)
+    return results
+
+
 def normalize_join_keys(raw_keys: Any) -> List[str]:
     if not raw_keys:
         return []
@@ -678,6 +757,7 @@ def write_output(
     join_pairs: List[Tuple[str, str]],
     chunk_size: int,
     column_lineage: List[Dict[str, Any]],
+    quality_guards: List[Dict[str, Any]],
 ) -> None:
     base_dir.mkdir(parents=True, exist_ok=True)
     outputs = write_silver_outputs(
@@ -715,6 +795,7 @@ def write_output(
         "chunk_size": chunk_size,
         "output_columns": list(df.columns),
         "column_lineage": column_lineage,
+        "quality_guards": quality_guards,
     }
     write_batch_metadata(
         base_dir,
@@ -777,6 +858,7 @@ def main() -> int:
             progress_tracker,
         )
         joined_df, column_lineage = apply_projection(joined_df, output_cfg, column_origin)
+        guard_results = run_quality_guards(joined_df, output_cfg.get("quality_guards", {}))
 
     source_audits = [build_input_audit(meta) for meta in metadata_list]
     requested_model = output_cfg.get("model") or SilverModel.default_for_load_pattern(LoadPattern.FULL).value
@@ -797,6 +879,7 @@ def main() -> int:
         join_pairs,
         chunk_size,
         column_lineage,
+        guard_results,
     )
     logger.info("Joined silver asset written to %s (model=%s)", output_cfg["path"], model.value)
     return 0
