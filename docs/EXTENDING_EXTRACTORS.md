@@ -49,7 +49,7 @@ To add a custom extractor:
    from typing import Dict, Any, List, Optional, Tuple
    from datetime import date
 
-   from extractors.base import BaseExtractor
+   from core.extractors.base import BaseExtractor
 
    class SalesforceExtractor(BaseExtractor):
        def fetch_records(

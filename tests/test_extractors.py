@@ -4,7 +4,7 @@ import pytest
 from datetime import date
 from typing import Dict, Any, List, Optional, Tuple
 
-from extractors.base import BaseExtractor
+from core.extractors.base import BaseExtractor
 
 
 class TestBaseExtractor:

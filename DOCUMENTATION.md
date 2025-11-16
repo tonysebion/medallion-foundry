@@ -558,7 +558,7 @@ Each extraction creates `_metadata.json`:
 # docs/examples/custom_extractors/my_extractor.py
 from typing import Dict, Any, List, Tuple, Optional
 from datetime import date
-from extractors.base import BaseExtractor
+from core.extractors.base import BaseExtractor
 
 class MyCustomExtractor(BaseExtractor):
     def fetch_records(

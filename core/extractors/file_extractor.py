@@ -13,7 +13,7 @@ from datetime import date
 
 import pandas as pd
 
-from extractors.base import BaseExtractor
+from core.extractors.base import BaseExtractor
 
 logger = logging.getLogger(__name__)
 

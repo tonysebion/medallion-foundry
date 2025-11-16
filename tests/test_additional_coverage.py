@@ -5,8 +5,8 @@ from datetime import date
 from unittest.mock import Mock, patch, MagicMock
 import requests
 
-from extractors.api_extractor import ApiExtractor
-from extractors.db_extractor import DbExtractor
+from core.extractors.api_extractor import ApiExtractor
+from core.extractors.db_extractor import DbExtractor
 from core.exceptions import (
     AuthenticationError,
     PaginationError,

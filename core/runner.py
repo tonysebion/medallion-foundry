@@ -9,10 +9,10 @@ from pathlib import Path
 from datetime import date, datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from extractors.base import BaseExtractor
-from extractors.api_extractor import ApiExtractor
-from extractors.db_extractor import DbExtractor
-from extractors.file_extractor import FileExtractor
+from core.extractors.base import BaseExtractor
+from core.extractors.api_extractor import ApiExtractor
+from core.extractors.db_extractor import DbExtractor
+from core.extractors.file_extractor import FileExtractor
 
 from core.io import (
     chunk_records,

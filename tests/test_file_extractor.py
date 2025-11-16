@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from extractors.file_extractor import FileExtractor
+from core.extractors.file_extractor import FileExtractor
 
 
 def _base_config(file_config):

@@ -10,7 +10,7 @@ from pathlib import Path
 import pyodbc
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from extractors.base import BaseExtractor
+from core.extractors.base import BaseExtractor
 
 logger = logging.getLogger(__name__)
 
