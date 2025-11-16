@@ -8,6 +8,9 @@ from datetime import date
 import requests
 
 from core.retry import RetryPolicy, execute_with_retry, CircuitBreaker
+from core.rate_limit import RateLimiter
+from core.tracing import trace_span
+from .async_http import AsyncApiClient, is_async_enabled
 
 from core.extractors.base import BaseExtractor
 
@@ -80,9 +83,14 @@ class ApiExtractor(BaseExtractor):
     ) -> requests.Response:
         """Make HTTP request with retry logic (exponential backoff + jitter)."""
         logger.debug(f"Making request to {url} with params {params}")
+        # Rate limiter is derived from config per call site; fallback to none
+        # The limiter is injected via closure when called from paginate
 
         def _once() -> requests.Response:
-            resp = session.get(url, headers=headers, params=params, timeout=timeout, auth=auth)
+            if getattr(self, "_limiter", None):  # type: ignore[attr-defined]
+                self._limiter.acquire()  # type: ignore[attr-defined]
+            with trace_span("api.request"):
+                resp = session.get(url, headers=headers, params=params, timeout=timeout, auth=auth)
             # Only retry on 5xx; 4xx should raise immediately
             try:
                 resp.raise_for_status()
@@ -175,6 +183,8 @@ class ApiExtractor(BaseExtractor):
         url = base_url.rstrip("/") + endpoint
         
         timeout = run_cfg.get("timeout_seconds", 30)
+        # set up per-extractor rate limiter, used by _make_request via attribute
+        self._limiter = RateLimiter.from_config(api_cfg, run_cfg)  # type: ignore[attr-defined]
         pagination_cfg = api_cfg.get("pagination", {})
         pagination_type = pagination_cfg.get("type", "none")
         
@@ -288,6 +298,115 @@ class ApiExtractor(BaseExtractor):
         
         return all_records
 
+    async def _paginate_async(
+        self,
+        base_url: str,
+        endpoint: str,
+        headers: Dict[str, str],
+        api_cfg: Dict[str, Any],
+        run_cfg: Dict[str, Any],
+        auth: Optional[Tuple[str, str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Async variant of pagination using httpx client.
+
+        Executes sequentially for correctness; still benefits from async I/O.
+        """
+        timeout = run_cfg.get("timeout_seconds", 30)
+        max_conc = api_cfg.get("max_concurrency", 5)
+        client = AsyncApiClient(base_url, headers, auth=auth, timeout=timeout, max_concurrent=max_conc)
+        limiter = RateLimiter.from_config(api_cfg, run_cfg)
+
+        all_records: List[Dict[str, Any]] = []
+        pagination_cfg = api_cfg.get("pagination", {})
+        pagination_type = pagination_cfg.get("type", "none")
+        params = dict(api_cfg.get("params", {}))
+
+        async def _get(params_local: Dict[str, Any]) -> Dict[str, Any]:
+            if limiter:
+                await limiter.async_acquire()
+            with trace_span("api.request"):
+                return await client.get(endpoint, params=params_local)
+
+        if pagination_type == "none":
+            data = await _get(params)
+            all_records = self._extract_records(data, api_cfg)
+            logger.info(f"Fetched {len(all_records)} records (no pagination, async)")
+
+        elif pagination_type == "offset":
+            offset_param = pagination_cfg.get("offset_param", "offset")
+            limit_param = pagination_cfg.get("limit_param", "limit")
+            page_size = pagination_cfg.get("page_size", 100)
+            max_records = pagination_cfg.get("max_records", 0)
+            offset = 0
+            params[limit_param] = page_size
+            while True:
+                params[offset_param] = offset
+                data = await _get(params)
+                records = self._extract_records(data, api_cfg)
+                if not records:
+                    break
+                all_records.extend(records)
+                logger.info(f"Fetched {len(records)} records at offset {offset} (total: {len(all_records)})")
+                if len(records) < page_size:
+                    break
+                if max_records > 0 and len(all_records) >= max_records:
+                    all_records = all_records[:max_records]
+                    logger.info(f"Reached max_records limit of {max_records}")
+                    break
+                offset += page_size
+
+        elif pagination_type == "page":
+            page_param = pagination_cfg.get("page_param", "page")
+            page_size_param = pagination_cfg.get("page_size_param", "page_size")
+            page_size = pagination_cfg.get("page_size", 100)
+            max_pages = pagination_cfg.get("max_pages", 0)
+            page = 1
+            params[page_size_param] = page_size
+            while True:
+                if max_pages > 0 and page > max_pages:
+                    logger.info(f"Reached max_pages limit of {max_pages}")
+                    break
+                params[page_param] = page
+                data = await _get(params)
+                records = self._extract_records(data, api_cfg)
+                if not records:
+                    break
+                all_records.extend(records)
+                logger.info(f"Fetched {len(records)} records from page {page} (total: {len(all_records)})")
+                if len(records) < page_size:
+                    break
+                page += 1
+
+        elif pagination_type == "cursor":
+            cursor_param = pagination_cfg.get("cursor_param", "cursor")
+            cursor_path = pagination_cfg.get("cursor_path", "next_cursor")
+            cursor = None
+            while True:
+                if cursor:
+                    params[cursor_param] = cursor
+                data = await _get(params)
+                records = self._extract_records(data, api_cfg)
+                if not records:
+                    break
+                all_records.extend(records)
+                logger.info(f"Fetched {len(records)} records (total: {len(all_records)})")
+                # Extract next cursor
+                cursor_val = None
+                obj = data
+                if isinstance(obj, dict):
+                    for key in cursor_path.split("."):
+                        obj = obj.get(key) if isinstance(obj, dict) else None
+                        if obj is None:
+                            break
+                    cursor_val = obj
+                cursor = cursor_val
+                if not cursor:
+                    break
+        else:
+            raise ValueError(f"Unsupported pagination type: '{pagination_type}'")
+
+        return all_records
+
     def fetch_records(
         self,
         cfg: Dict[str, Any],
@@ -315,7 +434,11 @@ class ApiExtractor(BaseExtractor):
         logger.info(f"Starting API extraction from {base_url}{endpoint}")
         
         try:
-            records = self._paginate(session, base_url, endpoint, headers, api_cfg, run_cfg, auth)
+            if is_async_enabled(api_cfg):
+                import asyncio
+                records = asyncio.run(self._paginate_async(base_url, endpoint, headers, api_cfg, run_cfg, auth))
+            else:
+                records = self._paginate(session, base_url, endpoint, headers, api_cfg, run_cfg, auth)
         except requests.exceptions.RequestException as e:
             logger.error(f"API request failed: {e}")
             raise

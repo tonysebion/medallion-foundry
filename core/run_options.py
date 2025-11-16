@@ -27,6 +27,7 @@ class RunOptions:
     streaming_chunk_size: int = 0  # 0 = file-level default
     streaming_prefetch: int = 0  # number of chunks to prefetch/lookahead
     transform_processes: int = 0  # >0 enables multiprocessing for chunk transforms
+    resume: bool = False  # resume streaming using checkpoints
 
     @staticmethod
     def default_artifacts() -> Dict[str, str]:

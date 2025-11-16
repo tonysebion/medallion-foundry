@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 from collections import defaultdict
 from typing import Any, Dict, Iterable, List, Tuple, DefaultDict
+import itertools
 
 import pandas as pd
 from core.run_options import RunOptions
@@ -22,6 +23,8 @@ from core.silver.artifacts import (
     handle_error_rows,
     DatasetWriter,
 )
+from core.checkpoint import CheckpointManager
+from core.tracing import trace_span
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +79,7 @@ def stream_silver_promotion(
     error_cfg: Dict[str, Any],
     silver_model: SilverModel,
 ) -> Tuple[Dict[str, List[Path]], int, int, List[Dict[str, str]]]:
+    cp = CheckpointManager(output_dir, enabled=bool(run_opts.resume))
     dataset_writer = DatasetWriter(
         base_dir=output_dir,
         primary_keys=run_opts.primary_keys,
@@ -105,6 +109,9 @@ def stream_silver_promotion(
         ),
         start=1,
     ):
+        if run_opts.resume and cp.should_skip_chunk("stream", chunk_index):
+            logger.info("Skipping chunk %s due to checkpoint", chunk_index)
+            continue
         if run_opts.transform_processes > 0:
             # Simple multiprocessing wrapper: apply schema + normalization in a separate process
             import multiprocessing as mp
@@ -120,8 +127,9 @@ def stream_silver_promotion(
                 normalized_list = pool.map(_transform, [pickled])
             normalized = normalized_list[0]
         else:
-            normalized = apply_schema_settings(chunk, schema_cfg)
-            normalized = normalize_dataframe(normalized, normalization_cfg)
+            with trace_span("silver.stream.transform"):
+                normalized = apply_schema_settings(chunk, schema_cfg)
+                normalized = normalize_dataframe(normalized, normalization_cfg)
         if normalized.empty:
             continue
 
@@ -131,45 +139,55 @@ def stream_silver_promotion(
 
         chunk_tag = f"{chunk_index:04d}"
 
-        if silver_model == SilverModel.PERIODIC_SNAPSHOT:
-            chunk_count += 1
-            outputs[full_name].extend(dataset_writer.write_dataset_chunk(full_name, normalized, chunk_tag))
-        elif silver_model == SilverModel.INCREMENTAL_MERGE:
-            chunk_count += 1
-            outputs[cdc_name].extend(dataset_writer.write_dataset_chunk(cdc_name, normalized, chunk_tag))
-        elif silver_model == SilverModel.SCD_TYPE_2:
-            chunk_count += 1
-            outputs[history_name].extend(dataset_writer.write_dataset_chunk(history_name, normalized, chunk_tag))
-            state.update(normalized)
-        elif silver_model in {SilverModel.SCD_TYPE_1, SilverModel.FULL_MERGE_DEDUPE}:
-            state.update(normalized)
-        else:
-            raise ValueError(f"Unsupported silver model '{silver_model.value}'")
+        with trace_span("silver.stream.write_chunk"):
+            if silver_model == SilverModel.PERIODIC_SNAPSHOT:
+                chunk_count += 1
+                outputs[full_name].extend(dataset_writer.write_dataset_chunk(full_name, normalized, chunk_tag))
+            elif silver_model == SilverModel.INCREMENTAL_MERGE:
+                chunk_count += 1
+                outputs[cdc_name].extend(dataset_writer.write_dataset_chunk(cdc_name, normalized, chunk_tag))
+            elif silver_model == SilverModel.SCD_TYPE_2:
+                chunk_count += 1
+                outputs[history_name].extend(dataset_writer.write_dataset_chunk(history_name, normalized, chunk_tag))
+                state.update(normalized)
+            elif silver_model in {SilverModel.SCD_TYPE_1, SilverModel.FULL_MERGE_DEDUPE}:
+                state.update(normalized)
+            else:
+                raise ValueError(f"Unsupported silver model '{silver_model.value}'")
+
+        if run_opts.resume:
+            cp.save_checkpoint("stream", chunk_index, record_count)
 
     if silver_model == SilverModel.SCD_TYPE_1:
         current_df = state.snapshot()
         if not current_df.empty:
             chunk_count += 1
-            outputs[current_name].extend(
-                dataset_writer.write_dataset_chunk(current_name, current_df, f"current-{chunk_count:04d}")
-            )
+            with trace_span("silver.stream.flush_current"):
+                outputs[current_name].extend(
+                    dataset_writer.write_dataset_chunk(current_name, current_df, f"current-{chunk_count:04d}")
+                )
             record_count += len(current_df)
     elif silver_model == SilverModel.FULL_MERGE_DEDUPE:
         full_df = state.snapshot()
         if not full_df.empty:
             chunk_count += 1
-            outputs[full_name].extend(
-                dataset_writer.write_dataset_chunk(full_name, full_df, f"full-{chunk_count:04d}")
-            )
+            with trace_span("silver.stream.flush_full"):
+                outputs[full_name].extend(
+                    dataset_writer.write_dataset_chunk(full_name, full_df, f"full-{chunk_count:04d}")
+                )
             record_count += len(full_df)
     elif silver_model == SilverModel.SCD_TYPE_2:
         current_df = state.snapshot()
         if not current_df.empty:
             chunk_count += 1
-            outputs[current_name].extend(
-                dataset_writer.write_dataset_chunk(current_name, current_df, f"current-{chunk_count:04d}")
-            )
+            with trace_span("silver.stream.flush_current"):
+                outputs[current_name].extend(
+                    dataset_writer.write_dataset_chunk(current_name, current_df, f"current-{chunk_count:04d}")
+                )
             record_count += len(current_df)
+
+    if run_opts.resume:
+        cp.clear_checkpoint("stream")
 
     return dict(outputs), chunk_count, record_count, schema_snapshot
 

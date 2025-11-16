@@ -260,6 +260,7 @@ class PromotionOptions:
             streaming_chunk_size=getattr(args, "streaming_chunk_size", 0),
             streaming_prefetch=getattr(args, "streaming_prefetch", 0),
             transform_processes=getattr(args, "transform_processes", 0),
+            resume=getattr(args, "resume", False),
         )
 
         model_override = args.silver_model or silver_cfg.get("model")
@@ -805,6 +806,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=0,
         help="Number of worker processes for chunk transforms (0 = disable)",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume streaming mode by skipping chunks already processed (uses checkpoints)",
     )
     parser.add_argument("--full-output-name", help="Base name for full snapshot files")
     parser.add_argument("--current-output-name", help="Base name for current view files")

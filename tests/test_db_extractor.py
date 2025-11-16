@@ -26,8 +26,10 @@ class DummyCursor:
         self.description = [(col,) for col in columns]
         self.connection = DummyConnection()
         self.offset = 0
+        self.requested_sizes: List[int] = []
 
     def fetchmany(self, size: int) -> List[Tuple[Any, ...]]:
+        self.requested_sizes.append(size)
         chunk = self.rows[self.offset : self.offset + size]
         self.offset += len(chunk)
         return chunk
@@ -83,3 +85,32 @@ def test_db_extractor_incremental_query(monkeypatch: pytest.MonkeyPatch, tmp_pat
     saved = json.loads(state_file.read_text(encoding="utf-8"))
     assert saved["cursor"] == "105"
     assert saved["last_run"] == "2025-11-14"
+
+
+def test_db_extractor_respects_batch_size(monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = _build_cfg()
+    extractor = DbExtractor()
+
+    rows = [(1, "a"), (2, "b"), (3, "c")]
+    cursor = DummyCursor(rows, ["id", "state"])
+
+    def fake_execute(self, driver: str, conn_str: str, query: str, params: Optional[Tuple] = None):
+        return cursor
+
+    monkeypatch.setattr(DbExtractor, "_execute_query", fake_execute)
+    monkeypatch.setenv("DB_CONN", "driver={driver};server=prod")
+
+    records, new_cursor = extractor.fetch_records(cfg, date(2025, 11, 15))
+
+    assert len(records) == 3
+    assert new_cursor == "3"
+    assert cursor.requested_sizes.count(1) >= 2
+
+
+def test_db_extractor_missing_env_raises(tmp_path: Path) -> None:
+    cfg = _build_cfg()
+    if "DB_CONN" in os.environ:
+        del os.environ["DB_CONN"]
+    extractor = DbExtractor()
+    with pytest.raises(ValueError):
+        extractor.fetch_records(cfg, date(2025, 11, 16))

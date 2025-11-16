@@ -36,3 +36,52 @@ This guide captures the day-two questions platform/ops teams usually ask when on
 - **Data quality** – Silver configs support declarative normalization and PK enforcement. Leverage OpenMetadata or a dedicated expectation engine for richer checks, and add fail-open/fail-close policies via `silver.error_handling`.
 - **Streaming Silver** – Mention the `--stream` flag in the playbook. When Bronze partitions are too big to fit in memory, use streaming mode so Silver processes one chunk at a time and appends partitions incrementally.
 - **Schema observability stub** – `core/catalog.report_schema_snapshot` currently logs schema snapshots per Silver run. Replace it or extend it later to push to OpenMetadata so lineage/quality alerts can trigger on schema drift.
+
+## Error Codes
+
+Core exceptions include stable error codes to simplify triage (see `core/exceptions.py`). Examples:
+- `CFG001`: configuration validation errors
+- `EXT001`: extractor failures (API/DB)
+- `STG001`: storage backend errors
+- `AUTH001`: authentication failures
+- `PAGE001`: pagination logic errors
+- `STATE001`: invalid state transitions
+- `QUAL001`: data quality related failures
+- `RETRY001`: retry exhaustion
+
+In logs, messages include the code prefix; alerting rules can route by code.
+
+## Tracing (optional)
+
+- Enable spans by setting `BRONZE_TRACING=1`. If OpenTelemetry is installed and a tracer provider is configured (e.g., OTLP endpoint), spans are emitted around API requests and Silver streaming operations.
+- No tracing libs installed? The instrumentation safely no-ops.
+
+## Rate Limiting
+
+- API extractions can be rate limited. Configure via any of:
+	- `source.api.rate_limit.rps: <float>`
+	- `source.run.rate_limit_rps: <float>`
+	- env `BRONZE_API_RPS=<float>`
+- The limiter coordinates with retries and circuit breakers to reduce pressure on upstream APIs.
+
+## Silver Streaming Resume
+
+- Use `silver_extract.py --stream --resume` to skip already processed chunks after a failure. Checkpoints are stored under the Silver partition in `_checkpoints/stream.json` and cleared on successful completion.
+
+## Azure Emulator (Azurite)
+
+- For local testing of Azure Blob Storage, run Azurite and point the platform to it via env vars. Example docker run:
+
+	```powershell
+	docker run -p 10000:10000 -p 10001:10001 -p 10002:10002 mcr.microsoft.com/azure-storage/azurite
+	```
+
+- Then set typical env vars (example):
+
+	```powershell
+	$env:AZURE_STORAGE_ACCOUNT = "devstoreaccount1"
+	$env:AZURE_STORAGE_KEY = "Eby8vdM02xNOcqFeq...=="  # default azurite key
+	$env:AZURE_STORAGE_ENDPOINT = "http://127.0.0.1:10000/devstoreaccount1"
+	```
+
+- Integration tests can be gated behind an env like `RUN_SMOKE=1` when targeting emulators.
