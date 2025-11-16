@@ -232,6 +232,7 @@ python silver_extract.py \
 - Documentation structure:
   - **Architecture overview**: `docs/ARCHITECTURE.md` sketches Bronze/Silver/storage flows plus the plugin registry and sample references.
   - **Operations & governance**: `docs/OPERATIONS.md` describes validation, sample generation, storage policy, and log/metric practices so different roles know where to look.
+- **Silver Join**: Join two existing Silver assets with `silver_join.py`. See `docs/SILVER_JOIN.md` and `docs/examples/configs/silver_join_example.yaml` for configuration patterns.
 - Matching configs: `file_example.yaml` (full), `file_cdc_example.yaml` (cdc), `file_current_history_example.yaml`
 
 ### Sample Configs
