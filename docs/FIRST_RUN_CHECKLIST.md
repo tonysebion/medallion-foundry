@@ -16,7 +16,7 @@ Use this checklist to validate your environment and minimize surprises on your f
 
 ## 3) Storage Access
 - Local: Write permissions to `./output`.
-- S3/Azure/GCS: Credentials present; minimal IAM/role allows `list/get/put`.
+- S3/Azure/local: Credentials present; minimal IAM/role (or local permissions) allows `list/get/put`.
 
 ## 4) Config Sanity
 - `--validate-only` passes:

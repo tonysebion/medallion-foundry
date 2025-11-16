@@ -24,7 +24,7 @@ from core.run_options import RunOptions
 from core.silver.models import SilverModel, resolve_profile
 from core.storage import get_storage_backend
 from core.storage.policy import enforce_storage_scope, validate_storage_metadata
-from silver_extract import write_silver_outputs
+from core.silver.artifacts import write_silver_outputs as _artifact_write_silver_outputs
 
 logger = logging.getLogger(__name__)
 
@@ -827,7 +827,7 @@ def apply_projection(
 def write_output(
     df: pd.DataFrame,
     base_dir: Path,
-    model: SilverModel,
+    model: SilverModel | None,
     run_opts: RunOptions,
     metadata_list: List[Dict[str, Any]],
     output_cfg: Dict[str, Any],
@@ -843,7 +843,16 @@ def write_output(
     run_context: RunContext | None = None,
 ) -> None:
     base_dir.mkdir(parents=True, exist_ok=True)
-    outputs = write_silver_outputs(
+    # Fallback for legacy callers that passed None for model
+    if model is None:
+        try:
+            from core.silver.models import SilverModel as _SM
+            model = _SM.PERIODIC_SNAPSHOT
+            logger.debug("Defaulted Silver model to PERIODIC_SNAPSHOT for legacy join output")
+        except Exception:  # pragma: no cover - defensive
+            pass
+
+    outputs = _artifact_write_silver_outputs(
         df,
         run_opts.primary_keys,
         run_opts.order_column,
@@ -852,7 +861,7 @@ def write_output(
         run_opts.parquet_compression,
         run_opts.artifact_names,
         run_opts.partition_columns,
-        {},
+        {},  # error handling config
         model,
         base_dir,
     )

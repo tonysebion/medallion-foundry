@@ -56,8 +56,17 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
         if "azure_container" not in bronze:
             raise ValueError("Azure backend requires platform.bronze.azure_container")
     elif storage_backend == "local":
+        # Backwards compatibility: older configs used only output_dir for local storage.
+        # If local_path is missing but output_dir provided, treat output_dir as local_path.
         if "local_path" not in bronze:
-            raise ValueError("Local backend requires platform.bronze.local_path")
+            legacy_output_dir = bronze.get("output_dir")
+            if legacy_output_dir:
+                bronze["local_path"] = legacy_output_dir
+                logger.debug(
+                    "Backfilled platform.bronze.local_path from output_dir for legacy local config"
+                )
+            else:
+                raise ValueError("Local backend requires platform.bronze.local_path")
 
     logger.debug("Validated storage backend: %s", storage_backend)
     validate_storage_metadata(cfg["platform"])
@@ -119,6 +128,14 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     if source_type == "api":
         api = source["api"]
+        # Backwards compatibility: allow legacy 'url' key and missing endpoint.
+        if "base_url" not in api and "url" in api:
+            api["base_url"] = api["url"]
+            logger.debug("Backfilled source.api.base_url from legacy 'url' key")
+        if "endpoint" not in api:
+            # Default to root endpoint when omitted in legacy minimal configs.
+            api["endpoint"] = "/"
+            logger.debug("Defaulted source.api.endpoint to '/' for legacy config")
         if "base_url" not in api:
             raise ValueError("source.api requires 'base_url'")
         if "endpoint" not in api:

@@ -121,7 +121,7 @@ By following these guidelines, new extractors can be added without changing the 
 
 ## Extending Storage Backends
 
-The framework currently supports S3-compatible storage. To add support for other storage systems (Azure Blob Storage, Google Cloud Storage, local filesystem, etc.), see:
+The framework currently supports S3-compatible storage. To add support for other storage systems (Azure Blob Storage, local filesystem, etc.), see:
 
 **[Azure Storage Extension Example](examples/AZURE_STORAGE_EXTENSION.md)**
 

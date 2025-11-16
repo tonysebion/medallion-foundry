@@ -49,7 +49,6 @@ def write_silver_outputs(
     bronze_pattern,  # preserved for compatibility; not directly used
     primary_keys,
     order_column,
-    *,
     write_parquet=True,
     write_csv=False,
     parquet_compression="snappy",
@@ -58,7 +57,17 @@ def write_silver_outputs(
     error_cfg=None,
     silver_model=None,
 ):
-    """Wrapper adapting old signature to new artifact writer implementation."""
+    """Wrapper adapting legacy public signature (positional args allowed) to new artifact writer.
+
+    Legacy order:
+        write_silver_outputs(df, output_dir, bronze_pattern, primary_keys, order_column,
+                              write_parquet, write_csv, parquet_compression,
+                              artifact_names, partition_columns, error_cfg, silver_model)
+    New implementation order (internal):
+        _artifact_write_silver_outputs(df, primary_keys, order_column, write_parquet, write_csv,
+                                       parquet_compression, artifact_names, partition_columns,
+                                       error_cfg, silver_model, output_dir)
+    """
     artifact_names = artifact_names or {
         "full_snapshot": "full_snapshot",
         "cdc": "cdc_changes",

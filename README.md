@@ -1,6 +1,6 @@
 # medallion-foundry
 
-`medallion-foundry` is a **production-ready**, config-driven Python framework for landing data from **APIs**, **databases**, or **custom sources** into a **Bronze layer** with **pluggable storage backends** (S3, Azure, GCS, local filesystem), using conventions that support future analytics platforms and medallion-style architectures.
+`medallion-foundry` is a **production-ready**, config-driven Python framework for landing data from **APIs**, **databases**, or **custom sources** into a **Bronze layer** with **pluggable storage backends** (S3, Azure, local filesystem), using conventions that support future analytics platforms and medallion-style architectures.
 
 This framework is intentionally lightweight and orchestration-neutral: you can run it from any scheduler or workflow orchestrator that can invoke a Python CLI.
 
@@ -15,7 +15,7 @@ This framework is intentionally lightweight and orchestration-neutral: you can r
 - **?? Pagination** - Offset-based, page-based, cursor-based, or none
 - **?? Incremental Loading** - State management for efficient delta loads
 - **?? Multiple Formats** - CSV (debugging) and Parquet (analytics) with compression
-- **?? Pluggable Storage** - S3, Azure Blob/ADLS, Google Cloud Storage, or local filesystem
+- **?? Pluggable Storage** - S3, Azure Blob/ADLS, or local filesystem
 - **?? Retry Logic** - Automatic retries with exponential backoff for network operations
 - **?? Error Handling** - Comprehensive error handling with automatic cleanup on failure
 - **?? Extensive Logging** - Structured logging for observability

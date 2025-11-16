@@ -87,7 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Pluggable Storage Backends**: Abstract `StorageBackend` interface
   - S3 storage in core
   - Azure storage as optional extension example
-  - Support for GCS and local filesystem
+  - Support for local filesystem
 
 - **Type Hints**: Improved type coverage throughout codebase
   - Optional types for better null safety
