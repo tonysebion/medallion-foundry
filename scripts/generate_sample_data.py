@@ -9,7 +9,13 @@ from pathlib import Path
 from random import Random
 from typing import Iterable, List, Dict
 
-BASE_DIR = Path(__file__).resolve().parents[1] / "docs" / "examples" / "data" / "bronze_samples"
+BASE_DIR = (
+    Path(__file__).resolve().parents[1]
+    / "docs"
+    / "examples"
+    / "data"
+    / "bronze_samples"
+)
 
 
 FULL_DATES = ["2025-11-13", "2025-11-14"]
@@ -17,7 +23,9 @@ CDC_DATES = ["2025-11-13", "2025-11-14"]
 CURRENT_HISTORY_DATES = ["2025-11-13", "2025-11-14"]
 HYBRID_REFERENCE_INITIAL = datetime(2025, 11, 13).date()
 HYBRID_REFERENCE_SWITCH_DAY = 9
-HYBRID_REFERENCE_SECOND = HYBRID_REFERENCE_INITIAL + timedelta(days=HYBRID_REFERENCE_SWITCH_DAY)
+HYBRID_REFERENCE_SECOND = HYBRID_REFERENCE_INITIAL + timedelta(
+    days=HYBRID_REFERENCE_SWITCH_DAY
+)
 HYBRID_DELTA_DAYS = 14
 HYBRID_COMBOS = [
     ("hybrid_cdc_point", "cdc", "point_in_time"),
@@ -61,7 +69,14 @@ def _write_metadata(
 def generate_full_snapshot(seed: int = 42, row_count: int = 500) -> None:
     for day_offset, date_str in enumerate(FULL_DATES):
         rng = Random(seed + day_offset)
-        base_dir = BASE_DIR / "full" / "system=retail_demo" / "table=orders" / "pattern=full" / f"dt={date_str}"
+        base_dir = (
+            BASE_DIR
+            / "full"
+            / "system=retail_demo"
+            / "table=orders"
+            / "pattern=full"
+            / f"dt={date_str}"
+        )
         rows: List[Dict[str, object]] = []
         start = datetime.fromisoformat(f"{date_str}T00:00:00")
         total_rows = row_count + day_offset * 50
@@ -71,7 +86,9 @@ def generate_full_snapshot(seed: int = 42, row_count: int = 500) -> None:
                 {
                     "order_id": f"ORD-{order_id + day_offset * 1000:05d}",
                     "customer_id": f"CUST-{rng.randint(1000, 9999)}",
-                    "status": rng.choice(["new", "processing", "shipped", "delivered", "returned"]),
+                    "status": rng.choice(
+                        ["new", "processing", "shipped", "delivered", "returned"]
+                    ),
                     "order_total": round(rng.uniform(25.0, 500.0), 2),
                     "updated_at": order_time.isoformat() + "Z",
                     "run_date": date_str,
@@ -83,7 +100,8 @@ def generate_full_snapshot(seed: int = 42, row_count: int = 500) -> None:
                 "customer_id": f"CUST-{rng.randint(1000, 9999)}",
                 "status": "processing",
                 "order_total": round(rng.uniform(25.0, 500.0), 2),
-                "updated_at": (start + timedelta(days=total_rows + 1)).isoformat() + "Z",
+                "updated_at": (start + timedelta(days=total_rows + 1)).isoformat()
+                + "Z",
                 "run_date": date_str,
             }
         )
@@ -179,7 +197,9 @@ def _write_hybrid_delta(
     )
 
 
-def _build_delta_rows(delta_pattern: str, date_str: str, seed: int) -> List[Dict[str, object]]:
+def _build_delta_rows(
+    delta_pattern: str, date_str: str, seed: int
+) -> List[Dict[str, object]]:
     rng = Random(seed)
     start = datetime.fromisoformat(f"{date_str}T08:00:00")
     rows: List[Dict[str, object]] = []
@@ -205,7 +225,14 @@ def generate_cdc(seed: int = 99, row_count: int = 400) -> None:
     change_types = ["insert", "update", "delete"]
     for day_offset, date_str in enumerate(CDC_DATES):
         rng = Random(seed + day_offset)
-        base_dir = BASE_DIR / "cdc" / "system=retail_demo" / "table=orders" / "pattern=cdc" / f"dt={date_str}"
+        base_dir = (
+            BASE_DIR
+            / "cdc"
+            / "system=retail_demo"
+            / "table=orders"
+            / "pattern=cdc"
+            / f"dt={date_str}"
+        )
         rows: List[Dict[str, object]] = []
         start = datetime.fromisoformat(f"{date_str}T08:00:00")
 
@@ -229,7 +256,10 @@ def generate_cdc(seed: int = 99, row_count: int = 400) -> None:
                 "order_id": None,
                 "customer_id": f"CUST-{rng.randint(1000, 9999)}",
                 "change_type": "insert",
-                "changed_at": (start + timedelta(minutes=total_rows * 3 + 5)).isoformat() + "Z",
+                "changed_at": (
+                    start + timedelta(minutes=total_rows * 3 + 5)
+                ).isoformat()
+                + "Z",
                 "status": "processing",
                 "order_total": round(rng.uniform(10.0, 800.0), 2),
                 "run_date": date_str,
@@ -265,7 +295,9 @@ def generate_cdc(seed: int = 99, row_count: int = 400) -> None:
         _write_metadata(base_dir, "cdc", total_records, chunk_count)
 
 
-def generate_current_history(seed: int = 7, current_rows: int = 200, history_rows: int = 600) -> None:
+def generate_current_history(
+    seed: int = 7, current_rows: int = 200, history_rows: int = 600
+) -> None:
     for day_offset, date_str in enumerate(CURRENT_HISTORY_DATES):
         rng = Random(seed + day_offset)
         base_dir = (
@@ -311,7 +343,8 @@ def generate_current_history(seed: int = 7, current_rows: int = 200, history_row
                         "effective_start": "",
                         "effective_end": "",
                         "current_flag": 1,
-                        "updated_at": (start_time + timedelta(hours=idx)).isoformat() + "Z",
+                        "updated_at": (start_time + timedelta(hours=idx)).isoformat()
+                        + "Z",
                         "run_date": date_str,
                     }
                 )
@@ -328,7 +361,8 @@ def generate_current_history(seed: int = 7, current_rows: int = 200, history_row
                 "effective_start": "",
                 "effective_end": "",
                 "current_flag": "",
-                "updated_at": datetime.fromisoformat(f"{date_str}T00:00:00").isoformat() + "Z",
+                "updated_at": datetime.fromisoformat(f"{date_str}T00:00:00").isoformat()
+                + "Z",
                 "run_date": date_str,
             }
         )
@@ -344,10 +378,18 @@ def generate_current_history(seed: int = 7, current_rows: int = 200, history_row
                         "order_id": f"ORD-SK-{idx:05d}",
                         "customer_id": f"CUST-{rng.randint(2000, 9999)}",
                         "status": "active",
-                        "effective_start": (datetime.fromisoformat(f"{date_str}T00:00:00") - timedelta(days=idx % 5)).isoformat() + "Z",
+                        "effective_start": (
+                            datetime.fromisoformat(f"{date_str}T00:00:00")
+                            - timedelta(days=idx % 5)
+                        ).isoformat()
+                        + "Z",
                         "effective_end": "",
                         "current_flag": 1,
-                        "updated_at": (datetime.fromisoformat(f"{date_str}T12:00:00") + timedelta(minutes=idx)).isoformat() + "Z",
+                        "updated_at": (
+                            datetime.fromisoformat(f"{date_str}T12:00:00")
+                            + timedelta(minutes=idx)
+                        ).isoformat()
+                        + "Z",
                         "run_date": date_str,
                         "revision_notes": f"skewed-{idx % 3}",
                     }
@@ -381,7 +423,9 @@ def generate_hybrid_combinations(seed: int = 123) -> None:
         cumulative_rows: List[Dict[str, object]] = []
         for offset in range(1, HYBRID_DELTA_DAYS + 1):
             delta_date = HYBRID_REFERENCE_INITIAL + timedelta(days=offset)
-            rows = _build_delta_rows(delta_pattern, delta_date.isoformat(), seed + offset * 10)
+            rows = _build_delta_rows(
+                delta_pattern, delta_date.isoformat(), seed + offset * 10
+            )
             if delta_mode == "cumulative":
                 cumulative_rows.extend(rows)
                 rows_to_write = cumulative_rows.copy()

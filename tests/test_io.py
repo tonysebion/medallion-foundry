@@ -1,6 +1,5 @@
 """Tests for IO functions (chunking, CSV, Parquet)."""
 
-from pathlib import Path
 import csv
 import pandas as pd
 
@@ -22,7 +21,7 @@ class TestChunkRecords:
         """Test that max_rows=0 returns all records in one chunk."""
         records = [{"id": i} for i in range(100)]
         chunks = chunk_records(records, 0)
-        
+
         assert len(chunks) == 1
         assert len(chunks[0]) == 100
 
@@ -30,7 +29,7 @@ class TestChunkRecords:
         """Test chunking with specific max_rows."""
         records = [{"id": i} for i in range(100)]
         chunks = chunk_records(records, 25)
-        
+
         assert len(chunks) == 4
         assert all(len(chunk) == 25 for chunk in chunks)
 
@@ -38,7 +37,7 @@ class TestChunkRecords:
         """Test chunking when records don't divide evenly."""
         records = [{"id": i} for i in range(105)]
         chunks = chunk_records(records, 25)
-        
+
         assert len(chunks) == 5
         assert len(chunks[-1]) == 5  # Last chunk has remainder
 
@@ -46,7 +45,7 @@ class TestChunkRecords:
         """Test chunking empty list."""
         records = []
         chunks = chunk_records(records, 10)
-        
+
         assert len(chunks) == 0
 
 
@@ -59,17 +58,17 @@ class TestWriteCsvChunk:
             {"id": 1, "name": "Alice", "value": 100},
             {"id": 2, "name": "Bob", "value": 200},
         ]
-        
+
         csv_path = tmp_path / "test.csv"
         write_csv_chunk(records, csv_path)
-        
+
         assert csv_path.exists()
-        
+
         # Verify content
         with open(csv_path, "r") as f:
             reader = csv.DictReader(f)
             rows = list(reader)
-        
+
         assert len(rows) == 2
         assert rows[0]["name"] == "Alice"
         assert rows[1]["value"] == "200"
@@ -78,7 +77,7 @@ class TestWriteCsvChunk:
         """Test writing empty chunk does nothing."""
         csv_path = tmp_path / "empty.csv"
         write_csv_chunk([], csv_path)
-        
+
         # File shouldn't be created for empty chunk
         assert not csv_path.exists()
 
@@ -92,12 +91,12 @@ class TestWriteParquetChunk:
             {"id": 1, "name": "Alice", "value": 100},
             {"id": 2, "name": "Bob", "value": 200},
         ]
-        
+
         parquet_path = tmp_path / "test.parquet"
         write_parquet_chunk(records, parquet_path, compression="snappy")
-        
+
         assert parquet_path.exists()
-        
+
         # Verify content
         df = pd.read_parquet(parquet_path)
         assert len(df) == 2
@@ -106,10 +105,10 @@ class TestWriteParquetChunk:
     def test_write_parquet_with_compression(self, tmp_path):
         """Test writing Parquet with different compression."""
         records = [{"id": i, "data": f"row_{i}"} for i in range(10)]
-        
+
         parquet_path = tmp_path / "compressed.parquet"
         write_parquet_chunk(records, parquet_path, compression="gzip")
-        
+
         assert parquet_path.exists()
         df = pd.read_parquet(parquet_path)
         assert len(df) == 10
@@ -118,7 +117,7 @@ class TestWriteParquetChunk:
         """Test writing empty Parquet chunk."""
         parquet_path = tmp_path / "empty.parquet"
         write_parquet_chunk([], parquet_path)
-        
+
         # File shouldn't be created for empty chunk
         assert not parquet_path.exists()
 
@@ -128,7 +127,9 @@ class TestChecksumManifest:
         data_file = tmp_path / "part-0001.csv"
         data_file.write_text("hello,world", encoding="utf-8")
 
-        write_checksum_manifest(tmp_path, [data_file], "full", extra_metadata={"system": "demo"})
+        write_checksum_manifest(
+            tmp_path, [data_file], "full", extra_metadata={"system": "demo"}
+        )
 
         manifest = verify_checksum_manifest(tmp_path, expected_pattern="full")
         assert manifest["load_pattern"] == "full"

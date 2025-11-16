@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List
@@ -8,7 +7,6 @@ from typing import Any, Dict, List
 import pytest
 
 from core.context import RunContext, build_run_context
-from core.runner import run_extract
 from core.runner.job import ExtractJob
 
 
@@ -54,15 +52,20 @@ def test_run_extract_emits_catalog_events(
     job.created_files = [chunk_file]
 
     captured: Dict[str, List[Any]] = {"schema": [], "quality": [], "run": []}
-    monkeypatch.setattr("core.runner.job.report_schema_snapshot", lambda dataset_id, schema: captured["schema"].append(
-        (dataset_id, list(schema))
-    ))
-    monkeypatch.setattr("core.runner.job.report_quality_snapshot", lambda dataset_id, metrics: captured["quality"].append(
-        (dataset_id, metrics)
-    ))
-    monkeypatch.setattr("core.runner.job.report_run_metadata", lambda dataset_id, metadata: captured["run"].append(
-        (dataset_id, metadata)
-    ))
+    monkeypatch.setattr(
+        "core.runner.job.report_schema_snapshot",
+        lambda dataset_id, schema: captured["schema"].append(
+            (dataset_id, list(schema))
+        ),
+    )
+    monkeypatch.setattr(
+        "core.runner.job.report_quality_snapshot",
+        lambda dataset_id, metrics: captured["quality"].append((dataset_id, metrics)),
+    )
+    monkeypatch.setattr(
+        "core.runner.job.report_run_metadata",
+        lambda dataset_id, metadata: captured["run"].append((dataset_id, metadata)),
+    )
 
     job._emit_metadata(record_count=1, chunk_count=1, cursor="1")
     assert captured["schema"]
@@ -70,7 +73,9 @@ def test_run_extract_emits_catalog_events(
     assert captured["run"][0][1]["status"] == "success"
 
 
-def test_cleanup_on_failure_removes_files(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_cleanup_on_failure_removes_files(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     from core.runner.job import ExtractJob
 
     context = _build_context(tmp_path)

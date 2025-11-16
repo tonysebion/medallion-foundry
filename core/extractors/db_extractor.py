@@ -8,7 +8,12 @@ from datetime import date
 from pathlib import Path
 
 import pyodbc
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
 
 from core.extractors.base import BaseExtractor
 
@@ -23,11 +28,11 @@ class DbExtractor(BaseExtractor):
         source_cfg = cfg["source"]
         system = source_cfg["system"]
         table = source_cfg["table"]
-        
+
         # Store state files in a .state directory
         state_dir = Path(".state")
         state_dir.mkdir(exist_ok=True)
-        
+
         return state_dir / f"{system}_{table}_cursor.json"
 
     def _load_cursor(self, state_file: Path) -> Optional[str]:
@@ -35,7 +40,7 @@ class DbExtractor(BaseExtractor):
         if not state_file.exists():
             logger.info("No previous cursor state found")
             return None
-        
+
         try:
             with open(state_file, "r") as f:
                 state = json.load(f)
@@ -53,7 +58,7 @@ class DbExtractor(BaseExtractor):
             "cursor": cursor,
             "last_run": run_date.isoformat(),
         }
-        
+
         try:
             with open(state_file, "w") as f:
                 json.dump(state, f, indent=2)
@@ -63,28 +68,25 @@ class DbExtractor(BaseExtractor):
             raise
 
     def _build_incremental_query(
-        self,
-        base_query: str,
-        cursor_column: Optional[str],
-        last_cursor: Optional[str]
+        self, base_query: str, cursor_column: Optional[str], last_cursor: Optional[str]
     ) -> str:
         """Build query with incremental WHERE clause if applicable."""
         if not cursor_column or not last_cursor:
             return base_query
-        
+
         # Check if query already has WHERE clause
         query_upper = base_query.upper()
-        
+
         if "WHERE" in query_upper:
             # Append to existing WHERE
             connector = "AND"
         else:
             # Add new WHERE clause
             connector = "WHERE"
-        
+
         # Build incremental filter
         incremental_clause = f"\n{connector} {cursor_column} > ?"
-        
+
         return base_query + incremental_clause
 
     @retry(
@@ -93,7 +95,9 @@ class DbExtractor(BaseExtractor):
         retry=retry_if_exception_type(Exception),
         reraise=True,
     )
-    def _execute_query(self, driver: str, conn_str: str, query: str, params: Optional[Tuple] = None):
+    def _execute_query(
+        self, driver: str, conn_str: str, query: str, params: Optional[Tuple] = None
+    ):
         """Execute database query with retry logic for the selected driver."""
         logger.debug("Executing query with driver=%s params=%s", driver, params)
 
@@ -111,7 +115,9 @@ class DbExtractor(BaseExtractor):
                 "Use 'pyodbc' or open an issue if you need first-class pymssql support."
             )
         else:
-            raise ValueError(f"Unsupported db.driver '{driver}'. Use 'pyodbc' (default) or 'pymssql'.")
+            raise ValueError(
+                f"Unsupported db.driver '{driver}'. Use 'pyodbc' (default) or 'pymssql'."
+            )
 
     def fetch_records(
         self,
@@ -132,55 +138,61 @@ class DbExtractor(BaseExtractor):
 
         conn_str = os.environ.get(conn_env)
         if not conn_str:
-            raise ValueError(f"Environment variable '{conn_env}' not set for DB connection string")
+            raise ValueError(
+                f"Environment variable '{conn_env}' not set for DB connection string"
+            )
 
         base_query = db_cfg["base_query"]
-        
+
         # Incremental configuration
         incremental_cfg = db_cfg.get("incremental", {})
         cursor_column = incremental_cfg.get("cursor_column")
         use_incremental = incremental_cfg.get("enabled", False) and cursor_column
-        
+
         # Load previous cursor if incremental is enabled
         last_cursor = None
         state_file = None
-        
+
         if use_incremental:
             state_file = self._get_state_file_path(cfg)
             last_cursor = self._load_cursor(state_file)
-        
+
         # Build query with incremental filter
-        query = self._build_incremental_query(base_query, cursor_column if use_incremental else None, last_cursor)
-        
-        logger.info(f"Executing database query (incremental={'yes' if use_incremental else 'no'})")
-        
+        query = self._build_incremental_query(
+            base_query, cursor_column if use_incremental else None, last_cursor
+        )
+
+        logger.info(
+            f"Executing database query (incremental={'yes' if use_incremental else 'no'})"
+        )
+
         # Execute query
         records: List[Dict[str, Any]] = []
         max_cursor: Optional[str] = None
         conn = None
-        
+
         try:
             if last_cursor:
                 cur = self._execute_query(driver, conn_str, query, (last_cursor,))
             else:
                 cur = self._execute_query(driver, conn_str, query)
-            
+
             conn = cur.connection
             columns = [col[0] for col in cur.description]
-            
+
             # Fetch in batches
             batch_size = db_cfg.get("fetch_batch_size", 10000)
             total_rows = 0
-            
+
             while True:
                 rows = cur.fetchmany(batch_size)
                 if not rows:
                     break
-                
+
                 for row in rows:
                     rec = {col: val for col, val in zip(columns, row)}
                     records.append(rec)
-                    
+
                     # Track max cursor value
                     if use_incremental and cursor_column in rec:
                         cursor_val = rec[cursor_column]
@@ -188,23 +200,23 @@ class DbExtractor(BaseExtractor):
                             cursor_str = str(cursor_val)
                             if max_cursor is None or cursor_str > max_cursor:
                                 max_cursor = cursor_str
-                
+
                 total_rows += len(rows)
                 logger.info(f"Fetched {len(rows)} rows (total: {total_rows})")
-            
+
             logger.info(f"Successfully extracted {len(records)} records from database")
-            
+
         except Exception as e:
             logger.error(f"Database query failed: {e}")
             raise
         finally:
             if conn:
                 conn.close()
-        
+
         # Save new cursor if we have one
         new_cursor = max_cursor
-        
+
         if use_incremental and new_cursor and state_file:
             self._save_cursor(state_file, new_cursor, run_date)
-        
+
         return records, new_cursor

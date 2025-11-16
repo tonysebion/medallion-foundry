@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import List
 
-import pytest
 
 from core.parallel import _safe_run_extract, run_parallel_extracts
 
@@ -27,8 +25,12 @@ def test_run_parallel_extracts_reports_status(monkeypatch) -> None:
     results = run_parallel_extracts(contexts, max_workers=2)
 
     assert len(results) == len(contexts)
-    assert any(config_name == "success" and status == 0 for config_name, status, _ in results)
-    assert any(config_name == "failure" and status == -1 for config_name, status, _ in results)
+    assert any(
+        config_name == "success" and status == 0 for config_name, status, _ in results
+    )
+    assert any(
+        config_name == "failure" and status == -1 for config_name, status, _ in results
+    )
 
 
 def test_safe_run_extract_records_exception(monkeypatch) -> None:

@@ -169,16 +169,16 @@ Example:
 from typing import Dict, Any, List, Optional
 
 def process_records(
-    records: List[Dict[str, Any]], 
+    records: List[Dict[str, Any]],
     max_size: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """
     Process records with optional size limit.
-    
+
     Args:
         records: List of record dictionaries
         max_size: Maximum number of records to process
-    
+
     Returns:
         Processed records
     """
@@ -199,20 +199,20 @@ Example docstring:
 def fetch_records(self, cfg: Dict[str, Any], run_date: date) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
     Fetch records from the data source.
-    
+
     Args:
         cfg: Configuration dictionary containing platform and source settings
         run_date: The logical date for this extraction run
-    
+
     Returns:
         Tuple of (records, cursor) where:
         - records: List of extracted record dictionaries
         - cursor: Optional cursor value for incremental loads
-    
+
     Raises:
         ValueError: If configuration is invalid
         ConnectionError: If unable to connect to data source
-    
+
     Example:
         >>> extractor = ApiExtractor()
         >>> records, cursor = extractor.fetch_records(config, date(2025, 1, 1))
@@ -236,19 +236,19 @@ from datetime import date
 
 class TestMyFeature:
     """Test suite for my feature."""
-    
+
     @pytest.mark.unit
     def test_basic_functionality(self):
         """Test that basic functionality works."""
         # Arrange
         input_data = {"key": "value"}
-        
+
         # Act
         result = my_function(input_data)
-        
+
         # Assert
         assert result["key"] == "value"
-    
+
     @pytest.mark.integration
     def test_with_dependencies(self, sample_config):
         """Test with external dependencies."""

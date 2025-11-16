@@ -11,29 +11,30 @@ logger = logging.getLogger(__name__)
 
 
 def run_parallel_extracts(
-    contexts: List[RunContext],
-    max_workers: int = 4
+    contexts: List[RunContext], max_workers: int = 4
 ) -> List[Tuple[str, int, Optional[Exception]]]:
     """
     Run multiple extraction configs in parallel.
-    
+
     Args:
         configs: List of configuration dictionaries
         run_date: Date for the extraction run
         local_output_base: Base directory for local output
         max_workers: Maximum number of parallel workers
-        
+
     Returns:
         List of tuples containing (config_name, status_code, error)
         status_code = 0 for success, -1 for failure
     """
     if max_workers <= 0:
         max_workers = 1
-    
-    logger.info(f"Starting parallel extraction with {max_workers} workers for {len(contexts)} configs")
-    
+
+    logger.info(
+        f"Starting parallel extraction with {max_workers} workers for {len(contexts)} configs"
+    )
+
     results = []
-    
+
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all extraction jobs
         future_to_context = {}
@@ -50,28 +51,34 @@ def run_parallel_extracts(
                 results.append((context.config_name, status_code, error))
 
                 if status_code == 0:
-                    logger.info(f"✓ Successfully completed extraction for {context.config_name}")
+                    logger.info(
+                        f"✓ Successfully completed extraction for {context.config_name}"
+                    )
                 else:
-                    logger.error(f"✗ Failed extraction for {context.config_name}: {error}")
+                    logger.error(
+                        f"✗ Failed extraction for {context.config_name}: {error}"
+                    )
             except Exception as e:
-                logger.error(f"✗ Unexpected error for {context.config_name}: {e}", exc_info=True)
+                logger.error(
+                    f"✗ Unexpected error for {context.config_name}: {e}", exc_info=True
+                )
                 results.append((context.config_name, -1, e))
-    
+
     # Summary
     successful = sum(1 for _, status, _ in results if status == 0)
     failed = len(results) - successful
-    
+
     logger.info(
         f"Parallel extraction complete: {successful} successful, {failed} failed out of {len(contexts)} total"
     )
-    
+
     return results
 
 
 def _safe_run_extract(context: RunContext) -> Tuple[int, Optional[Exception]]:
     """
     Wrapper for run_extract that catches exceptions and returns status.
-    
+
     Returns:
         Tuple of (status_code, error)
         status_code = 0 for success, -1 for failure

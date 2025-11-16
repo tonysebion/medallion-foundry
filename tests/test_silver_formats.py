@@ -50,7 +50,9 @@ def _rewrite_config(original: Path, run_date: str, tmp_dir: Path) -> Path:
     return target
 
 
-def _rewrite_silver_config(original: Path, run_date: str, tmp_dir: Path, fmt: str) -> Path:
+def _rewrite_silver_config(
+    original: Path, run_date: str, tmp_dir: Path, fmt: str
+) -> Path:
     cfg = yaml.safe_load(original.read_text())
     bronze_path = _build_sample_path(cfg, run_date)
     bronze_out = tmp_dir / f"bronze_out_{run_date}"
@@ -79,7 +81,9 @@ def _run_cli(cmd: list[str]) -> None:
 @pytest.mark.parametrize("fmt", ["parquet", "csv"])
 @pytest.mark.parametrize("config_name", CONFIG_FILES)
 @pytest.mark.parametrize("run_date", RUN_DATES)
-def test_silver_writer_formats(tmp_path: Path, config_name: str, run_date: str, fmt: str) -> None:
+def test_silver_writer_formats(
+    tmp_path: Path, config_name: str, run_date: str, fmt: str
+) -> None:
     config_path = CONFIGS_DIR / config_name
     bronze_cfg = _rewrite_config(config_path, run_date, tmp_path)
     _run_cli(["bronze_extract.py", "--config", str(bronze_cfg), "--date", run_date])

@@ -34,7 +34,9 @@ def _cache_key(config: Dict[str, Any]) -> int:
     return id(config)
 
 
-def get_storage_backend(config: Dict[str, Any], use_cache: bool = True) -> StorageBackend:
+def get_storage_backend(
+    config: Dict[str, Any], use_cache: bool = True
+) -> StorageBackend:
     cache_key = _cache_key(config)
     if use_cache and cache_key in _STORAGE_BACKEND_CACHE:
         return _STORAGE_BACKEND_CACHE[cache_key]

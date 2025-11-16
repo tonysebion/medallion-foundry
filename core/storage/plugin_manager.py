@@ -25,5 +25,7 @@ def get_backend_factory(backend_type: str) -> Callable[[Dict[str, Any]], Any]:
     return factory
 
 
-def register_storage_backend(name: str) -> Callable[[Callable[[Dict[str, Any]], Any]], Callable[[Dict[str, Any]], Any]]:
+def register_storage_backend(
+    name: str,
+) -> Callable[[Callable[[Dict[str, Any]], Any]], Callable[[Dict[str, Any]], Any]]:
     return register_backend(name)

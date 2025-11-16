@@ -66,7 +66,9 @@ class RecordingBackend:
         return "record"
 
 
-def test_run_extract_emits_metadata_and_uploads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_extract_emits_metadata_and_uploads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     context = _build_context(tmp_path, storage_enabled=True)
     backend = RecordingBackend()
 

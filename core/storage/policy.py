@@ -61,4 +61,6 @@ def enforce_storage_scope(platform_cfg: Dict[str, Any], scope: str | None) -> No
 
     cloud_provider = metadata.get("cloud_provider")
     if cloud_provider:
-        raise ValueError("storage_scope='onprem' requires storage_metadata.cloud_provider to be null")
+        raise ValueError(
+            "storage_scope='onprem' requires storage_metadata.cloud_provider to be null"
+        )

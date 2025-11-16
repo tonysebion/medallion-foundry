@@ -9,14 +9,14 @@ platform:
   bronze:
     # Storage backend: "s3" (AWS/MinIO), "azure" (Blob/ADLS), or "local"
     storage_backend: "s3"
-    
+
     s3_bucket: "analytics-bronze"
     s3_prefix: "bronze"
-    
+
     partitioning:
       # Enable date partitioning
       use_dt_partition: true
-      
+
       # Partition strategy for multiple daily loads
       # Options: "date" (default), "hourly", "timestamp", "batch_id"
       # - "date": dt=YYYY-MM-DD (one partition per day)
@@ -61,24 +61,24 @@ source:
     # Analytics platforms perform best with files between 128MB-1GB
     max_rows_per_file: 1000000  # Maximum rows per file (0 = unlimited)
     max_file_size_mb: 256       # Maximum file size in MB (optional, overrides row limit)
-    
+
     # Parallel processing within this extraction job
     # Processes multiple chunks concurrently for faster extraction
     parallel_workers: 4         # Number of parallel threads for chunk processing (default: 1)
-    
+
     # Output formats
     write_csv: false            # Disable CSV for production (Parquet is more efficient)
     write_parquet: true         # Enable Parquet for optimal analytics performance
-    
+
     # S3 upload
     s3_enabled: true
-    
+
     # Local staging directory
     local_output_dir: "./output/bronze"
-    
+
     # Cleanup failed extractions
     cleanup_on_failure: true
-    
+
     # Optional: Custom batch_id for partition_strategy="batch_id"
     # If not provided, auto-generated as YYYYMMDD_HHMMSS_<random>
     # batch_id: "batch_20250112_001"

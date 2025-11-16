@@ -1,8 +1,6 @@
 import sys
 from pathlib import Path
 
-import pytest
-
 
 def _write_min_config(tmp_path: Path) -> Path:
     cfg = tmp_path / "cfg.yaml"
@@ -68,12 +66,14 @@ def test_silver_parser_supports_json_logs(monkeypatch):
     # Using --validate-only requires --config; supply a minimal temp file
     # but we only exercise parser + setup_logging path here via dry-run flags.
     parser = se.build_parser()
-    args = parser.parse_args([
-        "--log-format",
-        "json",
-        "--validate-only",
-        "--config",
-        "tests/does_not_exist.yaml",
-    ])
+    args = parser.parse_args(
+        [
+            "--log-format",
+            "json",
+            "--validate-only",
+            "--config",
+            "tests/does_not_exist.yaml",
+        ]
+    )
     # setup_logging is called inside main(); here we just assert arg surface exists
     assert getattr(args, "log_format", None) == "json"

@@ -5,7 +5,12 @@ from typing import List
 
 import pytest
 
-from core.runner.chunks import ChunkProcessor, ChunkWriter, ChunkWriterConfig, StoragePlan
+from core.runner.chunks import (
+    ChunkProcessor,
+    ChunkWriter,
+    ChunkWriterConfig,
+    StoragePlan,
+)
 
 
 class FailingChunkWriter(ChunkWriter):

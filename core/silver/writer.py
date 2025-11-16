@@ -1,4 +1,5 @@
 """Public SilverArtifactWriter interface and default implementation."""
+
 from __future__ import annotations
 from typing import Protocol, Dict, Any, List
 from typing import Mapping
@@ -6,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 
 from core.silver.artifacts import write_silver_outputs as _artifact_write_silver_outputs
+
 
 class SilverArtifactWriter(Protocol):
     def write(
@@ -22,8 +24,9 @@ class SilverArtifactWriter(Protocol):
         error_cfg: Dict[str, Any],
         silver_model: Any,  # SilverModel
         output_dir,
-        ) -> Mapping[str, List[Path]]:  # artifact label -> list of path objects
+    ) -> Mapping[str, List[Path]]:  # artifact label -> list of path objects
         ...
+
 
 class DefaultSilverArtifactWriter:
     def write(
@@ -56,11 +59,13 @@ class DefaultSilverArtifactWriter:
         )
         return outputs
 
+
 class TransactionalSilverArtifactWriter:
     """Write artifacts atomically via temp staging directory then rename.
 
     Ensures readers never see partial files (best-effort on local fs).
     """
+
     def write(
         self,
         df: pd.DataFrame,
@@ -107,6 +112,7 @@ class TransactionalSilverArtifactWriter:
         except Exception:
             pass
         return final_outputs
+
 
 def get_silver_writer(kind: str | None = None) -> SilverArtifactWriter:
     if kind == "transactional":

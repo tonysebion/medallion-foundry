@@ -3,7 +3,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import List
 
-import pytest
 
 from core.parallel import _safe_run_extract, run_parallel_extracts
 

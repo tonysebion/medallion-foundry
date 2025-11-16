@@ -40,19 +40,19 @@ source:
     base_url: "https://your-store.myshopify.com"
     endpoint: "/admin/api/2024-01/orders.json"
     method: "GET"
-    
+
     # Shopify uses custom token in header
     auth_type: "api_key"
     auth_key_header: "X-Shopify-Access-Token"
     auth_key_env: "SHOPIFY_ACCESS_TOKEN"
-    
+
     # Shopify uses page-based pagination with link headers
     pagination:
       type: "page"
       page_size: 250  # Shopify max
       page_param: "page"
       limit_param: "limit"
-    
+
     # Extract orders from nested response
     data_path: "orders"
 
@@ -97,21 +97,21 @@ source:
     base_url_env: "SALESFORCE_INSTANCE_URL"  # e.g., https://yourorg.my.salesforce.com
     endpoint: "/services/data/v59.0/query"
     method: "GET"
-    
+
     # Salesforce uses OAuth bearer token
     auth_type: "bearer"
     auth_token_env: "SALESFORCE_ACCESS_TOKEN"
-    
+
     # SOQL query
     params:
       q: "SELECT Id, Name, Industry, AnnualRevenue, CreatedDate, LastModifiedDate FROM Account WHERE LastModifiedDate >= LAST_N_DAYS:7"
-    
+
     # Salesforce uses cursor-based pagination
     pagination:
       type: "cursor"
       cursor_param: "nextRecordsUrl"
       cursor_path: "nextRecordsUrl"
-    
+
     # Extract records from response
     data_path: "records"
 
@@ -157,20 +157,20 @@ source:
     base_url: "https://api.stripe.com"
     endpoint: "/v1/charges"
     method: "GET"
-    
+
     # Stripe uses bearer token (secret key)
     auth_type: "bearer"
     auth_token_env: "STRIPE_SECRET_KEY"
-    
+
     # Stripe cursor-based pagination
     pagination:
       type: "cursor"
       page_size: 100  # Stripe max
       cursor_param: "starting_after"
       cursor_path: "data.-1.id"  # Last record's ID
-    
+
     data_path: "data"
-    
+
     # Rate limiting considerations
     headers:
       Stripe-Version: "2023-10-16"
@@ -217,24 +217,24 @@ source:
     base_url: "https://api.github.com"
     endpoint: "/repos/owner/repo/issues"
     method: "GET"
-    
+
     # GitHub personal access token
     auth_type: "bearer"
     auth_token_env: "GITHUB_TOKEN"
-    
+
     # GitHub uses page-based pagination
     pagination:
       type: "page"
       page_size: 100  # GitHub max
       page_param: "page"
       limit_param: "per_page"
-    
+
     # Optional filters
     params:
       state: "all"
       sort: "updated"
       direction: "desc"
-    
+
     headers:
       Accept: "application/vnd.github+json"
       X-GitHub-Api-Version: "2022-11-28"
@@ -280,20 +280,20 @@ source:
     base_url: "https://api.hubapi.com"
     endpoint: "/crm/v3/objects/contacts"
     method: "GET"
-    
+
     # HubSpot private app token
     auth_type: "bearer"
     auth_token_env: "HUBSPOT_ACCESS_TOKEN"
-    
+
     # HubSpot pagination
     pagination:
       type: "cursor"
       page_size: 100
       cursor_param: "after"
       cursor_path: "paging.next.after"
-    
+
     data_path: "results"
-    
+
     # Request specific properties
     params:
       properties: "email,firstname,lastname,createdate,lastmodifieddate"
@@ -335,7 +335,7 @@ source:
   type: "custom"  # Requires custom extractor for GA4 API
   system: "google_analytics"
   table: "sessions"
-  
+
   custom_extractor:
     module: "custom_extractors.google_analytics"
     class_name: "GoogleAnalyticsExtractor"

@@ -23,7 +23,7 @@ source:
   run:
     # Row-based limit
     max_rows_per_file: 1000000  # Maximum rows per file (0 = unlimited)
-    
+
     # Size-based limit (takes precedence over row limit)
     max_file_size_mb: 256       # Maximum file size in MB
 ```
@@ -164,7 +164,7 @@ system=salesforce/table=accounts/
 **Example query**:
 ```sql
 SELECT * FROM bronze.accounts
-WHERE dt = DATE '2025-01-12' 
+WHERE dt = DATE '2025-01-12'
   AND batch_id = 'batch_20250112_001';
 ```
 
@@ -394,7 +394,7 @@ else:
 with open(metadata_path) as f:
     meta = json.load(f)
     last_cursor = meta.get("new_cursor")
-    
+
 # Use in next extraction
 config["source"]["db"]["incremental_cursor_value"] = last_cursor
 ```
@@ -402,7 +402,7 @@ config["source"]["db"]["incremental_cursor_value"] = last_cursor
 #### 4. **Data Quality Checks**
 ```sql
 -- Query your analytics platform to validate record counts
-SELECT 
+SELECT
   dt,
   hour,
   COUNT(*) as record_count,
@@ -580,11 +580,11 @@ platform:
   bronze:
     s3_bucket: "production-bronze"
     s3_prefix: "bronze"
-    
+
     partitioning:
       use_dt_partition: true
       partition_strategy: "hourly"  # Multiple daily loads
-    
+
     output_defaults:
       allow_csv: false              # Parquet only for production
       allow_parquet: true
@@ -599,11 +599,11 @@ source:
   type: "db"
   system: "postgres_prod"
   table: "orders"
-  
+
   db:
     conn_str_env: "POSTGRES_CONN_STR"
     base_query: |
-      SELECT 
+      SELECT
         order_id,
         customer_id,
         order_date,
@@ -611,18 +611,18 @@ source:
         status,
         updated_at
       FROM orders
-    
+
     incremental_key: "updated_at"
     incremental_cursor_env: "ORDERS_LAST_CURSOR"
-  
+
   run:
     # Query-optimized file sizes
     max_file_size_mb: 256
-    
+
     # Parquet only
     write_csv: false
     write_parquet: true
-    
+
     # Production settings
     s3_enabled: true
     cleanup_on_failure: true
@@ -657,10 +657,10 @@ WITH (
 );
 
 -- Query with partition pruning
-SELECT * 
+SELECT *
 FROM bronze.orders
-WHERE dt = DATE '2025-01-12' 
-  AND hour >= 8 
+WHERE dt = DATE '2025-01-12'
+  AND hour >= 8
   AND hour <= 17;
 ```
 
@@ -674,7 +674,7 @@ WHERE dt = DATE '2025-01-12'
    ```sql
    -- Good: Partition pruning before other filters
    WHERE dt = DATE '2025-01-12' AND hour = 14 AND status = 'completed'
-   
+
    -- Bad: No partition pruning
    WHERE status = 'completed' AND dt = DATE '2025-01-12'
    ```
@@ -716,23 +716,23 @@ WHERE dt = DATE '2025-01-12'
 ## Troubleshooting
 
 ### Issue: Files too small
-**Symptoms**: Many small Parquet files (< 64 MB)  
+**Symptoms**: Many small Parquet files (< 64 MB)
 **Solution**: Increase `max_file_size_mb` or `max_rows_per_file`
 
 ### Issue: Files too large
-**Symptoms**: OOM errors, slow queries  
+**Symptoms**: OOM errors, slow queries
 **Solution**: Decrease `max_file_size_mb` to 128-256 MB
 
 ### Issue: Too many partitions
-**Symptoms**: Slow metadata queries, high S3 list operations  
+**Symptoms**: Slow metadata queries, high S3 list operations
 **Solution**: Use coarser partitioning (hourly → daily)
 
 ### Issue: Parallel extraction failures
-**Symptoms**: Some extractions succeed, others fail  
+**Symptoms**: Some extractions succeed, others fail
 **Solution**: Check logs for specific errors, reduce `--parallel-workers`
 
 ### Issue: Missing metadata files
-**Symptoms**: `_metadata.json` not created  
+**Symptoms**: `_metadata.json` not created
 **Solution**: Check for extraction errors, ensure write permissions
 
 ---

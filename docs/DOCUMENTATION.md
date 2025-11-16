@@ -135,20 +135,20 @@ pytest tests/ --cov=core --cov=extractors
 
 ### Design Principles
 
-**Single CLI, Many Sources**  
+**Single CLI, Many Sources**
 One entrypoint (`bronze_extract.py`) reads YAML config and chooses the appropriate extractor.
 
-**Standard Bronze Layout**  
+**Standard Bronze Layout**
 Predictable directory structure optimized for query engines and analytics platforms:
 ```
 bronze/system=<system>/table=<table>/dt=YYYY-MM-DD/[hour=HH/]part-0001.parquet
 ```
 
-**Config-Driven Rigor**  
+**Config-Driven Rigor**
 - **Platform section**: Owned by data platform team (buckets, prefixes, defaults)
 - **Source section**: Owned by domain teams (API/DB details, queries, table names)
 
-**Extractor Interface**  
+**Extractor Interface**
 Simple `BaseExtractor` interface for new source types while reusing Bronze writing, S3 upload, and partitioning logic.
 
 ### Directory Structure
@@ -217,11 +217,11 @@ platform:
   bronze:
     s3_bucket: "analytics-bronze"
     s3_prefix: "bronze"
-    
+
     partitioning:
       use_dt_partition: true
       partition_strategy: "hourly"  # date | hourly | timestamp | batch_id
-    
+
     output_defaults:
       allow_csv: true
       allow_parquet: true
@@ -258,28 +258,28 @@ source:
   type: "api"           # api | db | custom
   system: "salesforce"
   table: "accounts"
-  
+
   run:
     # File size control
     max_rows_per_file: 1000000
     max_file_size_mb: 256
-    
+
     # Parallelism
     parallel_workers: 4
-    
+
     # Output formats
     write_csv: false
     write_parquet: true
-    
+
     # Storage upload (supports s3_enabled for backward compatibility or storage_enabled)
     storage_enabled: true  # Upload to configured storage backend
-    
+
     # Paths
     local_output_dir: "./output"
-    
+
     # Error handling
     cleanup_on_failure: true
-    
+
     # Batch tracking
     batch_id: "batch_001"  # optional
 ```
@@ -303,12 +303,12 @@ source:
 ```yaml
 source:
   type: "api"
-  
+
   api:
     base_url: "https://api.example.com"
     endpoint: "/v1/tickets"
     method: "GET"
-    
+
     # Authentication
     auth_type: "bearer"           # bearer | api_key | basic | none
     auth_token_env: "API_TOKEN"   # For bearer
@@ -316,15 +316,15 @@ source:
     # auth_key_env: "API_KEY"
     # auth_username_env: "API_USER"  # For basic
     # auth_password_env: "API_PASS"
-    
+
     # Headers
     headers:
       User-Agent: "medallion-foundry/1.0"
-    
+
     # Query parameters
     params:
       page_size: 100
-    
+
     # Pagination
     pagination:
       type: "offset"              # offset | page | cursor | none
@@ -344,18 +344,18 @@ source:
 ```yaml
 source:
   type: "db"
-  
+
   db:
     conn_str_env: "POSTGRES_CONN_STR"
     base_query: |
       SELECT id, name, created_at, updated_at
       FROM accounts
       WHERE is_deleted = false
-    
+
     # Incremental loading
     incremental_key: "updated_at"
     incremental_cursor_env: "ACCOUNTS_CURSOR"
-    
+
     # Performance
     batch_size: 10000
 ```
@@ -372,11 +372,11 @@ source:
 ```yaml
 source:
   type: "custom"
-  
+
   custom_extractor:
     module: "examples.custom_extractors.salesforce_example"
     class_name: "SalesforceExtractor"
-    
+
     # Custom parameters (passed to extractor)
     params:
       instance_url: "https://mycompany.salesforce.com"
@@ -550,13 +550,13 @@ Each extraction creates `_metadata.json`:
 
 Modern extractions require stability under rate limits, intermittent failures, and bursty traffic. medallion-foundry bakes in:
 
-**Retry + Circuit Breaker**  
+**Retry + Circuit Breaker**
 Unified exponential backoff with transient error predicates (HTTP 429/5xx) and a circuit breaker preventing hot looping when a downstream repeatedly fails.
 
-**Async HTTP Path**  
+**Async HTTP Path**
 Enable with `api.async: true` (or environment `BRONZE_ASYNC_HTTP=1`). Uses `httpx` + task prefetch pagination for higher throughput under moderate latency, with cooperative backpressure.
 
-**Rate Limiting**  
+**Rate Limiting**
 Fine-grained token bucket:
 ```yaml
 api:
@@ -567,16 +567,16 @@ run:
 ```
 Priority order: `api.rate_limit.rps` → `run.rate_limit_rps` → env `BRONZE_API_RPS`. Fractional RPS supported.
 
-**Tracing**  
+**Tracing**
 Set `BRONZE_TRACING=1` to emit OpenTelemetry spans (no-op if instrumentation absent). Useful around retries, chunk writes, and Silver streaming promotion.
 
-**Streaming Resume (Silver)**  
+**Streaming Resume (Silver)**
 Use `silver_extract.py --stream --resume` to resume a partially processed promotion safely; checkpoints track completed chunks.
 
-**Benchmark Harness & Performance Guidance**  
+**Benchmark Harness & Performance Guidance**
 Included script `scripts/benchmark.py` plus tuning strategies in [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md).
 
-**Operational Error Codes**  
+**Operational Error Codes**
 Standardized categories documented in [ERROR_CODES.md](ERROR_CODES.md) for alert routing and triage.
 
 See also: [PERFORMANCE_TUNING.md](PERFORMANCE_TUNING.md) & [ERROR_CODES.md](ERROR_CODES.md) for deeper coverage.
@@ -597,13 +597,13 @@ from core.extractors.base import BaseExtractor
 
 class MyCustomExtractor(BaseExtractor):
     def fetch_records(
-        self, 
-        cfg: Dict[str, Any], 
+        self,
+        cfg: Dict[str, Any],
         run_date: date
     ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
         """
         Extract records from custom source.
-        
+
         Returns:
             Tuple of (records, new_cursor)
             - records: List of dictionaries
@@ -612,13 +612,13 @@ class MyCustomExtractor(BaseExtractor):
         source_cfg = cfg["source"]
         custom_cfg = source_cfg.get("custom_extractor", {})
         params = custom_cfg.get("params", {})
-        
+
         # Your extraction logic here
         records = []
         # ... fetch data ...
-        
+
         new_cursor = None  # Update if doing incremental loads
-        
+
         return records, new_cursor
 ```
 
@@ -644,15 +644,15 @@ source:
   type: "custom"
   system: "my_system"
   table: "my_table"
-  
+
   custom_extractor:
     module: "examples.custom_extractors.my_extractor"
     class_name: "MyCustomExtractor"
-    
+
     params:
       api_url: "https://api.example.com"
       # Add your custom parameters
-  
+
   run:
     max_file_size_mb: 256
     parallel_workers: 4
@@ -676,17 +676,17 @@ from datetime import date
 class BaseExtractor(ABC):
     @abstractmethod
     def fetch_records(
-        self, 
-        cfg: Dict[str, Any], 
+        self,
+        cfg: Dict[str, Any],
         run_date: date
     ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
         """
         Fetch records from the source.
-        
+
         Args:
             cfg: Full configuration dictionary
             run_date: Logical run date for the extraction
-            
+
         Returns:
             Tuple of (records, new_cursor)
             - records: List of record dictionaries
@@ -703,7 +703,7 @@ The framework provides a pluggable storage backend architecture supporting multi
 
 **Supported Backends**:
 - **S3** - AWS S3, MinIO, and any S3-compatible storage (default)
-- **Azure** - Azure Blob Storage and ADLS Gen2 
+- **Azure** - Azure Blob Storage and ADLS Gen2
 - **Local** - Local filesystem for development/testing
 
 **Configuration**:
@@ -819,7 +819,7 @@ source:
   db:
     conn_str_env: "POSTGRES_CONN_STR"
     base_query: |
-      SELECT 
+      SELECT
         order_id,
         customer_id,
         order_date,
@@ -1020,22 +1020,22 @@ WHERE order_date = DATE '2025-01-12';
 
 ### Common Issues
 
-**Issue**: Files too small (<64MB)  
+**Issue**: Files too small (<64MB)
 **Solution**: Increase `max_file_size_mb` to 128-256
 
-**Issue**: Files too large (>1GB)  
+**Issue**: Files too large (>1GB)
 **Solution**: Decrease `max_file_size_mb` to 256-512
 
-**Issue**: No speedup with parallelism  
+**Issue**: No speedup with parallelism
 **Solution**: Check chunk count, reduce `max_file_size_mb` to create more chunks
 
-**Issue**: High memory usage  
+**Issue**: High memory usage
 **Solution**: Reduce `parallel_workers`
 
-**Issue**: S3 throttling  
+**Issue**: S3 throttling
 **Solution**: Reduce `parallel_workers` or add retry configuration
 
-**Issue**: Missing metadata files  
+**Issue**: Missing metadata files
 **Solution**: Check logs for errors, ensure write permissions
 
 ### Debug Mode

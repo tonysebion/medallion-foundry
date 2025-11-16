@@ -1,5 +1,5 @@
 """Tests for enhanced error taxonomy with error codes."""
-import pytest
+
 from core.exceptions import (
     BronzeFoundryError,
     ConfigValidationError,
@@ -30,7 +30,9 @@ def test_config_validation_error_code():
 
 def test_extraction_error_code():
     """Test ExtractionError has correct error code."""
-    err = ExtractionError("Extraction failed", extractor_type="api", system="test_system")
+    err = ExtractionError(
+        "Extraction failed", extractor_type="api", system="test_system"
+    )
     assert err.error_code == "EXT001"
     assert "[EXT001]" in str(err)
 
@@ -84,9 +86,9 @@ def test_error_with_details():
         backend_type="s3",
         operation="upload",
         file_path="/local/file.csv",
-        remote_path="bronze/data.csv"
+        remote_path="bronze/data.csv",
     )
-    
+
     error_str = str(err)
     assert "[STG001]" in error_str
     assert "Upload failed" in error_str
@@ -98,7 +100,7 @@ def test_error_with_original_exception():
     """Test error wraps original exception."""
     original = ValueError("Original error")
     err = ExtractionError("Wrapped error", original_error=original)
-    
+
     assert err.original_error is original
     assert "ValueError" in str(err)
 
@@ -125,9 +127,9 @@ def test_error_details_dict():
         "Test error",
         backend_type="azure",
         operation="download",
-        remote_path="container/blob"
+        remote_path="container/blob",
     )
-    
+
     assert err.details["backend_type"] == "azure"
     assert err.details["operation"] == "download"
     assert err.details["remote_path"] == "container/blob"

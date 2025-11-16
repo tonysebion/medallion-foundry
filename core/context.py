@@ -44,17 +44,25 @@ def build_run_context(
     load_pattern_override: str | None = None,
     bronze_path_override: Path | None = None,
 ) -> RunContext:
-    typed: RootConfig | None = cfg.get("__typed_model__") if isinstance(cfg, dict) else (cfg if isinstance(cfg, RootConfig) else None)  # type: ignore[assignment]
+    typed: RootConfig | None = (
+        cfg.get("__typed_model__")
+        if isinstance(cfg, dict)
+        else (cfg if isinstance(cfg, RootConfig) else None)
+    )  # type: ignore[assignment]
     if typed:
         run_cfg = typed.source.run.model_dump()  # dict for compatibility
     else:
         platform_cfg = cfg["platform"]  # type: ignore[index]
         run_cfg = cfg["source"].get("run", {})  # type: ignore[index]
 
-    local_output_dir = Path(local_output_override or run_cfg.get("local_output_dir", "./output")).resolve()
+    local_output_dir = Path(
+        local_output_override or run_cfg.get("local_output_dir", "./output")
+    ).resolve()
     relative_path = relative_override or build_relative_path(cfg, run_date)
     bronze_path = (
-        Path(bronze_path_override).resolve() if bronze_path_override else (local_output_dir / relative_path).resolve()
+        Path(bronze_path_override).resolve()
+        if bronze_path_override
+        else (local_output_dir / relative_path).resolve()
     )
 
     if typed:
@@ -65,12 +73,18 @@ def build_run_context(
         source_table = cfg["source"]["table"]  # type: ignore[index]
     dataset_id = f"{source_system}.{source_table}"
     if typed:
-        config_name = cfg["source"].get("config_name", dataset_id) if isinstance(cfg, dict) else dataset_id
+        config_name = (
+            cfg["source"].get("config_name", dataset_id)
+            if isinstance(cfg, dict)
+            else dataset_id
+        )
     else:
         config_name = cfg["source"].get("config_name", dataset_id)  # type: ignore[index]
 
     pattern_value = load_pattern_override or run_cfg.get("load_pattern")
-    load_pattern = LoadPattern.normalize(pattern_value) if pattern_value else LoadPattern.FULL
+    load_pattern = (
+        LoadPattern.normalize(pattern_value) if pattern_value else LoadPattern.FULL
+    )
 
     logger.debug(
         "Built RunContext(dataset_id=%s, run_date=%s, relative_path=%s)",
@@ -130,7 +144,12 @@ def load_run_context(path: str | Path) -> RunContext:
     ctx_path = Path(path)
     payload = json.loads(ctx_path.read_text(encoding="utf-8"))
     context = run_context_from_dict(payload)
-    logger.info("Loaded RunContext for %s (run_date=%s) from %s", context.dataset_id, context.run_date, ctx_path)
+    logger.info(
+        "Loaded RunContext for %s (run_date=%s) from %s",
+        context.dataset_id,
+        context.run_date,
+        ctx_path,
+    )
     return context
 
 

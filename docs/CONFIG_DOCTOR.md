@@ -46,4 +46,3 @@ bronze-config-doctor --target-version 1 configs/my_source.yaml
 ## Notes
 - The tool attempts to preserve structure and comments where feasible, but YAML comments may be lost.
 - For multi-source configs (`sources:`), the tool migrates each entry and keeps top-level defaults.
-

@@ -24,9 +24,18 @@ class FakeResponse:
 class FakeSession:
     def __init__(self, responses: List[Dict[str, Any]]) -> None:
         self.responses = responses
-        self.calls: List[Tuple[str, Dict[str, str], Dict[str, Any], Optional[Tuple[str, str]]]] = []
+        self.calls: List[
+            Tuple[str, Dict[str, str], Dict[str, Any], Optional[Tuple[str, str]]]
+        ] = []
 
-    def get(self, url: str, headers: Dict[str, str], params: Dict[str, Any], timeout: int, auth: Optional[Tuple[str, str]] = None):
+    def get(
+        self,
+        url: str,
+        headers: Dict[str, str],
+        params: Dict[str, Any],
+        timeout: int,
+        auth: Optional[Tuple[str, str]] = None,
+    ):
         idx = len(self.calls)
         payload = self.responses[idx]
         self.calls.append((url, headers.copy(), params.copy(), auth))
@@ -36,7 +45,9 @@ class FakeSession:
         return None
 
 
-def _build_config(pagination: Dict[str, Any], auth_cfg: Dict[str, Any], cursor_field: str) -> Dict[str, Any]:
+def _build_config(
+    pagination: Dict[str, Any], auth_cfg: Dict[str, Any], cursor_field: str
+) -> Dict[str, Any]:
     return {
         "source": {
             "api": {

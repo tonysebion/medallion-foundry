@@ -10,19 +10,19 @@ This page is the visual anchor for how Bronze → Silver (and storage backends) 
 
 ## Config paths
 
-- Quick start & configs: `README.md` outlines how to run Bronze/Silver. `docs/CONFIG_REFERENCE.md` lists every configurable option (including storage metadata, `storage_scope`, Silver model/profile presets, async flags, rate limiting, tracing env vars, and resume options).  
+- Quick start & configs: `README.md` outlines how to run Bronze/Silver. `docs/CONFIG_REFERENCE.md` lists every configurable option (including storage metadata, `storage_scope`, Silver model/profile presets, async flags, rate limiting, tracing env vars, and resume options).
 - Architecture deep dive: This page plus `docs/EXTRACTION_GUIDANCE.md` explain when to pick each Bronze/Silver model and highlight the newly generated sample datasets under `docs/examples/data`.
 - Operational procedures: See `docs/OPERATIONS.md` for governance, testing, and sample regeneration playbooks. Error taxonomy in `docs/ERROR_CODES.md` aids routing; performance tuning in `docs/PERFORMANCE_TUNING.md` covers benchmarks and optimization.
 
 ## Samples & Tests
 
-- Bronze sample data resides in `docs/examples/data/bronze_samples/` (full/CDC/current_history).  
-- Silver samples mirror each Bronze pattern + Silver model under `docs/examples/data/silver_samples/<pattern>/<model>/`; each folder now includes a `README.md` describing the artifacts and how to regenerate them (`scripts/generate_silver_samples.py --formats both`).  
+- Bronze sample data resides in `docs/examples/data/bronze_samples/` (full/CDC/current_history).
+- Silver samples mirror each Bronze pattern + Silver model under `docs/examples/data/silver_samples/<pattern>/<model>/`; each folder now includes a `README.md` describing the artifacts and how to regenerate them (`scripts/generate_silver_samples.py --formats both`).
 - Tests like `tests/test_silver_formats.py`, the integration suite (Azurite/LocalStack), async HTTP smoke tests, streaming resume tests, and `tests/test_silver_samples_generation.py` confirm both writers and the sample generator stay healthy. Benchmark harness (`scripts/benchmark.py`) measures sync vs async, rate limit impact, and streaming throughput.
 
 ## Next steps
 
-- For more detail on storage backends see `docs/STORAGE_BACKEND_ARCHITECTURE.md`.  
+- For more detail on storage backends see `docs/STORAGE_BACKEND_ARCHITECTURE.md`.
 - To plug in new storage providers, follow `core/storage/registry.py` + `core/storage/plugin_factories.py` and register your factory.
 - Resilience & async: See `docs/ENHANCED_FEATURES.md` for retry/breaker, async HTTP, rate limiting, tracing, and resume details.
 - Performance: Run `scripts/benchmark.py` and consult `docs/PERFORMANCE_TUNING.md`.

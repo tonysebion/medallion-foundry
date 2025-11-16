@@ -45,7 +45,9 @@ def _build_sample_path(bronze_dir: Path, cfg: dict, run_date: str) -> Path:
     )
 
 
-def _rewrite_config(original: Path, bronze_dir: Path, tmp_dir: Path, run_date: str) -> tuple[Path, Path, Path, dict]:
+def _rewrite_config(
+    original: Path, bronze_dir: Path, tmp_dir: Path, run_date: str
+) -> tuple[Path, Path, Path, dict]:
     """Clone config and rewrite data/local output paths into the tmp dir."""
     cfg = yaml.safe_load(original.read_text())
     bronze_out = (tmp_dir / f"bronze_out_{run_date}").resolve()
@@ -79,8 +81,18 @@ def _read_metadata(metadata_path: Path) -> dict:
 @pytest.mark.parametrize(
     "config_name, pattern, expected_silver_files, run_dates",
     [
-        ("file_example.yaml", "full", {"full_snapshot.parquet"}, ["2025-11-13", "2025-11-14"]),
-        ("file_cdc_example.yaml", "cdc", {"cdc_changes.parquet"}, ["2025-11-13", "2025-11-14"]),
+        (
+            "file_example.yaml",
+            "full",
+            {"full_snapshot.parquet"},
+            ["2025-11-13", "2025-11-14"],
+        ),
+        (
+            "file_cdc_example.yaml",
+            "cdc",
+            {"cdc_changes.parquet"},
+            ["2025-11-13", "2025-11-14"],
+        ),
         (
             "file_current_history_example.yaml",
             "current_history",
@@ -100,16 +112,22 @@ def test_bronze_to_silver_end_to_end(
     config_path = Path("docs/examples/configs") / config_name
 
     for run_date in run_dates:
-        rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_config(config_path, bronze_samples_dir, tmp_path, run_date)
+        rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_config(
+            config_path, bronze_samples_dir, tmp_path, run_date
+        )
 
-        _run_cli(["bronze_extract.py", "--config", str(rewritten_cfg), "--date", run_date])
+        _run_cli(
+            ["bronze_extract.py", "--config", str(rewritten_cfg), "--date", run_date]
+        )
 
         bronze_partition = _collect_bronze_partition(bronze_out)
         metadata = _read_metadata(bronze_partition / "_metadata.json")
         assert metadata["load_pattern"] == pattern
         assert metadata["record_count"] > 0
 
-        _run_cli(["silver_extract.py", "--config", str(rewritten_cfg), "--date", run_date])
+        _run_cli(
+            ["silver_extract.py", "--config", str(rewritten_cfg), "--date", run_date]
+        )
 
         base_silver = Path(cfg_data["silver"]["output_dir"])
         domain = cfg_data["silver"].get("domain", cfg_data["source"]["system"])
@@ -117,10 +135,7 @@ def test_bronze_to_silver_end_to_end(
         version = cfg_data["silver"].get("version", 1)
         load_part = cfg_data["silver"].get("load_partition_name", "load_date")
         base_path = (
-            base_silver
-            / f"domain={domain}"
-            / f"entity={entity}"
-            / f"v{version}"
+            base_silver / f"domain={domain}" / f"entity={entity}" / f"v{version}"
         )
         if cfg_data["silver"].get("include_pattern_folder"):
             base_path = base_path / f"pattern={pattern}"
@@ -135,11 +150,15 @@ def test_bronze_to_silver_end_to_end(
             assert len(df) > 0, f"{parquet_file} should contain rows"
 
 
-def test_silver_require_checksum_succeeds(tmp_path: Path, bronze_samples_dir: Path) -> None:
+def test_silver_require_checksum_succeeds(
+    tmp_path: Path, bronze_samples_dir: Path
+) -> None:
     config_path = Path("docs/examples/configs") / "file_example.yaml"
     run_date = "2025-11-13"
 
-    rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_config(config_path, bronze_samples_dir, tmp_path, run_date)
+    rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_config(
+        config_path, bronze_samples_dir, tmp_path, run_date
+    )
     cfg_data.setdefault("silver", {})["require_checksum"] = True
     rewritten_cfg.write_text(yaml.safe_dump(cfg_data))
 
@@ -148,14 +167,20 @@ def test_silver_require_checksum_succeeds(tmp_path: Path, bronze_samples_dir: Pa
     # Should succeed because manifest remains intact
     _run_cli(["silver_extract.py", "--config", str(rewritten_cfg), "--date", run_date])
 
-    assert any(silver_out.rglob("*.parquet")), "Silver output should exist when manifest is present"
+    assert any(
+        silver_out.rglob("*.parquet")
+    ), "Silver output should exist when manifest is present"
 
 
-def test_silver_require_checksum_missing_manifest(tmp_path: Path, bronze_samples_dir: Path) -> None:
+def test_silver_require_checksum_missing_manifest(
+    tmp_path: Path, bronze_samples_dir: Path
+) -> None:
     config_path = Path("docs/examples/configs") / "file_example.yaml"
     run_date = "2025-11-14"
 
-    rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_config(config_path, bronze_samples_dir, tmp_path, run_date)
+    rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_config(
+        config_path, bronze_samples_dir, tmp_path, run_date
+    )
     cfg_data.setdefault("silver", {})["require_checksum"] = True
     rewritten_cfg.write_text(yaml.safe_dump(cfg_data))
 
@@ -166,6 +191,10 @@ def test_silver_require_checksum_missing_manifest(tmp_path: Path, bronze_samples
     checksum_path.unlink()
 
     with pytest.raises(subprocess.CalledProcessError):
-        _run_cli(["silver_extract.py", "--config", str(rewritten_cfg), "--date", run_date])
+        _run_cli(
+            ["silver_extract.py", "--config", str(rewritten_cfg), "--date", run_date]
+        )
 
-    assert not any(silver_out.rglob("*.parquet")), "Silver output should not be created when checksum is missing"
+    assert not any(
+        silver_out.rglob("*.parquet")
+    ), "Silver output should not be created when checksum is missing"

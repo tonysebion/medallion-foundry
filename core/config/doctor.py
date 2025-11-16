@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 
 import yaml
 
-from .loader import load_config, load_configs
+from .loader import load_config
 
 
 def _migrate_single(cfg: Dict[str, Any], target_version: int = 1) -> Dict[str, Any]:
@@ -54,13 +54,17 @@ def _migrate_single(cfg: Dict[str, Any], target_version: int = 1) -> Dict[str, A
     # but ensures shapes and defaults exist
     if target_version >= 2:
         silver.setdefault("partitioning", {})
-        silver["partitioning"].setdefault("columns", silver.get("partitioning", {}).get("columns", []))
+        silver["partitioning"].setdefault(
+            "columns", silver.get("partitioning", {}).get("columns", [])
+        )
         out["silver"] = silver
 
     return out
 
 
-def migrate_config_file(path: Path, in_place: bool = False, target_version: int = 1) -> str:
+def migrate_config_file(
+    path: Path, in_place: bool = False, target_version: int = 1
+) -> str:
     original_text = path.read_text(encoding="utf-8")
     data = yaml.safe_load(original_text)
 
@@ -69,10 +73,16 @@ def migrate_config_file(path: Path, in_place: bool = False, target_version: int 
         platform = data.get("platform")
         silver = data.get("silver")
         for entry in data["sources"]:
-            merged: Dict[str, Any] = {"platform": platform, "silver": silver, "source": entry.get("source", {})}
+            merged: Dict[str, Any] = {
+                "platform": platform,
+                "silver": silver,
+                "source": entry.get("source", {}),
+            }
             migrated = _migrate_single(merged, target_version)
             # store back under sources with per-entry overrides
-            migrated_entry: Dict[str, Any] = {k: v for k, v in entry.items() if k != "source"}
+            migrated_entry: Dict[str, Any] = {
+                k: v for k, v in entry.items() if k != "source"
+            }
             migrated_entry["source"] = migrated["source"]
             migrated_sources.append(migrated_entry)
         data["sources"] = migrated_sources
@@ -84,8 +94,10 @@ def migrate_config_file(path: Path, in_place: bool = False, target_version: int 
     migrated_text = yaml.safe_dump(data, sort_keys=False)
     diff = "".join(
         difflib.unified_diff(
-            original_text.splitlines(keepends=True), migrated_text.splitlines(keepends=True),
-            fromfile=str(path), tofile=str(path) + " (migrated)",
+            original_text.splitlines(keepends=True),
+            migrated_text.splitlines(keepends=True),
+            fromfile=str(path),
+            tofile=str(path) + " (migrated)",
         )
     )
 
@@ -95,10 +107,19 @@ def migrate_config_file(path: Path, in_place: bool = False, target_version: int 
 
 
 def main(argv: List[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="bronze-config doctor: lint and migrate configs")
+    parser = argparse.ArgumentParser(
+        description="bronze-config doctor: lint and migrate configs"
+    )
     parser.add_argument("paths", nargs="+", help="YAML config files to analyze")
-    parser.add_argument("--in-place", "-i", action="store_true", help="Write changes back to files")
-    parser.add_argument("--target-version", type=int, default=1, help="Target config_version to enforce (default 1)")
+    parser.add_argument(
+        "--in-place", "-i", action="store_true", help="Write changes back to files"
+    )
+    parser.add_argument(
+        "--target-version",
+        type=int,
+        default=1,
+        help="Target config_version to enforce (default 1)",
+    )
     args = parser.parse_args(argv)
 
     exit_code = 0
@@ -115,7 +136,9 @@ def main(argv: List[str] | None = None) -> int:
                 lint_msg = "ok"
             except Exception as exc:
                 lint_msg = f"lint error: {exc}"
-            diff = migrate_config_file(path, in_place=args.in_place, target_version=args.target_version)
+            diff = migrate_config_file(
+                path, in_place=args.in_place, target_version=args.target_version
+            )
             print(f"== {p} ({lint_msg})")
             if diff:
                 print(diff)

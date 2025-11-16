@@ -54,7 +54,9 @@ class ChunkWriter:
 
             if self.config.write_parquet:
                 parquet_path = self.config.out_dir / f"{suffix}.parquet"
-                write_parquet_chunk(chunk, parquet_path, compression=self.config.parquet_compression)
+                write_parquet_chunk(
+                    chunk, parquet_path, compression=self.config.parquet_compression
+                )
                 created_files.append(parquet_path)
                 self.config.storage_plan.upload(parquet_path)
 
@@ -78,7 +80,9 @@ class ChunkProcessor:
 
         created_files: List[Path] = []
         if self.parallel_workers > 1 and len(chunks) > 1:
-            logger.info(f"Processing {len(chunks)} chunks with {self.parallel_workers} workers")
+            logger.info(
+                f"Processing {len(chunks)} chunks with {self.parallel_workers} workers"
+            )
             with ThreadPoolExecutor(max_workers=self.parallel_workers) as executor:
                 futures = {
                     executor.submit(self.writer.write, idx, chunk): idx

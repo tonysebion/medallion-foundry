@@ -4,7 +4,6 @@ import csv
 import json
 from pathlib import Path
 
-import pandas as pd
 import pytest
 
 from core.extractors.file_extractor import FileExtractor
@@ -25,7 +24,10 @@ def _build_config(path: Path, **kwargs) -> dict:
 
 def test_csv_limit_and_columns(tmp_path: Path) -> None:
     file_path = tmp_path / "sample.csv"
-    rows = [{"id": 1, "name": "alpha", "extra": "x"}, {"id": 2, "name": "beta", "extra": "y"}]
+    rows = [
+        {"id": 1, "name": "alpha", "extra": "x"},
+        {"id": 2, "name": "beta", "extra": "y"},
+    ]
     with file_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=rows[0].keys())
         writer.writeheader()
@@ -44,7 +46,9 @@ def test_tsv_without_header_requires_fieldnames(tmp_path: Path) -> None:
     file_path = tmp_path / "sample.tsv"
     file_path.write_text("1\talpha\n2\tbeta\n", encoding="utf-8")
 
-    cfg = _build_config(file_path, format="tsv", has_header=False, fieldnames=["id", "name"])
+    cfg = _build_config(
+        file_path, format="tsv", has_header=False, fieldnames=["id", "name"]
+    )
     extractor = FileExtractor()
     records, _ = extractor.fetch_records(cfg, None)
 

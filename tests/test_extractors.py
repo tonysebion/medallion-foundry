@@ -17,16 +17,16 @@ class TestBaseExtractor:
 
     def test_subclass_must_implement_fetch_records(self):
         """Test that subclasses must implement fetch_records."""
-        
+
         class IncompleteExtractor(BaseExtractor):
             pass
-        
+
         with pytest.raises(TypeError):
             IncompleteExtractor()
 
     def test_valid_subclass(self):
         """Test that valid subclass can be created."""
-        
+
         class ValidExtractor(BaseExtractor):
             def fetch_records(
                 self,
@@ -34,10 +34,10 @@ class TestBaseExtractor:
                 run_date: date,
             ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
                 return [{"test": "data"}], None
-        
+
         extractor = ValidExtractor()
         records, cursor = extractor.fetch_records({}, date.today())
-        
+
         assert len(records) == 1
         assert records[0]["test"] == "data"
         assert cursor is None

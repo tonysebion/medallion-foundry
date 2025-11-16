@@ -37,12 +37,14 @@ def _read_yaml(path: str) -> Dict[str, Any]:
     return cfg
 
 
-def load_config(path: str, *, strict: bool = False, enable_env_substitution: bool = True) -> Dict[str, Any | RootConfig]:
+def load_config(
+    path: str, *, strict: bool = False, enable_env_substitution: bool = True
+) -> Dict[str, Any | RootConfig]:
     """Load a single config file and return both dict and typed model.
 
     For backward compatibility we still return a validated dict, but attach
     a typed model instance under reserved key '__typed_model__'.
-    
+
     Args:
         path: Path to config YAML file
         strict: Enable strict validation (require config_version, enforce v2 rules)
@@ -52,7 +54,9 @@ def load_config(path: str, *, strict: bool = False, enable_env_substitution: boo
     if enable_env_substitution:
         cfg = apply_env_substitution(cfg)
     if "sources" in cfg:
-        raise ValueError("Config contains multiple sources; use load_configs() instead.")
+        raise ValueError(
+            "Config contains multiple sources; use load_configs() instead."
+        )
     validated = validate_config_dict(cfg)
     try:
         typed = parse_root_config(validated)
@@ -68,9 +72,11 @@ def load_config(path: str, *, strict: bool = False, enable_env_substitution: boo
     return validated
 
 
-def load_configs(path: str, *, strict: bool = False, enable_env_substitution: bool = True) -> List[Dict[str, Any | RootConfig]]:
+def load_configs(
+    path: str, *, strict: bool = False, enable_env_substitution: bool = True
+) -> List[Dict[str, Any | RootConfig]]:
     """Load multi-source config file.
-    
+
     Args:
         path: Path to config YAML file
         strict: Enable strict validation
@@ -119,13 +125,19 @@ def load_configs(path: str, *, strict: bool = False, enable_env_substitution: bo
             typed = parse_root_config(validated)
             if "config_version" not in validated:
                 if strict:
-                    raise ValueError("Missing required config_version in strict mode (multi-config load)")
-                emit_compat("Config missing config_version; defaulting to 1", code="CFG004")
+                    raise ValueError(
+                        "Missing required config_version in strict mode (multi-config load)"
+                    )
+                emit_compat(
+                    "Config missing config_version; defaulting to 1", code="CFG004"
+                )
             if strict and int(validated.get("config_version", 1) or 1) >= 2:
                 validate_v2_config_dict(validated)
             validated["__typed_model__"] = typed
         except Exception as exc:  # pragma: no cover
-            logger.warning("Typed config parse failed for source index %s: %s", idx, exc)
+            logger.warning(
+                "Typed config parse failed for source index %s: %s", idx, exc
+            )
         results.append(validated)
 
     return results

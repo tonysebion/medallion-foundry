@@ -29,33 +29,33 @@ source:
     method: "GET"
 
     # Authentication - uncomment the one you need:
-    
+
     # Bearer token (most common)
     auth_type: "bearer"
     auth_token_env: "MY_API_TOKEN"
-    
+
     # OR API key in header
     # auth_type: "api_key"
     # api_key_header: "X-API-Key"
     # api_key_env: "MY_API_KEY"
-    
+
     # OR Basic auth
     # auth_type: "basic"
     # basic_user_env: "API_USER"
     # basic_pass_env: "API_PASS"
 
     # Pagination - uncomment the one that matches your API:
-    
+
     pagination:
       type: "none"                   # Start with this - no pagination
-    
+
     # OR if your API uses offset/limit
     # pagination:
     #   type: "offset"
     #   page_size: 100
     #   offset_param: "offset"
     #   limit_param: "limit"
-    
+
     # OR if your API uses page numbers
     # pagination:
     #   type: "page"
@@ -72,7 +72,7 @@ source:
 
 
 # QUICK START INSTRUCTIONS:
-# 
+#
 # 1. Copy this file:
 #    cp docs/examples/quick_test.yaml config/test.yaml
 #

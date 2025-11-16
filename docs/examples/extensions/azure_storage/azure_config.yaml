@@ -16,15 +16,15 @@ platform:
   bronze:
     # Storage backend selection
     storage_backend: "azure"  # Use Azure instead of S3
-    
+
     # Azure storage settings
     azure_container: "bronze"  # Azure container name (like S3 bucket)
     azure_prefix: "bronze"     # Optional prefix for all paths
-    
+
     partitioning:
       use_dt_partition: true
       partition_strategy: "date"  # Options: date, hourly, timestamp, batch_id
-    
+
     output_defaults:
       allow_csv: true
       allow_parquet: true
@@ -32,24 +32,24 @@ platform:
 
   # Azure connection configuration
   # Choose ONE of the following authentication methods:
-  
+
   azure_connection:
     # METHOD 1: Connection String (easiest for dev/test)
     # Get from Azure Portal > Storage Account > Access keys > Connection string
     connection_string_env: "AZURE_STORAGE_CONNECTION_STRING"
-    
+
     # METHOD 2: Account Key (simple but less secure)
     # Uncomment if using account key instead of connection string:
     # account_name_env: "AZURE_STORAGE_ACCOUNT"
     # account_key_env: "AZURE_STORAGE_KEY"
-    
+
     # METHOD 3: Service Principal (recommended for production)
     # Uncomment if using service principal:
     # account_name_env: "AZURE_STORAGE_ACCOUNT"
     # tenant_id_env: "AZURE_TENANT_ID"
     # client_id_env: "AZURE_CLIENT_ID"
     # client_secret_env: "AZURE_CLIENT_SECRET"
-    
+
     # METHOD 4: Managed Identity (for Azure VMs/Functions)
     # Uncomment if using managed identity:
     # account_name_env: "AZURE_STORAGE_ACCOUNT"
@@ -64,13 +64,13 @@ source:
     base_url: "https://api.example.com"
     endpoint: "/v1/data"
     method: "GET"
-    
+
     auth_type: "bearer"
     auth_token_env: "EXAMPLE_API_TOKEN"
-    
+
     params:
       page_size: 100
-    
+
     pagination:
       type: "offset"
       page_size_param: "page_size"
@@ -90,7 +90,7 @@ source:
 #    # Using connection string (easiest):
 #    $env:AZURE_STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;AccountName=myaccount;AccountKey=..."
 #    $env:EXAMPLE_API_TOKEN = "your-api-token"
-#    
+#
 #    # OR using account key:
 #    $env:AZURE_STORAGE_ACCOUNT = "myaccount"
 #    $env:AZURE_STORAGE_KEY = "your-account-key"

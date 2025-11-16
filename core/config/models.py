@@ -50,11 +50,14 @@ class SilverSchema:
         data = raw or {}
         column_order = data.get("column_order")
         if column_order is not None:
-            if not isinstance(column_order, list) or any(not isinstance(col, str) for col in column_order):
+            if not isinstance(column_order, list) or any(
+                not isinstance(col, str) for col in column_order
+            ):
                 raise ValueError("silver.schema.column_order must be a list of strings")
         rename_map = data.get("rename_map") or {}
         if not isinstance(rename_map, dict) or any(
-            not isinstance(k, str) or not isinstance(v, str) for k, v in rename_map.items()
+            not isinstance(k, str) or not isinstance(v, str)
+            for k, v in rename_map.items()
         ):
             raise ValueError("silver.schema.rename_map must be a mapping of strings")
         return cls(column_order=column_order, rename_map=rename_map)
@@ -75,10 +78,15 @@ class SilverNormalization:
             raise ValueError("silver.normalization must be a dictionary")
         trim_strings = data.get("trim_strings", False)
         if "trim_strings" in data:
-            _ensure_bool(trim_strings, "silver.normalization.trim_strings must be a boolean")
+            _ensure_bool(
+                trim_strings, "silver.normalization.trim_strings must be a boolean"
+            )
         empty_strings = data.get("empty_strings_as_null", False)
         if "empty_strings_as_null" in data:
-            _ensure_bool(empty_strings, "silver.normalization.empty_strings_as_null must be a boolean")
+            _ensure_bool(
+                empty_strings,
+                "silver.normalization.empty_strings_as_null must be a boolean",
+            )
         return cls(trim_strings=trim_strings, empty_strings_as_null=empty_strings)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -105,11 +113,15 @@ class SilverErrorHandling:
         max_bad_records = data.get("max_bad_records", 0)
         if "max_bad_records" in data:
             if not isinstance(max_bad_records, int) or max_bad_records < 0:
-                raise ValueError("silver.error_handling.max_bad_records must be a non-negative integer")
+                raise ValueError(
+                    "silver.error_handling.max_bad_records must be a non-negative integer"
+                )
         max_bad_percent = data.get("max_bad_percent", 0.0)
         if "max_bad_percent" in data:
             if not isinstance(max_bad_percent, (int, float)) or max_bad_percent < 0:
-                raise ValueError("silver.error_handling.max_bad_percent must be a non-negative number")
+                raise ValueError(
+                    "silver.error_handling.max_bad_percent must be a non-negative number"
+                )
         return cls(
             enabled=enabled,
             max_bad_records=max_bad_records,
@@ -136,8 +148,12 @@ class SilverPartitioning:
         columns = data.get("columns")
         column = data.get("column")
         if columns is not None:
-            if not isinstance(columns, list) or any(not isinstance(col, str) for col in columns):
-                raise ValueError("silver.partitioning.columns must be a list of strings")
+            if not isinstance(columns, list) or any(
+                not isinstance(col, str) for col in columns
+            ):
+                raise ValueError(
+                    "silver.partitioning.columns must be a list of strings"
+                )
         elif column:
             if not isinstance(column, str):
                 raise ValueError("silver.partitioning.column must be a string")
@@ -199,7 +215,9 @@ class SilverConfig:
 
         parquet_compression = data.get("parquet_compression", "snappy")
         if "parquet_compression" in data:
-            _ensure_str(parquet_compression, "silver.parquet_compression must be a string")
+            _ensure_str(
+                parquet_compression, "silver.parquet_compression must be a string"
+            )
 
         domain = data.get("domain", source["system"])
         if data.get("domain") is not None:
@@ -214,10 +232,15 @@ class SilverConfig:
                 raise ValueError("silver.version must be an integer")
         load_partition_name = data.get("load_partition_name", "load_date")
         if "load_partition_name" in data:
-            _ensure_str(load_partition_name, "silver.load_partition_name must be a string")
+            _ensure_str(
+                load_partition_name, "silver.load_partition_name must be a string"
+            )
         include_pattern_folder = data.get("include_pattern_folder", False)
         if "include_pattern_folder" in data:
-            _ensure_bool(include_pattern_folder, "silver.include_pattern_folder must be a boolean")
+            _ensure_bool(
+                include_pattern_folder,
+                "silver.include_pattern_folder must be a boolean",
+            )
         require_checksum = data.get("require_checksum", False)
         if "require_checksum" in data:
             _ensure_bool(require_checksum, "silver.require_checksum must be a boolean")
@@ -225,7 +248,9 @@ class SilverConfig:
         primary_keys = data.get("primary_keys", [])
         if primary_keys is None:
             primary_keys = []
-        if not isinstance(primary_keys, list) or any(not isinstance(pk, str) for pk in primary_keys):
+        if not isinstance(primary_keys, list) or any(
+            not isinstance(pk, str) for pk in primary_keys
+        ):
             raise ValueError("silver.primary_keys must be a list of strings")
 
         order_column = data.get("order_column")
@@ -271,9 +296,13 @@ class SilverConfig:
 
         if load_pattern == LoadPattern.CURRENT_HISTORY:
             if not primary_keys:
-                raise ValueError("silver.primary_keys must be provided when load_pattern='current_history'")
+                raise ValueError(
+                    "silver.primary_keys must be provided when load_pattern='current_history'"
+                )
             if not order_column:
-                raise ValueError("silver.order_column must be provided when load_pattern='current_history'")
+                raise ValueError(
+                    "silver.order_column must be provided when load_pattern='current_history'"
+                )
 
         return cls(
             output_dir=output_dir,

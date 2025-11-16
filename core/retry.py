@@ -9,6 +9,7 @@ Provides:
 This module is self-contained and avoids changing existing behavior; adoption
 is opt-in from extractors/backends.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -35,7 +36,9 @@ class RetryPolicy:
     )
     retry_if: Optional[Predicate] = None  # custom predicate
     # Optional callback to compute delay from an exception (e.g., Retry-After). If returns None, fall back to exponential.
-    delay_from_exception: Optional[Callable[[BaseException, int, float], Optional[float]]] = None
+    delay_from_exception: Optional[
+        Callable[[BaseException, int, float], Optional[float]]
+    ] = None
 
     def should_retry(self, exc: BaseException) -> bool:
         if self.retry_if is not None:
@@ -46,7 +49,9 @@ class RetryPolicy:
         return isinstance(exc, self.retry_on_exceptions)
 
     def compute_delay(self, attempt: int) -> float:
-        delay = min(self.max_delay, self.base_delay * (self.backoff_multiplier ** (attempt - 1)))
+        delay = min(
+            self.max_delay, self.base_delay * (self.backoff_multiplier ** (attempt - 1))
+        )
         if self.jitter > 0:
             span = delay * self.jitter
             delay = max(0.0, random.uniform(delay - span, delay + span))
@@ -103,7 +108,10 @@ class CircuitBreaker:
 
     def record_failure(self) -> None:
         self._failures += 1
-        if self._state in (CircuitState.CLOSED, CircuitState.HALF_OPEN) and self._failures >= self.failure_threshold:
+        if (
+            self._state in (CircuitState.CLOSED, CircuitState.HALF_OPEN)
+            and self._failures >= self.failure_threshold
+        ):
             self._state = CircuitState.OPEN
             self._opened_at = time.time()
             self._half_open_calls = 0

@@ -6,6 +6,7 @@ Configuration:
 
 Both blocking acquire() and async async_acquire() are provided.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -61,6 +62,7 @@ class RateLimiter:
             rps = run_cfg.get("rate_limit_rps") if isinstance(run_cfg, dict) else None
         if rps is None:
             import os
+
             env_val = os.environ.get("BRONZE_API_RPS")
             if env_val:
                 try:

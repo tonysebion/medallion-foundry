@@ -27,7 +27,9 @@ def fire_webhooks(
     for url in urls:
         if not url:
             continue
-        req = request.Request(url, data=body, headers={"Content-Type": "application/json"})
+        req = request.Request(
+            url, data=body, headers={"Content-Type": "application/json"}
+        )
         try:
             with request.urlopen(req, timeout=timeout):
                 logger.debug("Webhook POST succeeded for %s", url)

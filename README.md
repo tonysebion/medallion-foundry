@@ -37,30 +37,30 @@ This framework is intentionally lightweight and orchestration-neutral: you can r
 
 ## Architecture Principles
 
-- **Single CLI, many sources**  
+- **Single CLI, many sources**
   One entrypoint (`bronze_extract.py`) that reads a YAML config and chooses the appropriate extractor (`api`, `db`, or `custom`).
 
-- **Standard Bronze layout**  
+- **Standard Bronze layout**
   All data lands in a predictable directory structure (by default):
 
   ```text
   bronze/system=<system>/table=<table>/dt=YYYY-MM-DD/part-0001.parquet
   ```
 
-- **Config-driven rigor**  
+- **Config-driven rigor**
   Each config file has:
   - A **`platform`** section: owned by the data platform team (buckets, prefixes, defaults).
   - A **`source`** section: owned by product/domain teams (API/DB details, query, table name, etc.).
 
-- **Extractor interface**  
+- **Extractor interface**
   Implement a simple `BaseExtractor` interface to support new source types, while reusing the same Bronze writing, S3 upload, and partitioning logic.
 
-- **Formats and file splitting**  
+- **Formats and file splitting**
   - CSV for human-readable debugging (optional)
   - Parquet (with Snappy) for analytics
   - Configurable `max_rows_per_file` to split large extracts into part files (e.g., `part-0001`, `part-0002`, ...).
 
-- **Orchestration friendly**  
+- **Orchestration friendly**
   - CLI takes `--config` and optional `--date`
   - Uses exit codes (0 = success, non-zero = failure)
   - Structured logging with levels and timestamps
@@ -148,7 +148,7 @@ Complete production setup:
    ```bash
    # Single extraction
    python bronze_extract.py --config config/my_api.yaml --date 2025-01-12
-   
+
    # Multiple sources in parallel
    python bronze_extract.py \
      --config config/sales.yaml,config/marketing.yaml,config/products.yaml \

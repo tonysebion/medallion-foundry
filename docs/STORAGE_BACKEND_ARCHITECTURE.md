@@ -19,27 +19,27 @@ All storage backends implement the abstract `StorageBackend` base class defined 
 ```python
 class StorageBackend(ABC):
     """Abstract base class for storage backends."""
-    
+
     @abstractmethod
     def upload_file(self, local_path: str, remote_path: str) -> bool:
         """Upload a file to remote storage."""
         pass
-    
+
     @abstractmethod
     def download_file(self, remote_path: str, local_path: str) -> bool:
         """Download a file from remote storage."""
         pass
-    
+
     @abstractmethod
     def list_files(self, prefix: str) -> List[str]:
         """List files in remote storage with given prefix."""
         pass
-    
+
     @abstractmethod
     def delete_file(self, remote_path: str) -> bool:
         """Delete a file from remote storage."""
         pass
-    
+
     @abstractmethod
     def get_backend_type(self) -> str:
         """Get backend type identifier."""
@@ -73,7 +73,7 @@ platform:
     storage_backend: "s3"  # optional, defaults to s3
     s3_bucket: "analytics-bronze"
     s3_prefix: "bronze"
-  
+
   s3_connection:
     endpoint_url_env: "BRONZE_S3_ENDPOINT"
     access_key_env: "BRONZE_S3_ACCESS_KEY"
@@ -100,7 +100,7 @@ platform:
     azure_storage_account: "myaccount"
     azure_container: "bronze"
     azure_prefix: "bronze"
-  
+
   azure_connection:
     connection_string_env: "AZURE_STORAGE_CONNECTION_STRING"
     # Or use SAS token, service principal, etc.
@@ -153,23 +153,23 @@ class MyStorage(StorageBackend):
         # Initialize from config
         self.bucket = config["bronze"]["my_bucket"]
         # ... setup client ...
-    
+
     def upload_file(self, local_path: str, remote_path: str) -> bool:
         # Upload implementation
         pass
-    
+
     def download_file(self, remote_path: str, local_path: str) -> bool:
         # Download implementation
         pass
-    
+
     def list_files(self, prefix: str) -> List[str]:
         # List implementation
         pass
-    
+
     def delete_file(self, remote_path: str) -> bool:
         # Delete implementation
         pass
-    
+
     def get_backend_type(self) -> str:
         return "my_storage"
 ```
@@ -179,7 +179,7 @@ class MyStorage(StorageBackend):
 ```python
 def get_storage_backend(config: Dict[str, Any]) -> StorageBackend:
     backend_type = config.get("bronze", {}).get("storage_backend", "s3")
-    
+
     if backend_type == "s3":
         from core.s3 import S3Storage
         return S3Storage(config)
@@ -300,12 +300,12 @@ def test_extraction_with_mock_storage():
     class MockStorage(StorageBackend):
         def __init__(self):
             self.uploaded_files = []
-        
+
         def upload_file(self, local_path, remote_path):
             self.uploaded_files.append((local_path, remote_path))
             return True
         # ... implement other methods ...
-    
+
     # Inject into runner
     # Test extraction
     # Assert uploaded_files contains expected files

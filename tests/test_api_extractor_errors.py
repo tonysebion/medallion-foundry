@@ -20,6 +20,7 @@ class DummySession:
     def close(self):
         return None
 
+
 def _build_cfg(pagination: dict):
     return {
         "source": {

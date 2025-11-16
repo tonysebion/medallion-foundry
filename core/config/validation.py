@@ -43,17 +43,25 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
     storage_backend = bronze.get("storage_backend", "s3")
     valid_backends = ["s3", "azure", "local"]
     if storage_backend not in valid_backends:
-        raise ValueError(f"platform.bronze.storage_backend must be one of {valid_backends}")
+        raise ValueError(
+            f"platform.bronze.storage_backend must be one of {valid_backends}"
+        )
 
     if storage_backend == "s3":
         if "s3_connection" not in platform:
-            raise ValueError("Missing platform.s3_connection section (required for S3 backend)")
+            raise ValueError(
+                "Missing platform.s3_connection section (required for S3 backend)"
+            )
         for key in ("s3_bucket", "s3_prefix"):
             if key not in bronze:
-                raise ValueError(f"Missing required key 'platform.bronze.{key}' in config")
+                raise ValueError(
+                    f"Missing required key 'platform.bronze.{key}' in config"
+                )
     elif storage_backend == "azure":
         if "azure_connection" not in platform:
-            raise ValueError("Missing platform.azure_connection section (required for Azure backend)")
+            raise ValueError(
+                "Missing platform.azure_connection section (required for Azure backend)"
+            )
         if "azure_container" not in bronze:
             raise ValueError("Azure backend requires platform.bronze.azure_container")
     elif storage_backend == "local":
@@ -99,21 +107,27 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
     if source_type == "db" and "db" not in source:
         raise ValueError("source.type='db' requires 'source.db' section")
     if source_type == "custom" and "custom_extractor" not in source:
-        raise ValueError("source.type='custom' requires 'source.custom_extractor' section")
+        raise ValueError(
+            "source.type='custom' requires 'source.custom_extractor' section"
+        )
     if source_type == "file" and "file" not in source:
         raise ValueError("source.type='file' requires 'source.file' section")
 
     if source_type == "custom":
         custom = source["custom_extractor"]
         if "module" not in custom or "class_name" not in custom:
-            raise ValueError("source.custom_extractor requires 'module' and 'class_name'")
+            raise ValueError(
+                "source.custom_extractor requires 'module' and 'class_name'"
+            )
 
     if source_type == "file":
         file_cfg = source["file"]
         if not isinstance(file_cfg, dict):
             raise ValueError("source.file must be a dictionary of options")
         if "path" not in file_cfg:
-            raise ValueError("source.file requires 'path' to point to the local dataset")
+            raise ValueError(
+                "source.file requires 'path' to point to the local dataset"
+            )
         file_format = file_cfg.get("format")
         valid_formats = ["csv", "tsv", "json", "jsonl", "parquet"]
         if file_format and file_format.lower() not in valid_formats:
@@ -130,7 +144,9 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
     if source_type == "db":
         db = source["db"]
         if "conn_str_env" not in db:
-            raise ValueError("source.db requires 'conn_str_env' to specify connection string env var")
+            raise ValueError(
+                "source.db requires 'conn_str_env' to specify connection string env var"
+            )
         if "base_query" not in db:
             raise ValueError("source.db requires 'base_query' for SQL query")
 
@@ -176,7 +192,9 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
     if "parallel_workers" in run_cfg:
         workers = run_cfg["parallel_workers"]
         if not isinstance(workers, int) or workers < 1:
-            raise ValueError("source.run.parallel_workers must be a positive integer (1 or greater)")
+            raise ValueError(
+                "source.run.parallel_workers must be a positive integer (1 or greater)"
+            )
         if workers > 32:
             logger.warning(
                 f"source.run.parallel_workers={workers} is very high and may cause resource issues"
@@ -191,14 +209,20 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
             raise ValueError("source.run.reference_mode.enabled must be a boolean")
         role = reference_mode.get("role", "reference")
         if role not in {"reference", "delta", "auto"}:
-            raise ValueError("source.run.reference_mode.role must be one of 'reference', 'delta', or 'auto'")
+            raise ValueError(
+                "source.run.reference_mode.role must be one of 'reference', 'delta', or 'auto'"
+            )
         cadence = reference_mode.get("cadence_days")
         if cadence is not None:
             if not isinstance(cadence, int) or cadence <= 0:
-                raise ValueError("source.run.reference_mode.cadence_days must be a positive integer")
+                raise ValueError(
+                    "source.run.reference_mode.cadence_days must be a positive integer"
+                )
         delta_patterns = reference_mode.get("delta_patterns", [])
         if delta_patterns and not all(isinstance(p, str) for p in delta_patterns):
-            raise ValueError("source.run.reference_mode.delta_patterns must be a list of strings")
+            raise ValueError(
+                "source.run.reference_mode.delta_patterns must be a list of strings"
+            )
         run_cfg["reference_mode"] = {
             "enabled": enabled,
             "role": role,
@@ -206,7 +230,11 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
             "delta_patterns": delta_patterns,
         }
 
-    partition_strategy = platform.get("bronze", {}).get("partitioning", {}).get("partition_strategy", "date")
+    partition_strategy = (
+        platform.get("bronze", {})
+        .get("partitioning", {})
+        .get("partition_strategy", "date")
+    )
     valid_strategies = ["date", "hourly", "timestamp", "batch_id"]
     if partition_strategy not in valid_strategies:
         raise ValueError(
@@ -218,5 +246,7 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
     cfg["silver"] = normalized_silver
 
     source.setdefault("config_name", f"{source['system']}.{source['table']}")
-    logger.info("Successfully validated config for %s.%s", source["system"], source["table"])
+    logger.info(
+        "Successfully validated config for %s.%s", source["system"], source["table"]
+    )
     return cfg

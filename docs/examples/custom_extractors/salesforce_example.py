@@ -16,10 +16,13 @@ class SalesforceExampleExtractor(BaseExtractor):
         cfg: Dict[str, Any],
         run_date: date,
     ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-
         # In a real implementation, use cfg["source"]["salesforce"] to read connection/query info.
         records: List[Dict[str, Any]] = [
-            {"Id": "001", "Name": "Acme Corp", "LastModifiedDate": "2025-01-01T00:00:00Z"},
+            {
+                "Id": "001",
+                "Name": "Acme Corp",
+                "LastModifiedDate": "2025-01-01T00:00:00Z",
+            },
             {"Id": "002", "Name": "Globex", "LastModifiedDate": "2025-01-02T00:00:00Z"},
         ]
 

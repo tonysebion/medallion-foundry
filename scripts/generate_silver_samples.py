@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable
 
 import yaml
 
@@ -103,7 +103,9 @@ def _rewrite_config(
     mapped_load = PATTERN_LOAD.get(partition["pattern"])
     if mapped_load:
         run_cfg["load_pattern"] = mapped_load
-    target = tmp_dir / f"{template.stem}_{partition['label']}_{partition['run_date']}.yaml"
+    target = (
+        tmp_dir / f"{template.stem}_{partition['label']}_{partition['run_date']}.yaml"
+    )
     target.write_text(yaml.safe_dump(cfg), encoding="utf-8")
     return target
 
@@ -119,7 +121,9 @@ def _rewrite_silver_config(
     cfg = yaml.safe_load(template.read_text(encoding="utf-8"))
     bronze_file = partition["file"]
     cfg["source"]["file"]["path"] = str(bronze_file)
-    cfg["source"]["run"]["local_output_dir"] = str(tmp_dir / f"bronze_out_{partition['run_date']}")
+    cfg["source"]["run"]["local_output_dir"] = str(
+        tmp_dir / f"bronze_out_{partition['run_date']}"
+    )
     silver_cfg = cfg.setdefault("silver", {})
     partition_cfg = dict(silver_cfg.get("partitioning", {}))
     partition_cfg["columns"] = []
@@ -129,13 +133,18 @@ def _rewrite_silver_config(
     cfg["silver"]["output_dir"] = str(silver_base)
     cfg["silver"]["write_parquet"] = enable_parquet
     cfg["silver"]["write_csv"] = enable_csv
-    target = tmp_dir / f"{template.stem}_{silver_model}_{partition['label']}_{partition['run_date']}.yaml"
+    target = (
+        tmp_dir
+        / f"{template.stem}_{silver_model}_{partition['label']}_{partition['run_date']}.yaml"
+    )
     target.write_text(yaml.safe_dump(cfg), encoding="utf-8")
     return target
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate Silver samples derived from the Bronze fixtures")
+    parser = argparse.ArgumentParser(
+        description="Generate Silver samples derived from the Bronze fixtures"
+    )
     parser.add_argument(
         "--formats",
         choices=["parquet", "csv", "both"],
@@ -149,7 +158,9 @@ def _run_cli(cmd: list[str]) -> None:
     subprocess.run([sys.executable, *cmd], check=True, cwd=REPO_ROOT)
 
 
-def _generate_for_partition(partition: Dict[str, object], tmp_dir: Path, enable_parquet: bool, enable_csv: bool) -> None:
+def _generate_for_partition(
+    partition: Dict[str, object], tmp_dir: Path, enable_parquet: bool, enable_csv: bool
+) -> None:
     pattern = partition["pattern"]
     config_name = PATTERN_CONFIG.get(pattern, "file_example.yaml")
     template = CONFIGS_DIR / config_name

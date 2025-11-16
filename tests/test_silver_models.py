@@ -21,7 +21,11 @@ ORDER_COLUMN = "updated_at"
 def _build_sample_df() -> pd.DataFrame:
     rows = [
         {"order_id": "ORD-001", "status": "new", "updated_at": "2025-01-01T08:00:00"},
-        {"order_id": "ORD-001", "status": "shipped", "updated_at": "2025-01-02T09:00:00"},
+        {
+            "order_id": "ORD-001",
+            "status": "shipped",
+            "updated_at": "2025-01-02T09:00:00",
+        },
         {"order_id": "ORD-002", "status": "new", "updated_at": "2025-01-01T12:00:00"},
     ]
     frame = pd.DataFrame(rows)
@@ -63,15 +67,25 @@ def test_silver_model_planner_handles_all_combinations(
         "current": f"current_{bronze_pattern.value}",
     }
     writer = TrackingWriter()
-    planner = SilverModelPlanner(writer, PRIMARY_KEYS, ORDER_COLUMN, artifact_names, silver_model)
+    planner = SilverModelPlanner(
+        writer, PRIMARY_KEYS, ORDER_COLUMN, artifact_names, silver_model
+    )
 
     planner.render(_build_sample_df())
     actual_labels = set(writer.written.keys())
     expected_full_names = {artifact_names[label] for label in expected_labels}
     assert actual_labels == expected_full_names
 
-    if silver_model in {SilverModel.SCD_TYPE_1, SilverModel.SCD_TYPE_2, SilverModel.FULL_MERGE_DEDUPE}:
-        target_label = "current" if silver_model != SilverModel.FULL_MERGE_DEDUPE else "full_snapshot"
+    if silver_model in {
+        SilverModel.SCD_TYPE_1,
+        SilverModel.SCD_TYPE_2,
+        SilverModel.FULL_MERGE_DEDUPE,
+    }:
+        target_label = (
+            "current"
+            if silver_model != SilverModel.FULL_MERGE_DEDUPE
+            else "full_snapshot"
+        )
         target_name = artifact_names[target_label]
         assert target_name in writer.written
         dedup_df = writer.written[target_name][0]
@@ -143,6 +157,15 @@ def test_silver_output_files_saved_to_sample_structure(
 
 
 def test_silver_model_defaults_match_load_pattern() -> None:
-    assert SilverModel.default_for_load_pattern(LoadPattern.FULL) == SilverModel.PERIODIC_SNAPSHOT
-    assert SilverModel.default_for_load_pattern(LoadPattern.CDC) == SilverModel.INCREMENTAL_MERGE
-    assert SilverModel.default_for_load_pattern(LoadPattern.CURRENT_HISTORY) == SilverModel.SCD_TYPE_2
+    assert (
+        SilverModel.default_for_load_pattern(LoadPattern.FULL)
+        == SilverModel.PERIODIC_SNAPSHOT
+    )
+    assert (
+        SilverModel.default_for_load_pattern(LoadPattern.CDC)
+        == SilverModel.INCREMENTAL_MERGE
+    )
+    assert (
+        SilverModel.default_for_load_pattern(LoadPattern.CURRENT_HISTORY)
+        == SilverModel.SCD_TYPE_2
+    )

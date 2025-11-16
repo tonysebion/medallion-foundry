@@ -18,7 +18,11 @@ CONFIGS_DIR = REPO_ROOT / "docs" / "examples" / "configs"
 SILVER_ROOT = REPO_ROOT / "docs" / "examples" / "data" / "silver_samples"
 PATTERN_REGEX = re.compile(r"pattern=([^/\\]+)")
 DEFAULT_NORMALIZATION = {"trim_strings": False, "empty_strings_as_null": False}
-DEFAULT_ERROR_HANDLING = {"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0}
+DEFAULT_ERROR_HANDLING = {
+    "enabled": False,
+    "max_bad_records": 0,
+    "max_bad_percent": 0.0,
+}
 DEFAULT_SCHEMA = {"rename_map": {}, "column_order": None}
 
 
@@ -60,7 +64,9 @@ def _pattern_from_bronze_path(bronze_path: str) -> str:
     return match.group(1)
 
 
-def _expected_artifact_names(model: SilverModel, silver_cfg: Dict[str, object]) -> List[str]:
+def _expected_artifact_names(
+    model: SilverModel, silver_cfg: Dict[str, object]
+) -> List[str]:
     artifact_names = {
         "full_snapshot": silver_cfg["full_output_name"],
         "cdc": silver_cfg["cdc_output_name"],
@@ -80,7 +86,9 @@ def _expected_artifact_names(model: SilverModel, silver_cfg: Dict[str, object]) 
 @pytest.fixture(scope="module")
 def silver_metadata_files() -> List[Path]:
     if not SILVER_ROOT.exists():
-        pytest.skip("Silver samples are missing; run scripts/generate_silver_samples.py")
+        pytest.skip(
+            "Silver samples are missing; run scripts/generate_silver_samples.py"
+        )
     return list(SILVER_ROOT.rglob("_metadata.json"))
 
 
@@ -90,7 +98,9 @@ def test_silver_metadata_matches_config(silver_metadata_files: List[Path]) -> No
     for metadata_path in silver_metadata_files:
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         silver_model = SilverModel(metadata["silver_model"])
-        expected_cfg = _load_expected_silver_config(_pattern_from_bronze_path(metadata["bronze_path"]))
+        expected_cfg = _load_expected_silver_config(
+            _pattern_from_bronze_path(metadata["bronze_path"])
+        )
 
         assert metadata["write_parquet"] is True
         assert metadata["write_csv"] is True
@@ -100,7 +110,9 @@ def test_silver_metadata_matches_config(silver_metadata_files: List[Path]) -> No
         assert metadata["entity"] == expected_cfg["entity"]
         assert metadata["version"] == expected_cfg["version"]
         assert metadata["load_partition_name"] == expected_cfg["load_partition_name"]
-        assert metadata["include_pattern_folder"] == expected_cfg["include_pattern_folder"]
+        assert (
+            metadata["include_pattern_folder"] == expected_cfg["include_pattern_folder"]
+        )
         assert metadata["primary_keys"] == expected_cfg["primary_keys"]
         assert metadata["order_column"] == expected_cfg["order_column"]
         assert metadata["normalization"] == expected_cfg["normalization"]
@@ -112,4 +124,7 @@ def test_silver_metadata_matches_config(silver_metadata_files: List[Path]) -> No
         assert artifact_keys == expected_artifacts
         for artifact_name in expected_artifacts:
             output_files = metadata["artifacts"][artifact_name]
-            assert set(output_files) == {f"{artifact_name}.parquet", f"{artifact_name}.csv"}
+            assert set(output_files) == {
+                f"{artifact_name}.parquet",
+                f"{artifact_name}.csv",
+            }

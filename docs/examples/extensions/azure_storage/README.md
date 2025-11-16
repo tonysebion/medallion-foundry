@@ -36,11 +36,11 @@ Edit `core/storage.py` and update the `get_storage_backend()` function:
 def get_storage_backend(config: Dict[str, Any]) -> StorageBackend:
     """Factory function to get appropriate storage backend."""
     backend_type = config.get("bronze", {}).get("storage_backend", "s3")
-    
+
     if backend_type == "s3":
         from core.s3 import S3Storage
         return S3Storage(config)
-    
+
     elif backend_type == "azure":
         # Azure backend (optional, requires azure-storage-blob)
         try:
@@ -51,7 +51,7 @@ def get_storage_backend(config: Dict[str, Any]) -> StorageBackend:
                 "Azure storage backend requires azure dependencies. "
                 "Install with: pip install -r requirements-azure.txt"
             ) from e
-    
+
     # ... rest of backends ...
 ```
 
@@ -131,27 +131,27 @@ The framework already provides the `StorageBackend` abstract base class in `core
 ```python
 class StorageBackend(ABC):
     """Abstract base class for storage backends."""
-    
+
     @abstractmethod
     def upload_file(self, local_path: str, remote_path: str) -> bool:
         """Upload a file to remote storage."""
         pass
-    
+
     @abstractmethod
     def download_file(self, remote_path: str, local_path: str) -> bool:
         """Download a file from remote storage."""
         pass
-    
+
     @abstractmethod
     def list_files(self, prefix: str) -> List[str]:
         """List files with given prefix."""
         pass
-    
+
     @abstractmethod
     def delete_file(self, remote_path: str) -> bool:
         """Delete a file from remote storage."""
         pass
-    
+
     @abstractmethod
     def get_backend_type(self) -> str:
         """Get backend type identifier."""
@@ -192,23 +192,23 @@ platform:
     storage_backend: "azure"  # Select Azure backend
     azure_container: "bronze" # Container name (like S3 bucket)
     azure_prefix: "bronze"    # Optional path prefix
-    
+
   azure_connection:
     # Choose ONE authentication method:
-    
+
     # Method 1: Connection string (easiest)
     connection_string_env: "AZURE_STORAGE_CONNECTION_STRING"
-    
+
     # Method 2: Account key
     # account_name_env: "AZURE_STORAGE_ACCOUNT"
     # account_key_env: "AZURE_STORAGE_KEY"
-    
+
     # Method 3: Service principal (production)
     # account_name_env: "AZURE_STORAGE_ACCOUNT"
     # tenant_id_env: "AZURE_TENANT_ID"
     # client_id_env: "AZURE_CLIENT_ID"
     # client_secret_env: "AZURE_CLIENT_SECRET"
-    
+
     # Method 4: Managed identity
     # account_name_env: "AZURE_STORAGE_ACCOUNT"
     # use_managed_identity: true

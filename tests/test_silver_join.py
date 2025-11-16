@@ -43,7 +43,9 @@ def test_perform_join_streaming_with_progress(tmp_path: Path) -> None:
 
     join_pairs = [("id", "id")]
     chunk_size = 2
-    joined, stats, column_origin, join_metrics = perform_join(left, right, join_pairs, chunk_size, output_cfg, tracker)
+    joined, stats, column_origin, join_metrics = perform_join(
+        left, right, join_pairs, chunk_size, output_cfg, tracker
+    )
 
     expected = pd.merge(
         left,
@@ -70,8 +72,12 @@ def test_build_input_audit_reads_bronze_metadata(tmp_path: Path) -> None:
     bronze_dir.mkdir()
     bronze_metadata = {"record_count": 5, "load_pattern": "full"}
     checksum_manifest = {"files": [{"path": "chunk-0001.csv", "hash": "abc123"}]}
-    (bronze_dir / "_metadata.json").write_text(json.dumps(bronze_metadata), encoding="utf-8")
-    (bronze_dir / "_checksums.json").write_text(json.dumps(checksum_manifest), encoding="utf-8")
+    (bronze_dir / "_metadata.json").write_text(
+        json.dumps(bronze_metadata), encoding="utf-8"
+    )
+    (bronze_dir / "_checksums.json").write_text(
+        json.dumps(checksum_manifest), encoding="utf-8"
+    )
     meta = {
         "silver_path": "silver",
         "bronze_path": str(bronze_dir),
@@ -101,7 +107,9 @@ def test_projection_limits_columns(tmp_path: Path) -> None:
     join_pairs = [("key", "key")]
     tracker = JoinProgressTracker(tmp_path / "progress")
 
-    joined, stats, column_origin, join_metrics = perform_join(left, right, join_pairs, 1, output_cfg, tracker)
+    joined, stats, column_origin, join_metrics = perform_join(
+        left, right, join_pairs, 1, output_cfg, tracker
+    )
     projected, lineage = apply_projection(joined, output_cfg, column_origin)
     assert list(projected.columns) == ["key", "currency"]
     assert stats.chunk_count == 1
@@ -128,7 +136,9 @@ def test_projection_dict_with_alias(tmp_path: Path) -> None:
     join_pairs = [("key", "key")]
     tracker = JoinProgressTracker(tmp_path / "progress")
 
-    joined, stats, column_origin, join_metrics = perform_join(left, right, join_pairs, 1, output_cfg, tracker)
+    joined, stats, column_origin, join_metrics = perform_join(
+        left, right, join_pairs, 1, output_cfg, tracker
+    )
     projected, lineage = apply_projection(joined, output_cfg, column_origin)
     assert list(projected.columns) == ["metric", "othervalue"]
     assert stats.chunk_count == 1
@@ -146,18 +156,24 @@ def test_datetime_alignment_preserves_timezone(tmp_path: Path) -> None:
     right = pd.DataFrame(
         {
             "key": [1],
-            "event_time": [pd.to_datetime("2024-01-01T00:00:00").tz_localize("US/Eastern")],
+            "event_time": [
+                pd.to_datetime("2024-01-01T00:00:00").tz_localize("US/Eastern")
+            ],
         }
     )
     output_cfg = {"join_type": "inner", "chunk_size": 1}
     join_pairs = [("key", "key")]
     tracker = JoinProgressTracker(tmp_path / "progress")
 
-    joined, stats, column_origin, join_metrics = perform_join(left, right, join_pairs, 1, output_cfg, tracker)
+    joined, stats, column_origin, join_metrics = perform_join(
+        left, right, join_pairs, 1, output_cfg, tracker
+    )
     projected, lineage = apply_projection(joined, output_cfg, column_origin)
     assert projected["event_time"].dt.tz == left["event_time"].dt.tz
     event_entry = next(entry for entry in lineage if entry["column"] == "event_time")
-    right_entry = next(entry for entry in lineage if entry["column"] == "event_time_right")
+    right_entry = next(
+        entry for entry in lineage if entry["column"] == "event_time_right"
+    )
     assert event_entry["source"] == "left"
     assert right_entry["source"] == "right"
 
@@ -176,7 +192,12 @@ def test_order_inputs_by_reference() -> None:
         {"reference_mode": {"role": "delta"}, "run_date": "2025-11-14"},
         "delta_path",
     )
-    auto_entry = ({"path": "auto"}, base_df, {"reference_mode": None, "run_date": "2025-11-13"}, "auto_path")
+    auto_entry = (
+        {"path": "auto"},
+        base_df,
+        {"reference_mode": None, "run_date": "2025-11-13"},
+        "auto_path",
+    )
     ordered = _order_inputs_by_reference([reference_entry, delta_entry, auto_entry])
     assert ordered[0][3] == "auto_path"
     assert ordered[1][3] == "delta_path"
@@ -236,7 +257,11 @@ def test_reference_metadata_in_join_output(tmp_path: Path) -> None:
 
     tracker = JoinProgressTracker(tmp_path / "progress")
     join_pairs = [("key", "key")]
-    output_cfg = {"formats": ["parquet"], "join_type": "inner", "checkpoint_dir": str(tmp_path / ".join_progress")}
+    output_cfg = {
+        "formats": ["parquet"],
+        "join_type": "inner",
+        "checkpoint_dir": str(tmp_path / ".join_progress"),
+    }
     joined, stats, column_origin, join_metrics = perform_join(
         left_df,
         right_df,
@@ -283,7 +308,9 @@ def test_reference_metadata_in_join_output(tmp_path: Path) -> None:
         quality_guards=guard_results,
         join_metrics=join_metrics,
     )
-    metadata_json = json.loads((metadata_out / "_metadata.json").read_text(encoding="utf-8"))
+    metadata_json = json.loads(
+        (metadata_out / "_metadata.json").read_text(encoding="utf-8")
+    )
     inputs = metadata_json.get("inputs", [])
     assert any(input_meta.get("reference_mode") for input_meta in inputs)
 
@@ -297,7 +324,10 @@ def test_delta_preferred_same_day_reference() -> None:
         "run_date": "2025-11-14",
     }
     ref_meta = dict(base_meta)
-    ref_meta["reference_mode"] = {"role": "reference", "reference_run_date": "2025-11-14"}
+    ref_meta["reference_mode"] = {
+        "role": "reference",
+        "reference_run_date": "2025-11-14",
+    }
     delta_meta = dict(base_meta)
     delta_meta["reference_mode"] = {"role": "delta", "reference_run_date": "2025-11-14"}
     left = pd.DataFrame({"key": [1], "value": ["a"]})

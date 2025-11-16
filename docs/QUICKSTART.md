@@ -312,7 +312,7 @@ source:
     endpoint: "/v1/data"
     auth_type: "bearer"
     auth_token_env: "MY_API_TOKEN"
-    
+
     pagination:
       type: "offset"
       page_size: 100

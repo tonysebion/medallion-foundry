@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Tuple
 
 import pandas as pd
 
-from core.patterns import LoadPattern
 from core.silver.models import SilverModel
 
 logger = logging.getLogger(__name__)
@@ -48,7 +47,9 @@ def apply_schema_settings(df: pd.DataFrame, schema_cfg: Dict[str, Any]) -> pd.Da
     if column_order:
         missing_order_cols = [col for col in column_order if col not in result.columns]
         if missing_order_cols:
-            logger.warning("schema.column_order missing columns: %s", missing_order_cols)
+            logger.warning(
+                "schema.column_order missing columns: %s", missing_order_cols
+            )
         ordered = [col for col in column_order if col in result.columns]
         remaining = [col for col in result.columns if col not in ordered]
         result = result[ordered + remaining]
@@ -56,7 +57,9 @@ def apply_schema_settings(df: pd.DataFrame, schema_cfg: Dict[str, Any]) -> pd.Da
     return result
 
 
-def normalize_dataframe(df: pd.DataFrame, normalization_cfg: Dict[str, Any]) -> pd.DataFrame:
+def normalize_dataframe(
+    df: pd.DataFrame, normalization_cfg: Dict[str, Any]
+) -> pd.DataFrame:
     trim_strings = normalization_cfg.get("trim_strings", False)
     empty_as_null = normalization_cfg.get("empty_strings_as_null", False)
 
@@ -65,9 +68,13 @@ def normalize_dataframe(df: pd.DataFrame, normalization_cfg: Dict[str, Any]) -> 
         object_cols = result.select_dtypes(include="object").columns
         for col in object_cols:
             if trim_strings:
-                result[col] = result[col].apply(lambda val: val.strip() if isinstance(val, str) else val)
+                result[col] = result[col].apply(
+                    lambda val: val.strip() if isinstance(val, str) else val
+                )
             if empty_as_null:
-                result[col] = result[col].apply(lambda val: None if isinstance(val, str) and val == "" else val)
+                result[col] = result[col].apply(
+                    lambda val: None if isinstance(val, str) and val == "" else val
+                )
     return result
 
 
@@ -75,14 +82,18 @@ def _sanitize_partition_value(value: Any) -> str:
     return re.sub(r"[^0-9A-Za-z._-]", "_", str(value))
 
 
-def partition_dataframe(df: pd.DataFrame, partition_columns: List[str]) -> List[Tuple[List[str], pd.DataFrame]]:
+def partition_dataframe(
+    df: pd.DataFrame, partition_columns: List[str]
+) -> List[Tuple[List[str], pd.DataFrame]]:
     if not partition_columns:
         return [([], df)]
 
     partitions = [([], df)]
     for column in partition_columns:
         if column not in df.columns:
-            logger.warning("Partition column '%s' not found; skipping this column", column)
+            logger.warning(
+                "Partition column '%s' not found; skipping this column", column
+            )
             continue
         new_partitions: List[Tuple[List[str], pd.DataFrame]] = []
         for path_parts, subset in partitions:
@@ -103,12 +114,16 @@ def handle_error_rows(
 ) -> pd.DataFrame:
     if not error_cfg.get("enabled") or not primary_keys:
         if error_cfg.get("enabled") and not primary_keys:
-            logger.warning("Error handling enabled but no primary_keys specified; skipping validation")
+            logger.warning(
+                "Error handling enabled but no primary_keys specified; skipping validation"
+            )
         return df
 
     missing_cols = [col for col in primary_keys if col not in df.columns]
     if missing_cols:
-        logger.warning("Primary key columns %s not found; skipping error handling", missing_cols)
+        logger.warning(
+            "Primary key columns %s not found; skipping error handling", missing_cols
+        )
         return df
 
     invalid_mask = df[primary_keys].isnull().any(axis=1)
@@ -128,7 +143,9 @@ def handle_error_rows(
     max_records = error_cfg.get("max_bad_records", 0)
     max_percent = error_cfg.get("max_bad_percent", 0.0)
 
-    if (max_records == 0 and invalid_count > 0) or (invalid_count > max_records and percent > max_percent):
+    if (max_records == 0 and invalid_count > 0) or (
+        invalid_count > max_records and percent > max_percent
+    ):
         raise ValueError(
             f"Error threshold exceeded for {dataset_name}: {invalid_count} invalid rows ({percent:.2f}%)"
         )
@@ -171,6 +188,7 @@ def _write_dataset(
             _atomic_replace(tmp_path, final_path)
             files.append(final_path)
     return files
+
 
 def _write_dataset_chunk(
     df: pd.DataFrame,
@@ -228,14 +246,22 @@ class DatasetWriter:
         self.parquet_compression = parquet_compression
 
     def write_dataset(self, dataset_name: str, dataset_df: pd.DataFrame) -> List[Path]:
-        partitions = partition_dataframe(dataset_df, self.partition_columns) or [([], dataset_df)]
+        partitions = partition_dataframe(dataset_df, self.partition_columns) or [
+            ([], dataset_df)
+        ]
         written_files: List[Path] = []
 
         for path_parts, partition_df in partitions:
             target_dir = self.base_dir
             for part in path_parts:
                 target_dir = target_dir / part
-            cleaned_df = handle_error_rows(partition_df, self.primary_keys, self.error_cfg, dataset_name, target_dir)
+            cleaned_df = handle_error_rows(
+                partition_df,
+                self.primary_keys,
+                self.error_cfg,
+                dataset_name,
+                target_dir,
+            )
             written_files.extend(
                 _write_dataset(
                     cleaned_df,
@@ -252,15 +278,25 @@ class DatasetWriter:
 
         return written_files
 
-    def write_dataset_chunk(self, dataset_name: str, dataset_df: pd.DataFrame, chunk_tag: str) -> List[Path]:
+    def write_dataset_chunk(
+        self, dataset_name: str, dataset_df: pd.DataFrame, chunk_tag: str
+    ) -> List[Path]:
         """Write a chunk of a dataset with partition/error policies, suffixing filenames."""
-        partitions = partition_dataframe(dataset_df, self.partition_columns) or [([], dataset_df)]
+        partitions = partition_dataframe(dataset_df, self.partition_columns) or [
+            ([], dataset_df)
+        ]
         written_files: List[Path] = []
         for path_parts, partition_df in partitions:
             target_dir = self.base_dir
             for part in path_parts:
                 target_dir = target_dir / part
-            cleaned_df = handle_error_rows(partition_df, self.primary_keys, self.error_cfg, dataset_name, target_dir)
+            cleaned_df = handle_error_rows(
+                partition_df,
+                self.primary_keys,
+                self.error_cfg,
+                dataset_name,
+                target_dir,
+            )
             written_files.extend(
                 _write_dataset_chunk(
                     cleaned_df,
@@ -335,10 +371,14 @@ class SilverModelPlanner:
         if not self.order_column:
             raise ValueError("order_column is required for deduplicated Silver models")
         if self.order_column not in df.columns:
-            raise ValueError(f"order_column '{self.order_column}' not found in Bronze data")
+            raise ValueError(
+                f"order_column '{self.order_column}' not found in Bronze data"
+            )
         return build_current_view(df, self.primary_keys, self.order_column)
 
-    def _build_history_frame(self, df: pd.DataFrame, current_df: pd.DataFrame) -> pd.DataFrame:
+    def _build_history_frame(
+        self, df: pd.DataFrame, current_df: pd.DataFrame
+    ) -> pd.DataFrame:
         history = df.copy()
         if not self.primary_keys or not self.order_column:
             return history
@@ -379,5 +419,7 @@ def write_silver_outputs(
         write_csv=write_csv,
         parquet_compression=parquet_compression,
     )
-    planner = SilverModelPlanner(writer, primary_keys, order_column, artifact_names, silver_model)
+    planner = SilverModelPlanner(
+        writer, primary_keys, order_column, artifact_names, silver_model
+    )
     return planner.render(df)

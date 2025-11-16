@@ -25,7 +25,11 @@ def test_enforce_storage_scope_onprem_requires_metadata():
 
 
 def test_enforce_storage_scope_onprem_blocks_cloud_provider():
-    metadata = {"boundary": "onprem", "provider_type": "s3_cloud", "cloud_provider": None}
+    metadata = {
+        "boundary": "onprem",
+        "provider_type": "s3_cloud",
+        "cloud_provider": None,
+    }
     with pytest.raises(ValueError):
         enforce_storage_scope(_platform(metadata=metadata), "onprem")
 

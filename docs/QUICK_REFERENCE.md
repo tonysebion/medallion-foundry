@@ -349,12 +349,12 @@ source:
   type: "db"
   system: "postgres_prod"
   table: "orders"
-  
+
   db:
     conn_str_env: "POSTGRES_CONN"
     base_query: "SELECT * FROM orders"
     incremental_key: "updated_at"
-  
+
   run:
     max_file_size_mb: 256
     write_csv: false

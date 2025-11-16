@@ -35,7 +35,7 @@ examples/
 - Basic pagination
 - S3 upload
 
-**`db_example.yaml`** - SQL database extraction  
+**`db_example.yaml`** - SQL database extraction
 - ODBC connection
 - Incremental loading with cursors
 - Local output only

@@ -284,26 +284,26 @@ from pathlib import Path
 
 class TestMyFeature:
     """Test suite for MyFeature."""
-    
+
     @pytest.mark.unit
     def test_basic_functionality(self):
         """Test basic functionality."""
         # Arrange
         input_data = {"key": "value"}
-        
+
         # Act
         result = my_function(input_data)
-        
+
         # Assert
         assert result == expected_value
-    
+
     @pytest.mark.integration
     def test_with_external_service(self, tmp_path):
         """Test integration with external service."""
         # Use tmp_path fixture for temporary files
         config_file = tmp_path / "test.yaml"
         config_file.write_text("test: data")
-        
+
         # Test code here
         pass
 ```
@@ -329,7 +329,7 @@ def test_api_call():
     with patch('requests.get') as mock_get:
         mock_get.return_value.json.return_value = {"data": []}
         mock_get.return_value.status_code = 200
-        
+
         # Your test code here
         pass
 ```

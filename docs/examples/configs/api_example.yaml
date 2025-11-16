@@ -6,7 +6,7 @@ platform:
     # Storage backend: "s3", "azure", or "local"
     # Defaults to "s3" if not specified (for backward compatibility)
     storage_backend: "s3"
-    
+
     s3_bucket: "analytics-bronze"
     s3_prefix: "bronze"
     partitioning:

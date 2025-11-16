@@ -8,13 +8,18 @@ from typing import Optional, Dict, Any
 
 class BronzeFoundryError(Exception):
     """Base exception for all medallion-foundry errors."""
-    
+
     error_code: str = "ERR000"  # Override in subclasses
-    
-    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None, error_code: Optional[str] = None):
+
+    def __init__(
+        self,
+        message: str,
+        details: Optional[Dict[str, Any]] = None,
+        error_code: Optional[str] = None,
+    ):
         """
         Initialize medallion-foundry exception.
-        
+
         Args:
             message: Human-readable error message
             details: Optional dictionary with additional context
@@ -25,7 +30,7 @@ class BronzeFoundryError(Exception):
         self.details = details or {}
         if error_code:
             self.error_code = error_code
-    
+
     def __str__(self) -> str:
         """Return string representation with error code and details."""
         parts = [f"[{self.error_code}] {self.message}"]
@@ -37,20 +42,22 @@ class BronzeFoundryError(Exception):
 
 class ConfigValidationError(BronzeFoundryError):
     """Raised when configuration validation fails.
-    
+
     Examples:
         - Missing required configuration keys
         - Invalid configuration values
         - Type mismatches in configuration
         - Backend-specific validation failures
     """
-    
+
     error_code = "CFG001"
-    
-    def __init__(self, message: str, config_path: Optional[str] = None, key: Optional[str] = None):
+
+    def __init__(
+        self, message: str, config_path: Optional[str] = None, key: Optional[str] = None
+    ):
         """
         Initialize configuration validation error.
-        
+
         Args:
             message: Description of validation failure
             config_path: Path to config file that failed validation
@@ -58,15 +65,15 @@ class ConfigValidationError(BronzeFoundryError):
         """
         details = {}
         if config_path:
-            details['config_path'] = config_path
+            details["config_path"] = config_path
         if key:
-            details['config_key'] = key
+            details["config_key"] = key
         super().__init__(message, details)
 
 
 class ExtractionError(BronzeFoundryError):
     """Raised when data extraction fails.
-    
+
     Examples:
         - API request failures
         - Database query errors
@@ -74,20 +81,20 @@ class ExtractionError(BronzeFoundryError):
         - Authentication errors
         - Data parsing errors
     """
-    
+
     error_code = "EXT001"
-    
+
     def __init__(
-        self, 
-        message: str, 
+        self,
+        message: str,
         extractor_type: Optional[str] = None,
         system: Optional[str] = None,
         table: Optional[str] = None,
-        original_error: Optional[Exception] = None
+        original_error: Optional[Exception] = None,
     ):
         """
         Initialize extraction error.
-        
+
         Args:
             message: Description of extraction failure
             extractor_type: Type of extractor (api, db, custom)
@@ -97,22 +104,22 @@ class ExtractionError(BronzeFoundryError):
         """
         details = {}
         if extractor_type:
-            details['extractor_type'] = extractor_type
+            details["extractor_type"] = extractor_type
         if system:
-            details['system'] = system
+            details["system"] = system
         if table:
-            details['table'] = table
+            details["table"] = table
         if original_error:
-            details['original_error'] = str(original_error)
-            details['error_type'] = type(original_error).__name__
-        
+            details["original_error"] = str(original_error)
+            details["error_type"] = type(original_error).__name__
+
         super().__init__(message, details)
         self.original_error = original_error
 
 
 class StorageError(BronzeFoundryError):
     """Raised when storage operations fail.
-    
+
     Examples:
         - S3 upload/download failures
         - Azure blob operations failures
@@ -120,9 +127,9 @@ class StorageError(BronzeFoundryError):
         - Permission errors
         - Network connectivity issues
     """
-    
+
     error_code = "STG001"
-    
+
     def __init__(
         self,
         message: str,
@@ -130,11 +137,11 @@ class StorageError(BronzeFoundryError):
         operation: Optional[str] = None,
         file_path: Optional[str] = None,
         remote_path: Optional[str] = None,
-        original_error: Optional[Exception] = None
+        original_error: Optional[Exception] = None,
     ):
         """
         Initialize storage error.
-        
+
         Args:
             message: Description of storage failure
         backend_type: Storage backend type (s3, azure, local)
@@ -145,37 +152,42 @@ class StorageError(BronzeFoundryError):
         """
         details = {}
         if backend_type:
-            details['backend_type'] = backend_type
+            details["backend_type"] = backend_type
         if operation:
-            details['operation'] = operation
+            details["operation"] = operation
         if file_path:
-            details['file_path'] = file_path
+            details["file_path"] = file_path
         if remote_path:
-            details['remote_path'] = remote_path
+            details["remote_path"] = remote_path
         if original_error:
-            details['original_error'] = str(original_error)
-            details['error_type'] = type(original_error).__name__
-        
+            details["original_error"] = str(original_error)
+            details["error_type"] = type(original_error).__name__
+
         super().__init__(message, details)
         self.original_error = original_error
 
 
 class AuthenticationError(ExtractionError):
     """Raised when authentication fails.
-    
+
     Examples:
         - Invalid API token
         - Expired credentials
         - Missing environment variables for auth
         - OAuth token refresh failures
     """
-    
+
     error_code = "AUTH001"
-    
-    def __init__(self, message: str, auth_type: Optional[str] = None, env_var: Optional[str] = None):
+
+    def __init__(
+        self,
+        message: str,
+        auth_type: Optional[str] = None,
+        env_var: Optional[str] = None,
+    ):
         """
         Initialize authentication error.
-        
+
         Args:
             message: Description of authentication failure
             auth_type: Type of authentication (bearer, api_key, basic)
@@ -183,36 +195,36 @@ class AuthenticationError(ExtractionError):
         """
         details = {}
         if auth_type:
-            details['auth_type'] = auth_type
+            details["auth_type"] = auth_type
         if env_var:
-            details['env_var'] = env_var
-        
+            details["env_var"] = env_var
+
         super().__init__(message)
         self.details.update(details)
 
 
 class PaginationError(ExtractionError):
     """Raised when pagination logic fails.
-    
+
     Examples:
         - Missing pagination parameters in response
         - Infinite pagination loop detected
         - Invalid cursor value
         - Page size exceeds API limits
     """
-    
+
     error_code = "PAGE001"
-    
+
     def __init__(
         self,
         message: str,
         pagination_type: Optional[str] = None,
         page: Optional[int] = None,
-        cursor: Optional[str] = None
+        cursor: Optional[str] = None,
     ):
         """
         Initialize pagination error.
-        
+
         Args:
             message: Description of pagination failure
             pagination_type: Type of pagination (offset, page, cursor)
@@ -221,38 +233,38 @@ class PaginationError(ExtractionError):
         """
         details = {}
         if pagination_type:
-            details['pagination_type'] = pagination_type
+            details["pagination_type"] = pagination_type
         if page is not None:
-            details['page'] = page
+            details["page"] = page
         if cursor:
-            details['cursor'] = cursor
-        
+            details["cursor"] = cursor
+
         super().__init__(message)
         self.details.update(details)
 
 
 class StateManagementError(BronzeFoundryError):
     """Raised when state file operations fail.
-    
+
     Examples:
         - Cannot read/write state file
         - Corrupt state file
         - State file lock conflicts
         - Invalid cursor format
     """
-    
+
     error_code = "STATE001"
-    
+
     def __init__(
         self,
         message: str,
         state_file: Optional[str] = None,
         cursor_column: Optional[str] = None,
-        original_error: Optional[Exception] = None
+        original_error: Optional[Exception] = None,
     ):
         """
         Initialize state management error.
-        
+
         Args:
             message: Description of state management failure
             state_file: Path to state file
@@ -261,20 +273,20 @@ class StateManagementError(BronzeFoundryError):
         """
         details = {}
         if state_file:
-            details['state_file'] = state_file
+            details["state_file"] = state_file
         if cursor_column:
-            details['cursor_column'] = cursor_column
+            details["cursor_column"] = cursor_column
         if original_error:
-            details['original_error'] = str(original_error)
-            details['error_type'] = type(original_error).__name__
-        
+            details["original_error"] = str(original_error)
+            details["error_type"] = type(original_error).__name__
+
         super().__init__(message, details)
         self.original_error = original_error
 
 
 class DataQualityError(BronzeFoundryError):
     """Raised when data quality checks fail.
-    
+
     Examples:
         - Schema validation failures
         - Record count below minimum threshold
@@ -282,20 +294,20 @@ class DataQualityError(BronzeFoundryError):
         - Excessive null values
         - Data type mismatches
     """
-    
+
     error_code = "QUAL001"
-    
+
     def __init__(
         self,
         message: str,
         check_type: Optional[str] = None,
         expected: Optional[Any] = None,
         actual: Optional[Any] = None,
-        failed_records: Optional[int] = None
+        failed_records: Optional[int] = None,
     ):
         """
         Initialize data quality error.
-        
+
         Args:
             message: Description of data quality issue
             check_type: Type of quality check (schema, count, duplicates, nulls)
@@ -305,38 +317,38 @@ class DataQualityError(BronzeFoundryError):
         """
         details = {}
         if check_type:
-            details['check_type'] = check_type
+            details["check_type"] = check_type
         if expected is not None:
-            details['expected'] = expected
+            details["expected"] = expected
         if actual is not None:
-            details['actual'] = actual
+            details["actual"] = actual
         if failed_records is not None:
-            details['failed_records'] = failed_records
-        
+            details["failed_records"] = failed_records
+
         super().__init__(message, details)
 
 
 class RetryExhaustedError(BronzeFoundryError):
     """Raised when all retry attempts are exhausted.
-    
+
     Examples:
         - Network request failed after max retries
         - Temporary service outage
         - Rate limit exceeded
     """
-    
+
     error_code = "RETRY001"
-    
+
     def __init__(
         self,
         message: str,
         attempts: Optional[int] = None,
         operation: Optional[str] = None,
-        last_error: Optional[Exception] = None
+        last_error: Optional[Exception] = None,
     ):
         """
         Initialize retry exhausted error.
-        
+
         Args:
             message: Description of failure
             attempts: Number of attempts made
@@ -345,12 +357,12 @@ class RetryExhaustedError(BronzeFoundryError):
         """
         details = {}
         if attempts is not None:
-            details['attempts'] = attempts
+            details["attempts"] = attempts
         if operation:
-            details['operation'] = operation
+            details["operation"] = operation
         if last_error:
-            details['last_error'] = str(last_error)
-            details['error_type'] = type(last_error).__name__
-        
+            details["last_error"] = str(last_error)
+            details["error_type"] = type(last_error).__name__
+
         super().__init__(message, details)
         self.last_error = last_error

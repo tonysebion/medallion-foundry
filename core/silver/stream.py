@@ -19,8 +19,6 @@ from core.silver.models import SilverModel
 from core.silver.artifacts import (
     apply_schema_settings,
     normalize_dataframe,
-    partition_dataframe,
-    handle_error_rows,
     DatasetWriter,
 )
 from core.checkpoint import CheckpointManager
@@ -33,9 +31,9 @@ def _sanitize_partition_value(value: Any) -> str:
     return str(value).replace("/", "_").replace(" ", "_")
 
 
-
-
-def _iter_bronze_frames(bronze_path: Path, chunk_size: int = 0, prefetch: int = 0) -> Iterable[pd.DataFrame]:
+def _iter_bronze_frames(
+    bronze_path: Path, chunk_size: int = 0, prefetch: int = 0
+) -> Iterable[pd.DataFrame]:
     """Iterate Bronze frames with optional chunking & prefetch.
 
     chunk_size: if >0, read CSV files in chunks of this many rows.
@@ -115,12 +113,15 @@ def stream_silver_promotion(
         if run_opts.transform_processes > 0:
             # Simple multiprocessing wrapper: apply schema + normalization in a separate process
             import multiprocessing as mp
+
             def _transform(df_bytes: bytes) -> pd.DataFrame:
                 import pickle
+
                 df = pickle.loads(df_bytes)
                 df = apply_schema_settings(df, schema_cfg)
                 df = normalize_dataframe(df, normalization_cfg)
                 return df
+
             pickled = chunk.to_pickle(None)  # type: ignore[arg-type]
             with mp.Pool(processes=run_opts.transform_processes) as pool:
                 # Map single element list; could be extended for batch of chunks
@@ -135,22 +136,36 @@ def stream_silver_promotion(
 
         record_count += len(normalized)
         if not schema_snapshot:
-            schema_snapshot = [{"name": col, "dtype": str(dtype)} for col, dtype in normalized.dtypes.items()]
+            schema_snapshot = [
+                {"name": col, "dtype": str(dtype)}
+                for col, dtype in normalized.dtypes.items()
+            ]
 
         chunk_tag = f"{chunk_index:04d}"
 
         with trace_span("silver.stream.write_chunk"):
             if silver_model == SilverModel.PERIODIC_SNAPSHOT:
                 chunk_count += 1
-                outputs[full_name].extend(dataset_writer.write_dataset_chunk(full_name, normalized, chunk_tag))
+                outputs[full_name].extend(
+                    dataset_writer.write_dataset_chunk(full_name, normalized, chunk_tag)
+                )
             elif silver_model == SilverModel.INCREMENTAL_MERGE:
                 chunk_count += 1
-                outputs[cdc_name].extend(dataset_writer.write_dataset_chunk(cdc_name, normalized, chunk_tag))
+                outputs[cdc_name].extend(
+                    dataset_writer.write_dataset_chunk(cdc_name, normalized, chunk_tag)
+                )
             elif silver_model == SilverModel.SCD_TYPE_2:
                 chunk_count += 1
-                outputs[history_name].extend(dataset_writer.write_dataset_chunk(history_name, normalized, chunk_tag))
+                outputs[history_name].extend(
+                    dataset_writer.write_dataset_chunk(
+                        history_name, normalized, chunk_tag
+                    )
+                )
                 state.update(normalized)
-            elif silver_model in {SilverModel.SCD_TYPE_1, SilverModel.FULL_MERGE_DEDUPE}:
+            elif silver_model in {
+                SilverModel.SCD_TYPE_1,
+                SilverModel.FULL_MERGE_DEDUPE,
+            }:
                 state.update(normalized)
             else:
                 raise ValueError(f"Unsupported silver model '{silver_model.value}'")
@@ -164,7 +179,9 @@ def stream_silver_promotion(
             chunk_count += 1
             with trace_span("silver.stream.flush_current"):
                 outputs[current_name].extend(
-                    dataset_writer.write_dataset_chunk(current_name, current_df, f"current-{chunk_count:04d}")
+                    dataset_writer.write_dataset_chunk(
+                        current_name, current_df, f"current-{chunk_count:04d}"
+                    )
                 )
             record_count += len(current_df)
     elif silver_model == SilverModel.FULL_MERGE_DEDUPE:
@@ -173,7 +190,9 @@ def stream_silver_promotion(
             chunk_count += 1
             with trace_span("silver.stream.flush_full"):
                 outputs[full_name].extend(
-                    dataset_writer.write_dataset_chunk(full_name, full_df, f"full-{chunk_count:04d}")
+                    dataset_writer.write_dataset_chunk(
+                        full_name, full_df, f"full-{chunk_count:04d}"
+                    )
                 )
             record_count += len(full_df)
     elif silver_model == SilverModel.SCD_TYPE_2:
@@ -182,7 +201,9 @@ def stream_silver_promotion(
             chunk_count += 1
             with trace_span("silver.stream.flush_current"):
                 outputs[current_name].extend(
-                    dataset_writer.write_dataset_chunk(current_name, current_df, f"current-{chunk_count:04d}")
+                    dataset_writer.write_dataset_chunk(
+                        current_name, current_df, f"current-{chunk_count:04d}"
+                    )
                 )
             record_count += len(current_df)
 

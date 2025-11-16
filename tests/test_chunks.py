@@ -5,7 +5,12 @@ from typing import List, Tuple
 
 import pytest
 
-from core.runner.chunks import ChunkProcessor, ChunkWriter, ChunkWriterConfig, StoragePlan
+from core.runner.chunks import (
+    ChunkProcessor,
+    ChunkWriter,
+    ChunkWriterConfig,
+    StoragePlan,
+)
 
 
 class DummyBackend:
@@ -22,7 +27,9 @@ def _make_chunk() -> List[dict]:
 
 
 @pytest.mark.parametrize("include_parquet", [True, False])
-def test_chunk_writer_creates_files_and_uploads(tmp_path: Path, include_parquet: bool) -> None:
+def test_chunk_writer_creates_files_and_uploads(
+    tmp_path: Path, include_parquet: bool
+) -> None:
     """ChunkWriter should materialize CSV/Parquet artifacts and upload each file."""
     chunk = _make_chunk()
     backend = DummyBackend()

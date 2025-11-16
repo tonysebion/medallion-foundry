@@ -1,15 +1,15 @@
 import os
-import io
 import requests
 import pandas as pd
-from pathlib import Path
 import pytest
 
 
 pytestmark = pytest.mark.integration
 
 
-@pytest.mark.skipif(os.environ.get("RUN_SMOKE") != "1", reason="Set RUN_SMOKE=1 to run smoke tests")
+@pytest.mark.skipif(
+    os.environ.get("RUN_SMOKE") != "1", reason="Set RUN_SMOKE=1 to run smoke tests"
+)
 def test_public_api_jsonplaceholder_smoke():
     resp = requests.get("https://jsonplaceholder.typicode.com/posts", timeout=15)
     assert resp.status_code == 200
@@ -18,7 +18,9 @@ def test_public_api_jsonplaceholder_smoke():
     assert len(data) > 0
 
 
-@pytest.mark.skipif(os.environ.get("RUN_SMOKE") != "1", reason="Set RUN_SMOKE=1 to run smoke tests")
+@pytest.mark.skipif(
+    os.environ.get("RUN_SMOKE") != "1", reason="Set RUN_SMOKE=1 to run smoke tests"
+)
 def test_local_parquet_roundtrip(tmp_path):
     df = pd.DataFrame({"id": [1, 2, 3], "name": ["a", "b", "c"]})
     out = tmp_path / "sample.parquet"

@@ -7,8 +7,16 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from core.bronze.base import emit_bronze_metadata, infer_schema
-from core.bronze.plan import build_chunk_writer_config, compute_output_formats, resolve_load_pattern
-from core.catalog import report_quality_snapshot, report_run_metadata, report_schema_snapshot
+from core.bronze.plan import (
+    build_chunk_writer_config,
+    compute_output_formats,
+    resolve_load_pattern,
+)
+from core.catalog import (
+    report_quality_snapshot,
+    report_run_metadata,
+    report_schema_snapshot,
+)
 from core.context import RunContext
 from core.extractors.api_extractor import ApiExtractor
 from core.extractors.base import BaseExtractor
@@ -88,7 +96,9 @@ class ExtractJob:
 
         chunk_count, chunk_files = self._process_chunks(records)
         self.created_files.extend(chunk_files)
-        self._emit_metadata(record_count=len(records), chunk_count=chunk_count, cursor=new_cursor)
+        self._emit_metadata(
+            record_count=len(records), chunk_count=chunk_count, cursor=new_cursor
+        )
 
         logger.info("Finished Bronze extract run successfully")
         return 0
@@ -96,7 +106,11 @@ class ExtractJob:
     def _process_chunks(self, records: List[Dict[str, Any]]) -> tuple[int, List[Path]]:
         run_cfg = self.source_cfg["run"]
         self.load_pattern = self.load_pattern or resolve_load_pattern(run_cfg)
-        logger.info("Load pattern: %s (%s)", self.load_pattern.value, self.load_pattern.describe())
+        logger.info(
+            "Load pattern: %s (%s)",
+            self.load_pattern.value,
+            self.load_pattern.describe(),
+        )
 
         max_rows_per_file = int(run_cfg.get("max_rows_per_file", 0))
         max_file_size_mb = run_cfg.get("max_file_size_mb")
@@ -106,10 +120,14 @@ class ExtractJob:
         bronze_output = platform_cfg["bronze"]["output_defaults"]
         self.output_formats = compute_output_formats(run_cfg, bronze_output)
 
-        storage_enabled = run_cfg.get("storage_enabled", run_cfg.get("s3_enabled", False))
+        storage_enabled = run_cfg.get(
+            "storage_enabled", run_cfg.get("s3_enabled", False)
+        )
         storage_backend = get_storage_backend(platform_cfg) if storage_enabled else None
         if storage_backend:
-            logger.info("Initialized %s storage backend", storage_backend.get_backend_type())
+            logger.info(
+                "Initialized %s storage backend", storage_backend.get_backend_type()
+            )
 
         self._out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -129,7 +147,9 @@ class ExtractJob:
         chunk_files = processor.process(chunks)
         return len(chunks), chunk_files
 
-    def _emit_metadata(self, record_count: int, chunk_count: int, cursor: Optional[str]) -> None:
+    def _emit_metadata(
+        self, record_count: int, chunk_count: int, cursor: Optional[str]
+    ) -> None:
         reference_mode = self.source_cfg["run"].get("reference_mode")
         metadata_path = emit_bronze_metadata(
             self._out_dir,

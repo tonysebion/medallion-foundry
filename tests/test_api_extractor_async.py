@@ -42,9 +42,17 @@ def test_api_extractor_async_pagination(monkeypatch):
         def __exit__(self, exc_type, exc, tb):
             return False
 
-    monkeypatch.setattr("core.extractors.api_extractor.AsyncApiClient", lambda *args, **kwargs: DummyClient())
-    monkeypatch.setattr("core.extractors.api_extractor.RateLimiter.from_config", DummyLimiter.from_config)
-    monkeypatch.setattr("core.extractors.api_extractor.trace_span", lambda name: DummySpan())
+    monkeypatch.setattr(
+        "core.extractors.api_extractor.AsyncApiClient",
+        lambda *args, **kwargs: DummyClient(),
+    )
+    monkeypatch.setattr(
+        "core.extractors.api_extractor.RateLimiter.from_config",
+        DummyLimiter.from_config,
+    )
+    monkeypatch.setattr(
+        "core.extractors.api_extractor.trace_span", lambda name: DummySpan()
+    )
 
     async def _run():
         return await extractor._paginate_async(
@@ -85,9 +93,17 @@ def test_api_extractor_async_rate_limiter(monkeypatch):
                 return {"items": [{"id": 99}]}
 
         limiter = DummyLimiter()
-        monkeypatch.setattr("core.extractors.api_extractor.AsyncApiClient", lambda *args, **kwargs: DummyClient())
-        monkeypatch.setattr("core.extractors.api_extractor.RateLimiter.from_config", lambda *args, **kwargs: limiter)
-        monkeypatch.setattr("core.extractors.api_extractor.trace_span", lambda name: DummySpan())
+        monkeypatch.setattr(
+            "core.extractors.api_extractor.AsyncApiClient",
+            lambda *args, **kwargs: DummyClient(),
+        )
+        monkeypatch.setattr(
+            "core.extractors.api_extractor.RateLimiter.from_config",
+            lambda *args, **kwargs: limiter,
+        )
+        monkeypatch.setattr(
+            "core.extractors.api_extractor.trace_span", lambda name: DummySpan()
+        )
 
         response = await extractor._paginate_async(
             api_cfg["base_url"],

@@ -2,19 +2,24 @@
 
 Provides structured warning categories and helper to standardize messaging.
 """
+
 from __future__ import annotations
 import warnings
 from dataclasses import dataclass
 from typing import Optional
 
+
 class BronzeFoundryDeprecationWarning(DeprecationWarning):
     """Base category for deprecation notices."""
+
 
 class BronzeFoundryCompatibilityWarning(UserWarning):
     """Non-breaking compatibility fallback triggered."""
 
+
 warnings.simplefilter("default", BronzeFoundryDeprecationWarning)
 warnings.simplefilter("default", BronzeFoundryCompatibilityWarning)
+
 
 @dataclass(frozen=True)
 class DeprecationSpec:
@@ -33,4 +38,6 @@ def emit_deprecation(spec: DeprecationSpec) -> None:
 
 
 def emit_compat(message: str, code: str) -> None:
-    warnings.warn(f"[{code}] {message}", BronzeFoundryCompatibilityWarning, stacklevel=2)
+    warnings.warn(
+        f"[{code}] {message}", BronzeFoundryCompatibilityWarning, stacklevel=2
+    )

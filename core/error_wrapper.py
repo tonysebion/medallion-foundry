@@ -3,10 +3,11 @@
 Provides consistent error handling by mapping boto3, requests, azure, and other
 third-party exceptions into medallion-foundry's typed exception hierarchy.
 """
+
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Optional, Type, TypeVar
+from typing import Any, Callable, Optional, TypeVar
 
 from core.exceptions import (
     ExtractionError,
@@ -17,7 +18,7 @@ from core.exceptions import (
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 def wrap_storage_error(
@@ -28,17 +29,18 @@ def wrap_storage_error(
     remote_path: Optional[str] = None,
 ) -> Callable[..., T]:
     """Decorator to wrap storage backend exceptions.
-    
+
     Args:
         func: Function to wrap
         backend_type: Storage backend type (s3, azure, local)
         operation: Operation being performed (upload, download, list, delete)
         file_path: Local file path (if applicable)
         remote_path: Remote path (if applicable)
-        
+
     Returns:
         Wrapped function that raises StorageError on failures
     """
+
     def wrapper(*args: Any, **kwargs: Any) -> T:
         try:
             return func(*args, **kwargs)
@@ -56,7 +58,7 @@ def wrap_storage_error(
                 remote_path=remote_path,
                 original_error=exc,
             ) from exc
-    
+
     return wrapper
 
 
@@ -67,16 +69,17 @@ def wrap_extraction_error(
     table: Optional[str] = None,
 ) -> Callable[..., T]:
     """Decorator to wrap extraction exceptions.
-    
+
     Args:
         func: Function to wrap
         extractor_type: Type of extractor (api, db, file, custom)
         system: System name from config
         table: Table name from config
-        
+
     Returns:
         Wrapped function that raises ExtractionError on failures
     """
+
     def wrapper(*args: Any, **kwargs: Any) -> T:
         try:
             return func(*args, **kwargs)
@@ -93,24 +96,26 @@ def wrap_extraction_error(
                 table=table,
                 original_error=exc,
             ) from exc
-    
+
     return wrapper
 
 
-def wrap_requests_exception(exc: Exception, operation: str = "api_request") -> ExtractionError:
+def wrap_requests_exception(
+    exc: Exception, operation: str = "api_request"
+) -> ExtractionError:
     """Convert requests library exceptions to ExtractionError.
-    
+
     Args:
         exc: Original requests exception
         operation: Description of the operation
-        
+
     Returns:
         ExtractionError with context
     """
     # Try to import requests for type checking
     try:
         import requests
-        
+
         if isinstance(exc, requests.exceptions.Timeout):
             return ExtractionError(
                 f"API request timed out: {operation}",
@@ -124,7 +129,9 @@ def wrap_requests_exception(exc: Exception, operation: str = "api_request") -> E
                 original_error=exc,
             )
         elif isinstance(exc, requests.exceptions.HTTPError):
-            status_code = getattr(getattr(exc, 'response', None), 'status_code', 'unknown')
+            status_code = getattr(
+                getattr(exc, "response", None), "status_code", "unknown"
+            )
             if status_code in (401, 403):
                 return AuthenticationError(
                     f"Authentication failed (HTTP {status_code})",
@@ -137,7 +144,7 @@ def wrap_requests_exception(exc: Exception, operation: str = "api_request") -> E
             )
     except ImportError:
         pass
-    
+
     # Fallback for unknown exception types
     return ExtractionError(
         f"API request failed: {type(exc).__name__}: {exc}",
@@ -146,23 +153,27 @@ def wrap_requests_exception(exc: Exception, operation: str = "api_request") -> E
     )
 
 
-def wrap_boto3_exception(exc: Exception, operation: str, bucket: Optional[str] = None) -> StorageError:
+def wrap_boto3_exception(
+    exc: Exception, operation: str, bucket: Optional[str] = None
+) -> StorageError:
     """Convert boto3/botocore exceptions to StorageError.
-    
+
     Args:
         exc: Original boto3/botocore exception
         operation: Storage operation (upload, download, list, delete)
         bucket: S3 bucket name
-        
+
     Returns:
         StorageError with context
     """
     try:
         from botocore.exceptions import ClientError, BotoCoreError
-        
+
         if isinstance(exc, ClientError):
-            error_code = exc.response.get('Error', {}).get('Code', 'Unknown')
-            status_code = exc.response.get('ResponseMetadata', {}).get('HTTPStatusCode', 0)
+            error_code = exc.response.get("Error", {}).get("Code", "Unknown")
+            status_code = exc.response.get("ResponseMetadata", {}).get(
+                "HTTPStatusCode", 0
+            )
             return StorageError(
                 f"S3 operation failed: {error_code} (HTTP {status_code})",
                 backend_type="s3",
@@ -180,7 +191,7 @@ def wrap_boto3_exception(exc: Exception, operation: str, bucket: Optional[str] =
             )
     except ImportError:
         pass
-    
+
     return StorageError(
         f"S3 operation failed: {type(exc).__name__}: {exc}",
         backend_type="s3",
@@ -190,20 +201,22 @@ def wrap_boto3_exception(exc: Exception, operation: str, bucket: Optional[str] =
     )
 
 
-def wrap_azure_exception(exc: Exception, operation: str, container: Optional[str] = None) -> StorageError:
+def wrap_azure_exception(
+    exc: Exception, operation: str, container: Optional[str] = None
+) -> StorageError:
     """Convert Azure SDK exceptions to StorageError.
-    
+
     Args:
         exc: Original Azure exception
         operation: Storage operation (upload, download, list, delete)
         container: Azure container name
-        
+
     Returns:
         StorageError with context
     """
     try:
         from azure.core.exceptions import AzureError, ResourceNotFoundError
-        
+
         if isinstance(exc, ResourceNotFoundError):
             return StorageError(
                 f"Azure resource not found: {operation}",
@@ -222,7 +235,7 @@ def wrap_azure_exception(exc: Exception, operation: str, container: Optional[str
             )
     except ImportError:
         pass
-    
+
     return StorageError(
         f"Azure operation failed: {type(exc).__name__}: {exc}",
         backend_type="azure",

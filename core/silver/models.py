@@ -30,7 +30,9 @@ class SilverModel(str, Enum):
         for member in cls:
             if member.value == canonical:
                 return member
-        raise ValueError(f"Invalid silver.model '{raw}'. Valid options: {', '.join(cls.choices())}")
+        raise ValueError(
+            f"Invalid silver.model '{raw}'. Valid options: {', '.join(cls.choices())}"
+        )
 
     @classmethod
     def default_for_load_pattern(cls, pattern: LoadPattern) -> "SilverModel":
@@ -74,6 +76,7 @@ def resolve_profile(profile_name: str | None) -> "SilverModel" | None:
         return None
     key = profile_name.strip().lower()
     return MODEL_PROFILES.get(key)
+
 
 SILVER_MODEL_ALIASES: Mapping[str, str] = {
     "scd_type_1": "scd_type_1",

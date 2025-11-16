@@ -52,7 +52,9 @@ class FileExtractor(BaseExtractor):
         logger.info(f"Loading records from {file_path} as {file_format.upper()}")
 
         if file_format in {"csv", "tsv"}:
-            delimiter = file_cfg.get("delimiter") or ("\t" if file_format == "tsv" else ",")
+            delimiter = file_cfg.get("delimiter") or (
+                "\t" if file_format == "tsv" else ","
+            )
             records = self._read_csv(file_path, delimiter, file_cfg)
         elif file_format == "json":
             records = self._read_json(file_path, file_cfg)
@@ -77,24 +79,32 @@ class FileExtractor(BaseExtractor):
         logger.info(f"Loaded {len(records)} records from local file {file_path}")
         return records, None
 
-    def _read_csv(self, file_path: Path, delimiter: str, file_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _read_csv(
+        self, file_path: Path, delimiter: str, file_cfg: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         encoding = file_cfg.get("encoding", "utf-8")
         has_header = file_cfg.get("has_header", True)
         fieldnames = file_cfg.get("fieldnames")
 
         if not has_header and not fieldnames:
-            raise ValueError("CSV/TSV files without headers require 'fieldnames' in source.file config")
+            raise ValueError(
+                "CSV/TSV files without headers require 'fieldnames' in source.file config"
+            )
 
         with file_path.open("r", encoding=encoding, newline="") as handle:
             if has_header:
                 reader = csv.DictReader(handle, delimiter=delimiter)
             else:
-                reader = csv.DictReader(handle, fieldnames=fieldnames, delimiter=delimiter)
+                reader = csv.DictReader(
+                    handle, fieldnames=fieldnames, delimiter=delimiter
+                )
             records = [dict(row) for row in reader]
 
         return records
 
-    def _read_json(self, file_path: Path, file_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _read_json(
+        self, file_path: Path, file_cfg: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         encoding = file_cfg.get("encoding", "utf-8")
         data_path = file_cfg.get("json_path")
 
@@ -106,7 +116,9 @@ class FileExtractor(BaseExtractor):
                 if isinstance(data, dict):
                     data = data.get(part, [])
                 else:
-                    raise ValueError(f"Cannot follow json_path '{data_path}' in file {file_path}")
+                    raise ValueError(
+                        f"Cannot follow json_path '{data_path}' in file {file_path}"
+                    )
 
         if isinstance(data, list):
             return data
@@ -114,9 +126,13 @@ class FileExtractor(BaseExtractor):
         if isinstance(data, dict):
             return [data]
 
-        raise ValueError(f"JSON file {file_path} must contain an object or list of objects")
+        raise ValueError(
+            f"JSON file {file_path} must contain an object or list of objects"
+        )
 
-    def _read_json_lines(self, file_path: Path, file_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _read_json_lines(
+        self, file_path: Path, file_cfg: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         encoding = file_cfg.get("encoding", "utf-8")
         records: List[Dict[str, Any]] = []
 
@@ -128,7 +144,9 @@ class FileExtractor(BaseExtractor):
 
         return records
 
-    def _read_parquet(self, file_path: Path, file_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _read_parquet(
+        self, file_path: Path, file_cfg: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         columns = file_cfg.get("columns")
         df = pd.read_parquet(file_path, columns=columns)
         return df.to_dict(orient="records")

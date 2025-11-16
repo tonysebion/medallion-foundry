@@ -46,4 +46,3 @@
 ### Troubleshooting
 - If you see `BronzeFoundryCompatibilityWarning`, implement the required explicit config change.
 - For `BronzeFoundryDeprecationWarning`, plan to remediate before the stated removal version.
-

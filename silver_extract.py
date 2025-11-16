@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import itertools
 import json
 import logging
 import time
@@ -16,7 +15,11 @@ import pandas as pd
 
 from core.config import build_relative_path, load_configs
 from core.context import RunContext, build_run_context, load_run_context
-from core.io import write_batch_metadata, verify_checksum_manifest, write_checksum_manifest
+from core.io import (
+    write_batch_metadata,
+    verify_checksum_manifest,
+    write_checksum_manifest,
+)
 from core.logging_config import setup_logging
 from core.patterns import LoadPattern
 from core.paths import build_silver_partition_path
@@ -35,13 +38,10 @@ from core.silver.stream import stream_silver_promotion
 from core.deprecation import emit_deprecation, DeprecationSpec
 from core.silver.artifacts import (
     apply_schema_settings,
-    build_current_view,
     normalize_dataframe,
-    handle_error_rows,
-    partition_dataframe,
-    SilverModelPlanner,
 )
 from core.silver.writer import get_silver_writer
+
 
 # Backwards-compatible wrapper matching legacy public signature used in tests:
 # write_silver_outputs(df, output_dir, bronze_pattern, primary_keys, order_column, ...)
@@ -85,7 +85,11 @@ def write_silver_outputs(
         "current": "current",
     }
     partition_columns = partition_columns or []
-    error_cfg = error_cfg or {"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0}
+    error_cfg = error_cfg or {
+        "enabled": False,
+        "max_bad_records": 0,
+        "max_bad_percent": 0.0,
+    }
     return _artifact_write_silver_outputs(
         df,
         primary_keys,
@@ -99,6 +103,8 @@ def write_silver_outputs(
         silver_model,
         output_dir,
     )
+
+
 from core.silver.models import SilverModel
 
 logger = logging.getLogger(__name__)
@@ -119,7 +125,9 @@ def discover_load_pattern(bronze_path: Path) -> Optional[LoadPattern]:
             if pattern_value:
                 return LoadPattern.normalize(pattern_value)
         except Exception as exc:
-            logger.warning("Failed to read Bronze metadata at %s: %s", metadata_path, exc)
+            logger.warning(
+                "Failed to read Bronze metadata at %s: %s", metadata_path, exc
+            )
     return None
 
 
@@ -162,7 +170,11 @@ def _default_silver_cfg() -> Dict[str, Any]:
         "schema": {"rename_map": {}, "column_order": None},
         "normalization": {"trim_strings": False, "empty_strings_as_null": False},
         "partitioning": {"columns": []},
-        "error_handling": {"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0},
+        "error_handling": {
+            "enabled": False,
+            "max_bad_records": 0,
+            "max_bad_percent": 0.0,
+        },
         "primary_keys": [],
         "order_column": None,
         "write_parquet": True,
@@ -188,15 +200,21 @@ def _derive_bronze_path_from_config(cfg: Dict[str, Any], run_date: dt.date) -> P
     return (local_output_dir / relative_path).resolve()
 
 
-def _select_config(cfgs: List[Dict[str, Any]], source_name: Optional[str]) -> Dict[str, Any]:
+def _select_config(
+    cfgs: List[Dict[str, Any]], source_name: Optional[str]
+) -> Dict[str, Any]:
     if source_name:
-        matches = [cfg for cfg in cfgs if cfg["source"].get("config_name") == source_name]
+        matches = [
+            cfg for cfg in cfgs if cfg["source"].get("config_name") == source_name
+        ]
         if not matches:
             raise ValueError(f"No source named '{source_name}' found in config")
         return matches[0]
     if len(cfgs) == 1:
         return cfgs[0]
-    raise ValueError("Config contains multiple sources; specify --source-name to select one.")
+    raise ValueError(
+        "Config contains multiple sources; specify --source-name to select one."
+    )
 
 
 @dataclass
@@ -215,38 +233,82 @@ class PromotionOptions:
         load_pattern: LoadPattern,
     ) -> "PromotionOptions":
         schema_cfg = silver_cfg.get("schema", {"rename_map": {}, "column_order": None})
-        normalization_cfg = silver_cfg.get("normalization", {"trim_strings": False, "empty_strings_as_null": False})
-        error_cfg = silver_cfg.get("error_handling", {"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0})
+        normalization_cfg = silver_cfg.get(
+            "normalization", {"trim_strings": False, "empty_strings_as_null": False}
+        )
+        error_cfg = silver_cfg.get(
+            "error_handling",
+            {"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0},
+        )
 
         rename_map = schema_cfg.get("rename_map") or {}
 
-        cli_primary = parse_primary_keys(args.primary_key) if args.primary_key is not None else None
-        primary_keys_raw = list(cli_primary if cli_primary is not None else silver_cfg.get("primary_keys", []))
+        cli_primary = (
+            parse_primary_keys(args.primary_key)
+            if args.primary_key is not None
+            else None
+        )
+        primary_keys_raw = list(
+            cli_primary
+            if cli_primary is not None
+            else silver_cfg.get("primary_keys", [])
+        )
         primary_keys = [rename_map.get(pk, pk) for pk in primary_keys_raw]
 
         cli_order_column = args.order_column if args.order_column is not None else None
-        order_column_raw = cli_order_column if cli_order_column is not None else silver_cfg.get("order_column")
-        order_column = rename_map.get(order_column_raw, order_column_raw) if order_column_raw else None
+        order_column_raw = (
+            cli_order_column
+            if cli_order_column is not None
+            else silver_cfg.get("order_column")
+        )
+        order_column = (
+            rename_map.get(order_column_raw, order_column_raw)
+            if order_column_raw
+            else None
+        )
 
-        partition_columns = [rename_map.get(col, col) for col in silver_cfg.get("partitioning", {}).get("columns", [])]
+        partition_columns = [
+            rename_map.get(col, col)
+            for col in silver_cfg.get("partitioning", {}).get("columns", [])
+        ]
 
-        write_parquet = args.write_parquet if args.write_parquet is not None else silver_cfg.get("write_parquet", True)
-        write_csv = args.write_csv if args.write_csv is not None else silver_cfg.get("write_csv", False)
+        write_parquet = (
+            args.write_parquet
+            if args.write_parquet is not None
+            else silver_cfg.get("write_parquet", True)
+        )
+        write_csv = (
+            args.write_csv
+            if args.write_csv is not None
+            else silver_cfg.get("write_csv", False)
+        )
         if not write_parquet and not write_csv:
-            raise ValueError("At least one output format (Parquet or CSV) must be enabled")
+            raise ValueError(
+                "At least one output format (Parquet or CSV) must be enabled"
+            )
 
-        parquet_compression = args.parquet_compression if args.parquet_compression else silver_cfg.get("parquet_compression", "snappy")
+        parquet_compression = (
+            args.parquet_compression
+            if args.parquet_compression
+            else silver_cfg.get("parquet_compression", "snappy")
+        )
 
         artifact_names = {
-            "full_snapshot": args.full_output_name or silver_cfg.get("full_output_name", "full_snapshot"),
-            "cdc": args.cdc_output_name or silver_cfg.get("cdc_output_name", "cdc_changes"),
-            "current": args.current_output_name or silver_cfg.get("current_output_name", "current"),
-            "history": args.history_output_name or silver_cfg.get("history_output_name", "history"),
+            "full_snapshot": args.full_output_name
+            or silver_cfg.get("full_output_name", "full_snapshot"),
+            "cdc": args.cdc_output_name
+            or silver_cfg.get("cdc_output_name", "cdc_changes"),
+            "current": args.current_output_name
+            or silver_cfg.get("current_output_name", "current"),
+            "history": args.history_output_name
+            or silver_cfg.get("history_output_name", "history"),
         }
 
         run_options = RunOptions(
             load_pattern=load_pattern,
-            require_checksum=args.require_checksum if args.require_checksum is not None else silver_cfg.get("require_checksum", False),
+            require_checksum=args.require_checksum
+            if args.require_checksum is not None
+            else silver_cfg.get("require_checksum", False),
             write_parquet=write_parquet,
             write_csv=write_csv,
             parquet_compression=parquet_compression,
@@ -271,9 +333,13 @@ class PromotionOptions:
 
         if silver_model.requires_dedupe:
             if not primary_keys:
-                raise ValueError(f"{silver_model.describe()} requires silver.primary_keys to be defined")
+                raise ValueError(
+                    f"{silver_model.describe()} requires silver.primary_keys to be defined"
+                )
             if not order_column:
-                raise ValueError(f"{silver_model.describe()} requires silver.order_column to be defined")
+                raise ValueError(
+                    f"{silver_model.describe()} requires silver.order_column to be defined"
+                )
 
         return cls(
             run_options=run_options,
@@ -301,10 +367,14 @@ class PromotionContext:
 class SilverPromotionService:
     """High-level orchestrator for Silver CLI operations."""
 
-    def __init__(self, parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    def __init__(
+        self, parser: argparse.ArgumentParser, args: argparse.Namespace
+    ) -> None:
         self.parser = parser
         self.args = args
-        self._provided_run_context: Optional[RunContext] = load_run_context(args.run_context) if args.run_context else None
+        self._provided_run_context: Optional[RunContext] = (
+            load_run_context(args.run_context) if args.run_context else None
+        )
         if self._provided_run_context:
             self.cfg_list = [self._provided_run_context.cfg]
         else:
@@ -341,14 +411,20 @@ class SilverPromotionService:
             run_date = self._resolve_run_date()
             run_context = self._build_run_context(cfg, run_date)
         bronze_path = run_context.bronze_path
-        self._update_hook_context(bronze_path=str(bronze_path), run_date=run_context.run_date.isoformat())
+        self._update_hook_context(
+            bronze_path=str(bronze_path), run_date=run_context.run_date.isoformat()
+        )
         if not bronze_path.exists() or not bronze_path.is_dir():
-            raise FileNotFoundError(f"Bronze path '{bronze_path}' does not exist or is not a directory")
+            raise FileNotFoundError(
+                f"Bronze path '{bronze_path}' does not exist or is not a directory"
+            )
 
         load_pattern = self._resolve_load_pattern(cfg, bronze_path)
         run_context.load_pattern = load_pattern
         self._update_hook_context(load_pattern=load_pattern.value)
-        silver_partition = self._resolve_silver_partition(cfg, bronze_path, load_pattern, run_date)
+        silver_partition = self._resolve_silver_partition(
+            cfg, bronze_path, load_pattern, run_date
+        )
         logger.info("Bronze partition: %s", bronze_path)
         logger.info("Silver partition: %s", silver_partition)
         logger.info("Load pattern: %s", load_pattern.value)
@@ -371,21 +447,29 @@ class SilverPromotionService:
         run_start = time.perf_counter()
         run_opts = context.options.run_options
         if self.args.stream_mode:
-            outputs, chunk_count, record_count, schema_snapshot = stream_silver_promotion(
-                bronze_path,
-                silver_partition,
-                run_opts,
-                context.options.schema_cfg,
-                context.options.normalization_cfg,
-                context.options.error_cfg,
-                context.silver_model,
+            outputs, chunk_count, record_count, schema_snapshot = (
+                stream_silver_promotion(
+                    bronze_path,
+                    silver_partition,
+                    run_opts,
+                    context.options.schema_cfg,
+                    context.options.normalization_cfg,
+                    context.options.error_cfg,
+                    context.silver_model,
+                )
             )
-            logger.info("Streamed %s records from Bronze path %s", record_count, bronze_path)
+            logger.info(
+                "Streamed %s records from Bronze path %s", record_count, bronze_path
+            )
         else:
             df = load_bronze_records(bronze_path)
             normalized_df = apply_schema_settings(df, context.options.schema_cfg)
-            normalized_df = normalize_dataframe(normalized_df, context.options.normalization_cfg)
-            logger.info("Loaded %s records from Bronze path %s", len(normalized_df), bronze_path)
+            normalized_df = normalize_dataframe(
+                normalized_df, context.options.normalization_cfg
+            )
+            logger.info(
+                "Loaded %s records from Bronze path %s", len(normalized_df), bronze_path
+            )
             writer = get_silver_writer(run_opts.artifact_writer_kind)
             outputs = writer.write(
                 normalized_df,
@@ -401,7 +485,8 @@ class SilverPromotionService:
                 output_dir=silver_partition,
             )
             schema_snapshot = [
-                {"name": col, "dtype": str(dtype)} for col, dtype in normalized_df.dtypes.items()
+                {"name": col, "dtype": str(dtype)}
+                for col, dtype in normalized_df.dtypes.items()
             ]
             record_count = len(normalized_df)
             chunk_count = len(outputs)
@@ -432,10 +517,14 @@ class SilverPromotionService:
             self.parser.error("--config is required when using --validate-only")
         if self.args.source_name:
             cfg = _select_config(self.cfg_list, self.args.source_name)
-            logger.info("Silver configuration valid for %s", cfg["source"]["config_name"])
+            logger.info(
+                "Silver configuration valid for %s", cfg["source"]["config_name"]
+            )
         else:
             for cfg in self.cfg_list:
-                logger.info("Silver configuration valid for %s", cfg["source"]["config_name"])
+                logger.info(
+                    "Silver configuration valid for %s", cfg["source"]["config_name"]
+                )
 
     def _select_config(self) -> Optional[Dict[str, Any]]:
         if not self.cfg_list:
@@ -446,17 +535,23 @@ class SilverPromotionService:
             self.parser.error(str(exc))
 
     def _resolve_run_date(self) -> dt.date:
-        return dt.date.fromisoformat(self.args.date) if self.args.date else dt.date.today()
+        return (
+            dt.date.fromisoformat(self.args.date) if self.args.date else dt.date.today()
+        )
 
     def _build_run_context(self, cfg: Dict[str, Any], run_date: dt.date) -> RunContext:
         relative_path = build_relative_path(cfg, run_date)
-        local_output_dir = Path(cfg["source"]["run"].get("local_output_dir", "./output"))
+        local_output_dir = Path(
+            cfg["source"]["run"].get("local_output_dir", "./output")
+        )
         if self.args.bronze_path:
             bronze_path = Path(self.args.bronze_path).resolve()
         else:
             part = build_bronze_partition(cfg, run_date)
             bronze_path = (local_output_dir / part.relative_path()).resolve()
-        load_pattern_override = None if (self.args.pattern in (None, "auto")) else self.args.pattern
+        load_pattern_override = (
+            None if (self.args.pattern in (None, "auto")) else self.args.pattern
+        )
         return build_run_context(
             cfg,
             run_date,
@@ -466,12 +561,20 @@ class SilverPromotionService:
             bronze_path_override=bronze_path,
         )
 
-    def _resolve_load_pattern(self, cfg: Optional[Dict[str, Any]], bronze_path: Path) -> LoadPattern:
-        metadata_pattern = discover_load_pattern(bronze_path) if self.args.pattern == "auto" else None
+    def _resolve_load_pattern(
+        self, cfg: Optional[Dict[str, Any]], bronze_path: Path
+    ) -> LoadPattern:
+        metadata_pattern = (
+            discover_load_pattern(bronze_path) if self.args.pattern == "auto" else None
+        )
         if self.args.pattern != "auto":
             return LoadPattern.normalize(self.args.pattern)
 
-        config_pattern = LoadPattern.normalize(cfg["source"]["run"].get("load_pattern")) if cfg else LoadPattern.FULL
+        config_pattern = (
+            LoadPattern.normalize(cfg["source"]["run"].get("load_pattern"))
+            if cfg
+            else LoadPattern.FULL
+        )
         if metadata_pattern and cfg and metadata_pattern != config_pattern:
             logger.warning(
                 "Config load_pattern (%s) differs from Bronze metadata (%s); using metadata value",
@@ -488,15 +591,27 @@ class SilverPromotionService:
         load_pattern: LoadPattern,
         run_date: dt.date,
     ) -> Path:
-        silver_base = Path(self.args.silver_base).resolve() if self.args.silver_base else None
+        silver_base = (
+            Path(self.args.silver_base).resolve() if self.args.silver_base else None
+        )
         silver_cfg = cfg["silver"] if cfg else _default_silver_cfg()
 
-        domain, entity, version, load_partition_name, include_pattern_folder = self._extract_identity(cfg, silver_cfg)
-        self._silver_identity = (domain, entity, version, load_partition_name, include_pattern_folder)
+        domain, entity, version, load_partition_name, include_pattern_folder = (
+            self._extract_identity(cfg, silver_cfg)
+        )
+        self._silver_identity = (
+            domain,
+            entity,
+            version,
+            load_partition_name,
+            include_pattern_folder,
+        )
 
         if not silver_base:
             if cfg:
-                silver_base = Path(silver_cfg.get("output_dir", "./silver_output")).resolve()
+                silver_base = Path(
+                    silver_cfg.get("output_dir", "./silver_output")
+                ).resolve()
             else:
                 silver_base = Path("./silver_output").resolve()
 
@@ -569,7 +684,9 @@ class SilverPromotionService:
         if not context.options.run_options.require_checksum:
             return
         bronze_path = context.run_context.bronze_path
-        manifest = verify_checksum_manifest(bronze_path, expected_pattern=context.load_pattern.value)
+        manifest = verify_checksum_manifest(
+            bronze_path, expected_pattern=context.load_pattern.value
+        )
         manifest_path = bronze_path / "_checksums.json"
         logger.info(
             "Verified %s checksum entries from %s",
@@ -605,7 +722,9 @@ class SilverPromotionService:
                 "normalization": context.options.normalization_cfg,
                 "schema": context.options.schema_cfg,
                 "error_handling": context.options.error_cfg,
-                "artifacts": {label: [p.name for p in paths] for label, paths in outputs.items()},
+                "artifacts": {
+                    label: [p.name for p in paths] for label, paths in outputs.items()
+                },
                 "require_checksum": context.options.run_options.require_checksum,
                 "silver_model": context.silver_model.value,
             },
@@ -653,7 +772,10 @@ class SilverPromotionService:
         )
         logger.info("Wrote Silver checksum manifest to %s", manifest_path)
         report_schema_snapshot(dataset_id, schema_snapshot)
-        report_quality_snapshot(dataset_id, {"record_count": stats["record_count"], "artifact_count": len(files)})
+        report_quality_snapshot(
+            dataset_id,
+            {"record_count": stats["record_count"], "artifact_count": len(files)},
+        )
         run_metadata = {
             "load_pattern": context.load_pattern.value,
             "silver_partition": str(context.silver_partition),
@@ -670,7 +792,9 @@ class SilverPromotionService:
         }
         report_lineage(bronze_dataset, dataset_id, lineage_metadata)
 
-    def _fire_hooks(self, success: bool, extra: Optional[Dict[str, Any]] = None) -> None:
+    def _fire_hooks(
+        self, success: bool, extra: Optional[Dict[str, Any]] = None
+    ) -> None:
         payload: Dict[str, Any] = {
             **self._hook_context,
             "status": "success" if success else "failure",
@@ -680,10 +804,16 @@ class SilverPromotionService:
 
         if self._run_options:
             urls = (
-                self._run_options.on_success_webhooks if success else self._run_options.on_failure_webhooks
+                self._run_options.on_success_webhooks
+                if success
+                else self._run_options.on_failure_webhooks
             )
         else:
-            urls = self.args.on_success_webhook if success else self.args.on_failure_webhook
+            urls = (
+                self.args.on_success_webhook
+                if success
+                else self.args.on_failure_webhook
+            )
         fire_webhooks(urls, payload)
 
         event = "silver_promotion_completed" if success else "silver_promotion_failed"
@@ -776,7 +906,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Disable CSV output",
     )
     parser.set_defaults(write_csv=None)
-    parser.add_argument("--parquet-compression", help="Parquet compression codec (default: snappy)")
+    parser.add_argument(
+        "--parquet-compression", help="Parquet compression codec (default: snappy)"
+    )
     parser.add_argument(
         "--stream",
         dest="stream_mode",
@@ -813,8 +945,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Resume streaming mode by skipping chunks already processed (uses checkpoints)",
     )
     parser.add_argument("--full-output-name", help="Base name for full snapshot files")
-    parser.add_argument("--current-output-name", help="Base name for current view files")
-    parser.add_argument("--history-output-name", help="Base name for history view files")
+    parser.add_argument(
+        "--current-output-name", help="Base name for current view files"
+    )
+    parser.add_argument(
+        "--history-output-name", help="Base name for history view files"
+    )
     parser.add_argument("--cdc-output-name", help="Base name for CDC output files")
     parser.add_argument(
         "--require-checksum",
@@ -881,7 +1017,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
-    setup_logging(level=logging.DEBUG if args.verbose else logging.INFO, format_type=args.log_format)
+    setup_logging(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format_type=args.log_format,
+    )
 
     service = SilverPromotionService(parser, args)
     return service.execute()
