@@ -37,7 +37,7 @@ def test_perform_join_streaming_with_progress(tmp_path: Path) -> None:
 
     join_pairs = [("id", "id")]
     chunk_size = 2
-    joined, stats, column_origin = perform_join(left, right, join_pairs, chunk_size, output_cfg, tracker)
+    joined, stats, column_origin, join_metrics = perform_join(left, right, join_pairs, chunk_size, output_cfg, tracker)
 
     expected = pd.merge(
         left,
@@ -53,6 +53,7 @@ def test_perform_join_streaming_with_progress(tmp_path: Path) -> None:
     )
     assert stats.chunk_count == 2
     assert stats.right_only_rows == 1
+    assert len(join_metrics) == 2
     summary = tracker.summary()
     assert summary["chunks_processed"] == 2
     assert (tmp_path / "progress" / "progress.json").exists()
@@ -89,7 +90,7 @@ def test_projection_limits_columns(tmp_path: Path) -> None:
     join_pairs = [("key", "key")]
     tracker = JoinProgressTracker(tmp_path / "progress")
 
-    joined, stats, column_origin = perform_join(left, right, join_pairs, 1, output_cfg, tracker)
+    joined, stats, column_origin, join_metrics = perform_join(left, right, join_pairs, 1, output_cfg, tracker)
     projected, lineage = apply_projection(joined, output_cfg, column_origin)
     assert list(projected.columns) == ["key", "currency"]
     assert stats.chunk_count == 1
@@ -116,7 +117,7 @@ def test_projection_dict_with_alias(tmp_path: Path) -> None:
     join_pairs = [("key", "key")]
     tracker = JoinProgressTracker(tmp_path / "progress")
 
-    joined, stats, column_origin = perform_join(left, right, join_pairs, 1, output_cfg, tracker)
+    joined, stats, column_origin, join_metrics = perform_join(left, right, join_pairs, 1, output_cfg, tracker)
     projected, lineage = apply_projection(joined, output_cfg, column_origin)
     assert list(projected.columns) == ["metric", "othervalue"]
     assert stats.chunk_count == 1
@@ -141,7 +142,7 @@ def test_datetime_alignment_preserves_timezone(tmp_path: Path) -> None:
     join_pairs = [("key", "key")]
     tracker = JoinProgressTracker(tmp_path / "progress")
 
-    joined, stats, column_origin = perform_join(left, right, join_pairs, 1, output_cfg, tracker)
+    joined, stats, column_origin, join_metrics = perform_join(left, right, join_pairs, 1, output_cfg, tracker)
     projected, lineage = apply_projection(joined, output_cfg, column_origin)
     assert projected["event_time"].dt.tz == left["event_time"].dt.tz
     event_entry = next(entry for entry in lineage if entry["column"] == "event_time")

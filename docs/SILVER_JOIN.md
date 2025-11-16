@@ -53,6 +53,8 @@ The `output` block controls the join semantics:
 - `checkpoint_dir`: override where `progress.json` is written (defaults to `<output path>/.join_progress`). The tracker records the chunk index, row counts, and sample join keys so retries can pick up where the last successful chunk ended.
 - `join_key_pairs`: when the two Silver assets use different column names, map them explicitly. Each entry can be a string (matching names) or a mapping (`left`/`source` and `right`/`target`). If you omit this field, `silver_join` will try to infer the join keys from metadata/column intersections.
 - `performance_profile`: one of `auto`, `chunked`, or `single`. The default `auto` derives a chunk size from the source metadata, `chunked` forces a chunked merge even for small inputs, and `single` runs the join in a single batch regardless of size. You can still override `chunk_size` manually if you want precise control.
+- `join_strategy`: choose the join execution plan (`auto`, `broadcast`, `partitioned`, `hash`). Each strategy tweaks how the tool chops the left table and whether it treats the right input as partitioned or broadcast for very large datasets.
+- `spill_dir`: optional directory where right-hand partitions are spilled to disk (Parquet) while joins are running; useful for debugging heavy jobs without recomputing the same partitions.
 - `quality_guards`: safeguard the merged dataset with configurable checks (`row_count`, `null_ratio`, and `unique_keys`). Guard failures abort the run with a descriptive error and do not write outputs; successful guards are listed in `_metadata.json`.
 
 If you configure `select_columns`/`projection`, the join enforces that projection after the merge – missing column names raise an error, and the columns are written in the order you list them so downstream consumers always see a predictable output schema.
@@ -73,6 +75,8 @@ The CLI respects the same storage metadata policy as Bronze/Silver, so if you en
 
 `silver_join` now partitions the right-hand asset on the join keys so each chunk only touches the minimal set of rows that match the current left-hand slice. That partition-aware execution both limits duplicated scans of the right asset and makes the join safe for very large Silver sources. Each chunk writes a checkpoint (`progress.json` under the configured `checkpoint_dir`) that captures the chunk index, record count, and a sample of the join keys processed, making restarts more predictable and easier to debug.
 
+The emitted `_metadata.json` now also includes `quality_guards`, `join_metrics`, and chunk durations so your monitoring hooks can consume them directly rather than parsing logs when performance regressions happen.
+
 `silver_join` also aligns any shared datetime columns between the two inputs before the join runs. When both sides contain the same column name with timezone metadata, the right-hand values are converted to match the left-hand representation so you don’t need to manually cast or respecify time formats.
 
 ## Metadata & lineage
@@ -83,6 +87,7 @@ The resulting `_metadata.json` now includes several helper sections so auditors 
 - `progress`: the latest checkpoint summary (chunks processed, rows emitted, and the stored checkpoint path).
 - `join_stats`: chunk counts, how many right-hand partitions were matched, and how many right-only rows were appended.
 - `joined_sources`: the paths you supplied via the config so the run record shows what produced the data.
+- `join_metrics`: duration/row counts for each chunk plus right-side statistics so operations can measure performance regressions.
 - `column_lineage`: a list describing every output column (its source table, the original column name, and any alias you applied) so catalog tools can follow renamed fields back to their Bronze/Silver origins.
 
 This richer metadata makes it easier to understand when the join had to fall back to a more permissive Silver model, which chunks contributed rows, and how each Silver input maps back to its Bronze extraction.

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from itertools import islice
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+import time
 
 import pandas as pd
 import yaml
@@ -187,6 +188,7 @@ def _resolve_chunk_size(
     output_cfg: Dict[str, Any],
     left_df: pd.DataFrame,
     metadata_list: List[Dict[str, Any]],
+    join_strategy: str,
 ) -> int:
     explicit = output_cfg.get("chunk_size")
     if explicit is not None:
@@ -206,7 +208,14 @@ def _resolve_chunk_size(
     # auto profile
     if estimated <= 5000:
         return 0
-    return max(1000, min(40000, estimated // 6))
+    split = max(1000, min(40000, estimated // 6))
+    if join_strategy == "broadcast":
+        return 0
+    if join_strategy == "partitioned":
+        return max(1000, split)
+    if join_strategy == "hash":
+        return max(1000, min(20000, split // 2))
+    return split
 
 
 def _align_datetime_columns(left: pd.DataFrame, right: pd.DataFrame) -> None:
@@ -408,12 +417,15 @@ class JoinProgressTracker:
         self.total_records = 0
         self.recent_chunks: List[Dict[str, Any]] = []
 
-    def record_chunk(self, chunk_index: int, record_count: int, sample_keys: Iterable[Any]) -> None:
+    def record_chunk(
+        self, chunk_index: int, record_count: int, sample_keys: Iterable[Any], duration_seconds: float
+    ) -> None:
         self.chunks_processed = chunk_index
         self.total_records += record_count
         entry = {
             "chunk_index": chunk_index,
             "record_count": record_count,
+            "duration_seconds": duration_seconds,
             "sample_keys": [self._format_key(key) for key in islice(sample_keys, self.MAX_RECENT)],
         }
         self.recent_chunks.append(entry)
@@ -544,6 +556,13 @@ def select_model(requested_model: str | None, metadata_list: List[Dict[str, Any]
     raise ValueError("No suitable Silver model could be satisfied by the inputs")
 
 
+def _normalize_join_strategy(raw: str | None) -> str:
+    strategy = (raw or "auto").strip().lower()
+    if strategy not in {"auto", "broadcast", "partitioned", "hash"}:
+        raise ValueError("join_strategy must be auto, broadcast, partitioned, or hash")
+    return strategy
+
+
 def build_run_options(output_cfg: Dict[str, Any], metadata_list: List[Dict[str, Any]]) -> RunOptions:
     formats = {fmt.strip().lower() for fmt in output_cfg.get("formats", ["parquet"])}
     write_parquet = "parquet" in formats
@@ -574,7 +593,8 @@ def perform_join(
     chunk_size: int,
     output_cfg: Dict[str, Any],
     progress_tracker: Optional[JoinProgressTracker] = None,
-) -> Tuple[pd.DataFrame, JoinRunStats]:
+    spill_dir: Optional[Path] = None,
+) -> Tuple[pd.DataFrame, JoinRunStats, Dict[str, str], List[Dict[str, Any]]]:
     _align_datetime_columns(left, right)
     join_type = output_cfg.get("join_type", "inner").strip().lower()
     if join_type not in VALID_JOIN_TYPES:
@@ -598,17 +618,32 @@ def perform_join(
     chunk_frames: List[pd.DataFrame] = []
     chunk_count = 0
 
+    join_metrics: List[Dict[str, Any]] = []
     for chunk in chunk_dataframe(left_aligned, chunk_size):
         if chunk.empty:
             continue
         chunk_count += 1
+        start = time.perf_counter()
         key_set = _extract_join_key_set(chunk, canonical_keys)
         right_subset = cache.batch_for_keys(key_set)
+        if spill_dir:
+            spill_file = spill_dir / f"chunk_{chunk_count:04d}.parquet"
+            spill_dir.mkdir(parents=True, exist_ok=True)
+            right_subset.to_parquet(spill_file, index=False)
         merged_chunk = pd.merge(chunk, right_subset, how=join_type, on=canonical_keys, suffixes=DEFAULT_SUFFIXES)
+        duration = time.perf_counter() - start
+        join_metrics.append(
+            {
+                "chunk_index": chunk_count,
+                "record_count": len(merged_chunk),
+                "right_rows": len(right_subset),
+                "duration_seconds": duration,
+            }
+        )
         chunk_frames.append(merged_chunk)
         matched_right_keys.update(_extract_join_key_set(right_subset, canonical_keys))
         if progress_tracker:
-            progress_tracker.record_chunk(chunk_count, len(merged_chunk), key_set)
+            progress_tracker.record_chunk(chunk_count, len(merged_chunk), key_set, duration)
 
     all_right_keys = cache.all_keys()
     unmatched_keys = all_right_keys - matched_right_keys
@@ -638,7 +673,7 @@ def perform_join(
         unmatched_right_keys=len(unmatched_keys),
         right_only_rows=right_only_rows,
     )
-    return merged, stats, column_origin
+    return merged, stats, column_origin, join_metrics
 
 
 def _normalize_projection(raw: Any) -> List[Tuple[str, str]]:
@@ -758,6 +793,7 @@ def write_output(
     chunk_size: int,
     column_lineage: List[Dict[str, Any]],
     quality_guards: List[Dict[str, Any]],
+    join_metrics: List[Dict[str, Any]],
 ) -> None:
     base_dir.mkdir(parents=True, exist_ok=True)
     outputs = write_silver_outputs(
@@ -796,6 +832,7 @@ def write_output(
         "output_columns": list(df.columns),
         "column_lineage": column_lineage,
         "quality_guards": quality_guards,
+        "join_metrics": join_metrics,
     }
     write_batch_metadata(
         base_dir,
@@ -838,6 +875,10 @@ def main() -> int:
     metadata_list: List[Dict[str, Any]] = []
     source_paths: List[str] = [join_config["left"]["path"], join_config["right"]["path"]]
 
+    join_strategy = _normalize_join_strategy(output_cfg.get("join_strategy"))
+    spill_path = output_cfg.get("spill_dir")
+    spill_dir = Path(spill_path) if spill_path else None
+
     with tempfile.TemporaryDirectory(prefix="silver_join_") as workspace_dir:
         workspace = Path(workspace_dir)
         left_path = fetch_asset_local(join_config["left"], workspace, platform_cfg, args.storage_scope)
@@ -848,14 +889,15 @@ def main() -> int:
         left_df = read_silver_data(left_path)
         right_df = read_silver_data(right_path)
         join_pairs = _resolve_join_pairs(output_cfg, left_df, right_df, metadata_list)
-        chunk_size = _resolve_chunk_size(output_cfg, left_df, metadata_list)
-        joined_df, join_stats, column_origin = perform_join(
+        chunk_size = _resolve_chunk_size(output_cfg, left_df, metadata_list, join_strategy)
+        joined_df, join_stats, column_origin, join_metrics = perform_join(
             left_df,
             right_df,
             join_pairs,
             chunk_size,
             output_cfg,
             progress_tracker,
+            spill_dir,
         )
         joined_df, column_lineage = apply_projection(joined_df, output_cfg, column_origin)
         guard_results = run_quality_guards(joined_df, output_cfg.get("quality_guards", {}))
@@ -880,6 +922,7 @@ def main() -> int:
         chunk_size,
         column_lineage,
         guard_results,
+        join_metrics,
     )
     logger.info("Joined silver asset written to %s (model=%s)", output_cfg["path"], model.value)
     return 0

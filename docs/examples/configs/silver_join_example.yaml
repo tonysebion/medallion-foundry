@@ -24,3 +24,5 @@ silver_join:
       - left: order_id
         right: order_identifier
     performance_profile: auto
+    join_strategy: partitioned
+    spill_dir: ./output/silver_joined/spills
