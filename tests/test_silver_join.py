@@ -37,7 +37,7 @@ def test_perform_join_streaming_with_progress(tmp_path: Path) -> None:
         right,
         how="outer",
         on="id",
-        suffixes=("_x", "_y"),
+        suffixes=("", "_right"),
     )
     joined = joined[expected.columns]
     pdt.assert_frame_equal(

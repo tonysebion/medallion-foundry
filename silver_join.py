@@ -32,7 +32,7 @@ MODEL_FALLBACK_ORDER = [
     SilverModel.PERIODIC_SNAPSHOT,
     SilverModel.INCREMENTAL_MERGE,
 ]
-DEFAULT_SUFFIXES = ("_x", "_y")
+DEFAULT_SUFFIXES = ("", "_right")
 
 
 def parse_config(path: Path) -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -529,17 +529,46 @@ def _normalize_projection(raw: Any) -> List[Tuple[str, str]]:
     return entries
 
 
+def _resolve_projection_source(source: str, df: pd.DataFrame) -> str:
+    candidate = source
+    if "." in source:
+        side, col = source.split(".", 1)
+        side = side.lower()
+        if side in {"right", "target"}:
+            candidate = f"{col}_right"
+        elif side in {"left", "source"}:
+            candidate = col
+        else:
+            raise ValueError(f"Unknown projection side '{side}'")
+    if candidate in df.columns and f"{candidate}_right" not in df.columns:
+        return candidate
+    right_candidate = f"{candidate}_right"
+    if right_candidate in df.columns:
+        return right_candidate
+    if candidate in df.columns and right_candidate in df.columns:
+        raise ValueError(f"Ambiguous column '{candidate}'; use left. or right. qualifier")
+    raise ValueError(f"Column '{source}' not found in joined output")
+
+
 def apply_projection(df: pd.DataFrame, output_cfg: Dict[str, Any]) -> pd.DataFrame:
     raw = output_cfg.get("select_columns") or output_cfg.get("projection")
     projection = _normalize_projection(raw)
     if not projection:
         return df
-    missing = [src for src, _ in projection if src not in df.columns]
+    resolved: List[Tuple[str, str]] = []
+    missing: List[str] = []
+    for src, alias in projection:
+        try:
+            resolved_src = _resolve_projection_source(src, df)
+        except ValueError:
+            missing.append(str(src))
+            continue
+        resolved.append((resolved_src, alias))
     if missing:
         raise ValueError(f"Projection references missing columns: {missing}")
     rename_map: Dict[str, str] = {}
     selected_columns: List[str] = []
-    for src, alias in projection:
+    for src, alias in resolved:
         selected_columns.append(src)
         if alias != src:
             rename_map[src] = alias
