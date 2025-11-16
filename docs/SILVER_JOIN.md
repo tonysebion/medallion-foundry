@@ -48,7 +48,7 @@ The `output` block controls the join semantics:
 - `join_type`: controls the SQL-style merge (`inner`, `left`, `right`, `outer`); the default is `inner`.
 - `join_keys`: the business keys that appear in both inputs; at least one key is required.
 - `chunk_size`: optionally break the left-hand input into chunks to mitigate memory pressure before merging; set to `0` or omit to join in a single operation.
-- `select_columns`/`projection`: trim the output to a specific column order after the join so downstream Silver writers stay predictable.
+- `select_columns`/`projection`: trim the output to a specific column order after the join so downstream Silver writers stay predictable. You can include mappings (e.g., `{"source": "old_name", "alias": "new_name"}` or `{"old_name": "new_name"}`) to rename columns as part of that projection.
 - `checkpoint_dir`: override where `progress.json` is written (defaults to `<output path>/.join_progress`). The tracker records the chunk index, row counts, and sample join keys so retries can pick up where the last successful chunk ended.
 - `join_key_pairs`: when the two Silver assets use different column names, map them explicitly. Each entry can be a string (matching names) or a mapping (`left`/`source` and `right`/`target`). If you omit this field, `silver_join` will try to infer the join keys from metadata/column intersections.
 - `performance_profile`: one of `auto`, `chunked`, or `single`. The default `auto` derives a chunk size from the source metadata, `chunked` forces a chunked merge even for small inputs, and `single` runs the join in a single batch regardless of size. You can still override `chunk_size` manually if you want precise control.

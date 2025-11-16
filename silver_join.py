@@ -507,15 +507,46 @@ def perform_join(
     return merged, stats
 
 
+def _normalize_projection(raw: Any) -> List[Tuple[str, str]]:
+    if not raw:
+        return []
+    entries: List[Tuple[str, str]] = []
+    for item in raw:
+        if isinstance(item, str):
+            entries.append((item, item))
+            continue
+        if isinstance(item, dict):
+            if "source" in item:
+                src = item["source"]
+                alias = item.get("alias", src)
+            elif len(item) == 1:
+                src, alias = next(iter(item.items()))
+            else:
+                raise ValueError("Projection mappings must contain 'source' or a single key/value")
+            entries.append((str(src), str(alias)))
+            continue
+        raise ValueError("Projection entries must be strings or single key/value mappings")
+    return entries
+
+
 def apply_projection(df: pd.DataFrame, output_cfg: Dict[str, Any]) -> pd.DataFrame:
-    projection = output_cfg.get("select_columns") or output_cfg.get("projection")
+    raw = output_cfg.get("select_columns") or output_cfg.get("projection")
+    projection = _normalize_projection(raw)
     if not projection:
         return df
-    cols = [str(col) for col in projection]
-    missing = [col for col in cols if col not in df.columns]
+    missing = [src for src, _ in projection if src not in df.columns]
     if missing:
         raise ValueError(f"Projection references missing columns: {missing}")
-    return df[cols]
+    rename_map: Dict[str, str] = {}
+    selected_columns: List[str] = []
+    for src, alias in projection:
+        selected_columns.append(src)
+        if alias != src:
+            rename_map[src] = alias
+    result = df[selected_columns]
+    if rename_map:
+        result = result.rename(columns=rename_map)
+    return result
 
 
 def write_output(
