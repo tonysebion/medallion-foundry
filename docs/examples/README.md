@@ -219,4 +219,4 @@ For more details, see:
 
 ---
 
-Questions? Open an issue at https://github.com/bronze-factory/medallion-foundry/issues
+Questions? Open an issue at https://github.com/tonysebion/medallion-foundry/issues

@@ -6,4 +6,4 @@ Welcome to the documentation. Start with:
 - [Installation](INSTALLATION.md)
 - [First Production Run](FIRST_RUN_CHECKLIST.md)
 
-For project overview, see the repository [README](README.md).
+For project overview, see the repository README on GitHub.

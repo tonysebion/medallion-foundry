@@ -35,7 +35,7 @@ Complete documentation for medallion-foundry - a production-ready, config-driven
 
 ```bash
 # Clone the repository
-git clone https://github.com/bronze-factory/medallion-foundry.git
+git clone https://github.com/tonysebion/medallion-foundry.git
 cd medallion-foundry
 
 # Create virtual environment
@@ -1089,6 +1089,6 @@ MIT License - See LICENSE file for details
 ## Support
 
 For issues, questions, or contributions:
-- GitHub Issues: https://github.com/bronze-factory/medallion-foundry/issues
+- GitHub Issues: https://github.com/tonysebion/medallion-foundry/issues
 - Documentation: This file
 - Examples: `docs/examples/` directory

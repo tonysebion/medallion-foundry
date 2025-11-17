@@ -3,9 +3,9 @@
 site_name: medallion-foundry
 site_description: Config-driven Python framework for landing data into Bronze layer
 site_author: Bronze Foundry Contributors
-site_url: https://medallion-foundry.github.io/medallion-foundry/
-repo_name: medallion-foundry/medallion-foundry
-repo_url: https://github.com/medallion-foundry/medallion-foundry
+site_url: https://tonysebion.github.io/medallion-foundry/
+repo_name: tonysebion/medallion-foundry
+repo_url: https://github.com/tonysebion/medallion-foundry
 edit_uri: edit/main/docs/
 
 theme:
@@ -57,7 +57,6 @@ plugins:
 
 nav:
   - Home: index.md
-  - README: ../README.md
   - Getting Started:
     - Quick Start: QUICKSTART.md
     - Installation: INSTALLATION.md
@@ -91,7 +90,7 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/medallion-foundry/medallion-foundry
+      link: https://github.com/tonysebion/medallion-foundry
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/medallion-foundry/
 

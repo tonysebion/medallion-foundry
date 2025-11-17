@@ -46,7 +46,7 @@ def list_storage_backends() -> List[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Extract data from APIs or databases to Bronze layer",
-        epilog="For detailed documentation, see: https://github.com/medallion-foundry/medallion-foundry",
+        epilog="For detailed documentation, see: https://github.com/tonysebion/medallion-foundry",
     )
 
     # Core arguments

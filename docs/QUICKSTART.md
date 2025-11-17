@@ -19,13 +19,13 @@
 cd C:\Projects
 
 # Download the project
-git clone https://github.com/bronze-factory/medallion-foundry.git
+git clone https://github.com/tonysebion/medallion-foundry.git
 cd medallion-foundry
 ```
 
 **If you don't have Git:**
 
-1. Go to https://github.com/bronze-factory/medallion-foundry
+1. Go to https://github.com/tonysebion/medallion-foundry
 2. Click the green "Code" button
 3. Click "Download ZIP"
 4. Extract the ZIP file to `C:\Projects\medallion-foundry`
@@ -270,7 +270,7 @@ Your work is done! Give the data team:
 ### 1. Install
 ```powershell
 # Clone (if you haven't already)
-git clone https://github.com/bronze-factory/medallion-foundry.git
+git clone https://github.com/tonysebion/medallion-foundry.git
 cd medallion-foundry
 
 # Setup virtual environment
