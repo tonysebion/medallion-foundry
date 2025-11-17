@@ -1,7 +1,11 @@
 {
+    "python.defaultInterpreterPath": "./.venv/Scripts/python.exe",
     "python.testing.pytestArgs": [
-        "tests"
+        "tests",
+        "--tb=short"
     ],
     "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true
+    "python.testing.pytestEnabled": true,
+    "python.testing.autoTestDiscoverOnSaveEnabled": true,
+    "python.testing.cwd": "${workspaceFolder}"
 }
