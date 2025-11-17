@@ -1,5 +1,7 @@
 {
     "python.defaultInterpreterPath": "./.venv/Scripts/python.exe",
+    "python.venvPath": "./.venv",
+    "python.testing.pytestPath": "./.venv/Scripts/pytest.exe",
     "python.testing.pytestArgs": [
         "tests",
         "--tb=short"
@@ -7,5 +9,7 @@
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
     "python.testing.autoTestDiscoverOnSaveEnabled": true,
-    "python.testing.cwd": "${workspaceFolder}"
+    "python.testing.cwd": "${workspaceFolder}",
+    "python-envs.pythonProjects": [],
+    "makefile.configureOnOpen": false
 }
