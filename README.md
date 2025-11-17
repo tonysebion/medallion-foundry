@@ -74,7 +74,7 @@ This framework is intentionally lightweight and orchestration-neutral: you can r
 **Quick summary:**
 
 ```bash
-# 1. Setup (one-time, ~3 minutes)
+# 1. Setup (one-time, ~3 minutes), use a 64-bit install of python
 python -m venv .venv
 .venv\Scripts\activate  # Windows
 pip install -r requirements.txt
