@@ -69,19 +69,6 @@ platform:
 
 Values are environment variable **names**, not secrets themselves.
 
-### Optional: `platform.dlt`
-
-If you use `dlt` for state or more advanced pipelines, you can add a semantic section like:
-
-```yaml
-platform:
-  dlt:
-    enabled: true
-    pipeline_name_prefix: "api_bronze_"
-```
-
-The scaffold does not fully implement all dlt features; this section is here to standardize how you might configure it later.
-
 ## `source` section
 
 ### Common fields

@@ -37,8 +37,11 @@ This framework is intentionally lightweight and orchestration-neutral: you can r
 
 ## Architecture Principles
 
-- **Single CLI, many sources**
-  One entrypoint (`bronze_extract.py`) that reads a YAML config and chooses the appropriate extractor (`api`, `db`, or `custom`).
+- **Multiple CLIs, unified config-driven approach**
+  Three entrypoints handle the medallion architecture:
+  - `bronze_extract.py` – Extract data from APIs/databases to Bronze layer
+  - `silver_extract.py` – Promote Bronze data to Silver layer with transformations
+  - `silver_join.py` – Join Silver assets into curated datasets
 
 - **Standard Bronze layout**
   All data lands in a predictable directory structure (by default):
