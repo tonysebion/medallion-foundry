@@ -45,7 +45,7 @@ examples/
 - Extensibility example
 
 **`file_example*.yaml`** - Offline/full, CDC, and current+history examples
-- Point to `docs/examples/data/bronze_samples/...`
+- Point to `sampledata/source_samples/...`
 - Pair with `silver_extract.py` to test medallion layouts
 - Regenerate the sample input files anytime with `python scripts/generate_sample_data.py`
 

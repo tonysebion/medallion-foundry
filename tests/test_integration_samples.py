@@ -13,8 +13,8 @@ import pandas as pd
 import pytest
 import yaml
 
-BRONZE_SAMPLE_ROOT = Path("docs/examples/data/bronze_samples")
-BRONZE_EXAMPLE_ROOT = Path("docs/examples/data/bronze_examples")
+BRONZE_SAMPLE_ROOT = Path("sampledata/source_samples")
+BRONZE_EXAMPLE_ROOT = BRONZE_SAMPLE_ROOT
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GENERATE_SCRIPT = Path("scripts") / "generate_sample_data.py"
 
@@ -55,9 +55,8 @@ def _build_sample_path(
                 break
         if not tail:
             tail = [original_path.name]
-    config_root = BRONZE_EXAMPLE_ROOT / config_path.stem
     return (
-        config_root
+        BRONZE_SAMPLE_ROOT
         / pattern_dir
         / f"system={system}"
         / f"table={table}"

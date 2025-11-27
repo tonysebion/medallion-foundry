@@ -7,19 +7,11 @@ import json
 from datetime import datetime, date, timedelta, timezone
 from pathlib import Path
 from random import Random
-import shutil
 from typing import Iterable, List, Dict
 
-CONFIG_DIR = Path(__file__).resolve().parents[1] / "docs" / "examples" / "configs"
-EXAMPLE_DIR = Path(__file__).resolve().parents[1] / "docs" / "examples" / "data" / "bronze_examples"
-
-BASE_DIR = (
-    Path(__file__).resolve().parents[1]
-    / "docs"
-    / "examples"
-    / "data"
-    / "bronze_samples"
-)
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CONFIG_DIR = REPO_ROOT / "docs" / "examples" / "configs"
+BASE_DIR = REPO_ROOT / "sampledata" / "source_samples"
 
 
 FULL_DATES = ["2025-11-13", "2025-11-14"]
@@ -459,20 +451,6 @@ def main() -> None:
     generate_current_history()
     generate_hybrid_combinations()
     print(f"Sample datasets written under {BASE_DIR}")
-    _mirror_for_configs()
-
-
-def _mirror_for_configs() -> None:
-    if not BASE_DIR.exists():
-        return
-    EXAMPLE_DIR.mkdir(parents=True, exist_ok=True)
-    for config_path in CONFIG_DIR.glob("*.yaml"):
-        config_name = config_path.stem
-        target = EXAMPLE_DIR / config_name
-        if target.exists():
-            shutil.rmtree(target)
-        shutil.copytree(BASE_DIR, target)
-    print(f"Replicated bronze_samples under {EXAMPLE_DIR} for {len(list(CONFIG_DIR.glob('*.yaml')))} configs")
 
 
 if __name__ == "__main__":

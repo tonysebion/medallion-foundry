@@ -14,7 +14,7 @@ def ensure_bootstrap_samples(tmp_path_factory):
     Uses today's date for deterministic partition names already referenced
     in example configs. If data already exists, no changes are made.
     """
-    root = Path("docs/examples/data/bronze_samples")
+    root = Path("sampledata/source_samples")
     if not root.exists() or not any(root.rglob("*.csv")):
         bootstrap_samples([date.today().isoformat()])
 

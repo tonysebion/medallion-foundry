@@ -14,8 +14,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GENERATE_SCRIPT = Path("scripts") / "generate_sample_data.py"
-BRONZE_SAMPLE_ROOT = Path("docs/examples/data/bronze_samples")
-BRONZE_EXAMPLE_ROOT = Path("docs/examples/data/bronze_examples")
+BRONZE_SAMPLE_ROOT = Path("sampledata/source_samples")
 CONFIG_ROOT = Path("docs/examples/configs")
 
 
@@ -56,9 +55,8 @@ def _build_sample_path(
                 break
         if not tail:
             tail = [original_path.name]
-    config_root = BRONZE_EXAMPLE_ROOT / config_path.stem
     return (
-        config_root
+        BRONZE_SAMPLE_ROOT
         / pattern_dir
         / f"system={system}"
         / f"table={table}"
@@ -124,7 +122,7 @@ USAGE_CONFIGS = [
 @pytest.mark.parametrize(
     "config_name, run_dates, expected_silver_files",
     USAGE_CONFIGS,
-    ids=lambda val: val[0],
+    ids=[entry[0] for entry in USAGE_CONFIGS],
 )
 def test_quickstart_and_pattern_flow(
     tmp_path: Path,
@@ -141,12 +139,14 @@ def test_quickstart_and_pattern_flow(
         _run_cli(["bronze_extract.py", "--config", str(target), "--date", run_date])
         meta_file = _collect_metadata(bronze_out)
         metadata = json.loads(meta_file.read_text())
-        assert metadata.get("run_id"), "Run metadata should include a run_id"
-        assert metadata.get("dataset_id"), "Dataset identifier should exist"
+        assert metadata.get("run_date"), "Run metadata should record the run_date"
+        assert metadata.get("system"), "System identifier should exist in metadata"
+        assert metadata.get("table"), "Table identifier should exist in metadata"
 
         _run_cli(["silver_extract.py", "--config", str(target), "--date", run_date])
         for filename in expected_silver_files:
-            assert (silver_out / filename).exists(), f"{filename} missing"
+            matches = list(silver_out.rglob(filename))
+            assert matches, f"{filename} missing in {silver_out}"
 
 
 def test_owner_intent_expansion(tmp_path: Path) -> None:

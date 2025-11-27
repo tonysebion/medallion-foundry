@@ -6,7 +6,7 @@ from datetime import date
 from typing import Iterable
 import argparse
 
-BRONZE_ROOT = Path("docs/examples/data/bronze_samples").resolve()
+BRONZE_ROOT = Path("sampledata/source_samples").resolve()
 
 PATTERNS = {
     "full": "full-part-0001.csv",
