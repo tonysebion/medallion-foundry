@@ -33,29 +33,37 @@ def bronze_samples_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
 def _build_sample_path(
     bronze_dir: Path, cfg: dict, run_date: str, config_path: Path
 ) -> Path:
+    bronze_options = cfg.get("bronze", {}).get("options", {})
     if "source" in cfg:
-        pattern = cfg["source"]["run"].get("load_pattern", "full")
+        load_pattern = cfg["source"]["run"].get("load_pattern", "full")
+        pattern_dir = load_pattern
         system = cfg["source"]["system"]
         table = cfg["source"]["table"]
         filename = Path(cfg["source"]["file"]["path"]).name
+        tail = [filename]
     else:
-        pattern = (
-            cfg.get("bronze", {})
-            .get("options", {})
-            .get("load_pattern", "full")
-        )
+        load_pattern = bronze_options.get("load_pattern", "full")
+        pattern_dir = bronze_options.get("pattern_folder") or load_pattern
         system = cfg["system"]
         table = cfg["entity"]
-        filename = Path(cfg["bronze"].get("path_pattern", "sample.csv")).name
+        original_path = Path(cfg["bronze"].get("path_pattern", "sample.csv"))
+        tail: list[str] = []
+        parts = list(original_path.parts)
+        for idx, part in enumerate(parts):
+            if part.startswith("dt="):
+                tail = parts[idx + 1 :]
+                break
+        if not tail:
+            tail = [original_path.name]
     config_root = BRONZE_EXAMPLE_ROOT / config_path.stem
     return (
         config_root
-        / pattern
+        / pattern_dir
         / f"system={system}"
         / f"table={table}"
-        / f"pattern={pattern}"
+        / f"pattern={pattern_dir}"
         / f"dt={run_date}"
-        / filename
+        / Path(*tail)
     )
 
 
@@ -105,10 +113,11 @@ def _read_metadata(metadata_path: Path) -> dict:
 
 
 @pytest.mark.parametrize(
-    "config_name, pattern, expected_silver_files, run_dates",
+    "config_name, load_pattern, pattern_dir, expected_silver_files, run_dates",
     [
         (
             "file_example.yaml",
+            "full",
             "full",
             {"events.parquet"},
             ["2025-11-13", "2025-11-14"],
@@ -116,14 +125,65 @@ def _read_metadata(metadata_path: Path) -> dict:
         (
             "file_cdc_example.yaml",
             "cdc",
+            "cdc",
             {"events.parquet"},
             ["2025-11-13", "2025-11-14"],
         ),
         (
             "file_current_history_example.yaml",
             "current_history",
+            "current_history",
             {"state_history.parquet", "state_current.parquet"},
             ["2025-11-13", "2025-11-14"],
+        ),
+        (
+            "pattern_full.yaml",
+            "full",
+            "full",
+            {"events.parquet"},
+            ["2025-11-13"],
+        ),
+        (
+            "pattern_cdc.yaml",
+            "cdc",
+            "cdc",
+            {"events.parquet"},
+            ["2025-11-13"],
+        ),
+        (
+            "pattern_current_history.yaml",
+            "current_history",
+            "current_history",
+            {"state_history.parquet", "state_current.parquet"},
+            ["2025-11-13"],
+        ),
+        (
+            "pattern_hybrid_cdc_point.yaml",
+            "cdc",
+            "hybrid_cdc_point",
+            None,
+            ["2025-11-24"],
+        ),
+        (
+            "pattern_hybrid_cdc_cumulative.yaml",
+            "cdc",
+            "hybrid_cdc_cumulative",
+            None,
+            ["2025-11-24"],
+        ),
+        (
+            "pattern_hybrid_incremental_point.yaml",
+            "cdc",
+            "hybrid_incremental_point",
+            None,
+            ["2025-11-24"],
+        ),
+        (
+            "pattern_hybrid_incremental_cumulative.yaml",
+            "cdc",
+            "hybrid_incremental_cumulative",
+            None,
+            ["2025-11-24"],
         ),
     ],
 )
@@ -131,8 +191,9 @@ def test_bronze_to_silver_end_to_end(
     tmp_path: Path,
     bronze_samples_dir: Path,
     config_name: str,
-    pattern: str,
-    expected_silver_files: set[str],
+    load_pattern: str,
+    pattern_dir: str,
+    expected_silver_files: set[str] | None,
     run_dates: list[str],
 ) -> None:
     config_path = Path("docs/examples/configs") / config_name
@@ -148,7 +209,7 @@ def test_bronze_to_silver_end_to_end(
 
         bronze_partition = _collect_bronze_partition(bronze_out)
         metadata = _read_metadata(bronze_partition / "_metadata.json")
-        assert metadata["load_pattern"] == pattern
+        assert metadata["load_pattern"] == load_pattern
         assert metadata["record_count"] > 0
 
         _run_cli(
@@ -175,7 +236,10 @@ def test_bronze_to_silver_end_to_end(
         assert base_path.exists()
 
         produced_files = {path.name for path in silver_out.rglob("*.parquet")}
-        assert expected_silver_files <= produced_files
+        if expected_silver_files:
+            assert expected_silver_files <= produced_files
+        else:
+            assert produced_files, "Expected at least one Silver artifact"
 
         for parquet_file in silver_out.rglob("*.parquet"):
             df = pd.read_parquet(parquet_file)
