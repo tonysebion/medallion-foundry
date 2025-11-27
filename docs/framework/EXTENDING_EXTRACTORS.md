@@ -123,7 +123,7 @@ By following these guidelines, new extractors can be added without changing the 
 
 The framework currently supports S3-compatible storage. To add support for other storage systems (Azure Blob Storage, local filesystem, etc.), see:
 
-**[Azure Storage Extension Example](examples/extensions/azure_storage/README.md)**
+**[Azure Storage Extension Example](../examples/extensions/azure_storage/README.md)**
 
 This comprehensive example demonstrates:
 - Creating a storage backend abstraction layer

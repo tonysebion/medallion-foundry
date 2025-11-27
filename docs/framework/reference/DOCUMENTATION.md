@@ -695,7 +695,7 @@ class BaseExtractor(ABC):
         pass
 ```
 
-**See also**: [EXTENDING_EXTRACTORS.md](EXTENDING_EXTRACTORS.md) for detailed implementation guide.
+**See also**: [EXTENDING_EXTRACTORS.md](../EXTENDING_EXTRACTORS.md) for detailed implementation guide.
 
 ### Extending Storage Backends
 
@@ -1070,10 +1070,10 @@ pytest tests/ --cov=core --cov=extractors --cov-report=html
 
 For deeper technical details, see:
 
-- **[Storage Backend Architecture](STORAGE_BACKEND_ARCHITECTURE.md)** - Comprehensive guide to pluggable storage backends
-- **[Extending Extractors](EXTENDING_EXTRACTORS.md)** - Guide to creating custom data source extractors
-- **[Enhanced Features](ENHANCED_FEATURES.md)** - Advanced features for production use
-- **[Architecture](ARCHITECTURE.md)** - Core framework design principles
+- **[Storage Backend Architecture](../STORAGE_BACKEND_ARCHITECTURE.md)** - Comprehensive guide to pluggable storage backends
+- **[Extending Extractors](../EXTENDING_EXTRACTORS.md)** - Guide to creating custom data source extractors
+- **[Enhanced Features](../../usage/patterns/ENHANCED_FEATURES.md)** - Advanced features for production use
+- **[Architecture](../architecture.md)** - Core framework design principles
 - **[Configuration Reference](CONFIG_REFERENCE.md)** - Complete YAML configuration guide
 - **[Performance Tuning](../operations/PERFORMANCE_TUNING.md)** - Benchmark scenarios and optimization strategies
 - **[Error Codes](../operations/ERROR_CODES.md)** - Unified operational error taxonomy
