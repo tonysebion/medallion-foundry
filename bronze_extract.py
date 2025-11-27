@@ -397,9 +397,6 @@ class BronzeOrchestrator:
                 on_success_webhooks=self.args.on_success_webhook or [],
                 on_failure_webhooks=self.args.on_failure_webhook or [],
                 artifact_writer_kind=getattr(self.args, "artifact_writer", "default"),
-                streaming_chunk_size=getattr(self.args, "streaming_chunk_size", 0),
-                streaming_prefetch=getattr(self.args, "streaming_prefetch", 0),
-                transform_processes=getattr(self.args, "transform_processes", 0),
             )
 
         # Fallback to dict-based extraction if typed model missing.
@@ -426,9 +423,6 @@ class BronzeOrchestrator:
             on_success_webhooks=self.args.on_success_webhook or [],
             on_failure_webhooks=self.args.on_failure_webhook or [],
             artifact_writer_kind=getattr(self.args, "artifact_writer", "default"),
-            streaming_chunk_size=getattr(self.args, "streaming_chunk_size", 0),
-            streaming_prefetch=getattr(self.args, "streaming_prefetch", 0),
-            transform_processes=getattr(self.args, "transform_processes", 0),
         )
 
     def _record_configs_info(
