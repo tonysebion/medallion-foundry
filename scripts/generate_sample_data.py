@@ -483,23 +483,3 @@ def _write_pattern_readmes() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-def _write_pattern_readmes() -> None:
-    for pattern, desc in PATTERN_DESC.items():
-        pattern_dir = BASE_DIR / pattern
-        pattern_dir.mkdir(parents=True, exist_ok=True)
-        readme = pattern_dir / "README.md"
-        lines = [
-            f"# {pattern}",
-            "",
-            desc,
-            "",
-            "Each `dt=YYYY-MM-DD` directory contains the daily source data for this pattern.",
-            "Refer back to `docs/usage/patterns/pattern_matrix.md` to understand how these files feed Bronze and Silver.",
-        ]
-        readme.write_text("\n".join(lines), encoding="utf-8")
-
-
-if __name__ == "__main__":
-    main()

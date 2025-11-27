@@ -90,8 +90,8 @@ All example configurations are in `docs/examples/configs/`:
 ### Configuration Reference
 
 See complete documentation:
-- **Full reference**: [docs/CONFIG_REFERENCE.md](../docs/CONFIG_REFERENCE.md)
-- **Quick reference**: [QUICK_REFERENCE.md](../QUICK_REFERENCE.md)
+- **Full reference**: [docs/framework/reference/CONFIG_REFERENCE.md](../docs/framework/reference/CONFIG_REFERENCE.md)
+- **Quick reference**: [docs/framework/reference/QUICK_REFERENCE.md](../docs/framework/reference/QUICK_REFERENCE.md)
 - **Examples README**: [docs/examples/README.md](../docs/examples/README.md)
 
 ## Best Practices

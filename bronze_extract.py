@@ -220,9 +220,6 @@ class BronzeOrchestrator:
         self._record_configs_info(configs, run_date)
         self._run_options = self._build_run_options(configs, run_date)
         self._update_hook_context(run_date=run_date.isoformat())
-        local_output_base = Path(
-            configs[0]["source"]["run"].get("local_output_dir", "./output")
-        )
         self._update_hook_context(
             config_names=[cfg["source"].get("config_name") for cfg in configs],
             tables=[
@@ -234,7 +231,6 @@ class BronzeOrchestrator:
             build_run_context(
                 cfg,
                 run_date,
-                local_output_base,
                 load_pattern_override=self.args.load_pattern,
             )
             for cfg in configs
