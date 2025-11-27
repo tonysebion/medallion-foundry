@@ -484,10 +484,6 @@ def _write_pattern_readmes() -> None:
         readme.write_text("\n".join(lines), encoding="utf-8")
 
 
-    if __name__ == "__main__":
-        main()
-
-
 def _sync_doc_samples() -> None:
     """Mirror generated Bronze samples into the docs/examples data tree."""
     if not DOC_BASE_DIR.parent.exists():
@@ -495,3 +491,7 @@ def _sync_doc_samples() -> None:
     if DOC_BASE_DIR.exists():
         shutil.rmtree(DOC_BASE_DIR)
     shutil.copytree(BASE_DIR, DOC_BASE_DIR)
+
+
+if __name__ == "__main__":
+    main()
