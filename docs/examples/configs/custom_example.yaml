@@ -1,42 +1,44 @@
 # CUSTOM EXTRACTOR EXAMPLE
-# This demonstrates using a custom Python extractor for specialized sources
+# This demonstrates using a custom Python extractor for specialized sources.
 
-platform:
-  bronze:
-    # Storage backend: "s3", "azure", or "local"
-    storage_backend: "s3"
+environment: test
+domain: crm
 
-    s3_bucket: "analytics-bronze"
-    s3_prefix: "bronze"
-    partitioning:
-      use_dt_partition: true
-    output_defaults:
-      allow_csv: true
-      allow_parquet: true
-      parquet_compression: "snappy"
+system: salesforce
+entity: accounts
 
-  s3_connection:
-    endpoint_url_env: "BRONZE_S3_ENDPOINT"
-    access_key_env: "BRONZE_S3_ACCESS_KEY"
-    secret_key_env: "BRONZE_S3_SECRET_KEY"
+bronze:
+  enabled: true
+  source_type: custom
+  connection_name: SALESFORCE_CONN
+  source_query: Account SOQL feed
+  partition_column: load_dt
+  options:
+    load_pattern: full
+    custom_extractor:
+      module: examples.custom_extractors.salesforce_example
+      class_name: SalesforceExampleExtractor
+    salesforce:
+      soql_query: SELECT Id, Name, LastModifiedDate FROM Account
+    local_output_dir: ./output
 
-source:
-  type: "custom"
-  system: "salesforce"
-  table: "accounts"
+silver:
+  enabled: true
 
-  custom_extractor:
-    module: "examples.custom_extractors.salesforce_example"
-    class_name: "SalesforceExampleExtractor"
+  entity_kind: state
+  history_mode: scd2
+  delete_mode: tombstone_state
+  schema_mode: allow_new_columns
 
-  salesforce:
-    # Your extractor can read this section as needed
-    soql_query: "SELECT Id, Name, LastModifiedDate FROM Account"
-    # Add incremental or field filters as needed (e.g., cursor fields, event types)
+  natural_keys:
+    - Id
 
-  run:
-    max_rows_per_file: 500000      # large chunk size for custom runs
-    write_csv: true                # ease of debugging
-    write_parquet: true            # analytics format
-    s3_enabled: false              # keep local while experimenting
-    local_output_dir: "./output"
+  change_ts_column: LastModifiedDate
+
+  attributes:
+    - Name
+    - OwnerId
+    - Status__c
+
+  partition_by:
+    - effective_from_dt

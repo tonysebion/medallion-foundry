@@ -14,6 +14,7 @@ import pytest
 import yaml
 
 BRONZE_SAMPLE_ROOT = Path("docs/examples/data/bronze_samples")
+BRONZE_EXAMPLE_ROOT = Path("docs/examples/data/bronze_examples")
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GENERATE_SCRIPT = Path("scripts") / "generate_sample_data.py"
 
@@ -29,13 +30,26 @@ def bronze_samples_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return dest
 
 
-def _build_sample_path(bronze_dir: Path, cfg: dict, run_date: str) -> Path:
-    pattern = cfg["source"]["run"].get("load_pattern", "full")
-    system = cfg["source"]["system"]
-    table = cfg["source"]["table"]
-    filename = Path(cfg["source"]["file"]["path"]).name
+def _build_sample_path(
+    bronze_dir: Path, cfg: dict, run_date: str, config_path: Path
+) -> Path:
+    if "source" in cfg:
+        pattern = cfg["source"]["run"].get("load_pattern", "full")
+        system = cfg["source"]["system"]
+        table = cfg["source"]["table"]
+        filename = Path(cfg["source"]["file"]["path"]).name
+    else:
+        pattern = (
+            cfg.get("bronze", {})
+            .get("options", {})
+            .get("load_pattern", "full")
+        )
+        system = cfg["system"]
+        table = cfg["entity"]
+        filename = Path(cfg["bronze"].get("path_pattern", "sample.csv")).name
+    config_root = BRONZE_EXAMPLE_ROOT / config_path.stem
     return (
-        bronze_dir
+        config_root
         / pattern
         / f"system={system}"
         / f"table={table}"
@@ -53,10 +67,22 @@ def _rewrite_config(
     bronze_out = (tmp_dir / f"bronze_out_{run_date}").resolve()
     silver_out = (tmp_dir / f"silver_out_{run_date}").resolve()
 
-    cfg["source"]["file"]["path"] = str(_build_sample_path(bronze_dir, cfg, run_date))
-    cfg["source"]["run"]["local_output_dir"] = str(bronze_out)
-    cfg.setdefault("silver", {})
-    cfg["silver"]["output_dir"] = str(silver_out)
+    if "source" in cfg:
+        cfg["source"]["file"]["path"] = str(
+            _build_sample_path(bronze_dir, cfg, run_date, original)
+        )
+        cfg["source"]["run"]["local_output_dir"] = str(bronze_out)
+        cfg.setdefault("silver", {})
+        cfg["silver"]["output_dir"] = str(silver_out)
+    else:
+        cfg.setdefault("bronze", {})
+        cfg["bronze"]["path_pattern"] = str(
+            _build_sample_path(bronze_dir, cfg, run_date, original)
+        )
+        bronze_options = cfg["bronze"].setdefault("options", {})
+        bronze_options["local_output_dir"] = str(bronze_out)
+        cfg.setdefault("silver", {})
+        cfg["silver"]["output_dir"] = str(silver_out)
 
     target = tmp_dir / f"{original.stem}_{run_date}.yaml"
     target.write_text(yaml.safe_dump(cfg))
@@ -84,19 +110,19 @@ def _read_metadata(metadata_path: Path) -> dict:
         (
             "file_example.yaml",
             "full",
-            {"full_snapshot.parquet"},
+            {"events.parquet"},
             ["2025-11-13", "2025-11-14"],
         ),
         (
             "file_cdc_example.yaml",
             "cdc",
-            {"cdc_changes.parquet"},
+            {"events.parquet"},
             ["2025-11-13", "2025-11-14"],
         ),
         (
             "file_current_history_example.yaml",
             "current_history",
-            {"history.parquet", "current.parquet"},
+            {"state_history.parquet", "state_current.parquet"},
             ["2025-11-13", "2025-11-14"],
         ),
     ],
@@ -130,8 +156,14 @@ def test_bronze_to_silver_end_to_end(
         )
 
         base_silver = Path(cfg_data["silver"]["output_dir"])
-        domain = cfg_data["silver"].get("domain", cfg_data["source"]["system"])
-        entity = cfg_data["silver"].get("entity", cfg_data["source"]["table"])
+        if "source" in cfg_data:
+            domain = cfg_data["silver"].get("domain", cfg_data["source"]["system"])
+            entity = cfg_data["silver"].get("entity", cfg_data["source"]["table"])
+        else:
+            domain = cfg_data.get("domain") or cfg_data["silver"].get(
+                "domain", cfg_data["system"]
+            )
+            entity = cfg_data["silver"].get("entity", cfg_data.get("entity"))
         version = cfg_data["silver"].get("version", 1)
         load_part = cfg_data["silver"].get("load_partition_name", "load_date")
         base_path = (

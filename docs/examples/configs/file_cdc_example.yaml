@@ -1,46 +1,38 @@
-platform:
-  bronze:
-    storage_backend: local
-    local_path: ./output
-    partitioning:
-      use_dt_partition: true
-    output_defaults:
-      allow_csv: true
-      allow_parquet: true
-      parquet_compression: snappy
+environment: dev
+domain: retail_demo
 
-source:
-  type: file
-  system: retail_demo
-  table: orders
-  file:
-    path: ./docs/examples/data/bronze_samples/cdc/system=retail_demo/table=orders/pattern=cdc/dt=2025-11-02/cdc-part-0001.csv
+system: retail_demo
+entity: orders   # reuse the same entity so sample data paths line up
+
+bronze:
+  enabled: true
+  source_type: file
+  path_pattern: ./docs/examples/data/bronze_samples/cdc/system=retail_demo/table=orders/pattern=cdc/dt=2025-11-02/cdc-part-0001.csv
+  partition_column: load_date
+  options:
     format: csv
-  run:
-    write_csv: true
-    write_parquet: false
-    local_output_dir: ./output
     load_pattern: cdc
+    local_output_dir: ./output
 
 silver:
-  output_dir: ./silver_output
-  domain: retail_demo
-  entity: orders_cdc
-  version: 1
-  load_partition_name: load_date
-  include_pattern_folder: false
-  write_parquet: true
-  write_csv: false
-  parquet_compression: snappy
-  primary_keys: ["order_id"]
-  order_column: changed_at
-  cdc_output_name: cdc_changes
-  normalization:
-    trim_strings: true
-    empty_strings_as_null: true
-  error_handling:
-    enabled: false
-    max_bad_records: 0
-    max_bad_percent: 0.0
-  partitioning:
-    columns: []
+  enabled: true
+
+  entity_kind: event             # CDC feed contains discrete change events
+  input_mode: append_log         # Bronze appends new change files
+  delete_mode: tombstone_event
+  schema_mode: strict
+
+  natural_keys:
+    - order_id
+
+  event_ts_column: changed_at    # CDC records include a change timestamp
+  change_ts_column: changed_at
+
+  attributes:
+    - customer_id
+    - status
+    - order_total
+    - change_type
+
+  partition_by:
+    - changed_at_dt

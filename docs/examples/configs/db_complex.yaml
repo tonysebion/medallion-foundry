@@ -1,77 +1,88 @@
-platform:
-  bronze:
-    s3_bucket: "enterprise-bronze"
-    s3_prefix: "bronze/customers"
-    partitioning:
-      use_dt_partition: true
-      partition_strategy: "hourly"
-    output_defaults:
-      allow_csv: false
-      allow_parquet: true
-      parquet_compression: "zstd"
+environment: prod
+domain: customers
 
-sources:
+datasets:
   - name: customer_snapshot
-    source:
-      type: "db"
-      system: "customers_dw"
-      table: "customer_snapshot"
-      db:
-        conn_str_env: "CUSTOMER_DB_CONN"
-        base_query: |
-          SELECT ClaimID, MemberID, ServiceDate, Amount, UpdatedAt
-          FROM dbo.ClaimsHeader
-          WHERE UpdatedAt >= ? AND UpdatedAt < ?
-        incremental:
-          enabled: true
-          cursor_column: "UpdatedAt"
-          state_file: "./state/customers.cursor"
-          cursor_type: "datetime"
-      run:
-        load_pattern: "current_history"
-        write_parquet: true
-        write_csv: false
-        parallel_workers: 8
-        max_file_size_mb: 512
-        require_checksum: true
-        cleanup_on_failure: true
-  - name: claim_cdc
-    source:
-      type: "db"
-      system: "claims_dw"
-      table: "claims_cdc"
-      db:
-        conn_str_env: "CLAIMS_DB_CONN_STR"
-        base_query: |
-          SELECT ClaimID, Status, UpdatedAt
-          FROM dbo.ClaimsDelta
-      run:
-        load_pattern: "cdc"
-        write_parquet: true
-        write_csv: false
-        max_rows_per_file: 400000
-        require_checksum: true
+    system: customers_dw
+    entity: customer_snapshot
 
-silver:
-  write_parquet: true
-  write_csv: false
-  partitioning:
-    columns: ["region"]
-  normalization:
-    trim_strings: true
-    empty_strings_as_null: true
-  schema:
-    rename_map:
-      ClaimID: claim_id
-      UpdatedAt: updated_at
-    column_order:
-      - claim_id
-      - member_id
-      - service_date
-      - amount
-      - updated_at
-  error_handling:
-    enabled: true
-    max_bad_records: 50
-    max_bad_percent: 1.0
-  require_checksum: true
+    bronze:
+      enabled: true
+      source_type: db
+      connection_name: CUSTOMER_DB_CONN
+      source_query: |
+        SELECT ClaimID, MemberID, ServiceDate, Amount, UpdatedAt
+        FROM dbo.ClaimsHeader
+        WHERE UpdatedAt >= :start_ts AND UpdatedAt < :end_ts
+      partition_column: hour_bucket
+      owner_team: claims-platform
+      owner_contact: claims-platform@example.com
+      options:
+        load_pattern: current_history
+        db:
+          cursor_column: UpdatedAt
+          cursor_state_path: ./state/customers.cursor
+          cursor_type: datetime
+        local_output_dir: ./output/customers
+        max_rows_per_file: 500000
+        parallel_workers: 6
+        max_file_size_mb: 512
+
+    silver:
+      enabled: true
+
+      entity_kind: state
+      history_mode: scd2
+      delete_mode: tombstone_state
+      schema_mode: allow_new_columns
+
+      natural_keys:
+        - ClaimID
+
+      change_ts_column: UpdatedAt
+
+      attributes:
+        - MemberID
+        - ServiceDate
+        - Amount
+
+      partition_by:
+        - effective_from_dt
+
+      semantic_owner: claims-analytics
+      semantic_contact: claims-analytics@example.com
+
+  - name: claim_cdc
+    system: claims_dw
+    entity: claims_cdc
+
+    bronze:
+      enabled: true
+      source_type: db
+      connection_name: CLAIMS_DB_CONN_STR
+      source_query: |
+        SELECT ClaimID, Status, UpdatedAt
+        FROM dbo.ClaimsDelta
+      partition_column: load_dt
+      options:
+        load_pattern: cdc
+
+    silver:
+      enabled: true
+
+      entity_kind: event
+      input_mode: append_log
+      delete_mode: tombstone_event
+      schema_mode: strict
+
+      natural_keys:
+        - ClaimID
+
+      event_ts_column: UpdatedAt
+      change_ts_column: UpdatedAt
+
+      attributes:
+        - Status
+
+      partition_by:
+        - UpdatedAt_dt

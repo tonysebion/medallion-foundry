@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
-from core.config import build_relative_path, load_configs
+from core.config import DatasetConfig, build_relative_path, load_configs
 from core.context import RunContext, build_run_context, load_run_context
 from core.io import (
     write_batch_metadata,
@@ -34,77 +34,17 @@ from core.catalog import (
 from core.hooks import fire_webhooks
 from core.run_options import RunOptions
 from core.storage.policy import enforce_storage_scope
-from core.silver.stream import stream_silver_promotion
-from core.deprecation import emit_deprecation, DeprecationSpec
 from core.silver.artifacts import (
     apply_schema_settings,
     normalize_dataframe,
-    write_silver_outputs as _artifact_write_silver_outputs,
 )
 from core.silver.writer import get_silver_writer
 from core.silver.models import SilverModel
-
-
-# Backwards-compatible wrapper matching legacy public signature used in tests:
-# write_silver_outputs(df, output_dir, bronze_pattern, primary_keys, order_column, ...)
-def write_silver_outputs(
-    df,
-    output_dir,
-    bronze_pattern,  # preserved for compatibility; not directly used
-    primary_keys,
-    order_column,
-    write_parquet=True,
-    write_csv=False,
-    parquet_compression="snappy",
-    artifact_names=None,
-    partition_columns=None,
-    error_cfg=None,
-    silver_model=None,
-):
-    """Wrapper adapting legacy public signature (positional args allowed) to new artifact writer.
-
-    Legacy order:
-        write_silver_outputs(df, output_dir, bronze_pattern, primary_keys, order_column,
-                              write_parquet, write_csv, parquet_compression,
-                              artifact_names, partition_columns, error_cfg, silver_model)
-    New implementation order (internal):
-        _artifact_write_silver_outputs(df, primary_keys, order_column, write_parquet, write_csv,
-                                       parquet_compression, artifact_names, partition_columns,
-                                       error_cfg, silver_model, output_dir)
-    """
-    emit_deprecation(
-        DeprecationSpec(
-            code="API001",
-            message="Legacy positional write_silver_outputs wrapper is deprecated; use DefaultSilverArtifactWriter instead",
-            since="1.1.0",
-            remove_in="1.3.0",
-        )
-    )
-    artifact_names = artifact_names or {
-        "full_snapshot": "full_snapshot",
-        "cdc": "cdc_changes",
-        "history": "history",
-        "current": "current",
-    }
-    partition_columns = partition_columns or []
-    error_cfg = error_cfg or {
-        "enabled": False,
-        "max_bad_records": 0,
-        "max_bad_percent": 0.0,
-    }
-    return _artifact_write_silver_outputs(
-        df,
-        primary_keys,
-        order_column,
-        write_parquet,
-        write_csv,
-        parquet_compression,
-        artifact_names,
-        partition_columns,
-        error_cfg,
-        silver_model,
-        output_dir,
-    )
+from core.silver.processor import (
+    SilverProcessor,
+    SilverProcessorResult,
+    build_intent_silver_partition,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -319,10 +259,10 @@ class PromotionOptions:
             on_success_webhooks=args.on_success_webhook or [],
             on_failure_webhooks=args.on_failure_webhook or [],
             artifact_writer_kind=getattr(args, "artifact_writer", "default"),
-            streaming_chunk_size=getattr(args, "streaming_chunk_size", 0),
-            streaming_prefetch=getattr(args, "streaming_prefetch", 0),
-            transform_processes=getattr(args, "transform_processes", 0),
-            resume=getattr(args, "resume", False),
+            streaming_chunk_size=0,
+            streaming_prefetch=0,
+            transform_processes=0,
+            resume=False,
         )
 
         model_override = args.silver_model or silver_cfg.get("model")
@@ -422,6 +362,23 @@ class SilverPromotionService:
         load_pattern = self._resolve_load_pattern(cfg, bronze_path)
         run_context.load_pattern = load_pattern
         self._update_hook_context(load_pattern=load_pattern.value)
+
+        dataset_cfg: DatasetConfig | None = (
+            cfg.get("__dataset__") if cfg and cfg.get("_intent_config") else None
+        )
+        if dataset_cfg:
+            self._update_hook_context(
+                config_name=run_context.config_name,
+                domain=dataset_cfg.domain or dataset_cfg.system,
+                entity=dataset_cfg.entity,
+            )
+            return self._run_intent_pipeline(
+                dataset_cfg,
+                run_context,
+                bronze_path,
+                load_pattern,
+            )
+
         silver_partition = self._resolve_silver_partition(
             cfg, bronze_path, load_pattern, run_date
         )
@@ -446,50 +403,34 @@ class SilverPromotionService:
         bronze_size_bytes = self._calculate_directory_size(bronze_path)
         run_start = time.perf_counter()
         run_opts = context.options.run_options
-        if self.args.stream_mode:
-            outputs, chunk_count, record_count, schema_snapshot = (
-                stream_silver_promotion(
-                    bronze_path,
-                    silver_partition,
-                    run_opts,
-                    context.options.schema_cfg,
-                    context.options.normalization_cfg,
-                    context.options.error_cfg,
-                    context.silver_model,
-                )
-            )
-            logger.info(
-                "Streamed %s records from Bronze path %s", record_count, bronze_path
-            )
-        else:
-            df = load_bronze_records(bronze_path)
-            normalized_df = apply_schema_settings(df, context.options.schema_cfg)
-            normalized_df = normalize_dataframe(
-                normalized_df, context.options.normalization_cfg
-            )
-            logger.info(
-                "Loaded %s records from Bronze path %s", len(normalized_df), bronze_path
-            )
-            writer = get_silver_writer(run_opts.artifact_writer_kind)
-            outputs = writer.write(
-                normalized_df,
-                primary_keys=run_opts.primary_keys,
-                order_column=run_opts.order_column,
-                write_parquet=run_opts.write_parquet,
-                write_csv=run_opts.write_csv,
-                parquet_compression=run_opts.parquet_compression,
-                artifact_names=run_opts.artifact_names,
-                partition_columns=run_opts.partition_columns,
-                error_cfg=context.options.error_cfg,
-                silver_model=context.silver_model,
-                output_dir=silver_partition,
-            )
-            schema_snapshot = [
-                {"name": col, "dtype": str(dtype)}
-                for col, dtype in normalized_df.dtypes.items()
-            ]
-            record_count = len(normalized_df)
-            chunk_count = len(outputs)
+        df = load_bronze_records(bronze_path)
+        normalized_df = apply_schema_settings(df, context.options.schema_cfg)
+        normalized_df = normalize_dataframe(
+            normalized_df, context.options.normalization_cfg
+        )
+        logger.info(
+            "Loaded %s records from Bronze path %s", len(normalized_df), bronze_path
+        )
+        writer = get_silver_writer(run_opts.artifact_writer_kind)
+        outputs = writer.write(
+            normalized_df,
+            primary_keys=run_opts.primary_keys,
+            order_column=run_opts.order_column,
+            write_parquet=run_opts.write_parquet,
+            write_csv=run_opts.write_csv,
+            parquet_compression=run_opts.parquet_compression,
+            artifact_names=run_opts.artifact_names,
+            partition_columns=run_opts.partition_columns,
+            error_cfg=context.options.error_cfg,
+            silver_model=context.silver_model,
+            output_dir=silver_partition,
+        )
+        schema_snapshot = [
+            {"name": col, "dtype": str(dtype)}
+            for col, dtype in normalized_df.dtypes.items()
+        ]
+        record_count = len(normalized_df)
+        chunk_count = len(outputs)
 
         self._write_metadata(record_count, chunk_count, context, outputs)
         runtime_seconds = time.perf_counter() - run_start
@@ -509,6 +450,174 @@ class SilverPromotionService:
 
         logger.info("Silver promotion complete")
         return 0
+
+    def _run_intent_pipeline(
+        self,
+        dataset: DatasetConfig,
+        run_context: RunContext,
+        bronze_path: Path,
+        load_pattern: LoadPattern,
+    ) -> int:
+        silver_base = (
+            Path(self.args.silver_base).resolve()
+            if self.args.silver_base
+            else None
+        )
+        silver_partition = build_intent_silver_partition(
+            dataset, run_context.run_date, silver_base
+        )
+        silver_partition.mkdir(parents=True, exist_ok=True)
+        self._update_hook_context(silver_partition=str(silver_partition))
+        logger.info("Bronze partition: %s", bronze_path)
+        logger.info("Silver partition: %s", silver_partition)
+        logger.info("Load pattern: %s", load_pattern.value)
+        require_checksum = (
+            self.args.require_checksum
+            if self.args.require_checksum is not None
+            else run_context.cfg.get("silver", {}).get("require_checksum", False)
+        )
+        if require_checksum:
+            verify_checksum_manifest(
+                bronze_path, expected_pattern=load_pattern.value
+            )
+        if self.args.dry_run:
+            logger.info("Dry run complete; no Silver files written")
+            return 0
+
+        silver_cfg = run_context.cfg.get("silver", _default_silver_cfg())
+        write_parquet = (
+            self.args.write_parquet
+            if self.args.write_parquet is not None
+            else silver_cfg.get("write_parquet", True)
+        )
+        write_csv = (
+            self.args.write_csv
+            if self.args.write_csv is not None
+            else silver_cfg.get("write_csv", False)
+        )
+        if not write_parquet and not write_csv:
+            self.parser.error("At least one output format must be enabled")
+        compression = (
+            self.args.parquet_compression
+            if self.args.parquet_compression
+            else silver_cfg.get("parquet_compression", "snappy")
+        )
+
+        processor = SilverProcessor(
+            dataset,
+            bronze_path,
+            silver_partition,
+            run_context.run_date,
+            write_parquet=write_parquet,
+            write_csv=write_csv,
+            parquet_compression=compression,
+        )
+        bronze_size_bytes = self._calculate_directory_size(bronze_path)
+        start = time.perf_counter()
+        result = processor.run()
+        runtime_seconds = time.perf_counter() - start
+        self._write_intent_metadata(
+            dataset,
+            result,
+            silver_partition,
+            bronze_path,
+            run_context.run_date,
+            load_pattern,
+            bronze_size_bytes,
+            runtime_seconds,
+        )
+
+        for label, paths in result.outputs.items():
+            for path in paths:
+                logger.info("Created Silver artifact '%s': %s", label, path)
+        return 0
+
+    def _write_intent_metadata(
+        self,
+        dataset: DatasetConfig,
+        result: SilverProcessorResult,
+        silver_partition: Path,
+        bronze_path: Path,
+        run_date: dt.date,
+        load_pattern: LoadPattern,
+        bronze_size_bytes: int,
+        runtime_seconds: float,
+    ) -> None:
+        files = [path for paths in result.outputs.values() for path in paths]
+        record_count = result.metrics.rows_written
+        chunk_count = sum(len(paths) for paths in result.outputs.values())
+        load_batch_id = f"{dataset.dataset_id}-{run_date.isoformat()}"
+        extra = {
+            "dataset_id": dataset.dataset_id,
+            "load_batch_id": load_batch_id,
+            "bronze_path": str(bronze_path),
+            "load_pattern": load_pattern.value,
+            "rows_read": result.metrics.rows_read,
+            "rows_written": result.metrics.rows_written,
+            "changed_keys": result.metrics.changed_keys,
+            "derived_events": result.metrics.derived_events,
+            "bronze_size_bytes": bronze_size_bytes,
+            "runtime_seconds": runtime_seconds,
+            "entity_kind": dataset.silver.entity_kind.value,
+            "history_mode": dataset.silver.history_mode.value
+            if dataset.silver.history_mode
+            else None,
+            "input_mode": dataset.silver.input_mode.value
+            if dataset.silver.input_mode
+            else None,
+            "bronze_owner": dataset.bronze.owner_team,
+            "silver_owner": dataset.silver.semantic_owner,
+        }
+        write_batch_metadata(
+            silver_partition,
+            record_count,
+            chunk_count,
+            quality_metrics={
+                "rows_written": result.metrics.rows_written,
+                "rows_read": result.metrics.rows_read,
+            },
+            extra_metadata=extra,
+        )
+        if files:
+            manifest_path = write_checksum_manifest(
+                silver_partition,
+                files,
+                load_pattern.value,
+                extra_metadata={
+                    "schema": result.schema_snapshot,
+                    "metrics": extra,
+                },
+            )
+        else:
+            manifest_path = None
+
+        dataset_id = f"silver:{(dataset.domain or dataset.system)}.{dataset.entity}"
+        report_schema_snapshot(dataset_id, result.schema_snapshot)
+        report_quality_snapshot(
+            dataset_id,
+            {
+                "rows_written": result.metrics.rows_written,
+                "rows_read": result.metrics.rows_read,
+            },
+        )
+        run_metadata = {
+            "load_pattern": load_pattern.value,
+            "silver_partition": str(silver_partition),
+            "artifact_names": list(result.outputs.keys()),
+            "manifest_path": manifest_path.name if manifest_path else None,
+            "load_batch_id": load_batch_id,
+        }
+        report_run_metadata(dataset_id, run_metadata)
+        bronze_dataset = f"bronze:{dataset.system}.{dataset.entity}"
+        report_lineage(
+            bronze_dataset,
+            dataset_id,
+            {
+                "manifest": manifest_path.name if manifest_path else None,
+                "files": [p.name for p in files],
+                "load_pattern": load_pattern.value,
+            },
+        )
 
     def _handle_validate_only(self) -> None:
         if self._provided_run_context:
@@ -910,39 +1019,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--parquet-compression", help="Parquet compression codec (default: snappy)"
     )
     parser.add_argument(
-        "--stream",
-        dest="stream_mode",
-        action="store_true",
-        help="Use the streaming writer that processes Bronze chunks incrementally",
-    )
-    parser.add_argument(
         "--artifact-writer",
         choices=["default", "transactional"],
         default="default",
         help="Select artifact writer implementation (default|transactional)",
-    )
-    parser.add_argument(
-        "--streaming-chunk-size",
-        type=int,
-        default=0,
-        help="CSV chunk size for streaming mode (0 = file at a time)",
-    )
-    parser.add_argument(
-        "--streaming-prefetch",
-        type=int,
-        default=0,
-        help="Prefetch buffer size (number of chunks) for streaming mode",
-    )
-    parser.add_argument(
-        "--transform-processes",
-        type=int,
-        default=0,
-        help="Number of worker processes for chunk transforms (0 = disable)",
-    )
-    parser.add_argument(
-        "--resume",
-        action="store_true",
-        help="Resume streaming mode by skipping chunks already processed (uses checkpoints)",
     )
     parser.add_argument("--full-output-name", help="Base name for full snapshot files")
     parser.add_argument(

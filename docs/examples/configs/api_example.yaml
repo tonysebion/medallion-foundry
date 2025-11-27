@@ -1,52 +1,47 @@
 # BASIC API EXTRACTION EXAMPLE
-# This demonstrates extracting data from a REST API endpoint
+# This demonstrates extracting data from a REST API endpoint while keeping intent-focused knobs.
 
-platform:
-  bronze:
-    # Storage backend: "s3", "azure", or "local"
-    # Defaults to "s3" if not specified (for backward compatibility)
-    storage_backend: "s3"
+environment: test
+domain: support
 
-    s3_bucket: "analytics-bronze"
-    s3_prefix: "bronze"
-    partitioning:
-      use_dt_partition: true
-    output_defaults:
-      allow_csv: true
-      allow_parquet: true
-      parquet_compression: "snappy"
+system: example_product
+entity: tickets
 
-  s3_connection:
-    endpoint_url_env: "BRONZE_S3_ENDPOINT"
-    access_key_env: "BRONZE_S3_ACCESS_KEY"
-    secret_key_env: "BRONZE_S3_SECRET_KEY"
+bronze:
+  enabled: true
+  source_type: api
+  connection_name: EXAMPLE_API_TOKEN            # bearer token comes from this env var
+  source_query: /v1/tickets                     # endpoint path
+  partition_column: load_date
+  options:
+    load_pattern: cdc                           # upstream API emits deltas
+    api:
+      base_url: https://api.example.com
+      method: GET
+      params:
+        page_size: 100
+      pagination:
+        type: none
+    local_output_dir: ./output                  # keep sample output on the local filesystem
 
-source:
-  type: "api"
-  system: "example_product"  # policies use system/table paths
-  table: "tickets"
+silver:
+  enabled: true
 
-  api:
-    base_url: "https://api.example.com"
-    endpoint: "/v1/tickets"
-    method: "GET"
+  entity_kind: event            # support tickets arrive as events
+  input_mode: append_log        # Bronze only appends new deltas
+  delete_mode: ignore           # tickets are closed via status changes
+  schema_mode: allow_new_columns
 
-    auth_type: "bearer"  # swap to api_key/basic if needed
-    auth_token_env: "EXAMPLE_API_TOKEN"
+  natural_keys:
+    - ticket_id
 
-    params:
-      page_size: 100
+  event_ts_column: updated_at
+  change_ts_column: updated_at
 
-    pagination:
-      type: "none"  # starts without paging; uncomment offsets/pages below as needed
-    # pagination:
-    #   type: "page"
-    #   page_size: 100
-    #   page_param: "page"
+  attributes:
+    - status
+    - severity
+    - owner_id
 
-  run:
-    max_rows_per_file: 500000  # large chunk size for sampling
-    write_csv: true  # keep CSV for debugging
-    write_parquet: true  # analytics default
-    s3_enabled: false
-    local_output_dir: "./output"
+  partition_by:
+    - updated_at_dt

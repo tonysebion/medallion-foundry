@@ -1,24 +1,33 @@
-platform:
-  bronze:
-    s3_bucket: "example-bronze"
-    s3_prefix: "bronze"
+environment: dev
+domain: playground
 
-source:
-  type: "file"
-  system: "local_demo"           # appears in Bronze path (system=<name>)
-  table: "flat_orders"           # appears in Bronze path (table=<name>)
-  file:
-    path: "./data/sample_orders.csv"  # relative path to the source file
-  run:
-    load_pattern: "full"          # required load pattern for promotable Bronze data
-    # Optional Bronze tuning:
-    # write_csv: true             # enable small CSV chunks for debugging
-    # limit_rows: 1000            # useful when previewing data locally
+system: local_demo
+entity: flat_orders
+
+bronze:
+  enabled: true
+  source_type: file
+  path_pattern: ./docs/examples/data/sample_orders.csv   # lightweight CSV for demos
+  partition_column: load_dt
+  options:
+    format: csv
+    load_pattern: full
 
 silver:
-  # Silver inherits defaults; override only when you need different normalization/partitioning.
-  write_parquet: true
-  # normalization:
-  #   trim_strings: true
-  # partitioning:
-  #   columns: ["status"]
+  enabled: true
+
+  entity_kind: event              # flat file records are individual events
+  input_mode: replace_daily
+  delete_mode: ignore
+  schema_mode: strict
+
+  natural_keys:
+    - order_id
+
+  event_ts_column: order_ts
+  change_ts_column: order_ts
+
+  attributes:
+    - customer_id
+    - status
+    - amount

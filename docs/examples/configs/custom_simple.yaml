@@ -1,18 +1,35 @@
-platform:
-  bronze:
-    s3_bucket: "example-bronze"
-    s3_prefix: "bronze/custom"
+environment: dev
+domain: crm
 
-source:
-  type: "custom"
-  system: "salesforce"
-  table: "accounts"
-  custom_extractor:
-    module: "custom_extractors.salesforce"
-    class_name: "SalesforceExtractor"
-  run:
-    load_pattern: "full"
-    # Optional parameters:
-    # parallel_workers: 2
-    # write_csv: true
-    # write_csv: true
+system: salesforce
+entity: accounts
+
+bronze:
+  enabled: true
+  source_type: custom
+  connection_name: SALESFORCE_CONN              # used by the custom extractor module
+  source_query: recent accounts                 # semantic label forwarded to the extractor
+  partition_column: load_dt
+  options:
+    custom_extractor:
+      module: custom_extractors.salesforce
+      class_name: SalesforceExtractor
+    load_pattern: full
+
+silver:
+  enabled: true
+
+  entity_kind: state
+  history_mode: latest_only                     # we only need the latest account attributes
+  delete_mode: ignore
+  schema_mode: allow_new_columns
+
+  natural_keys:
+    - account_id
+
+  change_ts_column: last_modified_at
+
+  attributes:
+    - account_name
+    - owner_id
+    - lifecycle_stage

@@ -1,54 +1,36 @@
-platform:
-  bronze:
-    storage_backend: local
-    local_path: ./output
-    partitioning:
-      use_dt_partition: true
-    output_defaults:
-      allow_csv: true
-      allow_parquet: true
-      parquet_compression: snappy
-  # No cloud connection info needed for local testing
+environment: dev
+domain: retail_demo
 
-source:
-  type: file
-  system: retail_demo
-  table: orders
-  file:
-    path: ./docs/examples/data/bronze_samples/full/system=retail_demo/table=orders/pattern=full/dt=2025-11-01/full-part-0001.csv
-    format: csv
-  run:
-    write_csv: true
-    write_parquet: false
-    local_output_dir: ./output
-    max_rows_per_file: 200
-    load_pattern: full
+system: retail_demo
+entity: orders
+
+bronze:
+  enabled: true
+  source_type: file
+  path_pattern: ./docs/examples/data/bronze_samples/full/system=retail_demo/table=orders/pattern=full/dt=2025-11-01/full-part-0001.csv  # demo file shipped with the repo
+  partition_column: extract_date                                     # matches the dt folders in the sample data
+  options:
+    format: csv                                                      # the bundled sample is CSV
+    load_pattern: full                                               # Bronze receives a full slice per day
 
 silver:
-  output_dir: ./silver_output
-  domain: retail_demo
-  entity: orders
-  version: 1
-  load_partition_name: load_date
-  include_pattern_folder: false
-  write_parquet: true
-  write_csv: false
-  parquet_compression: snappy
-  primary_keys: ["order_id"]
-  order_column: updated_at
-  current_output_name: current
-  history_output_name: history
-  schema:
-    rename_map:
-      order_total: total_amount
-    column_order: ["order_id", "customer_id", "status", "total_amount", "updated_at"]
-  normalization:
-    trim_strings: true
-    empty_strings_as_null: true
-  error_handling:
-    enabled: true
-    max_bad_records: 5
-    max_bad_percent: 1.0
-  partitioning:
-    columns: ["status"]
-  cdc_output_name: cdc_changes
+  enabled: true
+
+  entity_kind: event             # order rows are discrete happenings
+  input_mode: replace_daily      # Bronze sends a complete slice for each dt partition
+  delete_mode: ignore            # soft deletes are passed through for now
+  schema_mode: strict            # this sample fails the job if columns drift
+
+  natural_keys:
+    - order_id                   # order_id uniquely identifies each event
+
+  event_ts_column: updated_at    # upstream sends a timestamp on every record
+  change_ts_column: updated_at   # reuse the same column for ordering
+
+  attributes:
+    - customer_id
+    - status
+    - order_total
+
+  partition_by:
+    - event_ts_dt                # derived from updated_at during the Silver run

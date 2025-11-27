@@ -1,72 +1,87 @@
-platform:
-  bronze:
-    s3_bucket: "enterprise-bronze"
-    s3_prefix: "bronze/custom"
-    partitioning:
-      use_dt_partition: true
+environment: prod
+domain: crm
 
-sources:
+datasets:
   - name: salesforce_accounts
-    source:
-      type: "custom"
-      system: "salesforce"
-      table: "accounts"
-      custom_extractor:
-        module: "custom_extractors.salesforce"
-        class_name: "SalesforceExtractor"
-      salesforce:
-        username_env: "SF_USER"
-        password_env: "SF_PASS"
-        token_env: "SF_TOKEN"
-        soql_query: |
-          SELECT Id, Name, LastModifiedDate FROM Account WHERE IsDeleted = false
-        incremental:
-          cursor_field: "LastModifiedDate"
-          cursor_type: "timestamp"
-      run:
-        load_pattern: "cdc"
-        write_parquet: true
-        write_csv: true
-        max_rows_per_file: 100000
-        parallel_workers: 6
-        require_checksum: true
-  - name: service_requests
-    source:
-      type: "custom"
-      system: "service_desk"
-      table: "tickets"
-      custom_extractor:
-        module: "custom_extractors.service_desk"
-        class_name: "ServiceDeskExtractor"
-      service_desk:
-        api_user_env: "SD_USER"
-        api_key_env: "SD_API_KEY"
-        query: "SELECT * FROM tickets WHERE updated >= NOW() - INTERVAL '1 day'"
-      run:
-        load_pattern: "full"
-        write_parquet: true
-        write_csv: false
-        max_rows_per_file: 250000
+    system: salesforce
+    entity: accounts
 
-silver:
-  write_parquet: true
-  write_csv: true
-  partitioning:
-    columns: ["is_current"]
-  schema:
-    rename_map:
-      Id: entity_id
-      LastModifiedDate: updated_at
-    column_order:
-      - entity_id
-      - name
-      - updated_at
-      - is_current
-  normalization:
-    trim_strings: true
-    empty_strings_as_null: true
-  error_handling:
-    enabled: true
-    max_bad_records: 25
-    max_bad_percent: 0.25
-  require_checksum: true
+    bronze:
+      enabled: true
+      source_type: custom
+      connection_name: SALESFORCE_CONN
+      source_query: active accounts
+      partition_column: load_dt
+      options:
+        load_pattern: cdc
+        custom_extractor:
+          module: custom_extractors.salesforce
+          class_name: SalesforceExtractor
+        salesforce:
+          username_env: SF_USER
+          password_env: SF_PASS
+          token_env: SF_TOKEN
+          soql_query: |
+            SELECT Id, Name, LastModifiedDate
+            FROM Account
+            WHERE IsDeleted = false
+          incremental:
+            cursor_field: LastModifiedDate
+            cursor_type: timestamp
+
+    silver:
+      enabled: true
+
+      entity_kind: state
+      history_mode: scd2
+      delete_mode: tombstone_state
+      schema_mode: allow_new_columns
+
+      natural_keys:
+        - Id
+
+      change_ts_column: LastModifiedDate
+
+      attributes:
+        - Name
+
+      partition_by:
+        - effective_from_dt
+
+  - name: service_requests
+    system: service_desk
+    entity: tickets
+
+    bronze:
+      enabled: true
+      source_type: custom
+      connection_name: SERVICE_DESK_CONN
+      source_query: open tickets
+      partition_column: load_dt
+      options:
+        load_pattern: full
+        custom_extractor:
+          module: custom_extractors.service_desk
+          class_name: ServiceDeskExtractor
+        service_desk:
+          api_user_env: SD_USER
+          api_key_env: SD_API_KEY
+          query: "SELECT * FROM tickets WHERE updated >= NOW() - INTERVAL '1 day'"
+
+    silver:
+      enabled: true
+
+      entity_kind: event
+      input_mode: replace_daily
+      delete_mode: ignore
+      schema_mode: strict
+
+      natural_keys:
+        - ticket_id
+
+      event_ts_column: updated_at
+      change_ts_column: updated_at
+
+      attributes:
+        - status
+        - assigned_to

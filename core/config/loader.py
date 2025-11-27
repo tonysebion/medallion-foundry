@@ -1,19 +1,25 @@
 from __future__ import annotations
 
+import copy
+import logging
 from datetime import date as _date
 from pathlib import Path
 from typing import Any, Dict, List
-import copy
-import logging
 
 import yaml
 
-from .validation import validate_config_dict
-from .typed_models import parse_root_config, RootConfig
-from .v2_validation import validate_v2_config_dict
+from .dataset import (
+    DatasetConfig,
+    dataset_to_runtime_config,
+    is_new_intent_config,
+    legacy_to_dataset,
+)
 from .env_substitution import apply_env_substitution
+from .typed_models import RootConfig, parse_root_config
 from core.deprecation import emit_compat
 from core.paths import build_bronze_relative_path
+from .validation import validate_config_dict
+from .v2_validation import validate_v2_config_dict
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +59,19 @@ def load_config(
     cfg = _read_yaml(path)
     if enable_env_substitution:
         cfg = apply_env_substitution(cfg)
+
+    if "datasets" in cfg:
+        datasets = _load_intent_datasets(cfg)
+        if len(datasets) != 1:
+            raise ValueError(
+                "Config file contains multiple datasets; use load_configs() instead."
+            )
+        return datasets[0]
+
+    if is_new_intent_config(cfg):
+        dataset = DatasetConfig.from_dict(cfg)
+        return _build_dataset_runtime(dataset)
+
     if "sources" in cfg:
         raise ValueError(
             "Config contains multiple sources; use load_configs() instead."
@@ -69,6 +88,9 @@ def load_config(
         validated["__typed_model__"] = typed
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("Typed config parse failed; proceeding with dict only: %s", exc)
+    dataset_intent = legacy_to_dataset(validated)
+    if dataset_intent:
+        validated["__dataset__"] = dataset_intent
     return validated
 
 
@@ -85,8 +107,19 @@ def load_configs(
     raw = _read_yaml(path)
     if enable_env_substitution:
         raw = apply_env_substitution(raw)
+
+    if "datasets" in raw or is_new_intent_config(raw):
+        datasets = _load_intent_datasets(raw)
+        if datasets:
+            return datasets
+        raise ValueError("'datasets' must be a non-empty list when provided")
+
     if "sources" not in raw:
-        return [validate_config_dict(raw)]
+        validated = validate_config_dict(raw)
+        dataset_intent = legacy_to_dataset(validated)
+        if dataset_intent:
+            validated["__dataset__"] = dataset_intent
+        return [validated]
 
     sources = raw["sources"]
     if not isinstance(sources, list) or not sources:
@@ -138,6 +171,9 @@ def load_configs(
             logger.warning(
                 "Typed config parse failed for source index %s: %s", idx, exc
             )
+        dataset_intent = legacy_to_dataset(validated)
+        if dataset_intent:
+            validated["__dataset__"] = dataset_intent
         results.append(validated)
 
     return results
@@ -145,3 +181,38 @@ def load_configs(
 
 def build_relative_path(cfg: Dict[str, Any], run_date: _date) -> str:
     return build_bronze_relative_path(cfg, run_date)
+
+
+def _build_dataset_runtime(dataset: DatasetConfig) -> Dict[str, Any]:
+    runtime = dataset_to_runtime_config(dataset)
+    validated = validate_config_dict(runtime)
+    validated["__dataset__"] = dataset
+    validated["_intent_config"] = True
+    return validated
+
+
+def _load_intent_datasets(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Load intent-style configs (single dict or list under 'datasets')."""
+    entries: List[Dict[str, Any]]
+    if "datasets" in raw:
+        datasets = raw["datasets"]
+        if not isinstance(datasets, list) or not datasets:
+            raise ValueError("'datasets' must be a non-empty list")
+        defaults = {
+            key: raw.get(key)
+            for key in ("environment", "domain")
+            if raw.get(key) is not None
+        }
+        entries = []
+        for idx, item in enumerate(datasets):
+            if not isinstance(item, dict):
+                raise ValueError("Each entry in 'datasets' must be a dictionary")
+            merged = {**defaults, **item}
+            dataset = DatasetConfig.from_dict(merged)
+            runtime = _build_dataset_runtime(dataset)
+            runtime["source"]["config_name"] = item.get("name") or dataset.dataset_id
+            entries.append(runtime)
+        return entries
+
+    dataset = DatasetConfig.from_dict(raw)
+    return [_build_dataset_runtime(dataset)]

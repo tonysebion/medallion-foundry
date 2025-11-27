@@ -1,19 +1,35 @@
-platform:
-  bronze:
-    s3_bucket: "example-bronze"
-    s3_prefix: "bronze"
+environment: dev
+domain: customer_360
 
-source:
-  type: "db"
-  system: "customers"
-  table: "base"
-  db:
-    conn_str_env: "CUSTOMER_DB_CONN"  # env var holding the connection string
-    base_query: |
-      SELECT CustomerID, Name, UpdatedAt
-      FROM dbo.Customers
-  run:
-    load_pattern: "full"
-    # Optional adjustments for Bronze chunking:
-    # max_rows_per_file: 200000
-    # write_csv: true
+system: customers
+entity: base
+
+bronze:
+  enabled: true
+  source_type: db
+  connection_name: CUSTOMER_DB_CONN                 # connection string stored in env/secret store
+  source_query: |
+    SELECT CustomerID, Name, UpdatedAt
+    FROM dbo.Customers
+  partition_column: load_dt
+  options:
+    load_pattern: full
+
+silver:
+  enabled: true
+
+  entity_kind: state                                 # customer record is a stateful dimension
+  history_mode: scd2
+  delete_mode: tombstone_state
+  schema_mode: allow_new_columns
+
+  natural_keys:
+    - CustomerID
+
+  change_ts_column: UpdatedAt
+
+  attributes:
+    - Name
+
+  partition_by:
+    - effective_from_dt

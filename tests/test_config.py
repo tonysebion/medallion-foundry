@@ -1,10 +1,12 @@
 """Tests for configuration loading and validation."""
 
+import textwrap
+from datetime import date
+
 import pytest
 import yaml
 
-from core.config import load_config, load_configs, build_relative_path
-from datetime import date
+from core.config import build_relative_path, load_config, load_configs
 from core.silver.models import SilverModel
 
 
@@ -308,6 +310,104 @@ class TestConfigLoading:
 
         loaded_config = load_config(str(config_file))
         assert loaded_config["silver"]["model"] == SilverModel.SCD_TYPE_2.value
+
+    def test_intent_style_config_parses(self, tmp_path):
+        yaml_text = textwrap.dedent(
+            """
+            environment: dev
+            domain: finance
+            system: crm
+            entity: orders
+
+            bronze:
+              enabled: true
+              source_type: file
+              path_pattern: ./docs/examples/data/orders_daily.csv
+              options:
+                file:
+                  format: csv
+
+            silver:
+              enabled: true
+              entity_kind: event
+              input_mode: append_log
+              delete_mode: ignore
+              schema_mode: strict
+              natural_keys:
+                - order_id
+              event_ts_column: event_ts
+              change_ts_column: event_ts
+              attributes:
+                - status
+                - amount
+              partition_by:
+                - event_ts_dt
+            """
+        )
+        config_file = tmp_path / "intent.yaml"
+        config_file.write_text(yaml_text, encoding="utf-8")
+
+        cfg = load_config(str(config_file))
+        assert cfg["_intent_config"] is True
+        dataset = cfg["__dataset__"]
+        assert dataset.system == "crm"
+        assert dataset.entity == "orders"
+        assert dataset.silver.entity_kind.value == "event"
+        assert cfg["source"]["system"] == "crm"
+        assert cfg["silver"]["primary_keys"] == ["order_id"]
+        assert cfg["source"]["run"]["local_output_dir"]
+
+    def test_intent_multi_dataset_config(self, tmp_path):
+        yaml_text = textwrap.dedent(
+            """
+            environment: test
+            domain: claims
+            datasets:
+              - name: adjusters
+                system: guidewire
+                entity: adjusters
+                bronze:
+                  enabled: true
+                  source_type: db
+                  connection_name: GW_DB
+                  source_query: SELECT * FROM adjusters
+                silver:
+                  enabled: true
+                  entity_kind: state
+                  history_mode: scd2
+                  natural_keys: [adjuster_id]
+                  change_ts_column: updated_at
+                  attributes: [status]
+              - name: claim_events
+                system: guidewire
+                entity: claim_events
+                bronze:
+                  enabled: true
+                  source_type: api
+                  connection_name: GW_API
+                  source_query: /claims/events
+                silver:
+                  enabled: true
+                  entity_kind: event
+                  input_mode: append_log
+                  natural_keys: [claim_event_id]
+                  event_ts_column: occurred_at
+                  change_ts_column: occurred_at
+                  attributes: [claim_id, status]
+            """
+        )
+        config_file = tmp_path / "multi_intent.yaml"
+        config_file.write_text(yaml_text, encoding="utf-8")
+
+        configs = load_configs(str(config_file))
+        assert len(configs) == 2
+        names = {cfg["source"]["config_name"] for cfg in configs}
+        assert names == {"adjusters", "claim_events"}
+        for cfg in configs:
+            assert cfg["_intent_config"] is True
+            dataset = cfg["__dataset__"]
+            assert dataset.system == "guidewire"
+            assert cfg["platform"]["bronze"]["local_path"]
 
 
 class TestBuildRelativePath:

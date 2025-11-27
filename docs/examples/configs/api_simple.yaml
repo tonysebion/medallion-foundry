@@ -1,21 +1,45 @@
-platform:
-  bronze:
-    # Target bucket/prefix for Bronze files
-    s3_bucket: "example-bronze"
-    s3_prefix: "bronze"
+environment: dev
+domain: sales
 
-source:
-  # Use the API extractor for HTTP sources
-  type: "api"
-  system: "orders"      # Logical system name used in partition path
-  table: "orders"       # Logical table name used in partition path
-  api:
-    base_url: "https://api.example.com"
-    endpoint: "/orders"
-    method: "GET"
-  run:
-    load_pattern: "full"  # Required pattern for full snapshots
-    # Optional runtime tuning:
-    # max_rows_per_file: 500000
-    # write_parquet: true
-    # parallel_workers: 1
+system: commerce_cloud
+entity: orders
+
+bronze:
+  enabled: true
+  source_type: api
+  connection_name: COMMERCE_CLOUD_TOKEN        # resolve this to an env var or secret manager
+  source_query: /orders                        # simple REST endpoint path
+  partition_column: order_date
+  owner_team: commerce-platform
+  owner_contact: commerce-platform@example.com
+  options:
+    load_pattern: full                        # vendor sends a full daily slice
+    api:
+      base_url: https://api.example.com       # hosts the REST endpoint
+      method: GET
+      headers:
+        Accept: application/json
+
+silver:
+  enabled: true
+
+  entity_kind: event           # each order is a discrete business event
+  input_mode: replace_daily    # Bronze overwrites one day at a time
+  delete_mode: ignore          # cancellations arrive as new events
+  schema_mode: strict
+
+  natural_keys:
+    - order_id                 # order ID is the producer-defined key
+
+  event_ts_column: order_date
+  change_ts_column: order_date
+
+  attributes:
+    - customer_id
+    - status
+    - total_amount
+
+  partition_by:
+    - order_date_dt
+  semantic_owner: sales-analytics
+  semantic_contact: analytics@example.com

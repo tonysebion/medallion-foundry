@@ -1,83 +1,91 @@
-platform:
-  bronze:
-    s3_bucket: "integration-bronze"
-    s3_prefix: "bronze/orders"
-    partitioning:
-      use_dt_partition: true         # adds dt=YYYY-MM-DD partitions
-      partition_strategy: "batch_id" # custom batch identifier folder
-    output_defaults:
-      allow_csv: true
-      allow_parquet: true
-      parquet_compression: "snappy"
+environment: prod
+domain: commerce
 
-sources:
+datasets:
   - name: orders_batch
-    source:
-      type: "api"
-      system: "orders"
-      table: "orders_full"
-      api:
-        base_url: "https://api.example.com"
-        endpoint: "/orders"
-        method: "GET"
-        auth_type: "bearer"
-        auth_token_env: "ORDERS_API_TOKEN"
-        params:
-          page_size: 1000
-          include_inactive: false
-        pagination:
-          type: "page"
-          page_param: "page"
-          start_page: 1
-          max_pages: 1000
-        incremental:
-          enabled: true
-          cursor_field: "updated_at"
-          cursor_param: "updated_since"
-          initial_cursor_value: "2025-01-01T00:00:00Z"
-      run:
-        load_pattern: "current_history"
-        write_parquet: true
-        write_csv: false
-        max_rows_per_file: 250000
-        parallel_workers: 4
-        require_checksum: true
-  - name: invoices_delta
-    source:
-      type: "api"
-      system: "billing"
-      table: "invoices"
-      api:
-        base_url: "https://api.example.com"
-        endpoint: "/invoices"
-        method: "GET"
-        auth_type: "api_key"  # alternative auth for this source
-        api_key_env: "INVOICE_API_KEY"
-      run:
-        load_pattern: "cdc"
-        write_parquet: true
-        write_csv: false
-        max_rows_per_file: 150000
-        require_checksum: true
+    system: orders
+    entity: orders_full
 
-silver:
-  write_parquet: true
-  write_csv: true
-  partitioning:
-    columns: ["status"]
-  schema:
-    rename_map:
-      OrderID: order_id
-      UpdatedAt: updated_at
-    column_order:
-      - order_id
-      - status
-      - updated_at
-  normalization:
-    trim_strings: true
-    empty_strings_as_null: true
-  error_handling:
-    enabled: true
-    max_bad_records: 25
-    max_bad_percent: 2.0
-  require_checksum: true
+    bronze:
+      enabled: true
+      source_type: api
+      connection_name: ORDERS_API_TOKEN
+      source_query: /orders
+      partition_column: batch_id                             # original config used batch folders
+      options:
+        load_pattern: current_history                       # Bronze lands both current + history artifacts
+        api:
+          base_url: https://api.example.com
+          method: GET
+          params:
+            page_size: 1000
+            include_inactive: false
+          pagination:
+            type: page
+            page_param: page
+            start_page: 1
+            max_pages: 1000
+          incremental:
+            enabled: true
+            cursor_field: updated_at
+            cursor_param: updated_since
+            initial_cursor_value: 2025-01-01T00:00:00Z
+
+    silver:
+      enabled: true
+
+      entity_kind: state                                    # we need as-of answers for the order record
+      history_mode: scd2
+      delete_mode: tombstone_state
+      schema_mode: allow_new_columns
+
+      natural_keys:
+        - order_id
+
+      change_ts_column: updated_at
+
+      attributes:
+        - status
+        - total_amount
+        - owner_id
+
+      partition_by:
+        - effective_from_dt
+
+  - name: invoices_delta
+    system: billing
+    entity: invoices
+
+    bronze:
+      enabled: true
+      source_type: api
+      connection_name: INVOICE_API_KEY
+      source_query: /invoices
+      partition_column: invoice_date
+      options:
+        load_pattern: cdc
+        api:
+          base_url: https://api.example.com
+          method: GET
+
+    silver:
+      enabled: true
+
+      entity_kind: event                                    # delta feed emits invoice adjustments
+      input_mode: append_log
+      delete_mode: ignore
+      schema_mode: strict
+
+      natural_keys:
+        - invoice_id
+
+      event_ts_column: invoice_date
+      change_ts_column: invoice_date
+
+      attributes:
+        - customer_id
+        - total_due
+        - status
+
+      partition_by:
+        - invoice_date_dt
