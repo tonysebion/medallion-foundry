@@ -8,7 +8,7 @@ Complete [`docs/setup/INSTALLATION.md`](../../setup/INSTALLATION.md) first. That
 
 ## 2. Generate sample data
 
-We keep realistic CSV snapshots under `sampledata/bronze_samples/`. Run the helper script once to populate that folder:
+We keep realistic CSV snapshots over multiple weeks under `sampledata/source_samples/`. Run the helper script once to populate that folder so each pattern named in `docs/usage/patterns/pattern_matrix.md` has a matching directory, and each directory captures daily loads that visualize how the Bronze files shift across weeks.
 
 ```powershell
 python scripts/generate_sample_data.py
@@ -16,8 +16,7 @@ python scripts/generate_sample_data.py
 
 This writes
 
-- `sampledata/bronze_samples/` with CSV input for each pattern.  
-- `docs/examples/data/bronze_samples/` and `docs/examples/data/bronze_examples/` are mirrored copies used by the docs and tests.  
+- `sampledata/source_samples/` with CSV input for each pattern; this is the single canonical store used by the docs, tests, and quickstarts.
 
 You can also copy the generated Bronze files into a dedicated `sampledata/` folder if you want to experiment outside the repo tree; just point your config at that path.
 
@@ -74,3 +73,4 @@ The dry run verifies paths without writing data. The subsequent runs produce Bro
 - Run `tests/test_usage_flow.py` to continuously exercise this quickstart path and keep the docs accurate.  
 - Advance to [`docs/usage/onboarding/intent-owner-guide.md`](../onboarding/intent-owner-guide.md) to define real datasets, ownership, and metadata.  
 - Explore `docs/usage/patterns/pattern_matrix.md` plus `docs/examples/configs/pattern_*.yaml` for more refined Bronze/Silver patterns.
+- Automate the sample run: execute `python sampledata/processes/run_pattern_bronze.py` to rebuild the bronze outputs from each pattern config and observe how Bronze handles the daily source files described in the pattern matrix.

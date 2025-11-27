@@ -57,32 +57,41 @@ plugins:
 
 nav:
   - Home: index.md
-  - Getting Started:
-    - Quick Start: QUICKSTART.md
-    - Installation: INSTALLATION.md
-    - Quick Reference: QUICK_REFERENCE.md
-  - Documentation:
-    - Complete Guide: DOCUMENTATION.md
-    - Architecture: ARCHITECTURE.md
-    - Configuration Reference: CONFIG_REFERENCE.md
-    - Enhanced Features: ENHANCED_FEATURES.md
-    - Extraction Guidance: EXTRACTION_GUIDANCE.md
-    - Config Doctor: CONFIG_DOCTOR.md
-    - First Production Run: FIRST_RUN_CHECKLIST.md
-    - Error Codes: ERROR_CODES.md
-    - Performance Tuning: PERFORMANCE_TUNING.md
-    - Operations: OPERATIONS.md
-    - Ops Playbook: OPS_PLAYBOOK.md
-    - Gold Contracts: GOLD_CONTRACTS.md
-    - Silver Join: SILVER_JOIN.md
-  - Extending:
-    - Custom Extractors: EXTENDING_EXTRACTORS.md
-    - Storage Backends: STORAGE_BACKEND_ARCHITECTURE.md
-    - Examples: examples/README.md
-    - Real World Examples: examples/REAL_WORLD_EXAMPLES.md
+  - Setup:
+    - Installation: setup/INSTALLATION.md
+  - Usage:
+    - Overview: usage/index.md
+    - Beginner:
+      - Quick Start: usage/beginner/QUICKSTART.md
+      - First Production Run Checklist: usage/beginner/FIRST_RUN_CHECKLIST.md
+    - Onboarding:
+      - Intent Owner Guide: usage/onboarding/intent-owner-guide.md
+      - Intent Lifecycle: usage/onboarding/intent-lifecycle.md
+      - New Dataset Checklist: usage/onboarding/new_dataset_checklist.md
+      - Bronze Readiness Checklist: usage/onboarding/bronze_readiness_checklist.md
+    - Patterns:
+      - Pattern Matrix: usage/patterns/pattern_matrix.md
+      - Extraction Guidance: usage/patterns/EXTRACTION_GUIDANCE.md
+      - Enhanced Features: usage/patterns/ENHANCED_FEATURES.md
+  - Reference:
+    - Architecture: framework/architecture.md
+    - Silver Patterns: framework/silver_patterns.md
+    - Pipeline Engine: framework/pipeline_engine.md
+    - Manifesto Playbook: framework/manifesto-playbook.md
+    - Complete Guide: framework/reference/DOCUMENTATION.md
+    - Configuration Reference: framework/reference/CONFIG_REFERENCE.md
+    - Quick Reference: framework/reference/QUICK_REFERENCE.md
+  - Operations:
+    - Config Doctor: framework/operations/CONFIG_DOCTOR.md
+    - Error Codes: framework/operations/ERROR_CODES.md
+    - Gold Contracts: framework/operations/GOLD_CONTRACTS.md
+    - Operations Overview: framework/operations/OPERATIONS.md
+    - Ops Playbook: framework/operations/OPS_PLAYBOOK.md
+    - Performance Tuning: framework/operations/PERFORMANCE_TUNING.md
+    - Silver Join: framework/operations/SILVER_JOIN.md
+    - Testing: framework/operations/TESTING.md
   - Development:
-    - Contributing: CONTRIBUTING.md
-    - Testing: TESTING.md
+    - Contributing: framework/operations/CONTRIBUTING.md
   - API Reference:
     - Core: api/core.md
     - Extractors: api/extractors.md

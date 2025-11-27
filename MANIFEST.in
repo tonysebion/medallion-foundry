@@ -4,12 +4,12 @@
 include README.md
 include LICENSE
 include CHANGELOG.md
-include docs/CONTRIBUTING.md
-include docs/INSTALLATION.md
-include docs/QUICKSTART.md
-include docs/QUICK_REFERENCE.md
-include docs/DOCUMENTATION.md
-include docs/TESTING.md
+include docs/framework/operations/CONTRIBUTING.md
+include docs/setup/INSTALLATION.md
+include docs/usage/beginner/QUICKSTART.md
+include docs/framework/reference/QUICK_REFERENCE.md
+include docs/framework/reference/DOCUMENTATION.md
+include docs/framework/operations/TESTING.md
 include RELEASE_NOTES_v1.0.0.md
 
 # Include configuration files

@@ -402,4 +402,4 @@ python bronze_extract.py --config config/shopify_orders.yaml --dry-run
 python bronze_extract.py --config config/shopify_orders.yaml --date 2025-01-12
 ```
 
-See [DOCUMENTATION.md](../DOCUMENTATION.md) for complete API extractor documentation.
+See [DOCUMENTATION.md](../framework/reference/DOCUMENTATION.md) for complete API extractor documentation.

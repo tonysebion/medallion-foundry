@@ -50,7 +50,7 @@ This is the first production release of Bronze Foundry! This release includes co
   - `--log-format`: Choose JSON or human-readable logging
 
 ### Documentation
-- ✅ `docs/CONTRIBUTING.md`: Complete contribution guidelines
+- ✅ `docs/framework/operations/CONTRIBUTING.md`: Complete contribution guidelines
 - ✅ `config/README.md`: Configuration directory documentation
 - ✅ `TESTING.md`: Comprehensive testing guide
 - ✅ `mkdocs.yml`: Documentation website setup
@@ -169,7 +169,7 @@ Thanks to all contributors for making v1.0.0 possible!
 
 - Documentation: See `docs/` directory
 - Issues: Please report on project issue tracker
-- Contributing: See `docs/CONTRIBUTING.md`
+- Contributing: See `docs/framework/operations/CONTRIBUTING.md`
 
 ---
 

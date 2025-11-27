@@ -22,12 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Missing `source.api.endpoint` defaulting to '/' (CFG003, removal in 1.3.0).
 - Positional legacy wrapper `write_silver_outputs` (API001, removal in 1.3.0) – migrate to `DefaultSilverArtifactWriter`.
 - `StreamingSilverWriter` class (replaced by direct `DatasetWriter` usage in streaming path; removal in 1.3.0).
+- `silver_extract.py --stream` / `--resume` CLI flags (STREAM001, removal in 1.3.0) – switch to the new chunking flow and rely on metadata/checksum files for reruns.
 
 ### Changed
 - `generate_silver_samples.py` no longer auto-synthesizes Bronze data; tests and users should call bootstrap command explicitly.
 
 ### Migration Guidance
-Add explicit `platform.bronze.local_path`; rename `source.api.url` to `base_url`; specify `source.api.endpoint`; replace calls to `write_silver_outputs` wrapper with `DefaultSilverArtifactWriter().write(...)` before v1.3.0.
+Add explicit `platform.bronze.local_path`; rename `source.api.url` to `base_url`; specify `source.api.endpoint`; replace calls to `write_silver_outputs` wrapper with `DefaultSilverArtifactWriter().write(...)` before v1.3.0; eliminate `--stream`/`--resume` invocations (chunking is automatic via `SilverProcessor`).
 
 
 ## [1.0.0] - 2025-11-12
@@ -82,7 +83,7 @@ Add explicit `platform.bronze.local_path`; rename `source.api.url` to `base_url`
   - Coverage goals
 
 #### Documentation
-- **docs/CONTRIBUTING.md**: Complete contribution guidelines
+- **docs/framework/operations/CONTRIBUTING.md**: Complete contribution guidelines
   - Development workflow
   - Code style requirements
   - Testing requirements
