@@ -8,11 +8,12 @@ This section collates the owner-focused guides, checklists, and pattern referenc
 
 ## Onboarding & intent
 - [`intent-owner-guide`](onboarding/intent-owner-guide.md) – story-driven intent templates, safe-first runs, and metadata expectations.
-- [`intent-lifecycle`](onboarding/intent-lifecycle.md) – command/path/map reference showing how Bronze, Silver, and metadata files move through the tiered pipeline.
 - [`new_dataset_checklist`](onboarding/new_dataset_checklist.md) – capture ownership, entity intent, and load controls before running Bronze.
 - [`bronze_readiness_checklist`](onboarding/bronze_readiness_checklist.md) – post-run audit to confirm Bronze files, metadata, and ownership align with intent.
+- [`intent-lifecycle`](../framework/reference/intent-lifecycle.md) – command/path/map reference showing how Bronze, Silver, and metadata files move through the tiered pipeline.
 
 ## Patterns & advanced controls
+- [`QUICK_REFERENCE`](patterns/QUICK_REFERENCE.md) – cheat sheet for common data scenarios and pattern selection.
 - [`pattern_matrix`](patterns/pattern_matrix.md) – decision router and config recipes for every load model.
 - [`EXTRACTION_GUIDANCE`](patterns/EXTRACTION_GUIDANCE.md) – when to choose `full`, `cdc`, or `current_history`.
 - [`ENHANCED_FEATURES`](patterns/ENHANCED_FEATURES.md) – tuning knobs, partitioning, and observability options.

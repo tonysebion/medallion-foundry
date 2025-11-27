@@ -9,6 +9,7 @@ This guide distills the “source owner experience” into a purpose-built path.
 2. **Lean on the pattern matrix**
    - Consult `docs/usage/patterns/pattern_matrix.md` to see how every load pattern (full, CDC, current_history, hybrid reference/delta, incremental) maps to the sample configs we ship.
    - Copy the matching `docs/examples/configs/patterns/pattern_*.yaml` to create your own pattern variation and point it at your source feed.
+   - For detailed guidance on choosing between patterns, see `docs/usage/patterns/EXTRACTION_GUIDANCE.md`.
 
 3. **Run a safe-first Bronze extract**
    - Use the intent file with `python bronze_extract.py --config <your-intent>.yaml --date YYYY-MM-DD --dry-run` to verify the target folders and metadata without writing data.

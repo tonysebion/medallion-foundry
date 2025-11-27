@@ -147,3 +147,9 @@ silver:
 ```
 
 Once this config is filled in, Bronze + Silver can run as a paired pipeline without changing code.
+
+## Next Steps
+
+- **Choose your pattern**: Use `docs/usage/patterns/pattern_matrix.md` to select the right Bronze/Silver pattern based on your answers above
+- **Run a test**: Follow `docs/usage/onboarding/bronze_readiness_checklist.md` to validate your first Bronze extraction
+- **Advanced features**: Check `docs/usage/patterns/ENHANCED_FEATURES.md` for performance tuning and observability options

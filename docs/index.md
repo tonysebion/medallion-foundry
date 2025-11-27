@@ -27,9 +27,10 @@ Use these guides to move from “what is Bronze/Silver?” to selecting a patter
 | `docs/usage/beginner/QUICKSTART.md` | Step-by-step walkthrough that gets you from zero to running `bronze_extract.py` and `silver_extract.py`. |
 | `docs/usage/beginner/FIRST_RUN_CHECKLIST.md` | Checklist that ensures logging, metadata, and run controls are in place before a production run. |
 | `docs/usage/onboarding/intent-owner-guide.md` | Story-driven intent templates, safe-first runs, and metadata expectations. |
-| `docs/usage/onboarding/intent-lifecycle.md` | Command/path reference showing how Bronze, Silver, and metadata files move through the tiered flow. |
+| `docs/framework/reference/intent-lifecycle.md` | Command/path reference showing how Bronze, Silver, and metadata files move through the tiered flow. |
 | `docs/usage/onboarding/new_dataset_checklist.md` | Owner questionnaire capturing metadata, load controls, and observability flags before running Bronze. |
 | `docs/usage/onboarding/bronze_readiness_checklist.md` | Post-run audit to confirm Bronze files, `_metadata.json`, `_checksums.json`, and ownership align with your intent. |
+| `docs/usage/patterns/QUICK_REFERENCE.md` | Cheat sheet for common data scenarios and quick pattern selection. |
 | `docs/usage/patterns/pattern_matrix.md` | Decision router + per-pattern recipes that map load behaviors to config fields. |
 | `docs/usage/patterns/EXTRACTION_GUIDANCE.md` | When to choose `full`, `cdc`, `current_history`, or hybrid loads for your source. |
 | `docs/usage/patterns/ENHANCED_FEATURES.md` | Tunable features (partitioning, chunking, observability) to keep Bronze/Silver efficient. |

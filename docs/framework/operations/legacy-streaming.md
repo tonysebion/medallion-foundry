@@ -6,6 +6,6 @@ If you used to rely on `--stream`/`--resume`:
 
 1. Just re-run `bronze_extract.py --config <config> --date <date>` to rewrite Bronze safely.
 2. Run `silver_extract.py --config <config> --date <date>` (or `scripts/run_intent_config.py`) to promote the same data; the idempotent metadata/checksum flow replaces checkpoint resume.
-3. Review `docs/usage/onboarding/intent-lifecycle.md` for the updated Bronze→Silver path and `docs/framework/manifesto-playbook.md` for how that flow matches the Modern Data Pipeline Manifesto.
+3. Review `docs/framework/reference/intent-lifecycle.md` for the updated Bronze→Silver path and `docs/framework/manifesto-playbook.md` for how that flow matches the Modern Data Pipeline Manifesto.
 
 The old streaming helper has been removed from the codebase; this doc is kept for historical reference only.

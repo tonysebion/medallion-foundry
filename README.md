@@ -139,7 +139,7 @@ Repeat those steps for `api_example.yaml`, `db_complex.yaml`, `file_cdc_example.
 
 Need a single command to run Bronze and Silver together? Use `scripts/run_intent_config.py --config docs/examples/configs/examples/<name>.yaml --date 2025-11-13`; it shells out to the Bronze and Silver CLIs so you can treat each intent config like a runnable script bundle. Use `--skip-bronze` or `--skip-silver` if you only want one leg.
 
-The integration tests (`tests/test_integration_samples.py`) already automate this loop; read it for how we rewrite file paths and validate the Tiered outputs. See `docs/usage/onboarding/intent-lifecycle.md` for the canonical Bronze→Silver flow, directory mapping, and metadata expectations that keep the manifesto-lived experience calm.
+The integration tests (`tests/test_integration_samples.py`) already automate this loop; read it for how we rewrite file paths and validate the Tiered outputs. See `docs/framework/reference/intent-lifecycle.md` for the canonical Bronze→Silver flow, directory mapping, and metadata expectations that keep the manifesto-lived experience calm.
 
 ---
 

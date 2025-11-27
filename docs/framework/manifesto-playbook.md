@@ -17,4 +17,4 @@ This playbook ties each manifesto principle to the concrete artifacts we already
 
 Use this playbook as your primary checklist whenever you add configs, write new scripts, or modify the directory layout—each column maps the principle directly to something actionable in the repo.
 
-If you need an at-a-glance flow, see `docs/usage/onboarding/intent-lifecycle.md` for the Bronze→Silver command/path/metadata steps that implement this manifesto end-to-end.
+If you need an at-a-glance flow, see `docs/framework/reference/intent-lifecycle.md` for the Bronze→Silver command/path/metadata steps that implement this manifesto end-to-end.
