@@ -71,5 +71,6 @@ The dry run verifies paths without writing data. The subsequent runs produce Bro
 ## 8. What’s next
 
 - Run `tests/test_usage_flow.py` to continuously exercise this quickstart path and keep the docs accurate.  
+- **Customize configs**: See [`docs/usage/beginner/COPY_AND_CUSTOMIZE.md`](COPY_AND_CUSTOMIZE.md) for detailed guidance on adapting example configs for your data sources.  
 - Advance to [`docs/usage/onboarding/intent-owner-guide.md`](../onboarding/intent-owner-guide.md) to define real datasets, ownership, and metadata.  
 - Explore `docs/usage/patterns/pattern_matrix.md` plus `docs/examples/configs/patterns/` for more refined Bronze/Silver patterns.

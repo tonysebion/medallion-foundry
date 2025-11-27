@@ -63,6 +63,7 @@ nav:
     - Overview: usage/index.md
     - Beginner:
       - Quick Start: usage/beginner/QUICKSTART.md
+      - Copy & Customize Guide: usage/beginner/COPY_AND_CUSTOMIZE.md
       - First Production Run Checklist: usage/beginner/FIRST_RUN_CHECKLIST.md
     - Onboarding:
       - Intent Owner Guide: usage/onboarding/intent-owner-guide.md
