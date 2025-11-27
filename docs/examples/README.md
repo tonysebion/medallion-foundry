@@ -167,7 +167,7 @@ azure://container/prefix/system=<system>/table=<table>/dt=YYYY-MM-DD/
 
 ```bash
 # Run with quick test config (no cloud dependencies)
-python bronze_extract.py --config docs/examples/configs/quickstart/quick_test.yaml
+python bronze_extract.py --config docs/examples/configs/examples/file_example.yaml
 
 # Expected output:
 # - Local files in output/system=jsonplaceholder/table=todos/
@@ -197,13 +197,9 @@ docs/examples/
 │   │   ├── db_example.yaml           # SQL database extraction
 │   │   ├── file_example.yaml         # File extraction
 │   │   └── custom_example.yaml       # Custom Python extractor
-│   ├── simple/                       # Minimal starter configs
-│   ├── complex/                      # Advanced production configs
 │   ├── patterns/                     # Load pattern examples
 │   ├── advanced/                     # Specialized features
-│   ├── templates/                    # Config templates
-│   └── quickstart/                   # Quick start configs
-│       └── quick_test.yaml           # 2-minute quick start
+│   └── templates/                    # Config templates
 │
 ├── extensions/                        # Optional feature extensions
 │   └── azure_storage/                # Azure storage backend

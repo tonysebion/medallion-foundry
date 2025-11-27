@@ -88,7 +88,7 @@ python -m venv .venv
 pip install -r requirements.txt
 
 # 2. Copy and edit the quick test config
-cp docs/examples/configs/quickstart/quick_test.yaml config/test.yaml
+cp docs/examples/configs/examples/file_example.yaml config/test.yaml
 # Edit config/test.yaml with your API details
 
 # 3. Set your token
@@ -131,8 +131,8 @@ This workflow uses only local files, so a non-Python user can validate everythin
 To exercise the example configurations under `docs/examples/configs`, run Bronze and Silver separately with the same YAML (each config now has both sections). For example:
 
 ```bash
-python bronze_extract.py --config docs/examples/configs/complex/file_complex.yaml --date 2025-11-13
-python silver_extract.py --config docs/examples/configs/complex/file_complex.yaml --date 2025-11-13
+python bronze_extract.py --config docs/examples/configs/advanced/enhanced_example.yaml --date 2025-11-13
+python silver_extract.py --config docs/examples/configs/advanced/enhanced_example.yaml --date 2025-11-13
 ```
 
 Repeat those steps for `api_example.yaml`, `db_complex.yaml`, `file_cdc_example.yaml`, etc., to cover different entity kinds/load patterns. Bronze outputs always land under `output/env=<environment>/system=<system>/table=<entity>/…` (defaulting to no `env=` when none is specified); Silver promotes into `silver/env=<environment>/domain=<domain>/entity=<entity>/v<version>/<load_partition>=<date>/…`. Setting `environment` at the top level of the intent config ensures Bronze and Silver placements follow the same hierarchy.
@@ -265,7 +265,7 @@ python silver_extract.py \
 - Matching configs: `file_example.yaml` (full), `file_cdc_example.yaml` (cdc), `file_current_history_example.yaml`
 
 ### Sample Configs
-- `docs/examples/configs/` contains starter configs in `simple/` plus advanced versions in `complex/` that showcase options for each extractor type (API, DB, file, custom). Use the simple configs to get Bronze/Silver running quickly and refer to the complex ones when you need to enable partitioning, normalization, error handling, or chunk-friendly tuning; `SilverProcessor` chunking happens automatically (legacy streaming flags are now documented in `docs/framework/operations/legacy-streaming.md`).
+- `docs/examples/configs/` contains starter configs in `examples/` plus advanced versions in `advanced/` that showcase options for each extractor type (API, DB, file, custom). Use the examples configs to get Bronze/Silver running quickly and refer to the advanced ones when you need to enable partitioning, normalization, error handling, or chunk-friendly tuning; `SilverProcessor` chunking happens automatically (legacy streaming flags are now documented in `docs/framework/operations/legacy-streaming.md`).
 
 ### Multi-Source Pipelines (One YAML, Many Jobs)
 

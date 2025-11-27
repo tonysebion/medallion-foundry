@@ -19,11 +19,6 @@ These configurations demonstrate different data loading patterns used in the med
 - `file_cdc_example.yaml` - File extraction with CDC pattern
 - `file_current_history_example.yaml` - File extraction with SCD pattern
 
-### Sample Data Patterns
-- `sample_pattern_full.yaml` - Full pattern with sample data
-- `sample_pattern_cdc.yaml` - CDC pattern with sample data
-- `sample_pattern_scd_state.yaml` - SCD pattern with sample data
-
 ## Purpose
 
 These configs illustrate:
@@ -34,4 +29,4 @@ These configs illustrate:
 
 ## Usage
 
-Use these configs to understand how different data patterns work and choose the appropriate pattern for your use case. The sample data configs work with the generated test datasets.
+Use these configs to understand how different data patterns work and choose the appropriate pattern for your use case. The file-based examples work with the generated test datasets.

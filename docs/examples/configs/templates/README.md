@@ -17,4 +17,9 @@ These templates are designed for:
 
 ## Usage
 
-Copy these templates and replace placeholder values with your actual configuration. The owner_intent_template is designed for non-technical users to specify requirements, while reference_intent shows advanced options.
+Copy these templates and replace placeholder values with your actual configuration. The `owner_intent_template.yaml` is designed for non-technical users to specify requirements, while `reference_intent.yaml` shows advanced options.
+
+**Note**: To see how the owner intent template gets processed, run:
+```bash
+python scripts/expand_owner_intent.py --config docs/examples/configs/templates/owner_intent_template.yaml
+```
