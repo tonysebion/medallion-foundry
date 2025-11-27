@@ -11,7 +11,7 @@
 ### Clone Repository
 
 ```bash
-git clone https://github.com/medallion-foundry/medallion-foundry.git
+git clone https://github.com/tonysebion/medallion-foundry.git
 cd medallion-foundry
 ```
 

@@ -24,7 +24,7 @@ You can also copy the generated Bronze files into a dedicated `sampledata/` fold
 
 ```powershell
 mkdir -ErrorAction SilentlyContinue config
-copy docs\examples\quick_test.yaml config\test.yaml
+copy docs\examples\configs\quickstart\quick_test.yaml config\test.yaml
 ```
 
 Edit `config\test.yaml`:
@@ -72,5 +72,4 @@ The dry run verifies paths without writing data. The subsequent runs produce Bro
 
 - Run `tests/test_usage_flow.py` to continuously exercise this quickstart path and keep the docs accurate.  
 - Advance to [`docs/usage/onboarding/intent-owner-guide.md`](../onboarding/intent-owner-guide.md) to define real datasets, ownership, and metadata.  
-- Explore `docs/usage/patterns/pattern_matrix.md` plus `docs/examples/configs/pattern_*.yaml` for more refined Bronze/Silver patterns.
-- Automate the sample run: execute `python sampledata/processes/run_pattern_bronze.py` to rebuild the bronze outputs from each pattern config and observe how Bronze handles the daily source files described in the pattern matrix.
+- Explore `docs/usage/patterns/pattern_matrix.md` plus `docs/examples/configs/patterns/` for more refined Bronze/Silver patterns.
