@@ -3,12 +3,12 @@
 This guide distills the “source owner experience” into a purpose-built path. Follow the numbered steps, copy the linked templates, and let the framework infer the rest—no Python hacking required.
 
 1. **Describe your system & entities in plain language**
-   - Start from `docs/examples/configs/owner_intent_template.yaml`. Replace the `system`, `entity`, and high-level `bronze`/`silver` fields with your own objects.
+   - Start from `docs/examples/configs/templates/owner_intent_template.yaml`. Replace the `system`, `entity`, and high-level `bronze`/`silver` fields with your own objects.
    - Run `python scripts/expand_owner_intent.py --config <your-intent>.yaml` to print the inferred Bronze/Silver folders and save a resolved intent file (the generated `owner_intent_template.resolved.yaml` shows the pattern).
 
 2. **Lean on the pattern matrix**
    - Consult `docs/usage/patterns/pattern_matrix.md` to see how every load pattern (full, CDC, current_history, hybrid reference/delta, incremental) maps to the sample configs we ship.
-   - Copy the matching `docs/examples/configs/pattern_*.yaml` to create your own pattern variation and point it at your source feed.
+   - Copy the matching `docs/examples/configs/patterns/pattern_*.yaml` to create your own pattern variation and point it at your source feed.
 
 3. **Run a safe-first Bronze extract**
    - Use the intent file with `python bronze_extract.py --config <your-intent>.yaml --date YYYY-MM-DD --dry-run` to verify the target folders and metadata without writing data.

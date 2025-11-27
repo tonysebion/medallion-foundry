@@ -15,8 +15,8 @@ Use this checklist to onboard a dataset into the Bronze → Silver pipeline. The
    - Setting this ensures Bronze/Silver outputs live under `env=<environment>` so different tiers stay separated.
 
 4. **Intent template** (Step 1 hand-holding):
-   - Start from `docs/examples/configs/owner_intent_template.yaml` when you need a concrete example of how a source owner can describe systems/entities in plain language.
-   - Run `python scripts/expand_owner_intent.py --config docs/examples/configs/owner_intent_template.yaml` to produce `owner_intent_template.resolved.yaml` plus a short checklist of the inferred Bronze/Silver folders.
+   - Start from `docs/examples/configs/templates/owner_intent_template.yaml` when you need a concrete example of how a source owner can describe systems/entities in plain language.
+   - Run `python scripts/expand_owner_intent.py --config docs/examples/configs/templates/owner_intent_template.yaml` to produce `owner_intent_template.resolved.yaml` plus a short checklist of the inferred Bronze/Silver folders.
    - Copy the template, replace `system`, `entity`, and `bronze.path_pattern` with your own source values, and let the framework infer folders.
 
 4. **Domain** (optional):
@@ -70,7 +70,7 @@ Applies to `entity_kind: event` or `derived_event`.
     - Verify the planned paths before writing anything by running:
 
       ```bash
-      python bronze_extract.py --config docs/examples/configs/owner_intent_template.yaml --date 2025-11-13 --dry-run
+      python bronze_extract.py --config docs/examples/configs/templates/owner_intent_template.yaml --date 2025-11-13 --dry-run
       ```
 
       This prints the Bronze/Silver targets without creating files and confirms that your checklist and template point to the right folders.

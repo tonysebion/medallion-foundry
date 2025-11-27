@@ -120,7 +120,7 @@ lists the core config fields, and ends with “See also” links to the authorit
 ## Running the sample matrix
 
 1. Regenerate fixtures so each pattern has Bronze data (`python scripts/generate_sample_data.py`).  
-2. Optional: refresh the owner intent mapping (`python scripts/expand_owner_intent.py --config docs/examples/configs/owner_intent_template.yaml`).  
+2. Optional: refresh the owner intent mapping (`python scripts/expand_owner_intent.py --config docs/examples/configs/templates/owner_intent_template.yaml`).  
 3. Run the integration suite covering every `pattern_*.yaml` (`pytest tests/test_integration_samples.py`).  
 
 Each config targets an exact Bronze sample under `sampledata/source_samples/<pattern>/…`. Every pattern folder now records daily loads spanning several weeks, so you can inspect how that pattern’s files evolve day-to-day and understand what downstream Bronze or Silver operations must handle (e.g., full rewrites vs. new CDC deltas vs. refreshed current/history rows).

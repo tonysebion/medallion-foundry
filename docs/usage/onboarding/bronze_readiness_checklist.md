@@ -3,7 +3,7 @@
 Use this checklist after your first dev extract to confirm Bronze is ready for promotion and downstream consumption.
 
 1. **Run Mode & Safe Range**
-   - Launch `python bronze_extract.py --config docs/examples/configs/owner_intent_template.yaml --date 2025-11-13 --dry-run` to preview paths and metadata before writing files.
+   - Launch `python bronze_extract.py --config docs/examples/configs/templates/owner_intent_template.yaml --date 2025-11-13 --dry-run` to preview paths and metadata before writing files.
    - For a first dev run, add `--load-pattern full` or `--load-pattern cdc` and keep the dataset narrow (use `run_mode: dev_test` or `test_range_days: 1` in your intent YAML to document the intent) so only a small slice of data lands.
 
 2. **Inspect the Bronze layout**

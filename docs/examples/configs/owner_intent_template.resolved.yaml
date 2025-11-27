@@ -1,0 +1,59 @@
+environment: dev
+domain: claims
+datasets:
+- name: claim_header
+  system: claims
+  entity: claim_header
+  bronze:
+    enabled: true
+    source_type: file
+    path_pattern: ./sampledata/source_samples/pattern1_full_events/system=claims/table=claim_header/pattern=pattern1_full_events/dt=2025-11-13/
+    partition_column: run_date
+    owner_team: claims-platform
+    owner_contact: claims-team@example.com
+    options:
+      format: parquet
+      load_pattern: full
+      max_file_size_mb: 256
+      max_rows_per_file: 500000
+  silver:
+    enabled: true
+    entity_kind: event
+    history_mode: scd2
+    input_mode: append_log
+    natural_keys:
+    - claim_id
+    event_ts_column: event_ts
+    attributes:
+    - status
+    - amount
+    partition_by:
+    - event_ts_dt
+  derived_paths:
+    bronze: bronze\env=dev\system=claims\table=claim_header\pattern=full\dt=<run_date>
+    silver: silver\env=dev\domain=claims\entity=claim_header\v1\load_date=<run_date>
+- name: claim_line
+  system: claims
+  entity: claim_line
+  bronze:
+    enabled: true
+    source_type: file
+    path_pattern: ./sampledata/source_samples/pattern2_cdc_events/system=claims/table=claim_line/pattern=pattern2_cdc_events/dt=2025-11-13/
+    partition_column: run_date
+    options:
+      format: csv
+      load_pattern: cdc
+  silver:
+    enabled: true
+    entity_kind: event
+    input_mode: append_log
+    natural_keys:
+    - claim_id
+    - line_id
+    event_ts_column: updated_at
+    attributes:
+    - status
+    - amount
+  derived_paths:
+    bronze: bronze\env=dev\system=claims\table=claim_line\pattern=cdc\dt=<run_date>
+    silver: silver\env=dev\domain=claims\entity=claim_line\v1\load_date=<run_date>
