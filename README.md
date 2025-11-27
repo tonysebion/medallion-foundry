@@ -88,7 +88,7 @@ python -m venv .venv
 pip install -r requirements.txt
 
 # 2. Copy and edit the quick test config
-cp docs/examples/configs/quick_test.yaml config/test.yaml
+cp docs/examples/configs/quickstart/quick_test.yaml config/test.yaml
 # Edit config/test.yaml with your API details
 
 # 3. Set your token
@@ -112,10 +112,10 @@ Need proof the tooling works but don't have API credentials yet? Use the bundled
 python scripts/generate_sample_data.py
 
 # 1. Run Bronze with the file-based config
-python bronze_extract.py --config docs/examples/configs/file_example.yaml --date 2025-11-13
+python bronze_extract.py --config docs/examples/configs/examples/file_example.yaml --date 2025-11-13
 
 # 2. Promote the same run into Silver
-python silver_extract.py --config docs/examples/configs/file_example.yaml --date 2025-11-13
+python silver_extract.py --config docs/examples/configs/examples/file_example.yaml --date 2025-11-13
 
 # 3. Inspect the outputs
 tree output/system=retail_demo
@@ -131,13 +131,13 @@ This workflow uses only local files, so a non-Python user can validate everythin
 To exercise the example configurations under `docs/examples/configs`, run Bronze and Silver separately with the same YAML (each config now has both sections). For example:
 
 ```bash
-python bronze_extract.py --config docs/examples/configs/file_complex.yaml --date 2025-11-13
-python silver_extract.py --config docs/examples/configs/file_complex.yaml --date 2025-11-13
+python bronze_extract.py --config docs/examples/configs/complex/file_complex.yaml --date 2025-11-13
+python silver_extract.py --config docs/examples/configs/complex/file_complex.yaml --date 2025-11-13
 ```
 
 Repeat those steps for `api_example.yaml`, `db_complex.yaml`, `file_cdc_example.yaml`, etc., to cover different entity kinds/load patterns. Bronze outputs always land under `output/env=<environment>/system=<system>/table=<entity>/…` (defaulting to no `env=` when none is specified); Silver promotes into `silver/env=<environment>/domain=<domain>/entity=<entity>/v<version>/<load_partition>=<date>/…`. Setting `environment` at the top level of the intent config ensures Bronze and Silver placements follow the same hierarchy.
 
-Need a single command to run Bronze and Silver together? Use `scripts/run_intent_config.py --config docs/examples/configs/<name>.yaml --date 2025-11-13`; it shells out to the Bronze and Silver CLIs so you can treat each intent config like a runnable script bundle. Use `--skip-bronze` or `--skip-silver` if you only want one leg.
+Need a single command to run Bronze and Silver together? Use `scripts/run_intent_config.py --config docs/examples/configs/examples/<name>.yaml --date 2025-11-13`; it shells out to the Bronze and Silver CLIs so you can treat each intent config like a runnable script bundle. Use `--skip-bronze` or `--skip-silver` if you only want one leg.
 
 The integration tests (`tests/test_integration_samples.py`) already automate this loop; read it for how we rewrite file paths and validate the Tiered outputs. See `docs/usage/onboarding/intent-lifecycle.md` for the canonical Bronze→Silver flow, directory mapping, and metadata expectations that keep the manifesto-lived experience calm.
 
@@ -158,7 +158,7 @@ Complete production setup:
 2. **Create a config file:**
 
    ```bash
-   cp docs/examples/configs/api_example.yaml config/my_api.yaml
+   cp docs/examples/configs/examples/api_example.yaml config/my_api.yaml
    # Edit config/my_api.yaml with your settings
    ```
 
@@ -261,7 +261,7 @@ python silver_extract.py \
 - Documentation structure:
   - **Architecture overview**: `docs/ARCHITECTURE.md` sketches Bronze/Silver/storage flows plus the plugin registry and sample references.
   - **Operations & governance**: `docs/framework/operations/OPERATIONS.md` describes validation, sample generation, storage policy, and log/metric practices so different roles know where to look.
-- **Silver Join**: Join two existing Silver assets with `silver_join.py`, including configurable `join_key_pairs`, `join_strategy`, `quality_guards`, spill directories, checkpoints (`progress.json`), and richer metadata (column lineage, chunk metrics) that trace back to the Bronze inputs. Sample outputs in `docs/examples/data/silver_join_samples/v1` exercise every combination of inputs/formats and are generated with `python scripts/generate_silver_join_samples.py --version 1 --formats both`. See `docs/SILVER_JOIN.md` and `docs/examples/configs/silver_join_example.yaml` for configuration patterns.
+- **Silver Join**: Join two existing Silver assets with `silver_join.py`, including configurable `join_key_pairs`, `join_strategy`, `quality_guards`, spill directories, checkpoints (`progress.json`), and richer metadata (column lineage, chunk metrics) that trace back to the Bronze inputs. Sample outputs in `docs/examples/data/silver_join_samples/v1` exercise every combination of inputs/formats and are generated with `python scripts/generate_silver_join_samples.py --version 1 --formats both`. See `docs/SILVER_JOIN.md` and `docs/examples/configs/advanced/silver_join_example.yaml` for configuration patterns.
 - Matching configs: `file_example.yaml` (full), `file_cdc_example.yaml` (cdc), `file_current_history_example.yaml`
 
 ### Sample Configs
