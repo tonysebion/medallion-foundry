@@ -133,6 +133,7 @@ def main():
         print("   python bronze_extract.py --config config/my_api.yaml --date 2025-11-13")
 
         print("\n📚 For detailed guidance, see:")
+        print("   docs/usage/beginner/COPY_AND_CUSTOMIZE.md")
         print("   docs/usage/onboarding/intent-owner-guide.md")
         print("   docs/usage/patterns/QUICK_REFERENCE.md")
 
