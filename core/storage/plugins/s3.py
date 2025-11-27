@@ -466,6 +466,19 @@ class S3Storage(StorageBackend):
         return "s3"
 
 
+class S3StorageBackend(S3Storage):
+    """Legacy-friendly wrapper that exposes upload/download hooks."""
+
+    def upload(self, local_path: Path | str, remote_path: str) -> bool:
+        return self.upload_file(str(local_path), remote_path)
+
+    def download(self, remote_path: str, local_path: Path | str) -> bool:
+        return self.download_file(remote_path, str(local_path))
+
+    def delete(self, remote_path: str) -> bool:
+        return self.delete_file(remote_path)
+
+
 # Backward compatibility functions (deprecated)
 def build_s3_client(platform_cfg: Dict[str, Any]) -> boto3.client:
     """Build an S3 client from platform configuration.

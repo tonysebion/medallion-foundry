@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import Any, Dict, List
 
 from azure.core.exceptions import AzureError, ResourceNotFoundError
@@ -247,3 +248,16 @@ class AzureStorage(StorageBackend):
 
     def get_backend_type(self) -> str:
         return "azure"
+
+
+class AzureStorageBackend(AzureStorage):
+    """Backward-compatible wrapper expected by integration tests."""
+
+    def upload(self, local_path: Path | str, remote_path: str) -> bool:
+        return self.upload_file(str(local_path), remote_path)
+
+    def download(self, remote_path: str, local_path: Path | str) -> bool:
+        return self.download_file(remote_path, str(local_path))
+
+    def delete(self, remote_path: str) -> bool:
+        return self.delete_file(remote_path)
