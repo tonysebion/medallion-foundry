@@ -221,9 +221,9 @@ docs/examples/
 For more details, see:
 
 - **[Main Documentation](../framework/reference/DOCUMENTATION.md)** - Complete framework documentation
-- **[Storage Backend Architecture](../STORAGE_BACKEND_ARCHITECTURE.md)** - Pluggable storage design
-- **[Extending Extractors](../EXTENDING_EXTRACTORS.md)** - Creating custom data sources
-- **[Enhanced Features](../ENHANCED_FEATURES.md)** - Advanced production features
+- **[Storage Backend Architecture](../framework/STORAGE_BACKEND_ARCHITECTURE.md)** - Pluggable storage design
+- **[Extending Extractors](../framework/EXTENDING_EXTRACTORS.md)** - Creating custom data sources
+- **[Enhanced Features](../usage/patterns/ENHANCED_FEATURES.md)** - Advanced production features
 
 ---
 

@@ -106,7 +106,7 @@ platform:
     # Or use SAS token, service principal, etc.
 ```
 
-**See**: [Azure Storage Extension Example](examples/extensions/azure_storage/README.md) for complete implementation
+**See**: [Azure Storage Extension Example](../examples/extensions/azure_storage/README.md) for complete implementation
 
 ### Local Filesystem
 
@@ -324,4 +324,4 @@ Potential future additions:
 ---
 
 For implementation examples, see:
-- [Azure Storage Extension](examples/extensions/azure_storage/README.md)
+- [Azure Storage Extension](../examples/extensions/azure_storage/README.md)
