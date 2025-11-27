@@ -27,6 +27,7 @@ PATTERN_DIRS = {
 }
 
 HYBRID_REFERENCE_INITIAL = date(2025, 11, 13)
+HYBRID_REFERENCE_SECOND = HYBRID_REFERENCE_INITIAL + timedelta(days=9)
 HYBRID_DELTA_DAYS = 28
 HYBRID_DELTA_PATTERN = "incremental_merge"
 
@@ -133,6 +134,30 @@ def _read_bronze_parquet(bronze_partition: Path) -> pd.DataFrame:
     parquet_files = list(bronze_partition.glob("*.parquet"))
     assert parquet_files, f"No Parquet artifacts found under {bronze_partition}"
     return pd.concat((pd.read_parquet(path) for path in parquet_files), ignore_index=True)
+
+
+def _source_csv_path_from_cfg(cfg: dict[str, object]) -> Path:
+    if "source" in cfg:
+        return Path(cfg["source"]["file"]["path"])
+    bronze_cfg = cfg.get("bronze", {})
+    if "path_pattern" in bronze_cfg:
+        return Path(bronze_cfg["path_pattern"])
+    raise ValueError("Cannot determine source CSV path")
+
+
+def _reference_date_for_delta(delta_date: date) -> date:
+    if delta_date <= HYBRID_REFERENCE_SECOND:
+        return HYBRID_REFERENCE_INITIAL
+    return HYBRID_REFERENCE_SECOND
+
+
+def _reference_csv_path(delta_source: Path) -> Path:
+    dt_dir = next(p for p in delta_source.parents if p.name.startswith("dt="))
+    pattern_root = dt_dir.parent
+    run_date_str = dt_dir.name.split("=", 1)[1]
+    delta_date = date.fromisoformat(run_date_str)
+    reference_date = _reference_date_for_delta(delta_date)
+    return pattern_root / f"dt={reference_date.isoformat()}" / "reference" / "reference-part-0001.csv"
 
 
 def _expected_hybrid_delta_tags(run_date: str) -> set[str]:
@@ -247,6 +272,21 @@ def test_bronze_to_silver_end_to_end(
         if pattern_dir == "hybrid_incremental_cumulative":
             bronze_df = _read_bronze_parquet(bronze_partition)
             assert {"delta_tag", "change_type"} <= set(bronze_df.columns), "Hybrid samples must emit delta metadata"
+            source_path = _source_csv_path_from_cfg(cfg_data)
+            source_df = pd.read_csv(source_path)
+            assert set(source_df.columns) <= set(bronze_df.columns), "Bronze schema should include source columns"
+            bronze_tag_counts = bronze_df["delta_tag"].dropna().astype(str).value_counts().to_dict()
+            source_tag_counts = source_df["delta_tag"].dropna().astype(str).value_counts().to_dict()
+            assert bronze_tag_counts == source_tag_counts, "Per-tag row counts must match source"
+            bronze_change_counts = bronze_df["change_type"].dropna().astype(str).value_counts().to_dict()
+            source_change_counts = source_df["change_type"].dropna().astype(str).value_counts().to_dict()
+            assert bronze_change_counts == source_change_counts, "Change-type counts must survive the Bronze layer"
+            reference_path = _reference_csv_path(source_path)
+            if reference_path.exists():
+                reference_df = pd.read_csv(reference_path)
+                delta_ids = {str(value) for value in source_df["order_id"].dropna()}
+                reference_ids = {str(value) for value in reference_df["order_id"].dropna()}
+                assert not delta_ids.intersection(reference_ids), "Delta records should not duplicate reference IDs"
             expected_tags = _expected_hybrid_delta_tags(run_date)
             assert expected_tags, "Expected at least one cumulative delta tag for this run_date"
             actual_tags = {str(tag) for tag in bronze_df["delta_tag"].dropna()}
