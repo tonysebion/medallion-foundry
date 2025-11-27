@@ -67,7 +67,6 @@ nav:
       - First Production Run Checklist: usage/beginner/FIRST_RUN_CHECKLIST.md
     - Onboarding:
       - Intent Owner Guide: usage/onboarding/intent-owner-guide.md
-      - Intent Lifecycle: usage/onboarding/intent-lifecycle.md
       - New Dataset Checklist: usage/onboarding/new_dataset_checklist.md
       - Bronze Readiness Checklist: usage/onboarding/bronze_readiness_checklist.md
     - Patterns:
