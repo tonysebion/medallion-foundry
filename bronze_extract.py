@@ -19,7 +19,7 @@ import logging
 import datetime as dt
 from typing import Any, Dict, List, Optional
 
-from core.config import load_configs
+from core.config import load_configs, ensure_root_config
 from core.runner import run_extract
 from core.parallel import run_parallel_extracts
 from core.logging_config import setup_logging
@@ -183,7 +183,6 @@ class BronzeOrchestrator:
         }
         self._run_options: Optional[RunOptions] = None
         self._configs_info: List[Dict[str, Any]] = []
-        self._configs_info: List[Dict[str, Any]] = []
 
     def execute(self) -> int:
         try:
@@ -276,13 +275,15 @@ class BronzeOrchestrator:
                 logger.info(f"Validating config: {config_path}")
                 cfgs = load_configs(config_path)
                 cfgs = self._apply_load_pattern_override(cfgs)
-                for cfg in cfgs:
+                # Create typed RootConfig objects for typed-aware logging
+                typed_cfgs = [ensure_root_config(cfg) for cfg in cfgs]
+                for cfg, tcfg in zip(cfgs, typed_cfgs):
                     source = cfg["source"]
                     logger.info(
-                        f"  ✓ System: {source['system']}, Table: {source['table']}, Type: {source.get('type', 'api')}, Config: {source.get('config_name')}"
+                        f"  ✓ System: {tcfg.source.system}, Table: {tcfg.source.table}, Type: {cfg.get('source', {}).get('type', 'api')}, Config: {cfg.get('source', {}).get('config_name')}"
                     )
                     logger.info(
-                        f"  ✓ Load pattern: {source.get('run', {}).get('load_pattern', LoadPattern.FULL.value)}"
+                        f"  ✓ Load pattern: {tcfg.source.run.load_pattern.value if getattr(tcfg.source, 'run', None) else LoadPattern.FULL.value}"
                     )
 
                     platform = cfg["platform"]
