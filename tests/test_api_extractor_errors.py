@@ -1,3 +1,4 @@
+from datetime import date
 from __future__ import annotations
 
 import pytest
@@ -39,7 +40,7 @@ def test_api_extractor_invalid_pagination(monkeypatch):
     extractor = ApiExtractor()
     cfg = _build_cfg({"type": "unknown"})
     with pytest.raises(ValueError):
-        extractor.fetch_records(cfg, None)
+        extractor.fetch_records(cfg, date.today())
 
 
 def test_api_extractor_request_exception(monkeypatch):
@@ -51,4 +52,4 @@ def test_api_extractor_request_exception(monkeypatch):
     extractor = ApiExtractor()
     cfg = _build_cfg({"type": "none"})
     with pytest.raises(RetryExhaustedError):
-        extractor.fetch_records(cfg, None)
+        extractor.fetch_records(cfg, date.today())

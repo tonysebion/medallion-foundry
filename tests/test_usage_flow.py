@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -45,7 +46,7 @@ def bronze_samples_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 def _build_sample_path(
-    bronze_dir: Path, cfg: dict[str, object], run_date: str, config_path: Path
+    bronze_dir: Path, cfg: dict[str, Any], run_date: str, config_path: Path
 ) -> Path:
     """Recreate the pattern-aware bronze path logic used in docs configs."""
     bronze_options = cfg.get("bronze", {}).get("options", {})
@@ -62,7 +63,7 @@ def _build_sample_path(
         system = cfg["system"]
         table = cfg["entity"]
         original_path = Path(cfg["bronze"].get("path_pattern", "sample.csv"))
-        tail: list[str] = []
+        tail = []
         parts = list(original_path.parts)
         for idx, part in enumerate(parts):
             if part.startswith("dt="):

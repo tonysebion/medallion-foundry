@@ -353,15 +353,15 @@ class TestConfigLoading:
         config_file.write_text(yaml_text, encoding="utf-8")
 
         cfg = load_config(str(config_file))
-                cfg_dict = cfg.model_dump()
-                assert cfg_dict["_intent_config"] is True
-                dataset = cfg_dict["__dataset__"]
+        cfg_dict = cfg.model_dump()
+        assert cfg_dict["_intent_config"] is True
+        dataset = cfg_dict["__dataset__"]
         assert dataset.system == "crm"
         assert dataset.entity == "orders"
         assert dataset.silver.entity_kind.value == "event"
-        assert cfg["source"]["system"] == "crm"
-        assert cfg["silver"]["primary_keys"] == ["order_id"]
-        assert cfg["source"]["run"]["local_output_dir"]
+        assert cfg.source.system == "crm"
+        assert cfg.model_dump()["silver"]["primary_keys"] == ["order_id"]
+        assert cfg.source.run.local_output_dir
 
     def test_intent_multi_dataset_config(self, tmp_path):
         yaml_text = textwrap.dedent(
@@ -407,14 +407,14 @@ class TestConfigLoading:
 
         configs = load_configs(str(config_file))
         assert len(configs) == 2
-        names = {cfg["source"]["config_name"] for cfg in configs}
+        names = {cfg.model_dump()["source"]["config_name"] for cfg in configs}
         assert names == {"adjusters", "claim_events"}
         for cfg in configs:
-                        cfg_dict = cfg.model_dump()
-                        assert cfg_dict["_intent_config"] is True
-                        dataset = cfg_dict["__dataset__"]
+            cfg_dict = cfg.model_dump()
+            assert cfg_dict["_intent_config"] is True
+            dataset = cfg_dict["__dataset__"]
             assert dataset.system == "guidewire"
-            assert cfg["platform"]["bronze"]["local_path"]
+            assert cfg_dict["platform"]["bronze"]["local_path"]
 
 
 class TestBuildRelativePath:
