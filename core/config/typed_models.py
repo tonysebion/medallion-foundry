@@ -38,16 +38,6 @@ class BronzeConfig(BaseModel):
     partitioning: Dict[str, Any] = Field(default_factory=dict)
 
 
-class BronzeConfig(BaseModel):
-    storage_backend: StorageBackend = StorageBackend.s3
-    local_path: Optional[str] = None
-    s3_bucket: Optional[str] = None
-    s3_prefix: Optional[str] = None
-    azure_container: Optional[str] = None
-    output_defaults: Dict[str, Any] = Field(default_factory=dict)
-    partitioning: Dict[str, Any] = Field(default_factory=dict)
-
-
 class APIConfig(BaseModel):
     base_url: str
     endpoint: str = "/"
@@ -76,6 +66,7 @@ class RunConfig(BaseModel):
 
 
 class SourceConfig(BaseModel):
+    pattern_id: Optional[str] = None  # Configurable identifier for tracing across layers (e.g., pattern1_full_events, retail_pos_api)
     type: SourceType = SourceType.api
     system: str
     table: str

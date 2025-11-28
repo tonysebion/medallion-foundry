@@ -1,4 +1,5 @@
 environment: dev
+pattern_id: pattern6_hybrid_incremental_point  # Unique identifier for tracing across source → bronze → silver
 domain: retail_demo
 system: retail_demo
 entity: orders
@@ -6,7 +7,7 @@ entity: orders
 bronze:
   enabled: true
   source_type: file
-  path_pattern: ./sampledata/source_samples/pattern6_hybrid_incremental_point/system=retail_demo/table=orders/pattern=pattern6_hybrid_incremental_point/dt=2025-11-24/delta/delta-part-0001.csv
+  path_pattern: ./sampledata/source_samples/sample=pattern6_hybrid_incremental_point/system=retail_demo/table=orders/dt=2025-11-24/delta/delta-part-0001.csv
   partition_column: run_date
   options:
     format: csv

@@ -115,12 +115,12 @@ def _write_csv(path: Path, rows: Iterable[Dict[str, object]]) -> None:
 def generate_full_snapshot(seed: int = 42, row_count: int = FULL_ROW_COUNT) -> None:
     for day_offset, date_str in enumerate(FULL_DATES):
         rng = Random(seed + day_offset)
+        pattern_id = _pattern_dir("full")
         base_dir = (
             BASE_DIR
-            / _pattern_dir("full")
+            / f"sample={pattern_id}"
             / "system=retail_demo"
             / "table=orders"
-            / f"pattern={_pattern_dir('full')}"
             / f"dt={date_str}"
         )
         rows: List[Dict[str, object]] = []
@@ -287,12 +287,12 @@ def generate_cdc(seed: int = 99, row_count: int = CDC_ROW_COUNT) -> None:
     change_types = ["insert", "update", "delete"]
     for day_offset, date_str in enumerate(CDC_DATES):
         rng = Random(seed + day_offset)
+        pattern_id = _pattern_dir("cdc")
         base_dir = (
             BASE_DIR
-            / _pattern_dir("cdc")
+            / f"sample={pattern_id}"
             / "system=retail_demo"
             / "table=orders"
-            / f"pattern={_pattern_dir('cdc')}"
             / f"dt={date_str}"
         )
         rows: List[Dict[str, object]] = []
@@ -361,12 +361,12 @@ def generate_current_history(
 ) -> None:
     for day_offset, date_str in enumerate(CURRENT_HISTORY_DATES):
         rng = Random(seed + day_offset)
+        pattern_id = _pattern_dir("current_history")
         base_dir = (
             BASE_DIR
-            / _pattern_dir("current_history")
+            / f"sample={pattern_id}"
             / "system=retail_demo"
             / "table=orders"
-            / f"pattern={_pattern_dir('current_history')}"
             / f"dt={date_str}"
         )
 
@@ -462,12 +462,12 @@ def generate_current_history(
 
 def generate_hybrid_combinations(seed: int = 123) -> None:
     for combo_name, delta_pattern, delta_mode in HYBRID_COMBOS:
+        pattern_id = _pattern_dir(combo_name)
         base_pattern_dir = (
             BASE_DIR
-            / _pattern_dir(combo_name)
+            / f"sample={pattern_id}"
             / "system=retail_demo"
             / "table=orders"
-            / f"pattern={_pattern_dir(combo_name)}"
         )
         for ref_date in (HYBRID_REFERENCE_INITIAL, HYBRID_REFERENCE_SECOND):
             ref_dir = base_pattern_dir / f"dt={ref_date.isoformat()}" / "reference"
@@ -521,7 +521,7 @@ def main() -> None:
 
 def _write_pattern_readmes() -> None:
     for pattern_key, desc in PATTERN_DESC.items():
-        pattern_dir = BASE_DIR / pattern_key
+        pattern_dir = BASE_DIR / f"sample={pattern_key}"
         pattern_dir.mkdir(parents=True, exist_ok=True)
         readme = pattern_dir / "README.md"
         lines = [

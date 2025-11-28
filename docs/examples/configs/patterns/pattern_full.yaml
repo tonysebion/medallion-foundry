@@ -1,4 +1,5 @@
 environment: dev
+pattern_id: pattern1_full_events  # Unique identifier for tracing across source → bronze → silver
 domain: retail_demo
 system: retail_demo
 entity: orders
@@ -6,7 +7,7 @@ entity: orders
 bronze:
   enabled: true
   source_type: file
-  path_pattern: ./sampledata/source_samples/pattern1_full_events/system=retail_demo/table=orders/pattern=pattern1_full_events/dt=2025-11-13/full-part-0001.csv
+  path_pattern: ./sampledata/source_samples/sample=pattern1_full_events/system=retail_demo/table=orders/dt=2025-11-13/full-part-0001.csv
   partition_column: run_date
   options:
     format: csv

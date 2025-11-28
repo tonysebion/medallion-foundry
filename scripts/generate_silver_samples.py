@@ -33,9 +33,13 @@ SILVER_MODEL_MAP = {
     ("state", "scd2"): "scd_type_2",
     ("state", "scd1"): "scd_type_1",
     ("state", None): "scd_type_1",
+    ("event", "incremental"): "incremental_merge",
+    ("event", None): "incremental_merge",
     ("events", "incremental"): "incremental_merge",
     ("events", None): "incremental_merge",
     ("snapshot", None): "periodic_snapshot",
+    ("derived_event", None): "incremental_merge",
+    ("derived_state", None): "scd_type_1",
     ("hybrid", "incremental"): "incremental_merge",
     ("hybrid", "cumulative"): "full_merge_dedupe",
 }
@@ -58,7 +62,10 @@ if str(PROJECT_ROOT) not in sys.path:
 
 
 def _find_bronze_partitions() -> Iterable[Dict[str, Any]]:
-    """Find all Bronze partitions with CSV files."""
+    """Find all Bronze partitions with CSV files.
+    
+    Now looks for sample= prefixes in Bronze structure.
+    """
     seen: set[str] = set()
     # Accept any partition directory containing at least one CSV even if metadata file absent
     for dir_path in BRONZE_SAMPLE_ROOT.rglob("dt=*"):
@@ -68,11 +75,15 @@ def _find_bronze_partitions() -> Iterable[Dict[str, Any]]:
         if not csv_files:
             continue
         rel_parts = dir_path.relative_to(BRONZE_SAMPLE_ROOT).parts
-        pattern_part = next((p for p in rel_parts if p.startswith("pattern=")), None)
+        
+        # Look for sample= prefix (new structure: sample=pattern_id)
+        sample_part = next((p for p in rel_parts if p.startswith("sample=")), None)
         dt_part = next((p for p in rel_parts if p.startswith("dt=")), None)
-        if not pattern_part or not dt_part:
+        
+        if not sample_part or not dt_part:
             continue
-        pattern = pattern_part.split("=", 1)[1]
+        
+        pattern = sample_part.split("=", 1)[1]
         run_date = dt_part.split("=", 1)[1]
 
         chunk_dir = csv_files[0].parent
@@ -168,19 +179,19 @@ def _discover_pattern_configs() -> Dict[str, List[PatternConfig]]:
 
 def _write_pattern_readme(
     pattern_dir: Path,
-    pattern_folder: str,
+    pattern_id: str,
     silver_model: str,
 ) -> None:
     """Write README for pattern directory."""
     readme = pattern_dir / "README.md"
-    content = f"""# Silver Samples - {pattern_folder}
+    content = f"""# Silver Samples - {pattern_id}
 
 ## Overview
-Silver artifacts derived from Bronze `{pattern_folder}` samples.
+Silver artifacts derived from Bronze `{pattern_id}` samples.
 
 ## Structure
 ```
-{pattern_folder}/
+sample={pattern_id}/
   silver_model={silver_model}/
     domain={{domain}}/
       entity={{entity}}/
@@ -236,12 +247,13 @@ def _generate_for_partition(
         return
 
     run_date = str(partition["run_date"])
+    pattern_id = partition["pattern"]
 
-    # Build Silver base at the pattern/silver_model level
+    # Build Silver base using sample= prefix matching Bronze
     # silver_extract.py will add domain/entity/v1/load_date internally
     silver_base = (
         SILVER_SAMPLE_ROOT
-        / config.pattern_folder
+        / f"sample={pattern_id}"
         / f"silver_model={config.silver_model}"
     )
     silver_base.mkdir(parents=True, exist_ok=True)
@@ -255,7 +267,7 @@ def _generate_for_partition(
         "--date",
         run_date,
         "--silver-base",
-        str(silver_base),  # Pass silver_model level, CLI will add rest
+        str(silver_base),  # Pass sample/silver_model level, CLI will add rest
     ]
 
     if enable_parquet:
@@ -268,17 +280,17 @@ def _generate_for_partition(
     else:
         cmd.append("--no-write-csv")
 
-    print(f"Generating: {config.pattern_folder}/silver_model={config.silver_model} for {run_date}")
+    print(f"Generating: sample={pattern_id}/silver_model={config.silver_model} for {run_date}")
     _run_cli(cmd)
 
     # Copy config to pattern root for reference
-    pattern_root = SILVER_SAMPLE_ROOT / config.pattern_folder
+    pattern_root = SILVER_SAMPLE_ROOT / f"sample={pattern_id}"
     intent_dest = pattern_root / f"intent_{config.path.stem}.yaml"
     shutil.copy(config.path, intent_dest)
 
     # Write pattern-level README once per pattern
     if not (pattern_root / "README.md").exists():
-        _write_pattern_readme(pattern_root, config.pattern_folder, config.silver_model)
+        _write_pattern_readme(pattern_root, pattern_id, config.silver_model)
 
 
 def main() -> None:
@@ -310,9 +322,9 @@ def main() -> None:
             generated_count += 1
 
     print(f"\n✅ Generated {generated_count} Silver sample(s) under {SILVER_SAMPLE_ROOT}")
-    print(f"\nDirectory structure now matches Bronze hierarchy:")
+    print(f"\nDirectory structure now matches Bronze hierarchy with sample= prefix:")
     print(f"  {SILVER_SAMPLE_ROOT}/")
-    print(f"    {{pattern_folder}}/")
+    print(f"    sample={{pattern_id}}/")
     print(f"      silver_model={{model}}/")
     print(f"        domain={{domain}}/...")
 
