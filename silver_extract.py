@@ -1017,7 +1017,7 @@ class SilverPromotionService:
         path = silver_partition / f"_metadata_chunk_{self.args.chunk_tag}.json"
         with path.open("w", encoding="utf-8") as f:
             json.dump(chunk_meta, f, indent=2)
-        logger.debug("Wrote intent chunk metadata to %s", path)
+        logger.info("Wrote intent chunk metadata to %s", path)
 
     def _write_chunk_metadata(
         self,
@@ -1051,7 +1051,7 @@ class SilverPromotionService:
         metadata_path = context.silver_partition / f"_metadata_chunk_{context.chunk_tag}.json"
         with metadata_path.open("w", encoding="utf-8") as f:
             json.dump(chunk_meta, f, indent=2)
-        logger.debug("Wrote chunk metadata to %s", metadata_path)
+        logger.info("Wrote chunk metadata to %s", metadata_path)
 
     def _fire_hooks(
         self, success: bool, extra: Optional[Dict[str, Any]] = None

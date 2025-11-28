@@ -13,6 +13,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Tuple
+import re
 
 import pandas as pd
 
@@ -40,8 +41,17 @@ def parse_args() -> argparse.Namespace:
 
 def find_chunk_partitions(base: Path) -> List[Path]:
     candidates = []
+    # Any explicit chunk metadata files
     for p in base.rglob("_metadata_chunk_*.json"):
         candidates.append(p.parent)
+
+    # Also consider directories containing chunk-templated artifact filenames
+    pattern = re.compile(r"-[0-9a-fA-F]{8}\.(parquet|csv)$")
+    for f in base.rglob("*.*"):
+        if not f.is_file():
+            continue
+        if pattern.search(f.name):
+            candidates.append(f.parent)
     return sorted(set(candidates))
 
 
@@ -80,7 +90,8 @@ def _consolidate_partition(partition: Path, args: argparse.Namespace) -> None:
     # Parse chunk metadata files in partition
     chunk_meta_files = sorted(partition.glob("_metadata_chunk_*.json"))
     if not chunk_meta_files:
-        return
+        # No explicit chunk metadata; continue if we declared partitions via artifact detection
+        print(f"No `_metadata_chunk_` files under {partition}; attempting discovery via artifact filenames")
     chunk_tags = []
     for f in chunk_meta_files:
         j = json.loads(f.read_text(encoding='utf-8'))
