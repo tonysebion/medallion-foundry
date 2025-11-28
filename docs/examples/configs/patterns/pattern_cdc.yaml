@@ -24,7 +24,7 @@ silver:
   entity_kind: event
   input_mode: append_log
   delete_mode: ignore
-  schema_mode: strict
+  schema_mode: allow_new_columns
   natural_keys:
     - order_id
   event_ts_column: changed_at
