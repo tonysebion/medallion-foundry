@@ -9,7 +9,7 @@ import tempfile
 from dataclasses import dataclass
 from itertools import islice
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, cast
 import time
 
 import pandas as pd
@@ -98,9 +98,12 @@ def fetch_asset_local(
             "Remote path must be provided when the local path does not exist"
         )
 
-    target_dir = tmp_dir / (
-        entry.get("name") or prefix.replace("/", "_").replace("\\", "_")
-    )
+    name_value = entry.get("name")
+    if isinstance(name_value, str) and name_value:
+        dir_name = name_value
+    else:
+        dir_name = prefix.replace("/", "_").replace("\\", "_")
+    target_dir = tmp_dir / dir_name
     target_dir.mkdir(parents=True, exist_ok=True)
 
     files = backend.list_files(prefix)
@@ -123,7 +126,7 @@ def fetch_asset_local(
 def read_metadata(silver_path: Path) -> Dict[str, Any]:
     metadata_path = silver_path / "_metadata.json"
     if metadata_path.exists():
-        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+        payload = cast(Dict[str, Any], json.loads(metadata_path.read_text(encoding="utf-8")))
     else:
         logger.warning(
             "No metadata found for %s; falling back to minimal defaults", silver_path
@@ -536,7 +539,7 @@ def _safe_load_json(path: Path) -> Optional[Dict[str, Any]]:
     if not path.is_file():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return cast(Dict[str, Any], json.loads(path.read_text(encoding="utf-8")))
     except Exception as exc:
         logger.debug("Failed to read JSON from %s: %s", path, exc)
         return None
@@ -884,13 +887,13 @@ def apply_projection(
         raise ValueError(f"Projection references missing columns: {missing}")
     rename_map: Dict[str, str] = {}
     selected_columns: List[str] = []
-    lineage: List[Dict[str, Any]] = []
+    resolved_lineage: List[Dict[str, Any]] = []
     for src, alias in resolved:
         selected_columns.append(src)
         if alias != src:
             rename_map[src] = alias
         column_name = alias if alias else src
-        lineage.append(
+        resolved_lineage.append(
             {
                 "column": column_name,
                 "source": column_origin.get(src, "unknown"),
@@ -901,7 +904,7 @@ def apply_projection(
     result = df[selected_columns]
     if rename_map:
         result = result.rename(columns=rename_map)
-    return result, lineage
+    return result, resolved_lineage
 
 
 def write_output(
@@ -935,6 +938,8 @@ def write_output(
         except Exception:  # pragma: no cover - defensive
             pass
 
+    effective_model: SilverModel = model or SilverModel.PERIODIC_SNAPSHOT
+
     writer = get_silver_writer(run_opts.artifact_writer_kind)
     outputs = writer.write(
         df,
@@ -946,13 +951,13 @@ def write_output(
         artifact_names=run_opts.artifact_names,
         partition_columns=run_opts.partition_columns,
         error_cfg={},  # error handling config
-        silver_model=model,
+        silver_model=effective_model,
         output_dir=base_dir,
     )
     chunk_count = sum(len(paths) for paths in outputs.values())
     metadata = {
         "joined_sources": source_paths,
-        "silver_model": model.value,
+        "silver_model": effective_model.value,
         "requested_model": output_cfg.get("model"),
         "formats": {"parquet": run_opts.write_parquet, "csv": run_opts.write_csv},
         "join_type": output_cfg.get("join_type"),
