@@ -45,6 +45,41 @@ SILVER_MODEL_MAP = {
 }
 
 
+def _safe_remove_path(target: Path) -> None:
+    """Recursively delete a path even if shutil.rmtree previously failed."""
+    try:
+        if target.is_symlink():
+            target.unlink()
+            return
+        if target.is_dir():
+            for child in list(target.iterdir()):
+                _safe_remove_path(child)
+            target.rmdir()
+        else:
+            target.unlink()
+    except OSError as exc:
+        print(f"[WARN] Unable to delete {target}: {exc}; skipping")
+
+
+def _clear_silver_samples() -> None:
+    """Remove existing Silver samples, falling back to manual cleanup when rmtree fails."""
+    try:
+        shutil.rmtree(SILVER_SAMPLE_ROOT)
+        return
+    except OSError as exc:
+        print(f"[WARN] Unable to delete existing Silver samples: {exc}; falling back to manual cleanup")
+    if not SILVER_SAMPLE_ROOT.exists():
+        return
+    for child in list(SILVER_SAMPLE_ROOT.iterdir()):
+        _safe_remove_path(child)
+    try:
+        SILVER_SAMPLE_ROOT.rmdir()
+    except OSError:
+        pass
+
+
+
+
 @dataclass(frozen=True)
 class PatternConfig:
     path: Path
@@ -306,10 +341,7 @@ def main() -> None:
         raise RuntimeError("No Bronze partitions found; generate Bronze samples first.")
 
     if SILVER_SAMPLE_ROOT.exists():
-        try:
-            shutil.rmtree(SILVER_SAMPLE_ROOT)
-        except PermissionError as exc:
-            print(f"[WARN] Unable to delete existing Silver samples: {exc}; continuing")
+        _clear_silver_samples()
     SILVER_SAMPLE_ROOT.mkdir(parents=True, exist_ok=True)
 
     pattern_configs = _discover_pattern_configs()
