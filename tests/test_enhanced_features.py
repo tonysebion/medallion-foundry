@@ -200,7 +200,8 @@ def test_parallel_workers_validation():
     try:
         # Should load successfully
         cfg = load_config(temp_path)
-        assert cfg["source"]["run"]["parallel_workers"] == 4
+        run_cfg = cfg.model_dump()["source"]["run"]
+        assert run_cfg["parallel_workers"] == 4
     finally:
         import os
 
