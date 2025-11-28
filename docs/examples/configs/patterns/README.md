@@ -61,7 +61,7 @@ When you run these configs, they create Bronze layer outputs. Some configs speci
   - **Run**: `python bronze_extract.py --config pattern_hybrid_incremental_point.yaml --date 2025-11-13`
 
 - **`pattern_hybrid_incremental_cumulative.yaml`** → Reads `pattern7_hybrid_incremental_cumulative/`
-  - **Purpose**: Incremental loading with cumulative updates
+  - **Purpose**: Incremental SCD1 state refreshes (latest overwrite)
   - **Source**: Cumulative incremental merges
   - **Run**: `python bronze_extract.py --config pattern_hybrid_incremental_cumulative.yaml --date 2025-11-13`
 
@@ -104,7 +104,7 @@ The pattern numbers (1-7) correspond to the **Pattern Matrix** in `docs/usage/pa
 | 4 | Derived Events (CDC) | `pattern_hybrid_cdc_point.yaml` | `pattern4_hybrid_cdc_point/` |
 | 5 | Derived State (Cumulative) | `pattern_hybrid_cdc_cumulative.yaml` | `pattern5_hybrid_cdc_cumulative/` |
 | 6 | Derived State (Latest) | `pattern_hybrid_incremental_point.yaml` | `pattern6_hybrid_incremental_point/` |
-| 7 | Derived State (SCD) | `pattern_hybrid_incremental_cumulative.yaml` | `pattern7_hybrid_incremental_cumulative/` |
+| 7 | State (SCD1) | `pattern_hybrid_incremental_cumulative.yaml` | `pattern7_hybrid_incremental_cumulative/` |
 
 ---
 

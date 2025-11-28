@@ -22,7 +22,7 @@ silver:
   enabled: true
   entity_kind: event
   input_mode: append_log
-  delete_mode: tombstone_event
+  delete_mode: ignore
   schema_mode: strict
   natural_keys:
     - order_id

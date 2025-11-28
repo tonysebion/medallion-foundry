@@ -18,6 +18,7 @@ silver:
   enabled: true
   entity_kind: derived_state
   history_mode: scd2
+  delete_mode: ignore
   schema_mode: allow_new_columns
   natural_keys:
     - order_id

@@ -18,7 +18,7 @@ bronze:
 silver:
   enabled: true
   entity_kind: event
-  input_mode: append_log
+  input_mode: replace_daily
   delete_mode: ignore
   schema_mode: allow_new_columns
   natural_keys:

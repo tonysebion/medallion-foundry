@@ -18,7 +18,7 @@ bronze:
 silver:
   enabled: true
   entity_kind: state
-  history_mode: scd2
+  history_mode: scd1
   schema_mode: allow_new_columns
   natural_keys:
     - order_id
@@ -28,5 +28,5 @@ silver:
     - customer_id
     - changed_at
   partition_by:
-    - effective_from_dt
-  delete_mode: tombstone_state
+    - change_ts_dt
+  delete_mode: ignore
