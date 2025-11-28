@@ -344,16 +344,24 @@ class SilverPromotionService:
         if not self._provided_run_context and not self.cfg_list:
             self.parser.error("Either --config or --run-context must be provided")
 
+        cfg: Optional[Dict[str, Any | RootConfig]] = None
         if self._provided_run_context:
             run_context = self._provided_run_context
-            cfg: Dict[str, Any | RootConfig] = run_context.cfg
-            enforce_storage_scope(cfg["platform"], self.args.storage_scope)
+            cfg = run_context.cfg
             run_date = run_context.run_date
         else:
-            cfg: Optional[Dict[str, Any | RootConfig]] = self._select_config()
-            enforce_storage_scope(cfg["platform"], self.args.storage_scope)
+            cfg = self._select_config()
             run_date = self._resolve_run_date()
             run_context = self._build_run_context(cfg, run_date)
+
+        # normalize a dict view of the config for functions that expect plain dicts
+        if isinstance(cfg, RootConfig):
+            cfg_dict: Optional[Dict[str, Any]] = cast(Dict[str, Any], cfg.model_dump())
+        else:
+            cfg_dict = cast(Optional[Dict[str, Any]], cfg)
+
+        platform_cfg: Dict[str, Any] = cast(Dict[str, Any], cfg_dict.get("platform", {})) if cfg_dict else {}
+        enforce_storage_scope(platform_cfg, self.args.storage_scope)
         bronze_path = run_context.bronze_path
         self._update_hook_context(
             bronze_path=str(bronze_path), run_date=run_context.run_date.isoformat()
@@ -368,7 +376,7 @@ class SilverPromotionService:
         self._update_hook_context(load_pattern=load_pattern.value)
 
         dataset_cfg: DatasetConfig | None = (
-            cfg.get("__dataset__") if cfg and cfg.get("_intent_config") else None
+            cfg_dict.get("__dataset__") if cfg_dict and cfg_dict.get("_intent_config") else None
         )
         if dataset_cfg:
             self._update_hook_context(
