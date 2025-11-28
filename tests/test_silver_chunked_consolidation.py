@@ -119,6 +119,7 @@ def test_intent_chunk_metadata_written(tmp_path: Path) -> None:
                     "partition_by": ["run_date"],
                     "write_parquet": True,
                     "write_csv": False,
+                    "schema_mode": "allow_new_columns",
                 },
             }
         ]
