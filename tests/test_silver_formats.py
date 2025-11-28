@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, cast
 
 import pytest
 import yaml
