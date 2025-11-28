@@ -49,7 +49,9 @@ def resolve_paths(dataset: Dict[str, Any], env: Optional[str]) -> Dict[str, str]
 
 def load_intent(path: Path) -> Dict[str, Any]:
     with path.open(encoding="utf-8") as handle:
-        return yaml.safe_load(handle)
+        from typing import cast
+
+        return cast(Dict[str, Any], yaml.safe_load(handle))
 
 
 def persist_resolved(path: Path, data: Dict[str, Any]) -> None:

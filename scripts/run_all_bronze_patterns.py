@@ -61,11 +61,11 @@ PATTERN_CONFIGS = [
 def _extract_path_pattern_from_config(cfg: Dict[str, Any]) -> str:
     bronze_cfg = cfg.get("bronze", {})
     if "path_pattern" in bronze_cfg:
-        return bronze_cfg["path_pattern"]
+        return str(bronze_cfg["path_pattern"])
     source_cfg = cfg.get("source", {})
     file_cfg = source_cfg.get("file", {})
     if "path" in file_cfg:
-        return file_cfg["path"]
+        return str(file_cfg["path"])
     raise ValueError("Unable to determine Bronze source path in config")
 
 
