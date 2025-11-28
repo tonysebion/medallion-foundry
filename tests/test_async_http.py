@@ -165,11 +165,11 @@ def test_async_client_handles_timeout():
             mock_success.json.return_value = {"ok": "timeout-recovered"}
             mock_success.raise_for_status = MagicMock()
 
+            call_counter: Dict[str, int] = {"count": 0}
+
             async def mock_get(*args, **kwargs):
-                if not hasattr(mock_get, "count"):
-                    mock_get.count = 0
-                mock_get.count += 1
-                if mock_get.count == 1:
+                call_counter["count"] += 1
+                if call_counter["count"] == 1:
                     raise timeout_exc
                 return mock_success
 
@@ -182,7 +182,7 @@ def test_async_client_handles_timeout():
             client = AsyncApiClient("https://api.example.com", headers={}, timeout=1)
             result = await client.get("/timeout")
             assert result["ok"] == "timeout-recovered"
-            assert mock_get.count == 2
+            assert call_counter["count"] == 2
 
     asyncio.run(_inner())
 

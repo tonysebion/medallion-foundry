@@ -7,7 +7,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, cast
+from typing import Any, Dict, Iterator, cast
 
 import pytest
 
@@ -49,7 +49,7 @@ def _write_metadata_with_reference(
 
 
 @pytest.fixture(scope="module", autouse=True)
-def ensure_hybrid_samples() -> None:
+def ensure_hybrid_samples() -> Iterator[None]:
     subprocess.run(
         [sys.executable, "scripts/generate_sample_data.py"],
         cwd=REPO_ROOT,
