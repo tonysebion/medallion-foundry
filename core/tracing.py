@@ -4,12 +4,13 @@ from contextlib import contextmanager
 import os
 from typing import Any, Iterator
 
+otel_trace: Any = None
 try:  # optional dependency
-    from opentelemetry import trace as otel_trace
+    import opentelemetry.trace as _otel_trace
 
+    otel_trace = _otel_trace
     _OTEL_AVAILABLE = True
 except Exception:  # pragma: no cover - optional
-    otel_trace: Any = None
     _OTEL_AVAILABLE = False
 
 
