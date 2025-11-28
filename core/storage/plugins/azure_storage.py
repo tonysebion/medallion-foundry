@@ -95,8 +95,12 @@ class AzureStorage(StorageBackend):
                 return BlobServiceClient(account_url=account_url, credential=key)
 
         logger.debug("Azure storage using DefaultAzureCredential")
+        account_url_any = azure_cfg.get("account_url")
+        account_url: str | None = None
+        if account_url_any:
+            account_url = str(account_url_any)
         return BlobServiceClient(
-            account_url=azure_cfg.get("account_url"),
+            account_url=account_url,
             credential=DefaultAzureCredential(),
         )
 

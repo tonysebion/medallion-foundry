@@ -131,9 +131,7 @@ def get_log_level_from_env() -> int:
     Returns:
         Logging level (default: INFO)
     """
-    level_name = os.environ.get("BRONZE_LOG_LEVEL") or os.environ.get(
-        "LOG_LEVEL", "INFO"
-    )
+    level_name = os.environ.get("BRONZE_LOG_LEVEL") or os.environ.get("LOG_LEVEL") or "INFO"
     level_name = level_name.upper()
 
     level_map = {
@@ -219,7 +217,7 @@ def setup_logging(
 
     # Create formatter
     if format_type == "json":
-        formatter = JSONFormatter(include_context=include_context)
+        formatter: logging.Formatter = JSONFormatter(include_context=include_context)
     elif format_type == "simple":
         formatter = logging.Formatter("%(levelname)s: %(message)s")
     else:  # human

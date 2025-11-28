@@ -23,6 +23,7 @@ class ApiExtractor(BaseExtractor):
     _breaker = CircuitBreaker(
         failure_threshold=5, cooldown_seconds=30.0, half_open_max_calls=1
     )
+    _limiter: Optional[RateLimiter] = None
 
     def _build_auth_headers(self, api_cfg: Dict[str, Any]) -> Dict[str, str]:
         """Build authentication headers based on config."""
@@ -102,8 +103,9 @@ class ApiExtractor(BaseExtractor):
         # The limiter is injected via closure when called from paginate
 
         def _once() -> requests.Response:
-            if getattr(self, "_limiter", None):
-                self._limiter.acquire()  # type: ignore[attr-defined]
+            limiter = getattr(self, "_limiter", None)
+            if limiter is not None:
+                limiter.acquire()
             with trace_span("api.request"):
                 resp = session.get(
                     url, headers=headers, params=params, timeout=timeout, auth=auth
@@ -195,9 +197,11 @@ class ApiExtractor(BaseExtractor):
             return data
         elif isinstance(data, dict):
             # Check common patterns
+            from typing import cast
+
             for key in ["items", "data", "results", "records"]:
                 if key in data and isinstance(data[key], list):
-                    return data[key]
+                    return cast(List[Dict[str, Any]], data[key])
             # If no common pattern, wrap single record
             return [data]
         else:
@@ -326,11 +330,12 @@ class ApiExtractor(BaseExtractor):
                 # Extract next cursor
                 cursor = None
                 if isinstance(data, dict):
+                    obj: Any = data
                     for key in cursor_path.split("."):
-                        data = data.get(key) if isinstance(data, dict) else None
-                        if data is None:
+                        obj = obj.get(key) if isinstance(obj, dict) else None
+                        if obj is None:
                             break
-                    cursor = data
+                    cursor = obj
 
                 if not cursor:
                     break
@@ -539,10 +544,11 @@ class ApiExtractor(BaseExtractor):
             # Find the maximum cursor value from records
             try:
                 cursor_values = [
-                    r.get(cursor_field) for r in records if cursor_field in r
+                    r[cursor_field] for r in records if cursor_field in r and r[cursor_field] is not None
                 ]
                 if cursor_values:
-                    new_cursor = str(max(cursor_values))
+                    cursor_values_str = [str(v) for v in cursor_values]
+                    new_cursor = str(max(cursor_values_str))
                     logger.info(f"Computed new cursor: {new_cursor}")
             except (TypeError, ValueError) as e:
                 logger.warning(

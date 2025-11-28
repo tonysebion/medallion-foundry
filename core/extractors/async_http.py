@@ -16,11 +16,13 @@ from core.retry import RetryPolicy, CircuitBreaker, execute_with_retry_async
 logger = logging.getLogger(__name__)
 
 # Conditional import - httpx is optional
+httpx: Any = None
 try:
-    import httpx
+    import httpx as _httpx
 
     HTTPX_AVAILABLE = True
-except ImportError:
+    httpx = _httpx
+except Exception:
     HTTPX_AVAILABLE = False
     httpx = None
 
@@ -73,7 +75,7 @@ class AsyncApiClient:
 
         async def _once() -> Dict[str, Any]:
             async with self._semaphore:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:  # type: ignore[attr-defined]
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
                     logger.debug(f"Async request to {url} with params {params}")
 
                     kwargs: Dict[str, Any] = {
@@ -85,7 +87,9 @@ class AsyncApiClient:
 
                     response = await client.get(url, **kwargs)
                     response.raise_for_status()
-                    return response.json()
+                    from typing import cast
+
+                    return cast(Dict[str, Any], response.json())
 
         def _retry_if(exc: BaseException) -> bool:
             # Retry timeouts, connection errors, and 5xx/429
@@ -96,8 +100,12 @@ class AsyncApiClient:
                 # httpx.HTTPStatusError
                 if hasattr(exc, "response"):
                     status = getattr(exc.response, "status_code", None)
-                    if status:
-                        return status == 429 or 500 <= status < 600
+                    if status is not None:
+                        try:
+                            status_int = int(status)
+                            return status_int == 429 or 500 <= status_int < 600
+                        except Exception:
+                            return False
             return False
 
         def _delay_from_exc(
@@ -160,10 +168,10 @@ def is_async_enabled(api_cfg: Dict[str, Any]) -> bool:
         return False
 
     # Check config flag
-    async_enabled = api_cfg.get("async", False)
+    async_enabled = bool(api_cfg.get("async", False))
 
     # Check environment override
     if os.environ.get("BRONZE_ASYNC_HTTP"):
         async_enabled = os.environ["BRONZE_ASYNC_HTTP"].lower() in ("1", "true", "yes")
 
-    return async_enabled
+    return bool(async_enabled)

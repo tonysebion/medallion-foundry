@@ -5,7 +5,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 from core.config import build_relative_path
 from core.config.typed_models import RootConfig
@@ -37,27 +37,27 @@ class RunContext:
 
 
 def build_run_context(
-    cfg: Dict[str, Any | RootConfig],
+    cfg: Dict[str, Any] | RootConfig,
     run_date: date,
     local_output_override: Path | None = None,
     relative_override: str | None = None,
     load_pattern_override: str | None = None,
     bronze_path_override: Path | None = None,
 ) -> RunContext:
-    typed: RootConfig | None = (
-        cfg.get("__typed_model__")
-        if isinstance(cfg, dict)
-        else (cfg if isinstance(cfg, RootConfig) else None)
-    )
-    if typed:
+    typed: RootConfig | None
+    if isinstance(cfg, RootConfig):
+        typed = cfg
         run_cfg = typed.source.run.model_dump()  # dict for compatibility
+        cfg_dict = typed.model_dump()
     else:
-        run_cfg = cfg["source"].get("run", {})
+        typed = None
+        cfg_dict = cfg
+        run_cfg = cfg_dict["source"].get("run", {})
 
     local_output_dir = Path(
         local_output_override or run_cfg.get("local_output_dir", "./output")
     ).resolve()
-    relative_path = relative_override or build_relative_path(cfg, run_date)
+    relative_path = relative_override or build_relative_path(cfg_dict, run_date)
     bronze_path = (
         Path(bronze_path_override).resolve()
         if bronze_path_override
@@ -68,17 +68,13 @@ def build_run_context(
         source_system = typed.source.system
         source_table = typed.source.table
     else:
-        source_system = cfg["source"]["system"]
-        source_table = cfg["source"]["table"]
+        source_system = cfg_dict["source"]["system"]
+        source_table = cfg_dict["source"]["table"]
     dataset_id = f"{source_system}.{source_table}"
     if typed:
-        config_name = (
-            cfg["source"].get("config_name", dataset_id)
-            if isinstance(cfg, dict)
-            else dataset_id
-        )
+        config_name = cfg_dict["source"].get("config_name", dataset_id)
     else:
-        config_name = cfg["source"].get("config_name", dataset_id)
+        config_name = cfg_dict["source"].get("config_name", dataset_id)
 
     pattern_value = load_pattern_override or run_cfg.get("load_pattern")
     load_pattern = (
@@ -92,8 +88,11 @@ def build_run_context(
         relative_path,
     )
 
+    # Return typed RunContext. If we have a typed model, keep the original typed config
+    # object in `cfg` to allow access to model attributes elsewhere. Otherwise return
+    # the input dict as-is.
     return RunContext(
-        cfg=cfg,
+        cfg=cast(Dict[str, Any], cfg),
         run_date=run_date,
         relative_path=relative_path,
         local_output_dir=local_output_dir,

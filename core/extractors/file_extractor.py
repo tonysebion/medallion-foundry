@@ -8,7 +8,7 @@ import csv
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 from datetime import date
 
 import pandas as pd
@@ -149,4 +149,4 @@ class FileExtractor(BaseExtractor):
     ) -> List[Dict[str, Any]]:
         columns = file_cfg.get("columns")
         df = pd.read_parquet(file_path, columns=columns)
-        return df.to_dict(orient="records")
+        return cast(List[Dict[str, Any]], df.to_dict(orient="records"))

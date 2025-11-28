@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Type, cast
 
 from core.bronze.base import emit_bronze_metadata, infer_schema
 from core.bronze.plan import (
@@ -47,7 +47,9 @@ def build_extractor(cfg: Dict[str, Any]) -> BaseExtractor:
 
         module = importlib.import_module(module_name)
         cls = getattr(module, class_name)
-        return cls()
+        # Assume user-supplied custom extractor classes subclass BaseExtractor; cast for mypy
+        cls_typed: Type[BaseExtractor] = cast(Type[BaseExtractor], cls)
+        return cls_typed()
     if src_type == "file":
         return FileExtractor()
 
@@ -64,12 +66,16 @@ class ExtractJob:
         self.created_files: List[Path] = []
         self.load_pattern: Optional[LoadPattern] = context.load_pattern
         self.output_formats: Dict[str, bool] = {}
-        self.storage_plan = None
+        from core.runner.chunks import StoragePlan
+
+        self.storage_plan: Optional[StoragePlan] = None
         self.schema_snapshot: List[Dict[str, str]] = []
 
     @property
     def source_cfg(self) -> Dict[str, Any]:
-        return self.cfg["source"]
+        from typing import cast
+
+        return cast(Dict[str, Any], self.cfg["source"])
 
     def run(self) -> int:
         try:
@@ -151,14 +157,19 @@ class ExtractJob:
         self, record_count: int, chunk_count: int, cursor: Optional[str]
     ) -> None:
         reference_mode = self.source_cfg["run"].get("reference_mode")
+        from datetime import datetime
+
+        run_datetime = datetime.combine(self.run_date, datetime.min.time())
+        p_load_pattern = self.load_pattern or LoadPattern.FULL
+
         metadata_path = emit_bronze_metadata(
             self._out_dir,
-            self.run_date,
+            run_datetime,
             self.source_cfg["system"],
             self.source_cfg["table"],
             self.relative_path,
             self.output_formats,
-            self.load_pattern,
+            p_load_pattern,
             reference_mode,
             self.schema_snapshot,
             chunk_count,
@@ -180,7 +191,7 @@ class ExtractJob:
             dataset_id,
             {
                 "run_date": self.run_date.isoformat(),
-                "load_pattern": self.load_pattern.value,
+                    "load_pattern": p_load_pattern.value,
                 "chunk_count": chunk_count,
                 "record_count": record_count,
                 "relative_path": self.relative_path,

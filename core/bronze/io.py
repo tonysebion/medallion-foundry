@@ -1,7 +1,7 @@
 """Functions for chunking records and writing CSV/Parquet."""
 
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, cast
 from pathlib import Path
 import csv
 import json
@@ -94,7 +94,7 @@ def chunk_records(
     return chunks
 
 
-def write_csv_chunk(chunk: List[Dict[str, Any]], out_path: Path) -> None:
+def write_csv_chunk(chunk: List[Any], out_path: Path) -> None:
     if not chunk:
         return
 
@@ -116,7 +116,7 @@ def write_csv_chunk(chunk: List[Dict[str, Any]], out_path: Path) -> None:
 
 
 def write_parquet_chunk(
-    chunk: List[Dict[str, Any]], out_path: Path, compression: str = "snappy"
+    chunk: List[Any], out_path: Path, compression: str = "snappy"
 ) -> None:
     if not chunk:
         return
@@ -251,7 +251,7 @@ def verify_checksum_manifest(
         raise FileNotFoundError(f"Checksum manifest not found at {manifest_path}")
 
     with manifest_path.open("r", encoding="utf-8") as handle:
-        manifest = json.load(handle)
+        manifest: Dict[str, Any] = cast(Dict[str, Any], json.load(handle))
 
     if expected_pattern and manifest.get("load_pattern") != expected_pattern:
         raise ValueError(

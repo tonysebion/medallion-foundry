@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 
 _ENV_VAR_PATTERN = re.compile(r"\$\{([^}:]+)(?::([^}]*))?\}")
@@ -65,4 +65,4 @@ def apply_env_substitution(config: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Config with all ${VAR} references substituted
     """
-    return substitute_env_vars(config)
+    return cast(Dict[str, Any], substitute_env_vars(config))

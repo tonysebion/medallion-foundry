@@ -16,7 +16,7 @@ import asyncio
 import random
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Tuple, Type
+from typing import Any, Callable, Optional, Tuple, Type, TypeVar, Awaitable
 
 from core.exceptions import RetryExhaustedError
 
@@ -126,14 +126,17 @@ class CircuitBreaker:
         return self._state
 
 
+T = TypeVar("T")
+
+
 def execute_with_retry(
-    func: Callable[..., Any],
+    func: Callable[..., T],
     *args: Any,
     policy: Optional[RetryPolicy] = None,
     breaker: Optional[CircuitBreaker] = None,
     operation_name: Optional[str] = None,
     **kwargs: Any,
-) -> Any:
+) -> T:
     """Execute a function with retry and optional circuit breaker.
 
     - Skips execution if breaker is open (returns RetryExhaustedError)
@@ -166,7 +169,7 @@ def execute_with_retry(
                     f"Operation failed after {attempts} attempt(s): {operation_name or func.__name__}",
                     attempts=attempts,
                     operation=operation_name or func.__name__,
-                    last_error=exc,
+                    last_error=(exc if isinstance(exc, Exception) else None),
                 ) from exc
             # allow exception-specific delay override
             delay = policy.compute_delay(attempts)
@@ -181,13 +184,13 @@ def execute_with_retry(
 
 
 async def execute_with_retry_async(
-    func: Callable[..., Any],
+    func: Callable[..., Awaitable[T]],
     *args: Any,
     policy: Optional[RetryPolicy] = None,
     breaker: Optional[CircuitBreaker] = None,
     operation_name: Optional[str] = None,
     **kwargs: Any,
-) -> Any:
+) -> T:
     """Async variant of execute_with_retry for httpx and async callables.
 
     - Skips execution if breaker is open (raises RetryExhaustedError)
@@ -220,7 +223,7 @@ async def execute_with_retry_async(
                     f"Operation failed after {attempts} attempt(s): {operation_name or func.__name__}",
                     attempts=attempts,
                     operation=operation_name or func.__name__,
-                    last_error=exc,
+                    last_error=(exc if isinstance(exc, Exception) else None),
                 ) from exc
             # allow exception-specific delay override
             delay = policy.compute_delay(attempts)

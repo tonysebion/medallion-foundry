@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, TYPE_CHECKING
+if TYPE_CHECKING:
+    from core.storage.backend import StorageBackend
 
 from .registry import BACKEND_REGISTRY, register_backend
 
@@ -12,10 +14,11 @@ def list_backends() -> List[str]:
 
 def resolve_backend_type(config: Dict[str, Any]) -> str:
     """Determine the backend type from the provided config."""
-    return config.get("bronze", {}).get("storage_backend", "s3").lower()
+    backend = config.get("bronze", {}).get("storage_backend", "s3")
+    return str(backend).lower()
 
 
-def get_backend_factory(backend_type: str) -> Callable[[Dict[str, Any]], Any]:
+def get_backend_factory(backend_type: str) -> Callable[[Dict[str, Any]], "StorageBackend"]:
     factory = BACKEND_REGISTRY.get(backend_type)
     if not factory:
         available = list(BACKEND_REGISTRY.keys())

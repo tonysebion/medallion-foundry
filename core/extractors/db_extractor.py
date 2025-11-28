@@ -44,7 +44,9 @@ class DbExtractor(BaseExtractor):
         try:
             with open(state_file, "r") as f:
                 state = json.load(f)
-            cursor = state.get("cursor")
+            cursor: Optional[str] = state.get("cursor")
+            if cursor is not None:
+                cursor = str(cursor)
             last_run = state.get("last_run")
             logger.info(f"Loaded cursor state: cursor={cursor}, last_run={last_run}")
             return cursor
@@ -97,7 +99,7 @@ class DbExtractor(BaseExtractor):
     )
     def _execute_query(
         self, driver: str, conn_str: str, query: str, params: Optional[Tuple] = None
-    ):
+    ) -> Any:
         """Execute database query with retry logic for the selected driver."""
         logger.debug("Executing query with driver=%s params=%s", driver, params)
 

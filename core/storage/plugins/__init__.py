@@ -17,4 +17,4 @@ try:
 except ImportError:
     AZURE_AVAILABLE = False
     if TYPE_CHECKING:
-        from .azure_storage import AzureStorage  # type: ignore # noqa: F401
+        from .azure_storage import AzureStorage  # noqa: F401
