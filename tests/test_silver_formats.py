@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any, Dict
 
 import pytest
 import yaml
@@ -30,7 +31,7 @@ PATTERN_DIRS = {
 RUN_DATES = ["2025-11-13", "2025-11-14"]
 
 
-def _ensure_source(cfg: dict) -> dict:
+def _ensure_source(cfg: Dict[str, Any]) -> Dict[str, Any]:
     if "source" in cfg:
         return cfg["source"]
     bronze = cfg.get("bronze", {})
@@ -46,7 +47,9 @@ def _ensure_source(cfg: dict) -> dict:
     return source
 
 
-def _resolve_pattern_folder(cfg: dict, source: dict) -> str:
+def _resolve_pattern_folder(
+    cfg: Dict[str, Any], source: Dict[str, Any]
+) -> str:
     pattern_folder = source["run"].get("pattern_folder")
     if pattern_folder:
         return pattern_folder
@@ -58,7 +61,7 @@ def _resolve_pattern_folder(cfg: dict, source: dict) -> str:
     return PATTERN_DIRS.get(resolved, resolved)
 
 
-def _build_sample_path(cfg: dict, run_date: str) -> Path:
+def _build_sample_path(cfg: Dict[str, Any], run_date: str) -> Path:
     source = _ensure_source(cfg)
     pattern_folder = _resolve_pattern_folder(cfg, source)
     system = source["system"]
