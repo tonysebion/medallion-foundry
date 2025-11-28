@@ -15,7 +15,7 @@ Previously, sample data was organized using fixed pattern folder names embedded 
 
 ### Key Changes
 
-#### 1. **Added `pattern_id` to Configuration Schema** 
+#### 1. **Added `pattern_id` to Configuration Schema**
 
 Updated `core/config/typed_models.py`:
 ```python
@@ -82,7 +82,7 @@ silver_samples/
 **`scripts/generate_sample_data.py`**:
 - Removed redundant `pattern=` subfolder from path construction
 - Updated all four generation functions:
-  - `generate_full_snapshot()` 
+  - `generate_full_snapshot()`
   - `generate_cdc()`
   - `generate_current_history()`
   - `generate_hybrid_combinations()`
@@ -119,7 +119,7 @@ Easy to migrate from educational to realistic naming in **one place**:
 # Before (Educational)
 pattern_id: pattern1_full_events
 
-# After (Realistic)  
+# After (Realistic)
 pattern_id: retail_pos_api_transactions
 ```
 
@@ -128,7 +128,7 @@ All generated samples automatically use the new name without script changes.
 ### 3. **Clear Hierarchy**
 The medallion structure is now visually consistent across layers:
 - source_samples uses `sample=` prefix
-- bronze_samples uses `sample=` prefix  
+- bronze_samples uses `sample=` prefix
 - silver_samples uses `sample=` prefix (plus additional silver_model level)
 
 ### 4. **Production-Ready Alignment**
@@ -157,7 +157,7 @@ The pattern_id is primarily for organization. Generation scripts handle it autom
 # Generate source and bronze samples
 python scripts/generate_sample_data.py
 
-# Generate silver samples  
+# Generate silver samples
 python scripts/generate_silver_samples.py --formats parquet
 ```
 
@@ -216,9 +216,9 @@ If you have existing samples using the old structure:
 
 ### Pattern ID Field
 
-**Location:** Top-level in config YAML  
-**Type:** String (optional)  
-**Default:** None (scripts derive from config filenames)  
+**Location:** Top-level in config YAML
+**Type:** String (optional)
+**Default:** None (scripts derive from config filenames)
 **Purpose:** Unique identifier for tracing data across layers
 
 ```yaml
@@ -227,8 +227,8 @@ pattern_id: my_unique_pattern_identifier
 
 ### Sample Prefix Convention
 
-**Format:** `sample={pattern_id}`  
-**Used in:** All three layers (source, bronze, silver)  
+**Format:** `sample={pattern_id}`
+**Used in:** All three layers (source, bronze, silver)
 **Example:** `sample=retail_pos_api_orders`
 
 **Benefits:**
@@ -293,15 +293,15 @@ The following entity_kind values are mapped to Silver models:
 ## Troubleshooting
 
 ### Issue: "Bronze partitions not found"
-**Cause:** Generation script looks for `sample=` prefix  
+**Cause:** Generation script looks for `sample=` prefix
 **Solution:** Run `python scripts/generate_sample_data.py` first
 
-### Issue: "Unexpected columns in Bronze data"  
-**Cause:** Schema strictness in config vs actual data  
+### Issue: "Unexpected columns in Bronze data"
+**Cause:** Schema strictness in config vs actual data
 **Solution:** Set `schema_mode: allow_new_columns` in silver section
 
 ### Issue: Unicode errors in output
-**Cause:** Terminal doesn't support emoji characters  
+**Cause:** Terminal doesn't support emoji characters
 **Solution:** Already fixed in generate_silver_samples.py (uses ASCII indicators)
 
 ## Future Enhancements
