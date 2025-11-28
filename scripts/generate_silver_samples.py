@@ -368,8 +368,6 @@ def _generate_for_partition(
         cmd.append("--write-csv")
     else:
         cmd.append("--no-write-csv")
-    if args.use_locks:
-        cmd.append("--use-locks")
 
     print(
         f"Generating: sample={pattern_id}/silver_model={config.silver_model} for {run_date}"
