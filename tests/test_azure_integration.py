@@ -22,7 +22,7 @@ pytest.importorskip(
     "azure.identity", reason="Azure identity dependencies not installed"
 )
 
-from core.storage.plugins.azure_storage import AzureStorageBackend
+from core.storage.plugins.azure_storage import AzureStorageBackend  # noqa: E402
 
 
 @pytest.fixture
