@@ -686,7 +686,7 @@ def build_run_options(
     )
 
 
-def perform_join(
+def _execute_join(
     left: pd.DataFrame,
     right: pd.DataFrame,
     join_pairs: List[Tuple[str, str]],
@@ -907,7 +907,7 @@ def apply_projection(
     return result, resolved_lineage
 
 
-def write_output(
+def _persist_join_output(
     df: pd.DataFrame,
     base_dir: Path,
     model: SilverModel | None,
@@ -997,6 +997,187 @@ def write_output(
     )
 
 
+@dataclass
+class AssetFetchResult:
+    left_df: pd.DataFrame
+    right_df: pd.DataFrame
+    metadata_list: List[Dict[str, Any]]
+    source_paths: List[str]
+
+
+@dataclass
+class JoinExecutionResult:
+    joined_df: pd.DataFrame
+    join_stats: JoinRunStats
+    column_lineage: List[Dict[str, Any]]
+    quality_guards: List[Dict[str, Any]]
+    join_metrics: List[Dict[str, Any]]
+    join_pairs: List[Tuple[str, str]]
+    chunk_size: int
+
+
+class SilverJoinRunner:
+    def __init__(
+        self,
+        config_path: Path | None,
+        run_context_path: Path | None,
+        storage_scope: str,
+    ) -> None:
+        self.config_path = Path(config_path) if config_path else None
+        self.run_context_path = Path(run_context_path) if run_context_path else None
+        self.storage_scope = storage_scope
+        self.run_context: RunContext | None = None
+        self.full_config: Dict[str, Any] = {}
+        self.join_config: Dict[str, Any] = {}
+        self.platform_cfg: Dict[str, Any] = {}
+        self.output_cfg: Dict[str, Any] = {}
+
+    def load_configuration(self) -> None:
+        if self.run_context_path:
+            self.run_context = load_run_context(self.run_context_path)
+            full_config = self.run_context.cfg
+            if "silver_join" not in full_config:
+                raise ValueError("RunContext cfg must include a 'silver_join' section")
+            self.full_config = full_config
+            self.join_config = full_config["silver_join"]
+        elif self.config_path:
+            full_config, join_config = parse_config(self.config_path)
+            self.full_config = full_config
+            self.join_config = join_config
+        else:
+            raise ValueError("Either config_path or run_context_path must be provided")
+
+        self.platform_cfg = self.full_config.get("platform", {})
+        self.output_cfg = self.join_config.get("output")
+        if self.output_cfg is None:
+            raise ValueError("silver_join.output must be configured")
+
+    def fetch_assets(self, workspace: Path) -> AssetFetchResult:
+        left_entry = self.join_config["left"]
+        right_entry = self.join_config["right"]
+        left_path = fetch_asset_local(
+            left_entry, workspace, self.platform_cfg, self.storage_scope
+        )
+        right_path = fetch_asset_local(
+            right_entry, workspace, self.platform_cfg, self.storage_scope
+        )
+        left_meta = read_metadata(left_path)
+        right_meta = read_metadata(right_path)
+        left_df = read_silver_data(left_path)
+        right_df = read_silver_data(right_path)
+        entries = [
+            (left_entry, left_df, left_meta, left_entry["path"]),
+            (right_entry, right_df, right_meta, right_entry["path"]),
+        ]
+        ordered = _order_inputs_by_reference(entries)
+        (
+            (left_cfg, left_df, left_meta, left_path_str),
+            (right_cfg, right_df, right_meta, right_path_str),
+        ) = ordered
+        self.join_config["left"], self.join_config["right"] = left_cfg, right_cfg
+        metadata_list = [left_meta, right_meta]
+        source_paths = [left_path_str, right_path_str]
+        return AssetFetchResult(
+            left_df=left_df,
+            right_df=right_df,
+            metadata_list=metadata_list,
+            source_paths=source_paths,
+        )
+
+    def perform_join(
+        self,
+        assets: AssetFetchResult,
+        progress_tracker: JoinProgressTracker,
+        spill_dir: Optional[Path],
+        join_strategy: str,
+    ) -> JoinExecutionResult:
+        join_pairs = _resolve_join_pairs(
+            self.output_cfg, assets.left_df, assets.right_df, assets.metadata_list
+        )
+        chunk_size = _resolve_chunk_size(
+            self.output_cfg, assets.left_df, assets.metadata_list, join_strategy
+        )
+        joined, join_stats, column_origin, join_metrics = _execute_join(
+            assets.left_df,
+            assets.right_df,
+            join_pairs,
+            chunk_size,
+            self.output_cfg,
+            progress_tracker,
+            spill_dir,
+        )
+        projected, column_lineage = apply_projection(joined, self.output_cfg, column_origin)
+        guards = run_quality_guards(projected, self.output_cfg.get("quality_guards", {}))
+        return JoinExecutionResult(
+            joined_df=projected,
+            join_stats=join_stats,
+            column_lineage=column_lineage,
+            quality_guards=guards,
+            join_metrics=join_metrics,
+            join_pairs=join_pairs,
+            chunk_size=chunk_size,
+        )
+
+    def write_output(
+        self,
+        assets: AssetFetchResult,
+        result: JoinExecutionResult,
+        progress_tracker: JoinProgressTracker,
+    ) -> None:
+        source_audits = [build_input_audit(meta) for meta in assets.metadata_list]
+        requested_model = (
+            self.output_cfg.get("model")
+            or SilverModel.default_for_load_pattern(LoadPattern.FULL).value
+        )
+        model = select_model(requested_model, assets.metadata_list)
+        run_opts = build_run_options(self.output_cfg, assets.metadata_list)
+        progress_summary = progress_tracker.summary()
+        _persist_join_output(
+            result.joined_df,
+            Path(self.output_cfg["path"]),
+            model,
+            run_opts,
+            assets.metadata_list,
+            self.output_cfg,
+            assets.source_paths,
+            source_audits,
+            progress_summary,
+            result.join_stats,
+            result.join_pairs,
+            result.chunk_size,
+            result.column_lineage,
+            result.quality_guards,
+            result.join_metrics,
+            run_context=self.run_context,
+        )
+        logger.info(
+            "Joined silver asset written to %s (model=%s)",
+            self.output_cfg["path"],
+            model.value,
+        )
+
+    def run(self) -> int:
+        self.load_configuration()
+        validate_storage_metadata(self.platform_cfg)
+        enforce_storage_scope(self.platform_cfg, self.storage_scope)
+        output_path = Path(self.output_cfg["path"])
+        checkpoint_dir = (
+            self.output_cfg.get("checkpoint_dir") or output_path / ".join_progress"
+        )
+        progress_tracker = JoinProgressTracker(Path(checkpoint_dir))
+        join_strategy = _normalize_join_strategy(self.output_cfg.get("join_strategy"))
+        spill_path = self.output_cfg.get("spill_dir")
+        spill_dir = Path(spill_path) if spill_path else None
+        with tempfile.TemporaryDirectory(prefix="silver_join_") as workspace_dir:
+            workspace = Path(workspace_dir)
+            assets = self.fetch_assets(workspace)
+            result = self.perform_join(
+                assets, progress_tracker, spill_dir, join_strategy
+            )
+        self.write_output(assets, result, progress_tracker)
+        return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Join two Silver assets into a curated third asset"
@@ -1023,113 +1204,12 @@ def main() -> int:
     if not args.config and not args.run_context:
         parser.error("Either --config or --run-context must be provided")
 
-    ctx_override: RunContext | None = (
-        load_run_context(args.run_context) if args.run_context else None
+    runner = SilverJoinRunner(
+        Path(args.config) if args.config else None,
+        Path(args.run_context) if args.run_context else None,
+        args.storage_scope,
     )
-    if ctx_override:
-        full_config = ctx_override.cfg
-        if "silver_join" not in full_config:
-            raise ValueError("RunContext cfg must include a 'silver_join' section")
-        join_config = full_config["silver_join"]
-    else:
-        full_config, join_config = parse_config(Path(args.config))
-    platform_cfg = full_config.get("platform", {})
-    validate_storage_metadata(platform_cfg)
-    enforce_storage_scope(platform_cfg, args.storage_scope)
-
-    output_cfg = join_config.get("output")
-    if output_cfg is None:
-        raise ValueError("silver_join.output must be configured")
-
-    checkpoint_dir = (
-        output_cfg.get("checkpoint_dir") or Path(output_cfg["path"]) / ".join_progress"
-    )
-    progress_tracker = JoinProgressTracker(Path(checkpoint_dir))
-
-    metadata_list: List[Dict[str, Any]] = []
-    source_paths: List[str] = [
-        join_config["left"]["path"],
-        join_config["right"]["path"],
-    ]
-
-    join_strategy = _normalize_join_strategy(output_cfg.get("join_strategy"))
-    spill_path = output_cfg.get("spill_dir")
-    spill_dir = Path(spill_path) if spill_path else None
-
-    with tempfile.TemporaryDirectory(prefix="silver_join_") as workspace_dir:
-        workspace = Path(workspace_dir)
-        left_path = fetch_asset_local(
-            join_config["left"], workspace, platform_cfg, args.storage_scope
-        )
-        right_path = fetch_asset_local(
-            join_config["right"], workspace, platform_cfg, args.storage_scope
-        )
-        left_meta = read_metadata(left_path)
-        right_meta = read_metadata(right_path)
-        left_df = read_silver_data(left_path)
-        right_df = read_silver_data(right_path)
-        entries = [
-            (join_config["left"], left_df, left_meta, join_config["left"]["path"]),
-            (join_config["right"], right_df, right_meta, join_config["right"]["path"]),
-        ]
-        ordered = _order_inputs_by_reference(entries)
-        (
-            (left_cfg, left_df, left_meta, left_path_str),
-            (right_cfg, right_df, right_meta, right_path_str),
-        ) = ordered
-        join_config["left"], join_config["right"] = left_cfg, right_cfg
-        metadata_list = [left_meta, right_meta]
-        source_paths = [left_path_str, right_path_str]
-        join_pairs = _resolve_join_pairs(output_cfg, left_df, right_df, metadata_list)
-        chunk_size = _resolve_chunk_size(
-            output_cfg, left_df, metadata_list, join_strategy
-        )
-        joined_df, join_stats, column_origin, join_metrics = perform_join(
-            left_df,
-            right_df,
-            join_pairs,
-            chunk_size,
-            output_cfg,
-            progress_tracker,
-            spill_dir,
-        )
-        joined_df, column_lineage = apply_projection(
-            joined_df, output_cfg, column_origin
-        )
-        guard_results = run_quality_guards(
-            joined_df, output_cfg.get("quality_guards", {})
-        )
-
-    source_audits = [build_input_audit(meta) for meta in metadata_list]
-    requested_model = (
-        output_cfg.get("model")
-        or SilverModel.default_for_load_pattern(LoadPattern.FULL).value
-    )
-    model = select_model(requested_model, metadata_list)
-    run_opts = build_run_options(output_cfg, metadata_list)
-    progress_summary = progress_tracker.summary()
-    write_output(
-        joined_df,
-        Path(output_cfg["path"]),
-        model,
-        run_opts,
-        metadata_list,
-        output_cfg,
-        source_paths,
-        source_audits,
-        progress_summary,
-        join_stats,
-        join_pairs,
-        chunk_size,
-        column_lineage,
-        guard_results,
-        join_metrics,
-        run_context=ctx_override,
-    )
-    logger.info(
-        "Joined silver asset written to %s (model=%s)", output_cfg["path"], model.value
-    )
-    return 0
+    return runner.run()
 
 
 if __name__ == "__main__":
