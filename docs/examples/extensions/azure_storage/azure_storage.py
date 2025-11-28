@@ -17,7 +17,7 @@ See AZURE_STORAGE_EXTENSION.md for complete setup instructions.
 
 import os
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, TYPE_CHECKING
 
 from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import AzureError
@@ -28,10 +28,12 @@ from tenacity import (
     retry_if_exception_type,
 )
 
-# Import the base class (assumes you've copied to core/ directory)
-try:
+# Import the base class (assumes you've copied to core/ directory). Use
+# TYPE_CHECKING so mypy/type-checkers see the real type, but at runtime we
+# provide a fallback implementation in case the file is run in isolation.
+if TYPE_CHECKING:
     from core.storage import StorageBackend
-except ImportError:
+else:
     # Fallback for when viewing as example
     from abc import ABC, abstractmethod
 
@@ -55,6 +57,8 @@ except ImportError:
         @abstractmethod
         def get_backend_type(self) -> str:
             pass
+
+    # At runtime, StorageBackend is the fallback implementation.
 
 
 logger = logging.getLogger(__name__)
@@ -154,7 +158,7 @@ class AzureStorage(StorageBackend):
                     )
 
                 account_url = f"https://{account_name}.blob.core.windows.net"
-                credential = ClientSecretCredential(
+                client_credential = ClientSecretCredential(
                     tenant_id=tenant_id,
                     client_id=client_id,
                     client_secret=client_secret,
@@ -162,7 +166,7 @@ class AzureStorage(StorageBackend):
                 logger.debug(
                     f"Using Azure service principal authentication for {account_url}"
                 )
-                return BlobServiceClient(account_url=account_url, credential=credential)
+                return BlobServiceClient(account_url=account_url, credential=client_credential)
 
         # Method 4: Managed Identity (for Azure VMs/Functions)
         if azure_cfg.get("use_managed_identity", False):
@@ -173,11 +177,11 @@ class AzureStorage(StorageBackend):
                 raise ValueError("account_name_env required for managed identity")
 
             account_url = f"https://{account_name}.blob.core.windows.net"
-            credential = ManagedIdentityCredential()
+            managed_credential = ManagedIdentityCredential()
             logger.debug(
                 f"Using Azure managed identity authentication for {account_url}"
             )
-            return BlobServiceClient(account_url=account_url, credential=credential)
+            return BlobServiceClient(account_url=account_url, credential=managed_credential)
 
         raise ValueError(
             "No valid Azure authentication found. Provide one of: "
