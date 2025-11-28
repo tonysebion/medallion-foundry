@@ -1029,7 +1029,7 @@ class SilverJoinRunner:
         self.full_config: Dict[str, Any] = {}
         self.join_config: Dict[str, Any] = {}
         self.platform_cfg: Dict[str, Any] = {}
-        self.output_cfg: Dict[str, Any] | None = None
+        self.output_cfg: Dict[str, Any] = {}
 
     def load_configuration(self) -> None:
         if self.run_context_path:

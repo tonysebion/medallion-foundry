@@ -527,8 +527,8 @@ class ApiExtractor(BaseExtractor):
         logger.info(f"Starting API extraction from {base_url}{endpoint}")
 
         try:
-        if is_async_enabled(api_cfg):
-            records = asyncio.run(
+            if is_async_enabled(api_cfg):
+                records = asyncio.run(
                     self._paginate_async(
                         base_url, endpoint, headers, api_cfg, run_cfg, auth
                     )
