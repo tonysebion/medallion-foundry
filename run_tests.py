@@ -51,14 +51,14 @@ def main():
         "--html-coverage", action="store_true", help="Generate HTML coverage report"
     )
     parser.add_argument("--mypy", action="store_true", help="Run mypy type checking")
-    parser.add_argument("--flake8", action="store_true", help="Run flake8 linting")
+    parser.add_argument("--ruff", action="store_true", help="Run ruff linting")
     parser.add_argument(
         "--black-check", action="store_true", help="Check code formatting with black"
     )
     parser.add_argument(
         "--all-checks",
         action="store_true",
-        help="Run all quality checks (tests, mypy, flake8, black)",
+        help="Run all quality checks (tests, mypy, ruff, black)",
     )
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
 
@@ -69,7 +69,7 @@ def main():
     # Determine what to run
     run_tests = True
     run_mypy = args.mypy or args.all_checks
-    run_flake8 = args.flake8 or args.all_checks
+    run_ruff = args.ruff or args.all_checks
     run_black = args.black_check or args.all_checks
 
     # Run tests
@@ -111,19 +111,14 @@ def main():
         ]
         results.append(run_command(mypy_cmd, "Type Checking (mypy)"))
 
-    # Run flake8 linting
-    if run_flake8:
-        flake8_cmd = [
-            "flake8",
-            "core",
-            "extractors",
-            "tests",
-            "bronze_extract.py",
-            "--max-line-length=120",
-            "--exclude=.venv,__pycache__,.git",
-            "--ignore=E203,W503",  # Black compatibility
+    # Run ruff linting
+    if run_ruff:
+        ruff_cmd = [
+            "ruff",
+            "check",
+            ".",
         ]
-        results.append(run_command(flake8_cmd, "Linting (flake8)"))
+        results.append(run_command(ruff_cmd, "Linting (ruff)"))
 
     # Run black format checking
     if run_black:

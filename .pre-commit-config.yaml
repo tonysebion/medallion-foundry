@@ -34,3 +34,8 @@ repos:
           - types-requests
         args: [--config-file=mypy.ini, --no-incremental]
         exclude: ^(tests/|docs/)
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ["--baseline", ".secrets.baseline"]

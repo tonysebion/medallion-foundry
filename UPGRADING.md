@@ -317,7 +317,7 @@ This is the first production release of Bronze Foundry! This release includes co
 
 ### CI/CD & Testing Infrastructure
 - ✅ Comprehensive pytest configuration (`pytest.ini`)
-- ✅ Unified test runner (`run_tests.py`) supporting pytest, mypy, flake8, black
+- ✅ Unified test runner (`run_tests.py`) supporting pytest, mypy, ruff, black
 - ✅ Test markers for unit/integration/slow tests
 - ✅ Platform-agnostic CI/CD support (Jenkins, GitLab, Azure DevOps, Travis, CircleCI)
 - ✅ `TESTING.md` with complete testing guide and CI/CD examples
@@ -373,7 +373,7 @@ This is the first production release of Bronze Foundry! This release includes co
 ### Code Quality
 - ✅ Enhanced test coverage (39 test cases, 10 new edge case tests)
 - ✅ Consistent code formatting with Black
-- ✅ Linting with Flake8
+- ✅ Linting with ruff
 - ✅ Import sorting with isort
 
 ## 📋 What's Deferred (Future Versions)
@@ -435,7 +435,7 @@ pip install -r requirements-dev.txt
 # Run all tests
 python run_tests.py
 
-# Run all quality checks (tests, mypy, flake8, black)
+# Run all quality checks (tests, mypy, ruff, black)
 python run_tests.py --all-checks
 
 # Run specific test types

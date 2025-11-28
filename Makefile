@@ -1,9 +1,9 @@
 # Makefile for medallion-foundry development tasks
 # Requires: Python 3.8+, venv created at .venv/
 
-PYTHON := .venv/Scripts/python.exe
-PIP := .venv/Scripts/pip.exe
-PYTEST := .venv/Scripts/pytest.exe
+PYTHON ?= python
+PIP ?= $(PYTHON) -m pip
+PYTEST ?= $(PYTHON) -m pytest
 
 .PHONY: help install test test-fast test-smoke test-cov lint format type-check docs clean
 
@@ -30,7 +30,7 @@ test-fast:  ## Run tests (excluding slow integration tests)
 	$(PYTEST) -v -m "not integration"
 
 test-smoke:  ## Run smoke tests
-	set RUN_SMOKE=1 && $(PYTEST) -v -m integration
+	RUN_SMOKE=1 $(PYTEST) -v -m integration
 
 test-cov:  ## Run tests with coverage report
 	$(PYTEST) --cov=core --cov=bronze_extract --cov=silver_extract --cov-report=html --cov-report=term
@@ -55,19 +55,19 @@ docs-serve:  ## Serve documentation locally
 	$(PYTHON) -m mkdocs serve
 
 clean:  ## Clean temporary files and caches
-	-del /q /s *.pyc 2>nul
-	-rmdir /s /q __pycache__ .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov 2>nul
-	-rmdir /s /q site 2>nul
+	# OS-agnostic clean commands
+	find . -name "*.pyc" -delete || true
+	rm -rf __pycache__ .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov site || true
 
 clean-output:  ## Clean output directories
-	-rmdir /s /q output silver_output 2>nul
+	rm -rf output silver_output || true
 
 pre-commit-install:  ## Install pre-commit hooks
 	$(PIP) install pre-commit
-	.venv/Scripts/pre-commit install
+	pre-commit install
 
 pre-commit-run:  ## Run pre-commit on all files
-	.venv/Scripts/pre-commit run --all-files
+	pre-commit run --all-files
 
 validate-config:  ## Validate sample configs
 	$(PYTHON) bronze_extract.py --config config/sample_api.yaml --validate-only

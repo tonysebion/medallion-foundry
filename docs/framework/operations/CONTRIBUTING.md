@@ -151,7 +151,7 @@ isort core extractors tests bronze_extract.py
 
 ```bash
 # Run linter
-flake8 core extractors tests bronze_extract.py
+ruff check core extractors tests bronze_extract.py
 
 # Fix common issues automatically
 autopep8 --in-place --aggressive --aggressive <file>
@@ -280,7 +280,7 @@ python run_tests.py --coverage --html-coverage
 
 - [ ] All tests pass locally
 - [ ] Code is formatted with `black`
-- [ ] Linting passes with `flake8`
+ - [ ] Linting passes with `ruff`
 - [ ] Type checking passes with `mypy`
 - [ ] Documentation is updated
 - [ ] CHANGELOG.md is updated (if applicable)

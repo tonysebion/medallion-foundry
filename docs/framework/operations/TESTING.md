@@ -125,14 +125,14 @@ mypy core extractors bronze_extract.py
 
 Configuration in `mypy.ini`.
 
-### Linting (flake8)
+### Linting (ruff)
 
 ```bash
 # Run linting
-python run_tests.py --flake8
+python run_tests.py --ruff
 
-# Or directly with flake8
-flake8 core extractors tests bronze_extract.py
+# Or directly with ruff
+ruff check core extractors tests bronze_extract.py
 ```
 
 ### Code Formatting (black)
@@ -381,5 +381,5 @@ Add ignore rules to `mypy.ini` for third-party packages without type stubs.
 - [pytest Documentation](https://docs.pytest.org/)
 - [pytest-cov Documentation](https://pytest-cov.readthedocs.io/)
 - [mypy Documentation](https://mypy.readthedocs.io/)
-- [flake8 Documentation](https://flake8.pycqa.org/)
+- [ruff Documentation](https://beta.ruff.rs/docs/)
 - [black Documentation](https://black.readthedocs.io/)

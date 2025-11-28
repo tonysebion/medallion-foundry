@@ -6,6 +6,7 @@ This framework is intentionally lightweight and orchestration-neutral: you can r
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CI](https://github.com/tonysebion/medallion-foundry/actions/workflows/ci.yml/badge.svg)](https://github.com/tonysebion/medallion-foundry/actions)
 
 ## Key Features
 
@@ -396,6 +397,8 @@ silver_output/
 - [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) ï¿½ advanced configuration & features.
 - [CONFIG_REFERENCE.md](docs/framework/reference/CONFIG_REFERENCE.md) ï¿½ exhaustive list of config options.
 - [TESTING.md](TESTING.md) ï¿½ how to run tests and interpret results.
+- [CONTRIBUTING.md](CONTRIBUTING.md) â€” how to contribute and run local checks
+- [SECURITY.md](SECURITY.md) â€” how to report a security issue
 ### Silver Refinement Options\n- silver.schema: rename or reorder columns for standardized curated tables.\n- silver.normalization: toggle 	rim_strings / empty_strings_as_null to keep formatting consistent across datasets.\n- silver.error_handling: set enabled, max_bad_records, and max_bad_percent to quarantine bad rows into _errors/ files instead of failing immediately.\n- silver.partitioning: add a secondary partition column (e.g., status, region) for Silver outputs while still mirroring the Bronze folder layout.\n- silver.domain / entity / ersion / load_partition_name: describe the medallion layout so outputs land under domain=<domain>/entity=<entity>/v<version>/<load partition>=YYYY-MM-DD/.. Optional include_pattern_folder: true inserts pattern=<load_pattern> before the load partition.\n- silver.model: choose the Silver asset type to emit. Available options now mirror the requested asset catalogue:\n  - scd_type_1 â€“ deduplicated current view (SCD Type 1).\n  - scd_type_2 â€“ current + full history split with an is_current flag (SCD Type 2).\n  - incremental_merge â€“ incremental change set from the Bronze data (CDC/timestamp).\n  - ull_merge_dedupe â€“ full snapshot deduplicated by the configured keys/order column, ready for full merges.\n  - periodic_snapshot â€“ exact Bronze snapshot for periodic refreshes.\n  - silver.model_profile â€“ pick a named preset (analytics, operational, merge_ready, cdc_delta, snapshot) that maps to silver.model.\n- storage_metadata: classify your storage target with oundary, provider_type, and cloud_provider. Use --storage-scope onprem to force an on-prem policy.\n\nExample Silver section:
 
 ```yaml
