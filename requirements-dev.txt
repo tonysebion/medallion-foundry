@@ -7,7 +7,6 @@ pytest-mock>=3.10.0
 
 # Code quality
 black>=22.0.0
-flake8>=5.0.0
 isort>=5.11.0
 mypy>=0.990
 pydantic>=2.0.0
