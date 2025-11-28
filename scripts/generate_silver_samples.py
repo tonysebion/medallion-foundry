@@ -281,6 +281,12 @@ def parse_args() -> argparse.Namespace:
         default="both",
         help="Which Silver artifact formats to write",
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Limit the number of sample partitions generated (for testing)",
+    )
     return parser.parse_args()
 
 
@@ -366,6 +372,9 @@ def main() -> None:
     pattern_configs = _discover_pattern_configs()
     generated_count = 0
 
+    limit = args.limit if args.limit and args.limit > 0 else None
+    stop = False
+
     for partition in partitions:
         configs = pattern_configs.get(partition["pattern"])
         if not configs:
@@ -375,10 +384,15 @@ def main() -> None:
             continue
 
         for config_variant in configs:
+            if limit is not None and generated_count >= limit:
+                stop = True
+                break
             _generate_for_partition(
                 partition, config_variant, enable_parquet, enable_csv
             )
             generated_count += 1
+        if stop:
+            break
 
     _promote_temp_samples()
     print(
