@@ -111,12 +111,11 @@ def fetch_asset_local(
         raise FileNotFoundError(f"No remote files found under {prefix}")
 
     for remote in files:
-        rel = (
-            Path(remote).relative_to(prefix)
-            if remote.startswith(prefix)
-            else Path(remote).name
-        )
-        local_path = target_dir / rel
+        if remote.startswith(prefix):
+            rel_path = Path(remote).relative_to(prefix)
+        else:
+            rel_path = Path(Path(remote).name)
+        local_path = target_dir / rel_path
         local_path.parent.mkdir(parents=True, exist_ok=True)
         backend.download_file(remote, str(local_path))
 
@@ -1030,7 +1029,7 @@ class SilverJoinRunner:
         self.full_config: Dict[str, Any] = {}
         self.join_config: Dict[str, Any] = {}
         self.platform_cfg: Dict[str, Any] = {}
-        self.output_cfg: Dict[str, Any] = {}
+        self.output_cfg: Dict[str, Any] | None = None
 
     def load_configuration(self) -> None:
         if self.run_context_path:
@@ -1048,9 +1047,10 @@ class SilverJoinRunner:
             raise ValueError("Either config_path or run_context_path must be provided")
 
         self.platform_cfg = self.full_config.get("platform", {})
-        self.output_cfg = self.join_config.get("output")
-        if self.output_cfg is None:
+        output_cfg = self.join_config.get("output")
+        if output_cfg is None:
             raise ValueError("silver_join.output must be configured")
+        self.output_cfg = cast(Dict[str, Any], output_cfg)
 
     def fetch_assets(self, workspace: Path) -> AssetFetchResult:
         left_entry = self.join_config["left"]

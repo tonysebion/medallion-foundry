@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import pandas as pd
 
@@ -264,8 +264,9 @@ class SilverProcessor:
             self.dataset.silver.natural_keys
         )
         for _, group in grouped:
-            prev = None
-            for _, row in group.iterrows():
+            prev: Optional[pd.Series] = None
+            for _, row_raw in group.iterrows():
+                row = cast(pd.Series, row_raw)
                 change_type = "upsert"
                 changed_cols = list(attrs)
                 if prev is not None:
