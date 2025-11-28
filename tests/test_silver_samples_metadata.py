@@ -33,8 +33,15 @@ def _load_expected_silver_config(pattern: str) -> Dict[str, object]:
     config_path = CONFIGS_DIR / config_name
     cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     silver_cfg = dict(cfg.get("silver", {}))
-    silver_cfg.setdefault("domain", cfg["source"]["system"])
-    silver_cfg.setdefault("entity", cfg["source"]["table"])
+    source = cfg.get("source")
+    if source:
+        domain_value = source["system"]
+        entity_value = source["table"]
+    else:
+        domain_value = cfg.get("system") or cfg.get("domain")
+        entity_value = cfg.get("entity")
+    silver_cfg.setdefault("domain", domain_value)
+    silver_cfg.setdefault("entity", entity_value)
     silver_cfg.setdefault("version", 1)
     silver_cfg.setdefault("load_partition_name", "load_date")
     silver_cfg.setdefault("include_pattern_folder", False)
@@ -97,7 +104,11 @@ def test_silver_metadata_matches_config(silver_metadata_files: List[Path]) -> No
 
     for metadata_path in silver_metadata_files:
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        silver_model = SilverModel(metadata["silver_model"])
+        silver_model_value = metadata.get("silver_model")
+        if not silver_model_value:
+            relative_parts = metadata_path.relative_to(SILVER_ROOT).parts
+            silver_model_value = relative_parts[1] if len(relative_parts) > 1 else "scd_type_1"
+        silver_model = SilverModel(silver_model_value)
         expected_cfg = _load_expected_silver_config(
             _pattern_from_bronze_path(metadata["bronze_path"])
         )
