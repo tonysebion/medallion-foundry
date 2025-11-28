@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 import pandas as pd
 
 from core.config import DatasetConfig, build_relative_path, load_configs
+from core.config import ensure_root_config
 from core.context import RunContext, build_run_context, load_run_context
 from core.bronze.io import (
     write_batch_metadata,
@@ -319,9 +320,9 @@ class SilverPromotionService:
         # on how the configs are loaded. Explicitly annotate accordingly.
         self.cfg_list: Optional[List[Dict[str, Any]]]
         if self._provided_run_context:
-            self.cfg_list = [self._provided_run_context.cfg]
+            self.cfg_list = [ensure_root_config(self._provided_run_context.cfg)]
         else:
-            self.cfg_list = load_configs(args.config) if args.config else None
+            self.cfg_list = [ensure_root_config(cfg) for cfg in load_configs(args.config)] if args.config else None
         self._silver_identity: Optional[Tuple[Any, Any, int, str, bool]] = None
         self._hook_context: Dict[str, Any] = {"layer": "silver"}
         self._run_options: Optional[RunOptions] = None
