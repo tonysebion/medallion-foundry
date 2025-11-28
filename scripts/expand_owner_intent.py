@@ -8,7 +8,7 @@ import textwrap
 
 import yaml
 
-DEFAULT_BRONZE_BASE = Path("./bronze")
+DEFAULT_BRONZE_BASE = Path("sampledata") / "bronze"
 DEFAULT_SILVER_BASE = Path("./silver")
 
 
