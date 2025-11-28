@@ -14,6 +14,8 @@ from enum import Enum
 from core.patterns import LoadPattern
 from core.silver.models import SilverModel, resolve_profile
 
+from .dataset import DatasetConfig
+
 
 class StorageBackend(str, Enum):
     s3 = "s3"
@@ -63,6 +65,13 @@ class RunConfig(BaseModel):
     local_output_dir: str = "./output"
     write_csv: bool = True
     write_parquet: bool = False
+    parallel_workers: int = 1
+
+    @field_validator("parallel_workers")
+    def _validate_parallel_workers(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("parallel_workers must be a positive integer")
+        return value
 
 
 class SourceConfig(BaseModel):
@@ -244,7 +253,10 @@ class PlatformConfig(BaseModel):
 
 
 class RootConfig(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(
+        extra="allow",
+        json_encoders={DatasetConfig: lambda value: value},
+    )
     config_version: int = 1
     platform: PlatformConfig
     source: SourceConfig
@@ -252,6 +264,13 @@ class RootConfig(BaseModel):
 
     def to_dict(self) -> Dict[str, Any]:
         return self.model_dump()
+
+    def model_dump(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        data = super().model_dump(*args, **kwargs)
+        dataset = self.__pydantic_extra__.get("__dataset__")
+        if dataset is not None:
+            data["__dataset__"] = dataset
+        return data
 
 
 # Factory parsing entry point
