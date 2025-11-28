@@ -191,6 +191,19 @@ def _build_dataset_runtime(dataset: DatasetConfig) -> Dict[str, Any]:
     return validated
 
 
+def ensure_root_config(cfg: Dict[str, Any]) -> RootConfig:
+    """Given a config dict, return a parsed RootConfig model.
+
+    This ensures that callers downstream can work with typed config models.
+    """
+    try:
+        typed = parse_root_config(cfg)
+        return typed
+    except Exception:
+        # If parsing fails, raise so callers must handle invalid configs explicitly
+        raise
+
+
 def _load_intent_datasets(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Load intent-style configs (single dict or list under 'datasets')."""
     entries: List[Dict[str, Any]]
