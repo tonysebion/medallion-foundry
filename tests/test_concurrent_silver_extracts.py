@@ -22,10 +22,12 @@ def _find_bronze_partition() -> Path:
     raise RuntimeError("No Bronze partition found in sampledata")
 
 
-def _run_extract_chunk(bronze_part: Path, silver_tmp: Path, chunk_tag: str, use_lock: bool):
+def _run_extract_chunk(bronze_part: Path, silver_tmp: Path, chunk_tag: str, use_lock: bool, config_path: Path):
     cmd = [
         sys.executable,
         str(REPO_ROOT / "silver_extract.py"),
+        "--config",
+        str(config_path),
         "--bronze-path",
         str(bronze_part),
         "--silver-base",
@@ -51,8 +53,9 @@ def test_concurrent_writes_and_consolidation(tmp_path: Path) -> None:
 
     tags = [f"parallel-{uuid.uuid4().hex[:6]}" for _ in range(3)]
     failures: List[tuple] = []
+    config_path = REPO_ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
     with ThreadPoolExecutor(max_workers=3) as ex:
-        futures = [ex.submit(_run_extract_chunk, bronze_part, silver_tmp, t, False) for t in tags]
+        futures = [ex.submit(_run_extract_chunk, bronze_part, silver_tmp, t, False, config_path) for t in tags]
         for fut in as_completed(futures):
             rc, out, err = fut.result()
             failures.append((rc, out, err))
@@ -80,8 +83,9 @@ def test_concurrent_writes_with_locks(tmp_path: Path) -> None:
 
     tags = [f"lock-{uuid.uuid4().hex[:6]}" for _ in range(3)]
     failures: List[tuple] = []
+    config_path = REPO_ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
     with ThreadPoolExecutor(max_workers=3) as ex:
-        futures = [ex.submit(_run_extract_chunk, bronze_part, silver_tmp, t, True) for t in tags]
+        futures = [ex.submit(_run_extract_chunk, bronze_part, silver_tmp, t, True, config_path) for t in tags]
         for fut in as_completed(futures):
             rc, out, err = fut.result()
             failures.append((rc, out, err))
