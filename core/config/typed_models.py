@@ -267,9 +267,11 @@ class RootConfig(BaseModel):
 
     def model_dump(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
         data = super().model_dump(*args, **kwargs)
-        dataset = self.__pydantic_extra__.get("__dataset__")
-        if dataset is not None:
-            data["__dataset__"] = dataset
+        extra = self.__pydantic_extra__
+        if extra is not None:
+            dataset = extra.get("__dataset__")
+            if dataset is not None:
+                data["__dataset__"] = dataset
         return data
 
 
