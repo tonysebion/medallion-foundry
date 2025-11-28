@@ -33,7 +33,11 @@ from core.run_options import RunOptions
 from core.config.typed_models import RootConfig
 from core.storage.policy import enforce_storage_scope
 
-__version__ = "1.0.0"
+# Version is managed by setuptools_scm and written to core/_version.py
+try:
+    from core._version import __version__
+except ImportError:
+    __version__ = "unknown (not installed)"
 
 logger = logging.getLogger(__name__)
 
