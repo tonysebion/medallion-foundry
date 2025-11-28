@@ -7,12 +7,10 @@ from datetime import datetime, date, timedelta
 from pathlib import Path
 from random import Random
 from typing import Iterable, List, Dict
-import shutil
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = REPO_ROOT / "docs" / "examples" / "configs"
 BASE_DIR = REPO_ROOT / "sampledata" / "source_samples"
-DOC_BASE_DIR = REPO_ROOT / "docs" / "examples" / "data" / "bronze_samples"
 
 SAMPLE_START_DATE = date(2025, 11, 13)
 DAILY_DAYS = 28
@@ -460,7 +458,6 @@ def main() -> None:
     generate_hybrid_combinations()
     print(f"Sample datasets written under {BASE_DIR}")
     _write_pattern_readmes()
-    _sync_doc_samples()
 
 
 def _write_pattern_readmes() -> None:
@@ -482,15 +479,6 @@ def _write_pattern_readmes() -> None:
         lines.append("")
         lines.append("These source files drive the Bronze/Silver behavior described in `docs/usage/patterns/pattern_matrix.md`.")
         readme.write_text("\n".join(lines), encoding="utf-8")
-
-
-def _sync_doc_samples() -> None:
-    """Mirror generated Bronze samples into the docs/examples data tree."""
-    if not DOC_BASE_DIR.parent.exists():
-        DOC_BASE_DIR.parent.mkdir(parents=True, exist_ok=True)
-    if DOC_BASE_DIR.exists():
-        shutil.rmtree(DOC_BASE_DIR)
-    shutil.copytree(BASE_DIR, DOC_BASE_DIR)
 
 
 if __name__ == "__main__":

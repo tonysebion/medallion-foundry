@@ -1,231 +1,259 @@
 #!/usr/bin/env python
 """
-Run Bronze extraction for all pattern configurations.
-
-This script runs Bronze extraction (source to Bronze) for all pattern configurations
-in the sample data, using the appropriate dates for each pattern type.
+Run Bronze extraction for every sample pattern so Bronze outputs mimic the source layout.
 
 Usage:
     python scripts/run_all_bronze_patterns.py
 
-Or skip sample generation if already done:
-    python scripts/run_all_bronze_patterns.py --skip-sample-generation
-
-Output:
-    All Bronze outputs are saved to: sampledata/bronze_outputs/
+By default this regenerates source samples before running Bronze. Pass
+`--skip-sample-generation` to reuse whatever is already under sampledata/source_samples.
 """
 
+from __future__ import annotations
+
 import argparse
+import concurrent.futures
 import subprocess
 import sys
-import yaml
 import tempfile
-import shutil
 from pathlib import Path
-import concurrent.futures
+from typing import Iterable, List
 
-# All pattern configurations with their appropriate run dates
+import yaml
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 PATTERN_CONFIGS = [
-    ("docs/examples/configs/patterns/pattern_full.yaml", []),
-    ("docs/examples/configs/patterns/pattern_cdc.yaml", []),
-    ("docs/examples/configs/patterns/pattern_current_history.yaml", []),
-    ("docs/examples/configs/patterns/pattern_hybrid_cdc_point.yaml", []),
-    ("docs/examples/configs/patterns/pattern_hybrid_cdc_cumulative.yaml", []),
-    ("docs/examples/configs/patterns/pattern_hybrid_incremental_point.yaml", []),
-    ("docs/examples/configs/patterns/pattern_hybrid_incremental_cumulative.yaml", []),
+    {"config": "docs/examples/configs/patterns/pattern_full.yaml", "pattern": "pattern1_full_events"},
+    {"config": "docs/examples/configs/patterns/pattern_cdc.yaml", "pattern": "pattern2_cdc_events"},
+    {"config": "docs/examples/configs/patterns/pattern_current_history.yaml", "pattern": "pattern3_scd_state"},
+    {"config": "docs/examples/configs/patterns/pattern_hybrid_cdc_point.yaml", "pattern": "pattern4_hybrid_cdc_point"},
+    {"config": "docs/examples/configs/patterns/pattern_hybrid_cdc_cumulative.yaml", "pattern": "pattern5_hybrid_cdc_cumulative"},
+    {"config": "docs/examples/configs/patterns/pattern_hybrid_incremental_point.yaml", "pattern": "pattern6_hybrid_incremental_point"},
+    {"config": "docs/examples/configs/patterns/pattern_hybrid_incremental_cumulative.yaml", "pattern": "pattern7_hybrid_incremental_cumulative"},
+    {"config": "docs/examples/configs/examples/file_example.yaml", "pattern": "pattern1_full_events"},
+    {"config": "docs/examples/configs/patterns/file_cdc_example.yaml", "pattern": "pattern2_cdc_events"},
+    {"config": "docs/examples/configs/patterns/file_current_history_example.yaml", "pattern": "pattern3_scd_state"},
 ]
 
-def run_command(cmd, description):
-    """Run a command and return success status."""
-    print(f"\n{'='*60}")
-    print(f"🔄 {description}")
-    print(f"{'='*60}")
-    print(f"Command: {' '.join(cmd)}")
 
-    try:
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+def _extract_path_pattern_from_config(cfg: dict[str, object]) -> str:
+    bronze_cfg = cfg.get("bronze", {})
+    if "path_pattern" in bronze_cfg:
+        return bronze_cfg["path_pattern"]
+    source_cfg = cfg.get("source", {})
+    file_cfg = source_cfg.get("file", {})
+    if "path" in file_cfg:
+        return file_cfg["path"]
+    raise ValueError("Unable to determine Bronze source path in config")
+
+
+def _pattern_base_dir(path_pattern: str) -> Path:
+    candidate = Path(path_pattern)
+    if not candidate.is_absolute():
+        candidate = (REPO_ROOT / candidate).resolve()
+    for idx, part in enumerate(candidate.parts):
+        if part.startswith("dt="):
+            return Path(*candidate.parts[:idx])
+    raise ValueError(f"No dt= directory found in path pattern {path_pattern}")
+
+
+def _path_tail_after_dt(path_pattern: str) -> Path:
+    candidate = Path(path_pattern)
+    tail_parts: List[str] = []
+    for idx, part in enumerate(candidate.parts):
+        if part.startswith("dt="):
+            tail_parts = list(candidate.parts[idx + 1 :])
+            break
+    return Path(*tail_parts) if tail_parts else Path()
+
+
+def _discover_run_dates(
+    config_path: Path, explicit_dates: Iterable[str] | None
+) -> List[str]:
+    if explicit_dates:
+        return list(explicit_dates)
+
+    cfg = yaml.safe_load(config_path.read_text())
+    path_pattern = _extract_path_pattern_from_config(cfg)
+    base_dir = _pattern_base_dir(path_pattern)
+    tail = _path_tail_after_dt(path_pattern)
+    dt_dirs = sorted(p for p in base_dir.glob("dt=*") if p.is_dir())
+    if not dt_dirs:
+        raise ValueError(f"No dt directories present under {base_dir}")
+
+    valid_dates: List[str] = []
+    for dt_dir in dt_dirs:
+        candidate = dt_dir / tail if tail.parts else dt_dir
+        if candidate.exists():
+            valid_dates.append(dt_dir.name.split("=", 1)[1])
+
+    if not valid_dates:
+        raise ValueError(f"No valid files found for {config_path}")
+    return valid_dates
+
+
+def run_command(cmd: list[str], description: str) -> bool:
+    """Execute a subprocess command."""
+    print("\n" + "=" * 60)
+    print(f"🔄 {description}")
+    print(f"Command: {' '.join(cmd)}")
+    print("=" * 60)
+    result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    if result.returncode == 0:
         print("✅ SUCCESS")
         return True
-    except subprocess.CalledProcessError as e:
-        print(f"❌ FAILED (exit code: {e.returncode})")
-        if e.stdout:
-            print("STDOUT:", e.stdout.strip())
-        if e.stderr:
-            print("STDERR:", e.stderr.strip())
-        return False
+    print(f"❌ FAILED ({description})")
+    if result.stdout:
+        print("STDOUT:", result.stdout.strip())
+    if result.stderr:
+        print("STDERR:", result.stderr.strip())
+    return False
 
 
-def process_run(task):
-    """Process a single run task."""
-    config_path = task['config_path']
-    run_date = task['run_date']
-    run_count = task['run_count']
-    temp_path = task['temp_path']
-    output_base = task['output_base']
-    total_runs = task['total_runs']
-
-    config_name = Path(config_path).name
-    description = f"[{run_count}/{total_runs}] Bronze extraction: {config_name} ({run_date})"
-
-    actual_config_path = fix_file_example_config(config_path, run_date, temp_path, output_base)
-
-    success = run_command(
-        [sys.executable, "bronze_extract.py",
-         "--config", actual_config_path,
-         "--date", run_date],
-        description
-    )
-    return (config_name, run_date, success)
-
-
-def get_available_dates():
-    """Get all available dates from the sample data."""
-    pattern1_path = Path("sampledata/source_samples/pattern1_full_events/system=retail_demo/table=orders/pattern=pattern1_full_events")
-    if not pattern1_path.exists():
-        return ["2025-11-13"]  # fallback
-
-    dates = []
-    for item in pattern1_path.iterdir():
-        if item.is_dir() and item.name.startswith("dt="):
-            date_str = item.name.replace("dt=", "")
-            dates.append(date_str)
-    return sorted(dates)
-
-
-def fix_file_example_config(original_path, run_date, temp_dir, output_base):
-    """Fix configs to use the correct date and output directory."""
+def rewrite_config(
+    original_path: str,
+    run_date: str,
+    temp_dir: Path,
+    output_base: Path,
+    pattern_folder: str | None,
+) -> str:
     config = yaml.safe_load(Path(original_path).read_text())
 
-    # For pattern configs that use date parameters, update the path_pattern
     if "bronze" in config and "path_pattern" in config["bronze"]:
-        # Replace any dt=YYYY-MM-DD with the current run_date
         import re
+
         config["bronze"]["path_pattern"] = re.sub(
-            r'dt=\d{4}-\d{2}-\d{2}',
-            f'dt={run_date}',
-            config["bronze"]["path_pattern"]
+            r"dt=\d{4}-\d{2}-\d{2}",
+            f"dt={run_date}",
+            config["bronze"]["path_pattern"],
         )
 
-        # Extract pattern number from path_pattern
-        match = re.search(r'pattern(\d+)_', config["bronze"]["path_pattern"])
-        if match:
-            pattern_num = match.group(1)
-            output_dir = output_base / f"pattern{pattern_num}"
-        else:
-            config_name = Path(original_path).name
-            output_dir = output_base / config_name.replace('.yaml', '')
-    else:
-        config_name = Path(original_path).name
-        output_dir = output_base / config_name.replace('.yaml', '')
-
-    # Set output directory
     if "bronze" in config:
-        if "options" not in config["bronze"]:
-            config["bronze"]["options"] = {}
-        config["bronze"]["options"]["local_output_dir"] = str(output_dir)
+        options = config["bronze"].setdefault("options", {})
+        options["local_output_dir"] = str(output_base)
+        if pattern_folder:
+            options["pattern_folder"] = pattern_folder
 
-    # Also set silver output if it exists
     if "silver" in config:
-        config["silver"]["output_dir"] = str(output_dir / "silver")
+        config["silver"]["output_dir"] = str(output_base / "silver")
 
     config_name = Path(original_path).name
-    # Write to temp file
     temp_config = temp_dir / f"temp_{config_name}_{run_date.replace('-', '')}"
     temp_config.write_text(yaml.safe_dump(config))
     return str(temp_config)
 
-def main():
+
+def process_run(task: dict[str, object]) -> tuple[str, str, bool]:
+    config_path = task["config_path"]
+    run_date = task["run_date"]
+    temp_path = task["temp_path"]
+    output_base = task["output_base"]
+    total_runs = task["total_runs"]
+    pattern_folder = task.get("pattern")
+
+    run_count = task["run_count"]
+    config_name = Path(config_path).name
+    description = f"[{run_count}/{total_runs}] Bronze extraction: {config_name} ({run_date})"
+
+    actual_config = rewrite_config(
+        config_path,
+        run_date,
+        temp_path,
+        output_base,
+        pattern_folder,
+    )
+
+    success = run_command(
+        [sys.executable, "bronze_extract.py", "--config", actual_config, "--date", run_date],
+        description,
+    )
+    return config_name, run_date, success
+
+
+def main() -> int:
     parser = argparse.ArgumentParser(description="Run Bronze extraction for all pattern configs")
     parser.add_argument(
         "--skip-sample-generation",
         action="store_true",
-        help="Skip sample data generation (assumes it already exists)"
+        help="Skip generating the source sample data",
     )
 
     args = parser.parse_args()
 
-    print("🚀 Bronze Pattern Extraction Runner")
-    print("="*60)
-    print("Running all pattern configurations with their appropriate dates...")
+    if not (REPO_ROOT / "scripts" / "generate_sample_data.py").exists():
+        print("❌ Run me from the repository root.")
+        return 1
 
-    # Check if we're in the right directory
-    if not Path("scripts/generate_sample_data.py").exists():
-        print("❌ Error: Please run this script from the medallion-foundry root directory")
-        sys.exit(1)
-
-    # Generate sample data if needed
     if not args.skip_sample_generation:
         if not run_command(
             [sys.executable, "scripts/generate_sample_data.py"],
-            "Generating sample data"
+            "Generating sample data",
         ):
-            print("❌ Failed to generate sample data")
-            sys.exit(1)
+            return 1
 
-    print(f"Configs to run: {len(PATTERN_CONFIGS)}")
+    pattern_runs: List[dict[str, object]] = []
+    for entry in PATTERN_CONFIGS:
+        config_path = entry["config"]
+        run_dates = _discover_run_dates(REPO_ROOT / config_path, None)
+        pattern_runs.append(
+            {
+                "config": config_path,
+                "run_dates": run_dates,
+                "pattern": entry.get("pattern"),
+            }
+        )
 
-    # Get all available dates
-    available_dates = get_available_dates()
-    print(f"Available dates: {len(available_dates)} ({available_dates[0]} to {available_dates[-1]})")
+    total_runs = sum(len(entry["run_dates"]) for entry in pattern_runs)
+    print(f"Configs to run: {len(pattern_runs)} ({total_runs} total Bronze runs)")
 
-    # Set up output directory
-    output_base = Path("sampledata/bronze_samples")
-    output_base.mkdir(parents=True, exist_ok=True)
-
-    # Update PATTERN_CONFIGS to use all available dates
-    updated_configs = [(path, available_dates) for path, _ in PATTERN_CONFIGS]
-
-    # Run Bronze extraction for each pattern config and its dates
-    total_runs = sum(len(dates) for _, dates in updated_configs)
-    print(f"Total runs: {total_runs}")
+    bronze_out = Path("sampledata/bronze_outputs")
+    bronze_out.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
-
-        tasks = []
+        tasks: list[dict[str, object]] = []
         run_count = 0
-        for config_path, run_dates in updated_configs:
-            for run_date in run_dates:
+        for entry in pattern_runs:
+            for run_date in entry["run_dates"]:
                 run_count += 1
-                tasks.append({
-                    'config_path': config_path,
-                    'run_date': run_date,
-                    'run_count': run_count,
-                    'temp_path': temp_path,
-                    'output_base': output_base,
-                    'total_runs': total_runs
-                })
+                tasks.append(
+                    {
+                        "config_path": entry["config"],
+                        "run_date": run_date,
+                        "run_count": run_count,
+                        "temp_path": temp_path,
+                        "output_base": bronze_out,
+                        "total_runs": total_runs,
+                        "pattern": entry["pattern"],
+                    }
+                )
 
-        # Run in parallel
-        results = []
+        results: list[tuple[str, str, bool]] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
             futures = [executor.submit(process_run, task) for task in tasks]
             for future in concurrent.futures.as_completed(futures):
-                result = future.result()
-                results.append(result)
-
-    # Summary
-    print(f"\n{'='*60}")
-    print("SUMMARY")
-    print(f"{'='*60}")
+                results.append(future.result())
 
     successful = sum(1 for _, _, success in results if success)
     total = len(results)
 
+    print("\n" + "=" * 60)
+    print("SUMMARY")
+    print("=" * 60)
     print(f"\nCompleted: {successful}/{total} runs")
 
     if successful == total:
         print("\n✅ ALL BRONZE EXTRACTIONS SUCCEEDED!")
-        print(f"\n📁 Outputs saved to: {output_base}/")
-        print("   Bronze data: sampledata/bronze_samples/")
+        print(f"\n📁 Bronze outputs: {bronze_out.resolve()}")
     else:
         print("\n❌ SOME BRONZE EXTRACTIONS FAILED")
         print("\nFailed runs:")
         for config_name, run_date, success in results:
             if not success:
                 print(f"   ❌ {config_name} ({run_date})")
-
     return 0 if successful == total else 1
+
 
 if __name__ == "__main__":
     sys.exit(main())
