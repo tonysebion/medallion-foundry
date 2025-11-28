@@ -126,7 +126,7 @@ def load_configs(
 
     platform = raw.get("platform")
     base_silver = raw.get("silver")
-    results: List[Dict[str, Any]] = []
+    results: List[RootConfig] = []
 
     for idx, entry in enumerate(sources):
         if not isinstance(entry, dict):
