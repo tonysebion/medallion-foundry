@@ -4,7 +4,7 @@ import copy
 import logging
 from typing import Any, Dict
 
-from .models import SilverConfig
+from .typed_models import SilverConfig
 from core.deprecation import emit_compat, emit_deprecation, DeprecationSpec
 from core.patterns import LoadPattern
 from core.storage.policy import validate_storage_metadata

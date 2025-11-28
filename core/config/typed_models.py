@@ -200,6 +200,10 @@ class SilverConfig(BaseModel):
     ) -> "SilverConfig":
         data = raw.copy() if raw else {}
         
+        # Map legacy field names
+        if "schema" in data and "schema_config" not in data:
+            data["schema_config"] = data.pop("schema")
+        
         # Set defaults based on source and load_pattern
         data.setdefault("domain", source["system"])
         data.setdefault("entity", source["table"])
