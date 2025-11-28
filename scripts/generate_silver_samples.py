@@ -26,6 +26,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BRONZE_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "bronze_samples"
 SILVER_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "silver_samples"
+TEMP_SILVER_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "silver_samples_tmp"
 CONFIGS_DIR = REPO_ROOT / "docs" / "examples" / "configs" / "patterns"
 
 # Mapping from silver entity_kind + history_mode to silver_model name
@@ -61,21 +62,40 @@ def _safe_remove_path(target: Path) -> None:
         print(f"[WARN] Unable to delete {target}: {exc}; skipping")
 
 
-def _clear_silver_samples() -> None:
-    """Remove existing Silver samples, falling back to manual cleanup when rmtree fails."""
+def _clear_path(target: Path) -> None:
+    """Remove a directory tree with best-effort cleanup."""
+    if not target.exists():
+        return
     try:
-        shutil.rmtree(SILVER_SAMPLE_ROOT)
+        shutil.rmtree(target)
         return
     except OSError as exc:
-        print(f"[WARN] Unable to delete existing Silver samples: {exc}; falling back to manual cleanup")
-    if not SILVER_SAMPLE_ROOT.exists():
-        return
-    for child in list(SILVER_SAMPLE_ROOT.iterdir()):
+        print(f"[WARN] Unable to delete {target}: {exc}; falling back to manual cleanup")
+    for child in list(target.iterdir()):
         _safe_remove_path(child)
     try:
-        SILVER_SAMPLE_ROOT.rmdir()
+        target.rmdir()
     except OSError:
         pass
+
+
+def _promote_temp_samples() -> None:
+    """Move temporarily generated samples into the final location."""
+    if not TEMP_SILVER_SAMPLE_ROOT.exists():
+        print("[WARN] No Silver samples generated; skipping promotion")
+        return
+    if SILVER_SAMPLE_ROOT.exists():
+        _clear_path(SILVER_SAMPLE_ROOT)
+    try:
+        shutil.move(str(TEMP_SILVER_SAMPLE_ROOT), str(SILVER_SAMPLE_ROOT))
+    except OSError as exc:
+        print(f"[WARN] Unable to rename temp Silver samples: {exc}; copying instead")
+        shutil.copytree(
+            TEMP_SILVER_SAMPLE_ROOT,
+            SILVER_SAMPLE_ROOT,
+            dirs_exist_ok=True,
+        )
+        _clear_path(TEMP_SILVER_SAMPLE_ROOT)
 
 
 
@@ -287,12 +307,12 @@ def _generate_for_partition(
 
     # Build Silver base using sample= prefix matching Bronze
     # silver_extract.py will add domain/entity/v1/load_date internally
-    silver_base = (
-        SILVER_SAMPLE_ROOT
-        / f"sample={pattern_id}"
-        / f"silver_model={config.silver_model}"
-    )
-    silver_base.mkdir(parents=True, exist_ok=True)
+      silver_base = (
+          TEMP_SILVER_SAMPLE_ROOT
+          / f"sample={pattern_id}"
+          / f"silver_model={config.silver_model}"
+      )
+      silver_base.mkdir(parents=True, exist_ok=True)
 
     cmd = [
         "silver_extract.py",
@@ -322,7 +342,7 @@ def _generate_for_partition(
     _run_cli(cmd)
 
     # Copy config to pattern root for reference
-    pattern_root = SILVER_SAMPLE_ROOT / f"sample={pattern_id}"
+    pattern_root = TEMP_SILVER_SAMPLE_ROOT / f"sample={pattern_id}"
     intent_dest = pattern_root / f"intent_{config.path.stem}.yaml"
     shutil.copy(config.path, intent_dest)
 
@@ -340,9 +360,8 @@ def main() -> None:
     if not partitions:
         raise RuntimeError("No Bronze partitions found; generate Bronze samples first.")
 
-    if SILVER_SAMPLE_ROOT.exists():
-        _clear_silver_samples()
-    SILVER_SAMPLE_ROOT.mkdir(parents=True, exist_ok=True)
+    _clear_path(TEMP_SILVER_SAMPLE_ROOT)
+    TEMP_SILVER_SAMPLE_ROOT.mkdir(parents=True, exist_ok=True)
 
     pattern_configs = _discover_pattern_configs()
     generated_count = 0
@@ -361,6 +380,7 @@ def main() -> None:
             )
             generated_count += 1
 
+    _promote_temp_samples()
     print(
         f"\n[OK] Generated {generated_count} Silver sample(s) under {SILVER_SAMPLE_ROOT}"
     )
