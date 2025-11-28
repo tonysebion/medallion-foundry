@@ -416,7 +416,7 @@ def main() -> None:
                 break
             # create a deterministic-ish unique chunk_tag per task
             import uuid
-            chunk_tag = f"{partition['pattern']}-{partition['run_date']}-{uuid.uuid4().hex[:8]}"
+            chunk_tag = f"{partition['run_date']}-{uuid.uuid4().hex[:8]}"
             task_args = (partition, config_variant, enable_parquet, enable_csv, args.artifact_writer, chunk_tag, args.use_locks)
             task_list.append(task_args)
             generated_count += 1
