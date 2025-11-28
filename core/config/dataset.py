@@ -51,8 +51,8 @@ class SchemaMode(str, Enum):
     ALLOW_NEW_COLUMNS = "allow_new_columns"
 
 
-DEFAULT_BRONZE_BASE = Path("./bronze")
-DEFAULT_SILVER_BASE = Path("./silver")
+DEFAULT_BRONZE_BASE = Path("sampledata") / "bronze_samples"
+DEFAULT_SILVER_BASE = Path("sampledata") / "silver_samples"
 
 
 def _require_list_of_strings(values: Any, field_name: str) -> List[str]:
