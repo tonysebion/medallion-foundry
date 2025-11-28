@@ -53,7 +53,7 @@ def _load_expected_silver_config(config_path: Path) -> Dict[str, object]:
     silver_cfg["write_parquet"] = True
     silver_cfg["write_csv"] = True
     partitioning = dict(silver_cfg.get("partitioning", {}))
-    partitioning["columns"] = []
+    partitioning.setdefault("columns", list(silver_cfg.get("partition_by", [])))
     silver_cfg["partitioning"] = partitioning
     return silver_cfg
 
@@ -63,6 +63,17 @@ def _label_dir_from_metadata(metadata_path: Path) -> Path:
     if not relative_parts:
         raise ValueError(f"Unexpected metadata path structure: {metadata_path}")
     return SILVER_ROOT / relative_parts[0]
+
+
+def _find_intent_config(label_dir: Path) -> Path:
+    pattern_name = label_dir.name.split("=", 1)[1] if "=" in label_dir.name else label_dir.name
+    candidate = label_dir / f"intent_{pattern_name}.yaml"
+    if candidate.exists():
+        return candidate
+    intent_files = sorted(label_dir.glob("intent_*.yaml"))
+    if intent_files:
+        return intent_files[0]
+    raise FileNotFoundError(f"No intent config found under {label_dir}")
 
 
 def _expected_artifact_names(
@@ -110,12 +121,12 @@ def test_silver_metadata_matches_config(silver_metadata_files: List[Path]) -> No
             silver_model_value = silver_model_value.split("=", 1)[1]
         silver_model = SilverModel(silver_model_value)
         label_dir = _label_dir_from_metadata(metadata_path)
-        config_path = label_dir / "intent.yaml"
+        config_path = _find_intent_config(label_dir)
         expected_cfg = _load_expected_silver_config(config_path)
 
         assert metadata["write_parquet"] is True
         assert metadata["write_csv"] is True
-        assert metadata["partition_columns"] == []
+        assert metadata["partition_columns"] == expected_cfg["partitioning"]["columns"]
         assert metadata["parquet_compression"] == expected_cfg["parquet_compression"]
         assert metadata["domain"] == expected_cfg["domain"]
         assert metadata["entity"] == expected_cfg["entity"]
