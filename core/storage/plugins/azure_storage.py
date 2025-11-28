@@ -86,6 +86,7 @@ class AzureStorage(StorageBackend):
 
         account_env = azure_cfg.get("account_name_env")
         key_env = azure_cfg.get("account_key_env")
+        account_url: str | None = None
         if account_env and key_env:
             account = os.environ.get(account_env)
             key = os.environ.get(key_env)
@@ -96,12 +97,14 @@ class AzureStorage(StorageBackend):
 
         logger.debug("Azure storage using DefaultAzureCredential")
         account_url_any = azure_cfg.get("account_url")
-        account_url: str | None = None
         if account_url_any:
             account_url = str(account_url_any)
-        return BlobServiceClient(
-            account_url=account_url,
-            credential=DefaultAzureCredential(),
+        if account_url:
+            return BlobServiceClient(
+                account_url=account_url, credential=DefaultAzureCredential()
+            )
+        raise ValueError(
+            "azure.account_url must be provided in config when connection_string or account_key are not used"
         )
 
     def _remote_path(self, remote_path: str) -> str:

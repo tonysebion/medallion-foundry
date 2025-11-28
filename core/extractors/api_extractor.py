@@ -476,7 +476,7 @@ class ApiExtractor(BaseExtractor):
                 )
                 # Extract next cursor
                 cursor_val = None
-                obj = data
+                obj: Any = data
                 if isinstance(obj, dict):
                     for key in cursor_path.split("."):
                         obj = obj.get(key) if isinstance(obj, dict) else None
