@@ -51,7 +51,7 @@ def build_run_context(
         cfg_dict = typed.model_dump()
     else:
         typed = None
-        cfg_dict = cfg
+        cfg_dict = cast(Dict[str, Any], cfg)
         run_cfg = cfg_dict["source"].get("run", {})
 
     local_output_dir = Path(
@@ -88,11 +88,10 @@ def build_run_context(
         relative_path,
     )
 
-    # Return typed RunContext. If we have a typed model, keep the original typed config
-    # object in `cfg` to allow access to model attributes elsewhere. Otherwise return
-    # the input dict as-is.
+    # Return RunContext with a plain dict config so downstream runners can rely on
+    # standard dict operations regardless of how the input was provided.
     return RunContext(
-        cfg=cast(Dict[str, Any], cfg),
+        cfg=cfg_dict,
         run_date=run_date,
         relative_path=relative_path,
         local_output_dir=local_output_dir,
