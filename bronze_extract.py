@@ -400,7 +400,7 @@ class BronzeOrchestrator:
             )
 
         # Fallback to dict-based extraction if typed model missing.
-        cfg_dict: Dict[str, Any] = configs[0].model_dump()
+        cfg_dict = cast(Dict[str, Any], configs[0].model_dump())
         source_cfg = cast(Dict[str, Any], cfg_dict["source"])
         run_cfg = cast(Dict[str, Any], source_cfg["run"])
         silver_cfg = cast(Dict[str, Any], cfg_dict.get("silver", {}))
