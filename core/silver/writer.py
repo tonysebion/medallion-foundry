@@ -24,6 +24,7 @@ class SilverArtifactWriter(Protocol):
         error_cfg: Dict[str, Any],
         silver_model: Any,  # SilverModel
         output_dir,
+        chunk_tag: str | None = None,
     ) -> Mapping[str, List[Path]]:  # artifact label -> list of path objects
         ...
 
@@ -43,6 +44,7 @@ class DefaultSilverArtifactWriter:
         error_cfg: Dict[str, Any],
         silver_model: Any,
         output_dir,
+        chunk_tag: str | None = None,
     ) -> Mapping[str, List[Path]]:
         outputs = _artifact_write_silver_outputs(
             df,
@@ -56,6 +58,7 @@ class DefaultSilverArtifactWriter:
             error_cfg,
             silver_model,
             output_dir,
+            chunk_tag,
         )
         return outputs
 
@@ -80,6 +83,7 @@ class TransactionalSilverArtifactWriter:
         error_cfg: Dict[str, Any],
         silver_model: Any,
         output_dir,
+        chunk_tag: str | None = None,
     ) -> Mapping[str, List[Path]]:
         staging = Path(output_dir) / "_staging"
         staging.mkdir(parents=True, exist_ok=True)
@@ -95,6 +99,7 @@ class TransactionalSilverArtifactWriter:
             error_cfg,
             silver_model,
             staging,
+            chunk_tag,
         )
         final_outputs: Dict[str, List[Path]] = {}
         for label, paths in outputs.items():

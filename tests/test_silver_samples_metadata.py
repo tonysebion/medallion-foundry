@@ -9,17 +9,16 @@ from typing import Any, Dict, List, cast
 import pytest
 import yaml
 
+from core.silver.defaults import (
+    DEFAULT_ARTIFACT_OUTPUT_NAMES,
+    DEFAULT_ERROR_HANDLING,
+    DEFAULT_NORMALIZATION,
+    DEFAULT_SCHEMA,
+)
 from core.silver.models import SilverModel
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SILVER_ROOT = REPO_ROOT / "sampledata" / "silver_samples"
-DEFAULT_NORMALIZATION = {"trim_strings": False, "empty_strings_as_null": False}
-DEFAULT_ERROR_HANDLING = {
-    "enabled": False,
-    "max_bad_records": 0,
-    "max_bad_percent": 0.0,
-}
-DEFAULT_SCHEMA: Dict[str, Any] = {"rename_map": {}, "column_order": None}
 
 
 def _load_expected_silver_config(config_path: Path) -> Dict[str, Any]:
@@ -50,10 +49,8 @@ def _load_expected_silver_config(config_path: Path) -> Dict[str, Any]:
     silver_cfg.setdefault("normalization", DEFAULT_NORMALIZATION.copy())
     silver_cfg.setdefault("error_handling", DEFAULT_ERROR_HANDLING.copy())
     silver_cfg.setdefault("schema", DEFAULT_SCHEMA.copy())
-    silver_cfg.setdefault("full_output_name", "full_snapshot")
-    silver_cfg.setdefault("cdc_output_name", "cdc_changes")
-    silver_cfg.setdefault("history_output_name", "history")
-    silver_cfg.setdefault("current_output_name", "current")
+    for key, value in DEFAULT_ARTIFACT_OUTPUT_NAMES.items():
+        silver_cfg.setdefault(key, value)
 
     silver_cfg["write_parquet"] = True
     silver_cfg["write_csv"] = True

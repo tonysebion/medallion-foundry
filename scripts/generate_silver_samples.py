@@ -281,6 +281,23 @@ def parse_args() -> argparse.Namespace:
         default="both",
         help="Which Silver artifact formats to write",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=4,
+        help="Number of concurrent silver_extract worker subprocesses to run",
+    )
+    parser.add_argument(
+        "--artifact-writer",
+        choices=["default", "transactional"],
+        default="transactional",
+        help="Artifact writer kind to pass to silver_extract (transactional recommended for concurrency)",
+    )
+    parser.add_argument(
+        "--use-locks",
+        action="store_true",
+        help="Enable filesystem locking for each silver_extract subprocess (passes --use-locks to silver_extract)",
+    )
     return parser.parse_args()
 
 
@@ -293,6 +310,9 @@ def _generate_for_partition(
     config: PatternConfig,
     enable_parquet: bool,
     enable_csv: bool,
+    artifact_writer: str,
+    chunk_tag: str | None = None,
+    use_locks: bool = False,
 ) -> None:
     """Generate Silver artifacts for a single Bronze partition."""
     partition_dir = partition["dir"]
@@ -326,6 +346,13 @@ def _generate_for_partition(
         str(silver_base),  # Pass sample/silver_model level, CLI will add rest
     ]
 
+    if artifact_writer:
+        cmd.extend(["--artifact-writer", artifact_writer])
+    if chunk_tag:
+        cmd.extend(["--chunk-tag", chunk_tag])
+    if use_locks:
+        cmd.append("--use-locks")
+
     if enable_parquet:
         cmd.append("--write-parquet")
     else:
@@ -335,20 +362,22 @@ def _generate_for_partition(
         cmd.append("--write-csv")
     else:
         cmd.append("--no-write-csv")
+    if args.use_locks:
+        cmd.append("--use-locks")
 
     print(
         f"Generating: sample={pattern_id}/silver_model={config.silver_model} for {run_date}"
     )
     _run_cli(cmd)
 
-    # Copy config to pattern root for reference
+    # Copy config to pattern root for reference (overwrite to keep idempotent)
     pattern_root = TEMP_SILVER_SAMPLE_ROOT / f"sample={pattern_id}"
+    pattern_root.mkdir(parents=True, exist_ok=True)
     intent_dest = pattern_root / f"intent_{config.path.stem}.yaml"
-    shutil.copy(config.path, intent_dest)
+    shutil.copyfile(config.path, intent_dest)
 
-    # Write pattern-level README once per pattern
-    if not (pattern_root / "README.md").exists():
-        _write_pattern_readme(pattern_root, pattern_id, config.silver_model)
+    # Write pattern-level README (overwrite is safe and idempotent)
+    _write_pattern_readme(pattern_root, pattern_id, config.silver_model)
 
 
 def main() -> None:
@@ -365,20 +394,49 @@ def main() -> None:
 
     pattern_configs = _discover_pattern_configs()
     generated_count = 0
+    task_list: List[tuple] = []
 
-    for partition in partitions:
+    for idx, partition in enumerate(partitions):
         configs = pattern_configs.get(partition["pattern"])
         if not configs:
             print(
                 f"[WARN] No pattern configs found for pattern '{partition['pattern']}' - skipping"
             )
             continue
-
         for config_variant in configs:
-            _generate_for_partition(
-                partition, config_variant, enable_parquet, enable_csv
-            )
+            # create a deterministic-ish unique chunk_tag per task
+            import uuid
+            chunk_tag = f"{partition['pattern']}-{partition['run_date']}-{uuid.uuid4().hex[:8]}"
+            task_args = (partition, config_variant, enable_parquet, enable_csv, args.artifact_writer, chunk_tag, args.use_locks)
+            task_list.append(task_args)
             generated_count += 1
+
+    # Run tasks in parallel subprocesses, each executes silver_extract
+    if not task_list:
+        print("[WARN] No Silver generation tasks; nothing to run")
+    else:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def _task_runner(args_tuple):
+            try:
+                _generate_for_partition(*args_tuple)
+            except Exception as exc:
+                return (False, args_tuple, str(exc))
+            return (True, args_tuple, None)
+
+        failures: List[tuple] = []
+        with ThreadPoolExecutor(max_workers=args.workers) as ex:
+            futures = [ex.submit(_task_runner, t) for t in task_list]
+            for fut in as_completed(futures):
+                ok, args_tuple, error = fut.result()
+                if not ok:
+                    failures.append((args_tuple, error))
+
+        if failures:
+            print(f"[ERROR] {len(failures)} Silver generation tasks failed:")
+            for f in failures:
+                print(f" - {f[0]}: {f[1]}")
+            raise RuntimeError("One or more silver generation subprocesses failed")
 
     _promote_temp_samples()
     print(

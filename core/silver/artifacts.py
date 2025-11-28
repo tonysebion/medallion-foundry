@@ -333,7 +333,7 @@ class SilverModelPlanner:
         }
         self.silver_model = silver_model
 
-    def render(self, df: pd.DataFrame) -> Dict[str, List[Path]]:
+    def render(self, df: pd.DataFrame, chunk_tag: str | None = None) -> Dict[str, List[Path]]:
         artifact_frames = self.prepare_artifacts(df)
         outputs: Dict[str, List[Path]] = {}
 
@@ -341,7 +341,12 @@ class SilverModelPlanner:
             if dataset_df.empty:
                 continue
             target_name = self.artifact_names.get(label, label)
-            outputs[target_name] = self.writer.write_dataset(target_name, dataset_df)
+            if chunk_tag:
+                outputs[target_name] = self.writer.write_dataset_chunk(
+                    target_name, dataset_df, chunk_tag
+                )
+            else:
+                outputs[target_name] = self.writer.write_dataset(target_name, dataset_df)
 
         return outputs
 
@@ -409,6 +414,7 @@ def write_silver_outputs(
     error_cfg: Dict[str, Any],
     silver_model: SilverModel,
     output_dir: Path,
+    chunk_tag: str | None = None,
 ) -> Dict[str, List[Path]]:
     writer = DatasetWriter(
         base_dir=output_dir,
@@ -422,4 +428,4 @@ def write_silver_outputs(
     planner = SilverModelPlanner(
         writer, primary_keys, order_column, artifact_names, silver_model
     )
-    return planner.render(df)
+    return planner.render(df, chunk_tag=chunk_tag)

@@ -52,6 +52,7 @@ class SilverProcessor:
         write_parquet: bool = True,
         write_csv: bool = False,
         parquet_compression: str = "snappy",
+        chunk_tag: str | None = None,
     ) -> None:
         self.dataset = dataset
         self.bronze_path = bronze_path
@@ -60,6 +61,7 @@ class SilverProcessor:
         self.write_parquet = write_parquet
         self.write_csv = write_csv
         self.parquet_compression = parquet_compression
+        self.chunk_tag = chunk_tag
         self.load_batch_id = f"{dataset.dataset_id}-{run_date.isoformat()}"
 
     def run(self) -> SilverProcessorResult:
@@ -109,7 +111,10 @@ class SilverProcessor:
                     {"name": col, "dtype": str(dtype)}
                     for col, dtype in enriched.dtypes.items()
                 ]
-            written = writer.write_dataset(name, enriched)
+            if self.chunk_tag:
+                written = writer.write_dataset_chunk(name, enriched, self.chunk_tag)
+            else:
+                written = writer.write_dataset(name, enriched)
             outputs[name] = written
             metrics.rows_written += len(enriched)
 

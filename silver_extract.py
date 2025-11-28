@@ -41,6 +41,7 @@ from core.catalog import (
 from core.hooks import fire_webhooks
 from core.run_options import RunOptions
 from core.storage.policy import enforce_storage_scope
+from core.storage.locks import file_lock
 from core.silver.artifacts import (
     apply_schema_settings,
     build_current_view,
@@ -48,6 +49,12 @@ from core.silver.artifacts import (
     partition_dataframe,
     handle_error_rows,
     SilverModelPlanner,
+)
+from core.silver.defaults import (
+    DEFAULT_ERROR_HANDLING,
+    DEFAULT_NORMALIZATION,
+    DEFAULT_SCHEMA,
+    default_silver_config,
 )
 from core.silver.writer import get_silver_writer
 from core.silver.models import SilverModel
@@ -117,32 +124,7 @@ def derive_relative_partition(bronze_path: Path) -> Path:
 
 
 def _default_silver_cfg() -> Dict[str, Any]:
-    return {
-        "schema": {"rename_map": {}, "column_order": None},
-        "normalization": {"trim_strings": False, "empty_strings_as_null": False},
-        "partitioning": {"columns": []},
-        "error_handling": {
-            "enabled": False,
-            "max_bad_records": 0,
-            "max_bad_percent": 0.0,
-        },
-        "primary_keys": [],
-        "order_column": None,
-        "write_parquet": True,
-        "write_csv": False,
-        "parquet_compression": "snappy",
-        "full_output_name": "full_snapshot",
-        "cdc_output_name": "cdc_changes",
-        "current_output_name": "current",
-        "history_output_name": "history",
-        "domain": "default",
-        "entity": "dataset",
-        "version": 1,
-        "load_partition_name": "load_date",
-        "include_pattern_folder": False,
-        "require_checksum": False,
-        "model": SilverModel.PERIODIC_SNAPSHOT.value,
-    }
+    return default_silver_config()
 
 
 def _derive_bronze_path_from_config(cfg: Dict[str, Any], run_date: dt.date) -> Path:
@@ -175,6 +157,7 @@ class PromotionOptions:
     normalization_cfg: Dict[str, Any]
     error_cfg: Dict[str, Any]
     silver_model: SilverModel
+    chunk_tag: str | None = None
 
     @classmethod
     def from_inputs(
@@ -183,14 +166,11 @@ class PromotionOptions:
         args: argparse.Namespace,
         load_pattern: LoadPattern,
     ) -> "PromotionOptions":
-        schema_cfg = silver_cfg.get("schema", {"rename_map": {}, "column_order": None})
+        schema_cfg = silver_cfg.get("schema", DEFAULT_SCHEMA.copy())
         normalization_cfg = silver_cfg.get(
-            "normalization", {"trim_strings": False, "empty_strings_as_null": False}
+            "normalization", DEFAULT_NORMALIZATION.copy()
         )
-        error_cfg = silver_cfg.get(
-            "error_handling",
-            {"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0},
-        )
+        error_cfg = silver_cfg.get("error_handling", DEFAULT_ERROR_HANDLING.copy())
 
         rename_map = schema_cfg.get("rename_map") or {}
 
@@ -294,6 +274,7 @@ class PromotionOptions:
             normalization_cfg=normalization_cfg,
             error_cfg=error_cfg,
             silver_model=silver_model,
+                chunk_tag=(args.chunk_tag if hasattr(args, "chunk_tag") else None),
         )
 
 
@@ -309,6 +290,7 @@ class PromotionContext:
     load_partition_name: str
     include_pattern_folder: bool
     silver_model: SilverModel
+    chunk_tag: str | None = None
 
 
 class SilverPromotionService:
@@ -430,19 +412,42 @@ class SilverPromotionService:
             "Loaded %s records from Bronze path %s", len(normalized_df), bronze_path
         )
         writer = get_silver_writer(run_opts.artifact_writer_kind)
-        outputs = writer.write(
-            normalized_df,
-            primary_keys=run_opts.primary_keys,
-            order_column=run_opts.order_column,
-            write_parquet=run_opts.write_parquet,
-            write_csv=run_opts.write_csv,
-            parquet_compression=run_opts.parquet_compression,
-            artifact_names=run_opts.artifact_names,
-            partition_columns=run_opts.partition_columns,
-            error_cfg=context.options.error_cfg,
-            silver_model=context.silver_model,
-            output_dir=silver_partition,
-        )
+        if self.args.use_locks:
+            lock_ctx = file_lock(silver_partition, timeout=60.0)
+        else:
+            lock_ctx = None
+
+        if lock_ctx:
+            with lock_ctx:
+                outputs = writer.write(
+                    normalized_df,
+                    primary_keys=run_opts.primary_keys,
+                    order_column=run_opts.order_column,
+                    write_parquet=run_opts.write_parquet,
+                    write_csv=run_opts.write_csv,
+                    parquet_compression=run_opts.parquet_compression,
+                    artifact_names=run_opts.artifact_names,
+                    partition_columns=run_opts.partition_columns,
+                    error_cfg=context.options.error_cfg,
+                    silver_model=context.silver_model,
+                    output_dir=silver_partition,
+                    chunk_tag=context.chunk_tag,
+                )
+        else:
+            outputs = writer.write(
+                normalized_df,
+                primary_keys=run_opts.primary_keys,
+                order_column=run_opts.order_column,
+                write_parquet=run_opts.write_parquet,
+                write_csv=run_opts.write_csv,
+                parquet_compression=run_opts.parquet_compression,
+                artifact_names=run_opts.artifact_names,
+                partition_columns=run_opts.partition_columns,
+                error_cfg=context.options.error_cfg,
+                silver_model=context.silver_model,
+                output_dir=silver_partition,
+                chunk_tag=context.chunk_tag,
+            )
         schema_snapshot = [
             {"name": col, "dtype": str(dtype)}
             for col, dtype in normalized_df.dtypes.items()
@@ -450,9 +455,14 @@ class SilverPromotionService:
         record_count = len(normalized_df)
         chunk_count = len(outputs)
 
-        self._write_metadata(record_count, chunk_count, context, outputs)
+        if context.chunk_tag:
+            # Write per-chunk metadata to assist consolidation later; do not write global checksums.
+            self._write_chunk_metadata(record_count, chunk_count, context, outputs)
+        else:
+            self._write_metadata(record_count, chunk_count, context, outputs)
         runtime_seconds = time.perf_counter() - run_start
-        self._write_checksum_manifest(
+        if not context.chunk_tag:
+            self._write_checksum_manifest(
             outputs,
             context,
             schema_snapshot,
@@ -460,7 +470,7 @@ class SilverPromotionService:
             chunk_count,
             bronze_size_bytes=bronze_size_bytes,
             runtime_seconds=runtime_seconds,
-        )
+            )
 
         for label, paths in outputs.items():
             for path in paths:
@@ -525,12 +535,33 @@ class SilverPromotionService:
             write_parquet=write_parquet,
             write_csv=write_csv,
             parquet_compression=compression,
+            chunk_tag=(self.args.chunk_tag if hasattr(self.args, "chunk_tag") else None),
         )
         bronze_size_bytes = self._calculate_directory_size(bronze_path)
         start = time.perf_counter()
-        result = processor.run()
+        if self.args.use_locks:
+            with file_lock(silver_partition, timeout=60.0):
+                if self.args.use_locks:
+                    with file_lock(silver_partition, timeout=60.0):
+                        result = processor.run()
+                else:
+                    result = processor.run()
+        else:
+            result = processor.run()
         runtime_seconds = time.perf_counter() - start
-        self._write_intent_metadata(
+        if self.args.chunk_tag:
+            self._write_intent_chunk_metadata(
+                dataset,
+                result,
+                silver_partition,
+                bronze_path,
+                run_context.run_date,
+                load_pattern,
+                bronze_size_bytes,
+                runtime_seconds,
+            )
+        else:
+            self._write_intent_metadata(
             dataset,
             result,
             silver_partition,
@@ -818,6 +849,7 @@ class SilverPromotionService:
             load_partition_name=load_partition_name,
             include_pattern_folder=include_pattern_folder,
             silver_model=options.silver_model,
+            chunk_tag=options.chunk_tag,
         )
 
     def _maybe_verify_checksum(self, context: PromotionContext) -> None:
@@ -931,6 +963,95 @@ class SilverPromotionService:
             "load_pattern": context.load_pattern.value,
         }
         report_lineage(bronze_dataset, dataset_id, lineage_metadata)
+
+    def _write_intent_chunk_metadata(
+        self,
+        dataset: DatasetConfig,
+        result: SilverProcessorResult,
+        silver_partition: Path,
+        bronze_path: Path,
+        run_date: dt.date,
+        load_pattern: LoadPattern,
+        bronze_size_bytes: int,
+        runtime_seconds: float,
+    ) -> None:
+        if not hasattr(self.args, "chunk_tag") or not self.args.chunk_tag:
+            return
+        import json
+        from datetime import datetime
+
+        files = [path for paths in result.outputs.values() for path in paths]
+        record_count = result.metrics.rows_written
+        chunk_count = sum(len(paths) for paths in result.outputs.values())
+        extra = {
+            "dataset_id": dataset.dataset_id,
+            "load_batch_id": f"{dataset.dataset_id}-{run_date.isoformat()}",
+            "bronze_path": str(bronze_path),
+            "load_pattern": load_pattern.value,
+            "rows_read": result.metrics.rows_read,
+            "rows_written": result.metrics.rows_written,
+            "changed_keys": result.metrics.changed_keys,
+            "derived_events": result.metrics.derived_events,
+            "bronze_size_bytes": bronze_size_bytes,
+            "runtime_seconds": runtime_seconds,
+            "entity_kind": dataset.silver.entity_kind.value,
+            "history_mode": dataset.silver.history_mode.value
+            if dataset.silver.history_mode
+            else None,
+            "input_mode": dataset.silver.input_mode.value
+            if dataset.silver.input_mode
+            else None,
+            "bronze_owner": dataset.bronze.owner_team,
+            "silver_owner": dataset.silver.semantic_owner,
+        }
+        chunk_meta = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "chunk_tag": self.args.chunk_tag,
+            "dataset_id": dataset.dataset_id,
+            "artifact_names": list(result.outputs.keys()),
+            "files": [p.name for p in files],
+            "record_count": record_count,
+            "chunk_count": chunk_count,
+            "extra_metrics": extra,
+        }
+        path = silver_partition / f"_metadata_chunk_{self.args.chunk_tag}.json"
+        with path.open("w", encoding="utf-8") as f:
+            json.dump(chunk_meta, f, indent=2)
+        logger.debug("Wrote intent chunk metadata to %s", path)
+
+    def _write_chunk_metadata(
+        self,
+        record_count: int,
+        chunk_count: int,
+        context: PromotionContext,
+        outputs: Mapping[str, List[Path]],
+    ) -> None:
+        """Write a chunk-specific metadata file which will be used by consolidation.
+
+        The file is named `_metadata_chunk_{chunk_tag}.json` and contains
+        chunk-specific metrics plus a list of paths created by the chunk.
+        """
+        if not context.chunk_tag:
+            return
+        import json
+        from datetime import datetime
+
+        chunk_meta = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "chunk_tag": context.chunk_tag,
+            "record_count": record_count,
+            "chunk_count": chunk_count,
+            "artifacts": {label: [p.name for p in paths] for label, paths in outputs.items()},
+            "bronze_path": str(context.run_context.bronze_path),
+            "load_pattern": context.load_pattern.value,
+            "domain": context.domain,
+            "entity": context.entity,
+            "version": context.version,
+        }
+        metadata_path = context.silver_partition / f"_metadata_chunk_{context.chunk_tag}.json"
+        with metadata_path.open("w", encoding="utf-8") as f:
+            json.dump(chunk_meta, f, indent=2)
+        logger.debug("Wrote chunk metadata to %s", metadata_path)
 
     def _fire_hooks(
         self, success: bool, extra: Optional[Dict[str, Any]] = None
@@ -1121,6 +1242,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         dest="on_failure_webhook",
         help="URL to POST a JSON payload to when the Silver promotion fails (can be specified multiple times)",
+    )
+    parser.add_argument(
+        "--chunk-tag",
+        help="Optional tag to suffix chunked artifacts with (useful when running concurrent writers)",
+    )
+    parser.add_argument(
+        "--use-locks",
+        action="store_true",
+        help="Acquire a local filesystem lock around write/metadata steps to avoid clash when multiple processes target same partition",
     )
     return parser
 
