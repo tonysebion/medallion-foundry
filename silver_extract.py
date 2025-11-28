@@ -9,11 +9,12 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Mapping, cast
 
 import pandas as pd
 
 from core.config import DatasetConfig, build_relative_path, load_configs
+from core.config.typed_models import RootConfig
 from core.context import RunContext, build_run_context, load_run_context
 from core.bronze.io import (
     write_batch_metadata,
@@ -315,6 +316,9 @@ class SilverPromotionService:
         self._provided_run_context: Optional[RunContext] = (
             load_run_context(args.run_context) if args.run_context else None
         )
+        # cfg_list can contain typed RootConfig objects or plain dicts depending
+        # on how the configs are loaded. Explicitly annotate accordingly.
+        self.cfg_list: Optional[List[Dict[str, Any | RootConfig]]]
         if self._provided_run_context:
             self.cfg_list = [self._provided_run_context.cfg]
         else:
@@ -342,11 +346,11 @@ class SilverPromotionService:
 
         if self._provided_run_context:
             run_context = self._provided_run_context
-            cfg = run_context.cfg
+            cfg: Dict[str, Any | RootConfig] = run_context.cfg
             enforce_storage_scope(cfg["platform"], self.args.storage_scope)
             run_date = run_context.run_date
         else:
-            cfg = self._select_config()
+            cfg: Optional[Dict[str, Any | RootConfig]] = self._select_config()
             enforce_storage_scope(cfg["platform"], self.args.storage_scope)
             run_date = self._resolve_run_date()
             run_context = self._build_run_context(cfg, run_date)
@@ -631,7 +635,7 @@ class SilverPromotionService:
                     "Silver configuration valid for %s", cfg["source"]["config_name"]
                 )
 
-    def _select_config(self) -> Optional[Dict[str, Any]]:
+    def _select_config(self) -> Optional[Dict[str, Any | RootConfig]]:
         if not self.cfg_list:
             return None
         try:
@@ -804,7 +808,7 @@ class SilverPromotionService:
         record_count: int,
         chunk_count: int,
         context: PromotionContext,
-        outputs: Dict[str, List[Path]],
+        outputs: Mapping[str, List[Path]],
     ) -> None:
         metadata_path = write_batch_metadata(
             context.silver_partition,
@@ -838,7 +842,7 @@ class SilverPromotionService:
 
     def _write_checksum_manifest(
         self,
-        outputs: Dict[str, List[Path]],
+        outputs: Mapping[str, List[Path]],
         context: PromotionContext,
         schema_snapshot: List[Dict[str, str]],
         record_count: int,

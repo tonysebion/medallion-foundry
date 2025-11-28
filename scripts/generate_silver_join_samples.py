@@ -9,7 +9,7 @@ import subprocess
 import sys
 from itertools import product
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 import yaml
 
@@ -45,7 +45,7 @@ def _gather_silver_assets() -> list[Path]:
 
 def _load_metadata(asset: Path) -> Dict[str, Any]:
     metadata_path = asset / "_metadata.json"
-    return json.loads(metadata_path.read_text(encoding="utf-8"))
+    return cast(Dict[str, Any], json.loads(metadata_path.read_text(encoding="utf-8")))
 
 
 def _label_from_path(path: Path) -> str:
