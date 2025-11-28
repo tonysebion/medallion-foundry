@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "medallion-foundry"
-version = "1.0.0"
+dynamic = ["version"]
 description = "Config-driven Python framework for landing data into Bronze layer with pluggable storage backends"
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -156,3 +156,8 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
 ]
+
+[tool.setuptools_scm]
+write_to = "core/_version.py"
+version_scheme = "post-release"
+local_scheme = "no-local-version"
