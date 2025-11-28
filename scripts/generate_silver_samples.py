@@ -450,33 +450,6 @@ def main() -> None:
                 print(f" - {f[0]}: {f[1]}")
             raise RuntimeError("One or more silver generation subprocesses failed")
 
-    # Run tasks in parallel subprocesses, each executes silver_extract
-    if not task_list:
-        print("[WARN] No Silver generation tasks; nothing to run")
-    else:
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-
-        def _task_runner(args_tuple):
-            try:
-                _generate_for_partition(*args_tuple)
-            except Exception as exc:
-                return (False, args_tuple, str(exc))
-            return (True, args_tuple, None)
-
-        failures: List[tuple] = []
-        with ThreadPoolExecutor(max_workers=args.workers) as ex:
-            futures = [ex.submit(_task_runner, t) for t in task_list]
-            for fut in as_completed(futures):
-                ok, args_tuple, error = fut.result()
-                if not ok:
-                    failures.append((args_tuple, error))
-
-        if failures:
-            print(f"[ERROR] {len(failures)} Silver generation tasks failed:")
-            for f in failures:
-                print(f" - {f[0]}: {f[1]}")
-            raise RuntimeError("One or more silver generation subprocesses failed")
-
     _promote_temp_samples()
     print(
         f"\n[OK] Generated {generated_count} Silver sample(s) under {SILVER_SAMPLE_ROOT}"

@@ -17,7 +17,7 @@ import sys
 import argparse
 import logging
 import datetime as dt
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from core.config import load_configs, ensure_root_config
 from core.runner import run_extract
@@ -400,9 +400,10 @@ class BronzeOrchestrator:
             )
 
         # Fallback to dict-based extraction if typed model missing.
-        cfg_dict = configs[0].model_dump()
-        run_cfg = cfg_dict["source"]["run"]
-        silver_cfg = cfg_dict.get("silver", {})
+        cfg_dict: Dict[str, Any] = configs[0].model_dump()
+        source_cfg = cast(Dict[str, Any], cfg_dict["source"])
+        run_cfg = cast(Dict[str, Any], source_cfg["run"])
+        silver_cfg = cast(Dict[str, Any], cfg_dict.get("silver", {}))
         load_pattern = LoadPattern.normalize(run_cfg.get("load_pattern"))
         write_parquet = run_cfg.get("write_parquet", True)
         write_csv = run_cfg.get("write_csv", False)

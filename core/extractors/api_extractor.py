@@ -1,5 +1,8 @@
 """API-based extraction with authentication and pagination support."""
 
+from __future__ import annotations
+
+import asyncio
 import logging
 import os
 from typing import Dict, Any, List, Optional, Tuple
@@ -127,10 +130,11 @@ class ApiExtractor(BaseExtractor):
                 return True
             # Retry 5xx HTTP errors
             if isinstance(exc, requests.exceptions.HTTPError):
-                status = getattr(getattr(exc, "response", None), "status_code", None)
-                if status is None:
+                resp = getattr(exc, "response", None)
+                status_code = getattr(resp, "status_code", None)
+                if status_code is None:
                     return False
-                status = int(status)
+                status = int(status_code)
                 return status == 429 or 500 <= status < 600
             return False
 

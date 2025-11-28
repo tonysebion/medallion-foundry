@@ -6,4 +6,10 @@ from .loader import (
 )
 from .dataset import DatasetConfig
 
-__all__ = ["load_config", "load_configs", "build_relative_path", "DatasetConfig"]
+__all__ = [
+    "load_config",
+    "load_configs",
+    "build_relative_path",
+    "DatasetConfig",
+    "ensure_root_config",
+]

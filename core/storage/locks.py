@@ -69,16 +69,14 @@ def file_lock(dir_path: Path, lock_name: str = ".silver.lock", timeout: float = 
                 time.sleep(poll_interval)
         yield
     finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except Exception:
+                pass
         try:
-            if fd is not None:
-                try:
-                    os.close(fd)
-                except Exception:
-                    pass
-            if lock_path.exists():
-                try:
-                    lock_path.unlink()
-                except Exception:
-                    pass
+            lock_path.unlink()
+        except FileNotFoundError:
+            pass
         except Exception:
             pass

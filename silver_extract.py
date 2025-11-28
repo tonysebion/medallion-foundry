@@ -20,7 +20,6 @@ from core.config import (
     ensure_root_config,
 )
 from core.config.typed_models import RootConfig
-from core.config import ensure_root_config
 from core.context import RunContext, build_run_context, load_run_context
 from core.bronze.io import (
     write_batch_metadata,
