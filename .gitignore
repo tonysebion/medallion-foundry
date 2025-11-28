@@ -228,3 +228,4 @@ _checksums.json
 /config/*
 /config/*.*
 sampledata/
+.claude/settings.local.json
