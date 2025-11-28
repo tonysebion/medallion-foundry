@@ -262,7 +262,9 @@ class SilverIntent:
         partition_by = _require_list_of_strings(
             data.get("partition_by"), "silver.partition_by"
         )
-        require_checksum = bool(data.get("require_checksum", False))
+        require_checksum = _require_bool(
+            data.get("require_checksum"), "silver.require_checksum", False
+        )
         semantic_owner = _require_optional_str(
             data.get("semantic_owner"), "silver.semantic_owner"
         )
