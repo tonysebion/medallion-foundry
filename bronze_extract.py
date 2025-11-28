@@ -214,7 +214,7 @@ class BronzeOrchestrator:
             logger.error("No valid configs loaded")
             return 1
         for cfg in configs:
-            enforce_storage_scope(cfg["platform"], self.args.storage_scope)
+            enforce_storage_scope(cfg.platform, self.args.storage_scope)
 
         run_date = (
             dt.date.fromisoformat(self.args.date) if self.args.date else dt.date.today()
@@ -223,10 +223,8 @@ class BronzeOrchestrator:
         self._run_options = self._build_run_options(configs, run_date)
         self._update_hook_context(run_date=run_date.isoformat())
         self._update_hook_context(
-            config_names=[cfg["source"].get("config_name") for cfg in configs],
-            tables=[
-                f"{cfg['source']['system']}.{cfg['source']['table']}" for cfg in configs
-            ],
+            config_names=[cfg.model_dump()["source"].get("config_name") for cfg in configs],
+            tables=[f"{cfg.source.system}.{cfg.source.table}" for cfg in configs],
         )
 
         contexts = [
@@ -275,10 +273,9 @@ class BronzeOrchestrator:
                 logger.info(f"Validating config: {config_path}")
                 cfgs = load_configs(config_path)
                 cfgs = self._apply_load_pattern_override(cfgs)
-                # Create typed RootConfig objects for typed-aware logging
-                typed_cfgs = [ensure_root_config(cfg) for cfg in cfgs]
-                for cfg, tcfg in zip(cfgs, typed_cfgs):
-                    source = cfg["source"]
+                for cfg in cfgs:
+                    tcfg = cfg
+                    source = tcfg.source
                     logger.info(
                         f"  ✓ System: {tcfg.source.system}, Table: {tcfg.source.table}, Type: {cfg.get('source', {}).get('type', 'api')}, Config: {cfg.get('source', {}).get('config_name')}"
                     )
