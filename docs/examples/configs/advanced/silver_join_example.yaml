@@ -10,9 +10,9 @@ source:
   table: joined_orders
 silver_join:
   left:
-    path: ./docs/examples/data/silver_samples/full/scd_type_1/domain=retail_demo/entity=orders/v1/load_date=2025-11-13/
+    path: ./sampledata/silver_samples/full/scd_type_1/domain=retail_demo/entity=orders/v1/load_date=2025-11-13/
   right:
-    path: ./docs/examples/data/silver_samples/full/scd_type_1/domain=retail_demo/entity=orders/v1/load_date=2025-11-14/
+    path: ./sampledata/silver_samples/full/scd_type_1/domain=retail_demo/entity=orders/v1/load_date=2025-11-14/
   output:
     path: ./output/silver_joined
     model: scd_type_2

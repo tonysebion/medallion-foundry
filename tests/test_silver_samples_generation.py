@@ -16,7 +16,7 @@ def test_generate_silver_samples() -> None:
     subprocess.run(
         [sys.executable, str(script), "--formats", "both"], check=True, cwd=REPO_ROOT
     )
-    silver_root = REPO_ROOT / "docs" / "examples" / "data" / "silver_samples"
+    silver_root = REPO_ROOT / "sampledata" / "silver_samples"
     assert silver_root.exists()
     assert any(
         silver_root.iterdir()

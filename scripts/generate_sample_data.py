@@ -19,6 +19,7 @@ from core.io import write_batch_metadata
 
 CONFIG_DIR = REPO_ROOT / "docs" / "examples" / "configs"
 BASE_DIR = REPO_ROOT / "sampledata" / "source_samples"
+SAMPLE_BRONZE_SAMPLES = REPO_ROOT / "sampledata" / "bronze_samples"
 
 SAMPLE_START_DATE = date(2025, 11, 13)
 DAILY_DAYS = 28
@@ -513,7 +514,8 @@ def main() -> None:
     generate_hybrid_combinations()
     print(f"Sample datasets written under {BASE_DIR}")
     _write_pattern_readmes()
-    _sync_doc_samples()
+    _sync_sampledata_bronze()
+    print(f"Bronze sample mirror available under {SAMPLE_BRONZE_SAMPLES}")
 
 
 def _write_pattern_readmes() -> None:
@@ -537,11 +539,11 @@ def _write_pattern_readmes() -> None:
         readme.write_text("\n".join(lines), encoding="utf-8")
 
 
-def _sync_doc_samples() -> None:
-    doc_target = REPO_ROOT / "docs" / "examples" / "data" / "bronze_samples"
-    if doc_target.exists():
-        shutil.rmtree(doc_target)
-    shutil.copytree(BASE_DIR, doc_target)
+def _sync_sampledata_bronze() -> None:
+    if SAMPLE_BRONZE_SAMPLES.exists():
+        shutil.rmtree(SAMPLE_BRONZE_SAMPLES)
+    SAMPLE_BRONZE_SAMPLES.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(BASE_DIR, SAMPLE_BRONZE_SAMPLES)
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ This quick reference highlights the key operational playbooks for running Bronze
 ## Sample generation
 
 - Regenerate Bronze raw data with `python scripts/generate_sample_data.py`. Use `python scripts/generate_silver_samples.py --formats both` to produce curated Silver artifacts for every Bronze pattern + Silver model.
-- The new `tests/test_silver_samples_generation.py` now replays this generation during the test suite so the samples never drift. When you change extraction logic, rerun the script to keep docs/examples/data up to date.
+- The new `tests/test_silver_samples_generation.py` now replays this generation during the test suite so the samples never drift. When you change extraction logic, rerun the script to keep `sampledata/silver_samples` (and the derived artifacts) in sync.
 - Each sample folder contains a `README.md` describing the pattern/model and the recommended regeneration command.
 
 ## Storage governance

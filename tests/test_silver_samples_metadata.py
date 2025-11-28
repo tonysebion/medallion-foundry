@@ -14,8 +14,8 @@ from core.silver.models import SilverModel
 from scripts.generate_silver_samples import PATTERN_CONFIG
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CONFIGS_DIR = REPO_ROOT / "docs" / "examples" / "configs"
-SILVER_ROOT = REPO_ROOT / "docs" / "examples" / "data" / "silver_samples"
+CONFIGS_DIR = REPO_ROOT / "docs" / "examples" / "configs" / "examples"
+SILVER_ROOT = REPO_ROOT / "sampledata" / "silver_samples"
 PATTERN_REGEX = re.compile(r"pattern=([^/\\]+)")
 DEFAULT_NORMALIZATION = {"trim_strings": False, "empty_strings_as_null": False}
 DEFAULT_ERROR_HANDLING = {

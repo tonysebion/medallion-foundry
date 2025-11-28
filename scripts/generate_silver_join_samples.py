@@ -13,7 +13,7 @@ from pathlib import Path
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SILVER_SAMPLE_ROOT = REPO_ROOT / "docs" / "examples" / "data" / "silver_samples"
+SILVER_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "silver_samples"
 OUTPUT_ROOT = REPO_ROOT / "docs" / "examples" / "data" / "silver_join_samples"
 SCRIPT = REPO_ROOT / "silver_join.py"
 

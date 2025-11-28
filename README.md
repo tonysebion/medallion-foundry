@@ -256,7 +256,7 @@ python silver_extract.py \
 - Full snapshot (500 rows): `sampledata/source_samples/pattern1_full_events/system=retail_demo/table=orders/pattern=full/dt=2025-11-01/`
 - CDC stream (400 events): `sampledata/source_samples/pattern2_cdc_events/system=retail_demo/table=orders/pattern=cdc/dt=2025-11-02/`
 - Current + history mix (800 rows): `sampledata/source_samples/pattern3_scd_state/system=retail_demo/table=orders/pattern=current_history/dt=2025-11-03/`
-- Silver curated samples per model: `docs/examples/data/silver_samples/<load_pattern>/<silver_model>/domain=<domain>/entity=<entity>/v<version>/load_date=<YYYY-MM-DD>/`. Run `python scripts/generate_silver_samples.py --formats both` to regenerate the Bronze -> Silver outputs for every supported Silver model.
+- Silver curated samples per model: `sampledata/silver_samples/<load_pattern>/<silver_model>/domain=<domain>/entity=<entity>/v<version>/load_date=<YYYY-MM-DD>/`. Run `python scripts/generate_silver_samples.py --formats both` to regenerate the Bronze -> Silver outputs for every supported Silver model.
 - Bronze hybrid samples now include both point-in-time and cumulative variations per pattern (see `hybrid_cdc_point`, `hybrid_cdc_cumulative`, `hybrid_incremental_point`, `hybrid_incremental_cumulative`) plus rotated references; rerun `python scripts/generate_sample_data.py` to refresh them.
 - Documentation structure:
   - **Architecture overview**: `docs/ARCHITECTURE.md` sketches Bronze/Silver/storage flows plus the plugin registry and sample references.

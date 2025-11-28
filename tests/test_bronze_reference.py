@@ -19,7 +19,7 @@ from scripts.generate_sample_data import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-HYBRID_DIR = REPO_ROOT / "docs" / "examples" / "data" / "bronze_samples"
+HYBRID_DIR = REPO_ROOT / "sampledata" / "bronze_samples"
 HYBRID_COMBOS = [
     ("hybrid_cdc_point", "point_in_time"),
     ("hybrid_cdc_cumulative", "cumulative"),

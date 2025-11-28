@@ -17,7 +17,7 @@ This page is the visual anchor for how Bronze → Silver (and storage backends) 
 ## Samples & Tests
 
 - Bronze sample data resides in `sampledata/source_samples/` (full/CDC/current_history).
-- Silver samples mirror each Bronze pattern + Silver model under `docs/examples/data/silver_samples/<pattern>/<model>/`; each folder now includes a `README.md` describing the artifacts and how to regenerate them (`scripts/generate_silver_samples.py --formats both`).
+- Silver samples mirror each Bronze pattern + Silver model under `sampledata/silver_samples/<pattern>/<model>/`; each folder now includes a `README.md` describing the artifacts and how to regenerate them (`scripts/generate_silver_samples.py --formats both`).
 - Tests like `tests/test_silver_formats.py`, the integration suite (Azurite/LocalStack), async HTTP smoke tests, `tests/test_silver_processor.py`, and `tests/test_silver_samples_generation.py` confirm both writers and the sample generator stay healthy. Benchmark harness (`scripts/benchmark.py`) measures sync vs async and rate limit impact.
 
 ## Next steps

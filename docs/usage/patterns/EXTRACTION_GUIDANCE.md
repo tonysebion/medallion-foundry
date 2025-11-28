@@ -18,7 +18,7 @@ This guide highlights when to run each Bronze extraction pattern and which Silve
 - **Run latency**: Chunking, parallel workers, and smaller Bronze chunks keep runtime bounded, but SilverProcessor now handles the chunking automatically. For high-throughput APIs, enable async HTTP extraction with prefetch pagination.
 - **Failure tolerance**: Bronze already writes `_checksums.json`; Silver can opt into `require_checksum` to skip promotions when Bronze integrity fails.
 - **Edge-case coverage**: The Sample generator (`scripts/generate_sample_data.py`) now emits schema variations, null business keys, and skewed batches so Bronze and Silver tests continually surface new corner cases; regenerate the fixtures before onboarding new extracts.
-- **Sample nav**: Each pattern/model directory under `docs/examples/data/silver_samples/` now includes a `README.md` describing the behavior and linking back to the config/docs so users can quickly find the right artifact without digging through filenames. The upstream `sampledata/source_samples/<pattern>` tree mirrors this cadence with daily files spanning multiple weeks, making it easy to understand the expected Bronze inputs day-to-day for each pattern.
+- **Sample nav**: Each pattern/model directory under `sampledata/silver_samples/` now includes a `README.md` describing the behavior and linking back to the config/docs so users can quickly find the right artifact without digging through filenames. The upstream `sampledata/source_samples/<pattern>` tree mirrors this cadence with daily files spanning multiple weeks, making it easy to understand the expected Bronze inputs day-to-day for each pattern.
 
 ## Silver promotion assets (output)
 

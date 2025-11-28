@@ -10,14 +10,23 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(".").resolve()
-BRONZE_SAMPLE_ROOT = REPO_ROOT / "docs" / "examples" / "data" / "bronze_samples"
-CONFIGS_DIR = REPO_ROOT / "docs" / "examples" / "configs"
+BRONZE_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "bronze_samples"
+CONFIGS_DIR = REPO_ROOT / "docs" / "examples" / "configs" / "examples"
 
 CONFIG_FILES = [
     "file_example.yaml",
     "file_cdc_example.yaml",
     "file_current_history_example.yaml",
 ]
+PATTERN_DIRS = {
+    "full": "pattern1_full_events",
+    "cdc": "pattern2_cdc_events",
+    "current_history": "pattern3_scd_state",
+    "hybrid_cdc_point": "pattern4_hybrid_cdc_point",
+    "hybrid_cdc_cumulative": "pattern5_hybrid_cdc_cumulative",
+    "hybrid_incremental_point": "pattern6_hybrid_incremental_point",
+    "hybrid_incremental_cumulative": "pattern7_hybrid_incremental_cumulative",
+}
 RUN_DATES = ["2025-11-13", "2025-11-14"]
 
 
@@ -43,7 +52,8 @@ def _resolve_pattern_folder(cfg: dict, source: dict) -> str:
         return pattern_folder
     bronze = cfg.get("bronze", {})
     options = bronze.get("options", {}) or {}
-    return options.get("pattern_folder") or source["run"].get("load_pattern", "full")
+    resolved = options.get("pattern_folder") or source["run"].get("load_pattern", "full")
+    return PATTERN_DIRS.get(resolved, resolved)
 
 
 def _build_sample_path(cfg: dict, run_date: str) -> Path:
@@ -71,6 +81,8 @@ def _rewrite_config(original: Path, run_date: str, tmp_dir: Path) -> Path:
     assert bronze_path.exists(), f"Missing Bronze sample data at {bronze_path}"
     bronze_out = tmp_dir / f"bronze_out_{run_date}"
     bronze_out.mkdir(parents=True, exist_ok=True)
+    bronze_cfg = cfg.setdefault("bronze", {})
+    bronze_cfg["path_pattern"] = str(bronze_path.resolve())
     source["file"]["path"] = str(bronze_path.resolve())
     source["run"]["local_output_dir"] = str(bronze_out.resolve())
     source["run"]["pattern_folder"] = pattern_folder

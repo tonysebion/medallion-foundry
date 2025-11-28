@@ -13,9 +13,9 @@ from typing import Dict, Iterable
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-BRONZE_SAMPLE_ROOT = REPO_ROOT / "docs" / "examples" / "data" / "bronze_samples"
-SILVER_SAMPLE_ROOT = REPO_ROOT / "docs" / "examples" / "data" / "silver_samples"
-CONFIGS_DIR = REPO_ROOT / "docs" / "examples" / "configs"
+BRONZE_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "bronze_samples"
+SILVER_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "silver_samples"
+CONFIGS_DIR = REPO_ROOT / "docs" / "examples" / "configs" / "examples"
 
 SILVER_MODELS = [
     "scd_type_1",
@@ -25,17 +25,17 @@ SILVER_MODELS = [
     "periodic_snapshot",
 ]
 PATTERN_CONFIG = {
-    "full": "file_example.yaml",
-    "cdc": "file_cdc_example.yaml",
-    "current_history": "file_current_history_example.yaml",
-    "hybrid_cdc_point": "file_cdc_example.yaml",
-    "hybrid_cdc_cumulative": "file_cdc_example.yaml",
-    "hybrid_incremental_point": "file_example.yaml",
-    "hybrid_incremental_cumulative": "file_example.yaml",
+    "pattern1_full_events": "file_example.yaml",
+    "pattern2_cdc_events": "file_cdc_example.yaml",
+    "pattern3_scd_state": "file_current_history_example.yaml",
+    "pattern4_hybrid_cdc_point": "file_cdc_example.yaml",
+    "pattern5_hybrid_cdc_cumulative": "file_cdc_example.yaml",
+    "pattern6_hybrid_incremental_point": "file_example.yaml",
+    "pattern7_hybrid_incremental_cumulative": "file_example.yaml",
 }
 PATTERN_LOAD = {
-    "hybrid_cdc_point": "cdc",
-    "hybrid_cdc_cumulative": "cdc",
+    "pattern4_hybrid_cdc_point": "cdc",
+    "pattern5_hybrid_cdc_cumulative": "cdc",
 }
 
 

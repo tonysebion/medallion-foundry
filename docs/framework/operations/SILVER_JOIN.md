@@ -14,12 +14,12 @@ platform:             # reused to enforce storage_policy + storage_scope
 
 silver_join:
   left:
-    path: "./docs/examples/data/silver_samples/full/scd_type_2/domain=retail_demo/entity=orders/v1/load_date=2025-11-13/"
+    path: "./sampledata/silver_samples/full/scd_type_2/domain=retail_demo/entity=orders/v1/load_date=2025-11-13/"
     platform:
       bronze:
         storage_backend: local
   right:
-    path: "./docs/examples/data/silver_samples/cdc/scd_type_2/domain=retail_demo/entity=orders_cdc/v1/load_date=2025-11-13/"
+    path: "./sampledata/silver_samples/cdc/scd_type_2/domain=retail_demo/entity=orders_cdc/v1/load_date=2025-11-13/"
     platform:
       bronze:
         storage_backend: local
