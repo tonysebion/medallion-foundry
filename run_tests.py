@@ -74,7 +74,7 @@ def main():
 
     # Run tests
     if run_tests:
-        pytest_cmd = ["pytest"]
+        pytest_cmd = [sys.executable, "-m", "pytest"]
 
         # Add verbosity
         if args.verbose:
