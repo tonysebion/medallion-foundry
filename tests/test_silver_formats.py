@@ -66,10 +66,9 @@ def _build_sample_path(cfg: dict, run_date: str) -> Path:
     filename = Path(source["file"]["path"]).name
     return (
         BRONZE_SAMPLE_ROOT
-        / pattern_folder
+        / f"sample={pattern_folder}"
         / f"system={system}"
         / f"table={table}"
-        / f"pattern={pattern_folder}"
         / f"dt={run_date}"
         / filename
     )
