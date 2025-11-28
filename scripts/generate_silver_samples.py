@@ -321,7 +321,7 @@ def main() -> None:
             )
             generated_count += 1
 
-    print(f"\n✅ Generated {generated_count} Silver sample(s) under {SILVER_SAMPLE_ROOT}")
+    print(f"\n[OK] Generated {generated_count} Silver sample(s) under {SILVER_SAMPLE_ROOT}")
     print(f"\nDirectory structure now matches Bronze hierarchy with sample= prefix:")
     print(f"  {SILVER_SAMPLE_ROOT}/")
     print(f"    sample={{pattern_id}}/")
