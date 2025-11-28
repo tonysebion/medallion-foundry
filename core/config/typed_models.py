@@ -8,7 +8,7 @@ legacy code paths still expecting dictionaries.
 from __future__ import annotations
 
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, StrictBool, field_validator, model_validator
 from enum import Enum
 
 from core.patterns import LoadPattern
@@ -174,7 +174,7 @@ class SilverConfig(BaseModel):
     version: int = 1
     load_partition_name: str = "load_date"
     include_pattern_folder: bool = False
-    require_checksum: bool = False
+    require_checksum: StrictBool = False
     write_parquet: bool = True
     write_csv: bool = False
     parquet_compression: str = "snappy"
