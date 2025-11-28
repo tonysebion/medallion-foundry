@@ -53,8 +53,9 @@ class TestConfigLoading:
             yaml.dump(config, f)
 
         loaded_config = load_config(str(config_file))
-        assert loaded_config["source"]["system"] == "test_system"
-        assert loaded_config["platform"]["bronze"]["s3_bucket"] == "test-bucket"
+        cfg_dict = loaded_config.model_dump()
+        assert cfg_dict["source"]["system"] == "test_system"
+        assert cfg_dict["platform"]["bronze"]["s3_bucket"] == "test-bucket"
         assert loaded_config["silver"]["domain"] == "test_system"
         assert loaded_config["silver"]["entity"] == "test_table"
         assert loaded_config["silver"]["partitioning"]["columns"] == []
@@ -198,7 +199,7 @@ class TestConfigLoading:
 
         configs = load_configs(str(config_file))
         assert len(configs) == 2
-        names = [cfg["source"]["config_name"] for cfg in configs]
+        names = [cfg.model_dump()["source"]["config_name"] for cfg in configs]
         assert names == ["full_orders", "cdc_orders"]
 
     def test_current_history_requires_primary_keys(self, tmp_path):
