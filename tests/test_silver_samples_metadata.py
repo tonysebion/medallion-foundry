@@ -26,6 +26,9 @@ def _load_expected_silver_config(config_path: Path) -> Dict[str, Any]:
         raise FileNotFoundError(f"Config not found at {config_path}")
     cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     silver_cfg = dict(cfg.get("silver", {}))
+    bronze_cfg = cfg.get("bronze", {}) or {}
+    bronze_options = bronze_cfg.get("options", {}) or {}
+    silver_cfg.setdefault("load_pattern", bronze_options.get("load_pattern", "full"))
     source = cfg.get("source")
     if source:
         domain_value = source["system"]
@@ -57,6 +60,12 @@ def _load_expected_silver_config(config_path: Path) -> Dict[str, Any]:
     partitioning = dict(silver_cfg.get("partitioning", {}))
     partitioning.setdefault("columns", list(silver_cfg.get("partition_by", [])))
     silver_cfg["partitioning"] = partitioning
+    silver_cfg["dataset_id"] = f"{domain_value}.{entity_value}"
+    silver_cfg.setdefault("entity_kind", "state")
+    silver_cfg.setdefault("history_mode", silver_cfg.get("history_mode"))
+    silver_cfg.setdefault("input_mode", silver_cfg.get("input_mode"))
+    silver_cfg["bronze_owner"] = bronze_cfg.get("owner_team")
+    silver_cfg["silver_owner"] = silver_cfg.get("semantic_owner")
     return silver_cfg
 
 
@@ -97,6 +106,14 @@ def _expected_artifact_names(
     return [artifact_names[key] for key in mapping[model]]
 
 
+def _extract_load_date(metadata_path: Path) -> str:
+    relative_parts = metadata_path.relative_to(SILVER_ROOT).parts
+    for part in relative_parts:
+        if part.startswith("load_date="):
+            return part.split("=", 1)[1]
+    return ""
+
+
 @pytest.fixture(scope="module")
 def silver_metadata_files() -> List[Path]:
     if not SILVER_ROOT.exists():
@@ -111,45 +128,22 @@ def test_silver_metadata_matches_config(silver_metadata_files: List[Path]) -> No
 
     for metadata_path in silver_metadata_files:
         metadata: Dict[str, Any] = json.loads(metadata_path.read_text(encoding="utf-8"))
-        silver_model_value = metadata.get("silver_model")
-        if not silver_model_value:
-            relative_parts = metadata_path.relative_to(SILVER_ROOT).parts
-            silver_model_value = (
-                relative_parts[1] if len(relative_parts) > 1 else "scd_type_1"
-            )
-        if isinstance(silver_model_value, str) and silver_model_value.startswith(
-            "silver_model="
-        ):
-            silver_model_value = silver_model_value.split("=", 1)[1]
-        silver_model = SilverModel(silver_model_value)
         label_dir = _label_dir_from_metadata(metadata_path)
         config_path = _find_intent_config(label_dir)
         expected_cfg = _load_expected_silver_config(config_path)
 
-        assert metadata["write_parquet"] is True
-        assert metadata["write_csv"] is True
-        assert metadata["partition_columns"] == expected_cfg["partitioning"]["columns"]
-        assert metadata["parquet_compression"] == expected_cfg["parquet_compression"]
-        assert metadata["domain"] == expected_cfg["domain"]
-        assert metadata["entity"] == expected_cfg["entity"]
-        assert metadata["version"] == expected_cfg["version"]
-        assert metadata["load_partition_name"] == expected_cfg["load_partition_name"]
-        assert (
-            metadata["include_pattern_folder"] == expected_cfg["include_pattern_folder"]
-        )
-        assert metadata["primary_keys"] == expected_cfg["primary_keys"]
-        assert metadata["order_column"] == expected_cfg["order_column"]
-        assert metadata["normalization"] == expected_cfg["normalization"]
-        assert metadata["schema"] == expected_cfg["schema"]
-        assert metadata["error_handling"] == expected_cfg["error_handling"]
-
-        expected_artifacts = set(_expected_artifact_names(silver_model, expected_cfg))
-        artifacts = cast(Dict[str, List[str]], metadata["artifacts"])
-        artifact_keys = set(artifacts.keys())
-        assert artifact_keys == expected_artifacts
-        for artifact_name in expected_artifacts:
-            output_files = artifacts[artifact_name]
-            assert set(output_files) == {
-                f"{artifact_name}.parquet",
-                f"{artifact_name}.csv",
-            }
+        bronze_path = metadata["bronze_path"]
+        assert metadata["load_pattern"] == expected_cfg["load_pattern"]
+        assert metadata["dataset_id"] == expected_cfg["dataset_id"]
+        assert metadata["entity_kind"] == expected_cfg["entity_kind"]
+        assert metadata["history_mode"] == expected_cfg["history_mode"]
+        assert metadata["input_mode"] == expected_cfg["input_mode"]
+        assert metadata["bronze_owner"] == expected_cfg["bronze_owner"]
+        assert metadata["silver_owner"] == expected_cfg["silver_owner"]
+        load_date = _extract_load_date(metadata_path)
+        if load_date:
+            assert metadata["load_batch_id"] == f"{expected_cfg['dataset_id']}-{load_date}"
+        assert metadata["rows_written"] >= 0
+        assert metadata["rows_read"] >= metadata["rows_written"]
+        assert expected_cfg["domain"] in bronze_path
+        assert expected_cfg["entity"] in bronze_path

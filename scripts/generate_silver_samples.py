@@ -282,6 +282,12 @@ def parse_args() -> argparse.Namespace:
         help="Which Silver artifact formats to write",
     )
     parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Limit the number of sample partitions generated (for testing)",
+    )
+    parser.add_argument(
         "--workers",
         type=int,
         default=4,
@@ -396,6 +402,9 @@ def main() -> None:
     generated_count = 0
     task_list: List[tuple] = []
 
+    limit = args.limit if args.limit and args.limit > 0 else None
+    stop = False
+
     for idx, partition in enumerate(partitions):
         configs = pattern_configs.get(partition["pattern"])
         if not configs:
@@ -404,12 +413,44 @@ def main() -> None:
             )
             continue
         for config_variant in configs:
+            if limit is not None and generated_count >= limit:
+                stop = True
+                break
             # create a deterministic-ish unique chunk_tag per task
             import uuid
             chunk_tag = f"{partition['pattern']}-{partition['run_date']}-{uuid.uuid4().hex[:8]}"
             task_args = (partition, config_variant, enable_parquet, enable_csv, args.artifact_writer, chunk_tag, args.use_locks)
             task_list.append(task_args)
             generated_count += 1
+        if stop:
+            break
+
+    # Run tasks in parallel subprocesses, each executes silver_extract
+    if not task_list:
+        print("[WARN] No Silver generation tasks; nothing to run")
+    else:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def _task_runner(args_tuple):
+            try:
+                _generate_for_partition(*args_tuple)
+            except Exception as exc:
+                return (False, args_tuple, str(exc))
+            return (True, args_tuple, None)
+
+        failures: List[tuple] = []
+        with ThreadPoolExecutor(max_workers=args.workers) as ex:
+            futures = [ex.submit(_task_runner, t) for t in task_list]
+            for fut in as_completed(futures):
+                ok, args_tuple, error = fut.result()
+                if not ok:
+                    failures.append((args_tuple, error))
+
+        if failures:
+            print(f"[ERROR] {len(failures)} Silver generation tasks failed:")
+            for f in failures:
+                print(f" - {f[0]}: {f[1]}")
+            raise RuntimeError("One or more silver generation subprocesses failed")
 
     # Run tasks in parallel subprocesses, each executes silver_extract
     if not task_list:
