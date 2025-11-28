@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 from typing import Dict, List
 
@@ -11,12 +10,9 @@ import pytest
 import yaml
 
 from core.silver.models import SilverModel
-from scripts.generate_silver_samples import PATTERN_CONFIG
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CONFIGS_DIR = REPO_ROOT / "docs" / "examples" / "configs" / "patterns"
 SILVER_ROOT = REPO_ROOT / "sampledata" / "silver_samples"
-PATTERN_REGEX = re.compile(r"pattern=([^/\\]+)")
 DEFAULT_NORMALIZATION = {"trim_strings": False, "empty_strings_as_null": False}
 DEFAULT_ERROR_HANDLING = {
     "enabled": False,
@@ -26,11 +22,9 @@ DEFAULT_ERROR_HANDLING = {
 DEFAULT_SCHEMA = {"rename_map": {}, "column_order": None}
 
 
-def _load_expected_silver_config(pattern: str) -> Dict[str, object]:
-    config_name = PATTERN_CONFIG.get(pattern)
-    if not config_name:
-        raise ValueError(f"No config mapping for pattern '{pattern}'")
-    config_path = CONFIGS_DIR / config_name
+def _load_expected_silver_config(config_path: Path) -> Dict[str, object]:
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config not found at {config_path}")
     cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     silver_cfg = dict(cfg.get("silver", {}))
     source = cfg.get("source")
@@ -64,11 +58,11 @@ def _load_expected_silver_config(pattern: str) -> Dict[str, object]:
     return silver_cfg
 
 
-def _pattern_from_bronze_path(bronze_path: str) -> str:
-    match = PATTERN_REGEX.search(bronze_path)
-    if not match:
-        raise ValueError(f"Unable to parse pattern from bronze_path '{bronze_path}'")
-    return match.group(1)
+def _label_dir_from_metadata(metadata_path: Path) -> Path:
+    relative_parts = metadata_path.relative_to(SILVER_ROOT).parts
+    if not relative_parts:
+        raise ValueError(f"Unexpected metadata path structure: {metadata_path}")
+    return SILVER_ROOT / relative_parts[0]
 
 
 def _expected_artifact_names(
@@ -109,9 +103,9 @@ def test_silver_metadata_matches_config(silver_metadata_files: List[Path]) -> No
             relative_parts = metadata_path.relative_to(SILVER_ROOT).parts
             silver_model_value = relative_parts[1] if len(relative_parts) > 1 else "scd_type_1"
         silver_model = SilverModel(silver_model_value)
-        expected_cfg = _load_expected_silver_config(
-            _pattern_from_bronze_path(metadata["bronze_path"])
-        )
+        label_dir = _label_dir_from_metadata(metadata_path)
+        config_path = label_dir / "intent.yaml"
+        expected_cfg = _load_expected_silver_config(config_path)
 
         assert metadata["write_parquet"] is True
         assert metadata["write_csv"] is True

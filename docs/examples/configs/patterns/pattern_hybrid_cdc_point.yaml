@@ -17,6 +17,7 @@ bronze:
       role: reference
       cadence_days: 7
       delta_patterns: ["pattern4_hybrid_cdc_point"]
+    match_dir: delta
 
 silver:
   enabled: true

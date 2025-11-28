@@ -14,6 +14,7 @@ bronze:
     pattern_folder: pattern6_hybrid_incremental_point
     delta_mode: point_in_time
     partitioning_strategy: timestamp
+    match_dir: delta
 
 silver:
   enabled: true

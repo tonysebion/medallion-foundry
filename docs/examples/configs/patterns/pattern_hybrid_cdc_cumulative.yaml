@@ -13,6 +13,7 @@ bronze:
     load_pattern: cdc
     pattern_folder: pattern5_hybrid_cdc_cumulative
     delta_mode: cumulative
+    match_dir: delta
 
 silver:
   enabled: true

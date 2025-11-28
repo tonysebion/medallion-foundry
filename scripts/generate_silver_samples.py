@@ -6,8 +6,11 @@ import argparse
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable
+from typing import Dict, Iterable, List
+
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BRONZE_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "bronze_samples"
@@ -15,22 +18,11 @@ BRONZE_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "bronze_samples"
 SILVER_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "silver_samples"
 CONFIGS_DIR = REPO_ROOT / "docs" / "examples" / "configs" / "patterns"
 
-SILVER_MODELS = [
-    "scd_type_1",
-    "scd_type_2",
-    "incremental_merge",
-    "full_merge_dedupe",
-    "periodic_snapshot",
-]
-PATTERN_CONFIG = {
-    "pattern1_full_events": "pattern_full.yaml",
-    "pattern2_cdc_events": "pattern_cdc.yaml",
-    "pattern3_scd_state": "pattern_current_history.yaml",
-    "pattern4_hybrid_cdc_point": "pattern_hybrid_cdc_point.yaml",
-    "pattern5_hybrid_cdc_cumulative": "pattern_hybrid_cdc_cumulative.yaml",
-    "pattern6_hybrid_incremental_point": "pattern_hybrid_incremental_point.yaml",
-    "pattern7_hybrid_incremental_cumulative": "pattern_hybrid_incremental_cumulative.yaml",
-}
+
+@dataclass(frozen=True)
+class PatternConfig:
+    path: Path
+    match_dirs: tuple[str, ...] | None
 
 
 # Ensure project root on sys.path when executed as standalone script
@@ -84,8 +76,43 @@ def _find_brone_partitions() -> Iterable[Dict[str, object]]:
         yield sample
 
 
-def _silver_label_from_partition(partition: Dict[str, object]) -> str:
-    label_parts = [partition["pattern"], partition["run_date"]]
+def _pattern_from_config(cfg: Dict[str, object]) -> str | None:
+    bronze = cfg.get("bronze", {})
+    options = bronze.get("options", {}) or {}
+    pattern_folder = options.get("pattern_folder") or bronze.get("pattern_folder")
+    if pattern_folder:
+        return pattern_folder
+    return cfg.get("pattern")
+
+
+def _discover_pattern_configs() -> Dict[str, List[PatternConfig]]:
+    configs: Dict[str, List[PatternConfig]] = {}
+    if not CONFIGS_DIR.is_dir():
+        raise FileNotFoundError(f"Patterns directory {CONFIGS_DIR} not found")
+    for path in sorted(CONFIGS_DIR.glob("pattern*.yaml")):
+        if not path.is_file():
+            continue
+        cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
+        pattern = _pattern_from_config(cfg)
+        if not pattern:
+            continue
+        bronze = cfg.get("bronze", {})
+        options = bronze.get("options", {}) or {}
+        match_dir = options.get("match_dir")
+        if isinstance(match_dir, str):
+            match_dirs: tuple[str, ...] = (match_dir,)
+        elif isinstance(match_dir, (list, tuple)):
+            match_dirs = tuple(match_dir)
+        else:
+            match_dirs = None
+        configs.setdefault(pattern, []).append(
+            PatternConfig(path=path, match_dirs=match_dirs)
+        )
+    return configs
+
+
+def _silver_label_from_partition(partition: Dict[str, object], config_path: Path) -> str:
+    label_parts = [partition["pattern"], config_path.stem, partition["run_date"]]
     dir_name = partition["dir"].name
     dt_label = f"dt={partition['run_date']}"
     if dir_name and dir_name != dt_label:
@@ -110,58 +137,53 @@ def _run_cli(cmd: list[str]) -> None:
     subprocess.run([sys.executable, *cmd], check=True, cwd=REPO_ROOT)
 
 
-def _generate_for_partition(
-    partition: Dict[str, object], enable_parquet: bool, enable_csv: bool
+def _write_label_readme(
+    label_dir: Path, partition: Dict[str, object], config_path: Path
 ) -> None:
-    pattern = partition["pattern"]
-    config_name = PATTERN_CONFIG.get(pattern)
-    if not config_name:
-        raise ValueError(f"No config mapping for pattern '{pattern}'")
-    template = CONFIGS_DIR / config_name
-    if not template.exists():
-        raise FileNotFoundError(f"Pattern config '{template}' not found")
-    silver_label = _silver_label_from_partition(partition)
-    for silver_model in SILVER_MODELS:
-        silver_base = SILVER_SAMPLE_ROOT / silver_label / silver_model
-        silver_base.mkdir(parents=True, exist_ok=True)
-        cmd = [
-            "silver_extract.py",
-            "--config",
-            str(template),
-            "--bronze-path",
-            str(partition["dir"]),
-            "--date",
-            partition["run_date"],
-            "--silver-model",
-            silver_model,
-            "--silver-base",
-            str(silver_base),
-        ]
-        if enable_parquet:
-            cmd.append("--write-parquet")
-        else:
-            cmd.append("--no-write-parquet")
-        if enable_csv:
-            cmd.append("--write-csv")
-        else:
-            cmd.append("--no-write-csv")
-        _run_cli(cmd)
+    readme = label_dir / "README.md"
+    content = f"""# Silver samples ({label_dir.name})
 
-
-def _synthesize_sample_readmes(root_dir: Path) -> None:
-    for label_dir in root_dir.iterdir():
-        if not label_dir.is_dir():
-            continue
-        for model_dir in label_dir.iterdir():
-            if not model_dir.is_dir():
-                continue
-            readme_path = model_dir / "README.md"
-            model_name = model_dir.name.replace("_", " ")
-            content = f"""# Silver samples ({model_name})
-
-Derived from Bronze partition `{label_dir.name}` using Silver model `{model_dir.name}`.
+Derived from Bronze partition `{partition['dir']}` using config `{config_path.name}`.
 """
-            readme_path.write_text(content, encoding="utf-8")
+    readme.write_text(content, encoding="utf-8")
+
+
+def _generate_for_partition(
+    partition: Dict[str, object],
+    config: PatternConfig,
+    enable_parquet: bool,
+    enable_csv: bool,
+) -> None:
+    dir_name = partition["dir"].name
+    if config.match_dirs and dir_name not in config.match_dirs:
+        return
+    config_path = config.path
+    silver_label = _silver_label_from_partition(partition, config_path)
+    silver_base = SILVER_SAMPLE_ROOT / silver_label
+    silver_base.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        "silver_extract.py",
+        "--config",
+        str(config_path),
+        "--bronze-path",
+        str(partition["dir"]),
+        "--date",
+        partition["run_date"],
+        "--silver-base",
+        str(silver_base),
+    ]
+    if enable_parquet:
+        cmd.append("--write-parquet")
+    else:
+        cmd.append("--no-write-parquet")
+    if enable_csv:
+        cmd.append("--write-csv")
+    else:
+        cmd.append("--no-write-csv")
+    _run_cli(cmd)
+    intent_dest = silver_base / "intent.yaml"
+    shutil.copy(config_path, intent_dest)
+    _write_label_readme(silver_base, partition, config_path)
 
 
 def main() -> None:
@@ -176,10 +198,17 @@ def main() -> None:
     if SILVER_SAMPLE_ROOT.exists():
         shutil.rmtree(SILVER_SAMPLE_ROOT)
     SILVER_SAMPLE_ROOT.mkdir(parents=True, exist_ok=True)
+    pattern_configs = _discover_pattern_configs()
     for partition in partitions:
-        _generate_for_partition(partition, enable_parquet, enable_csv)
-
-    _synthesize_sample_readmes(SILVER_SAMPLE_ROOT)
+        configs = pattern_configs.get(partition["pattern"])
+        if not configs:
+            raise ValueError(
+                f"No pattern configs found for pattern '{partition['pattern']}'"
+            )
+        for config_variant in configs:
+            _generate_for_partition(
+                partition, config_variant, enable_parquet, enable_csv
+            )
     print(f"Silver samples materialized under {SILVER_SAMPLE_ROOT}")
 
 
