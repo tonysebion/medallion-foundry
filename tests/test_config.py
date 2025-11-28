@@ -56,11 +56,13 @@ class TestConfigLoading:
         cfg_dict = loaded_config.model_dump()
         assert cfg_dict["source"]["system"] == "test_system"
         assert cfg_dict["platform"]["bronze"]["s3_bucket"] == "test-bucket"
-        assert loaded_config["silver"]["domain"] == "test_system"
-        assert loaded_config["silver"]["entity"] == "test_table"
-        assert loaded_config["silver"]["partitioning"]["columns"] == []
-        assert loaded_config["silver"]["require_checksum"] is False
-        assert loaded_config["source"]["run"]["load_pattern"] == "full"
+        # loaded_config is a typed RootConfig model; derive dict view for dict-style checks
+        loaded_dict = loaded_config.model_dump()
+        assert loaded_dict["silver"]["domain"] == "test_system"
+        assert loaded_dict["silver"]["entity"] == "test_table"
+        assert loaded_dict["silver"]["partitioning"]["columns"] == []
+        assert loaded_dict["silver"]["require_checksum"] is False
+        assert loaded_dict["source"]["run"]["load_pattern"] == "full"
 
     def test_missing_config_file(self):
         """Test that missing config file raises FileNotFoundError."""
@@ -266,7 +268,8 @@ class TestConfigLoading:
             yaml.dump(config, f)
 
         loaded_config = load_config(str(config_file))
-        assert loaded_config["silver"]["require_checksum"] is True
+        loaded_dict = loaded_config.model_dump()
+        assert loaded_dict["silver"]["require_checksum"] is True
 
     def test_silver_require_checksum_must_be_boolean(self, tmp_path):
         config = {
@@ -310,7 +313,8 @@ class TestConfigLoading:
             yaml.dump(config, f)
 
         loaded_config = load_config(str(config_file))
-        assert loaded_config["silver"]["model"] == SilverModel.SCD_TYPE_2.value
+        loaded_dict = loaded_config.model_dump()
+        assert loaded_dict["silver"]["model"] == SilverModel.SCD_TYPE_2.value
 
     def test_intent_style_config_parses(self, tmp_path):
         yaml_text = textwrap.dedent(
@@ -349,8 +353,9 @@ class TestConfigLoading:
         config_file.write_text(yaml_text, encoding="utf-8")
 
         cfg = load_config(str(config_file))
-        assert cfg["_intent_config"] is True
-        dataset = cfg["__dataset__"]
+                cfg_dict = cfg.model_dump()
+                assert cfg_dict["_intent_config"] is True
+                dataset = cfg_dict["__dataset__"]
         assert dataset.system == "crm"
         assert dataset.entity == "orders"
         assert dataset.silver.entity_kind.value == "event"
@@ -405,8 +410,9 @@ class TestConfigLoading:
         names = {cfg["source"]["config_name"] for cfg in configs}
         assert names == {"adjusters", "claim_events"}
         for cfg in configs:
-            assert cfg["_intent_config"] is True
-            dataset = cfg["__dataset__"]
+                        cfg_dict = cfg.model_dump()
+                        assert cfg_dict["_intent_config"] is True
+                        dataset = cfg_dict["__dataset__"]
             assert dataset.system == "guidewire"
             assert cfg["platform"]["bronze"]["local_path"]
 
