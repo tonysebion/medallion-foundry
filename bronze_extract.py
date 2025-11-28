@@ -309,8 +309,8 @@ class BronzeOrchestrator:
 
         return 0 if all_valid else 1
 
-    def _load_all_configs(self) -> Optional[List[Dict[str, Any]]]:
-        configs: List[Dict[str, Any]] = []
+    def _load_all_configs(self) -> Optional[List[RootConfig]]:
+        configs: List[RootConfig] = []
         for config_path in self.config_paths:
             try:
                 cfgs = load_configs(config_path)
@@ -324,14 +324,17 @@ class BronzeOrchestrator:
         return configs
 
     def _apply_load_pattern_override(
-        self, cfgs: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, cfgs: List[RootConfig]
+    ) -> List[RootConfig]:
         if not self.args.load_pattern:
             return cfgs
         normalized = LoadPattern.normalize(self.args.load_pattern).value
+        updated: List[RootConfig] = []
         for cfg in cfgs:
-            cfg["source"]["run"]["load_pattern"] = normalized
-        return cfgs
+            cfg_dict = cfg.model_dump()
+            cfg_dict.setdefault("source", {}).setdefault("run", {})["load_pattern"] = normalized
+            updated.append(ensure_root_config(cfg_dict))
+        return updated
 
     def _dispatch_hooks(
         self, success: bool, extra: Optional[Dict[str, Any]] = None
@@ -367,10 +370,10 @@ class BronzeOrchestrator:
                 self._hook_context[key] = value
 
     def _build_run_options(
-        self, configs: List[Dict[str, Any]], run_date: dt.date
+        self, configs: List[RootConfig], run_date: dt.date
     ) -> RunOptions:
         # Prefer typed model if available to reduce dict key errors.
-        typed: RootConfig | None = configs[0].get("__typed_model__")
+        typed: RootConfig | None = configs[0]
         if typed and typed.silver:
             run_cfg = typed.source.run
             load_pattern = LoadPattern.normalize(
@@ -400,8 +403,9 @@ class BronzeOrchestrator:
             )
 
         # Fallback to dict-based extraction if typed model missing.
-        run_cfg = configs[0]["source"]["run"]
-        silver_cfg = configs[0].get("silver", {})
+        cfg_dict = configs[0].model_dump()
+        run_cfg = cfg_dict["source"]["run"]
+        silver_cfg = cfg_dict.get("silver", {})
         load_pattern = LoadPattern.normalize(run_cfg.get("load_pattern"))
         write_parquet = run_cfg.get("write_parquet", True)
         write_csv = run_cfg.get("write_csv", False)
@@ -426,18 +430,19 @@ class BronzeOrchestrator:
         )
 
     def _record_configs_info(
-        self, configs: List[Dict[str, Any]], run_date: dt.date
+        self, configs: List[RootConfig], run_date: dt.date
     ) -> None:
         self._configs_info = []
         for cfg in configs:
-            dataset_id = f"bronze:{cfg['source']['system']}.{cfg['source']['table']}"
+            dataset_id = f"bronze:{cfg.source.system}.{cfg.source.table}"
+            cfg_dict = cfg.model_dump()
             self._configs_info.append(
                 {
                     "dataset_id": dataset_id,
-                    "config_name": cfg["source"].get("config_name"),
+                    "config_name": cfg_dict["source"].get("config_name"),
                     "run_date": run_date.isoformat(),
-                    "system": cfg["source"]["system"],
-                    "table": cfg["source"]["table"],
+                    "system": cfg.source.system,
+                    "table": cfg.source.table,
                 }
             )
         self._update_hook_context(

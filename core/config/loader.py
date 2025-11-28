@@ -45,7 +45,7 @@ def _read_yaml(path: str) -> Dict[str, Any]:
 
 def load_config(
     path: str, *, strict: bool = False, enable_env_substitution: bool = True
-) -> Dict[str, Any | RootConfig]:
+) -> RootConfig:
     """Load a single config file and return both dict and typed model.
 
     For backward compatibility we still return a validated dict, but attach
@@ -66,37 +66,34 @@ def load_config(
             raise ValueError(
                 "Config file contains multiple datasets; use load_configs() instead."
             )
-        return datasets[0]
+        runtime = datasets[0]
+        # Parse into typed RootConfig
+        return parse_root_config(runtime)
 
     if is_new_intent_config(cfg):
         dataset = DatasetConfig.from_dict(cfg)
-        return _build_dataset_runtime(dataset)
+        runtime = _build_dataset_runtime(dataset)
+        return parse_root_config(runtime)
 
     if "sources" in cfg:
         raise ValueError(
             "Config contains multiple sources; use load_configs() instead."
         )
     validated = validate_config_dict(cfg)
-    try:
-        typed = parse_root_config(validated)
-        if "config_version" not in validated:
-            if strict:
-                raise ValueError("Missing required config_version in strict mode")
-            emit_compat("Config missing config_version; defaulting to 1", code="CFG004")
-        if strict and int(validated.get("config_version", 1) or 1) >= 2:
-            validate_v2_config_dict(validated)
-        validated["__typed_model__"] = typed
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.warning("Typed config parse failed; proceeding with dict only: %s", exc)
-    dataset_intent = legacy_to_dataset(validated)
-    if dataset_intent:
-        validated["__dataset__"] = dataset_intent
-    return validated
+    typed = parse_root_config(validated)
+    if "config_version" not in validated:
+        if strict:
+            raise ValueError("Missing required config_version in strict mode")
+        emit_compat("Config missing config_version; defaulting to 1", code="CFG004")
+    if strict and int(validated.get("config_version", 1) or 1) >= 2:
+        validate_v2_config_dict(validated)
+    # Return typed RootConfig instance
+    return typed
 
 
 def load_configs(
     path: str, *, strict: bool = False, enable_env_substitution: bool = True
-) -> List[Dict[str, Any | RootConfig]]:
+) -> List[RootConfig]:
     """Load multi-source config file.
 
     Args:
@@ -111,7 +108,7 @@ def load_configs(
     if "datasets" in raw or is_new_intent_config(raw):
         datasets = _load_intent_datasets(raw)
         if datasets:
-            return datasets
+            return [parse_root_config(ds) for ds in datasets]
         raise ValueError("'datasets' must be a non-empty list when provided")
 
     if "sources" not in raw:
@@ -119,7 +116,7 @@ def load_configs(
         dataset_intent = legacy_to_dataset(validated)
         if dataset_intent:
             validated["__dataset__"] = dataset_intent
-        return [validated]
+        return [parse_root_config(validated)]
 
     sources = raw["sources"]
     if not isinstance(sources, list) or not sources:
@@ -174,7 +171,7 @@ def load_configs(
         dataset_intent = legacy_to_dataset(validated)
         if dataset_intent:
             validated["__dataset__"] = dataset_intent
-        results.append(validated)
+        results.append(parse_root_config(validated))
 
     return results
 

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Dict, Any
+from typing import Dict, Any, Union
+from core.config.typed_models import PlatformConfig
 
 from .metadata import (
     VALID_BOUNDARIES,
@@ -11,7 +12,9 @@ from .metadata import (
 )
 
 
-def validate_storage_metadata(platform_cfg: Dict[str, Any]) -> None:
+def validate_storage_metadata(platform_cfg: Union[Dict[str, Any], PlatformConfig]) -> None:
+    if isinstance(platform_cfg, PlatformConfig):
+        platform_cfg = platform_cfg.model_dump()
     bronze_cfg = platform_cfg.get("bronze", {})
     metadata = bronze_cfg.get("storage_metadata")
     if not metadata:
@@ -35,7 +38,9 @@ def validate_storage_metadata(platform_cfg: Dict[str, Any]) -> None:
         )
 
 
-def enforce_storage_scope(platform_cfg: Dict[str, Any], scope: str | None) -> None:
+def enforce_storage_scope(platform_cfg: Union[Dict[str, Any], PlatformConfig], scope: str | None) -> None:
+    if isinstance(platform_cfg, PlatformConfig):
+        platform_cfg = platform_cfg.model_dump()
     if not scope or scope == "any":
         return
 

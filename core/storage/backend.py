@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Dict, Any
+from typing import Dict, Any, Union
+from core.config.typed_models import RootConfig
 import logging
 
 from core.storage.plugin_manager import get_backend_factory, resolve_backend_type
@@ -37,15 +38,17 @@ def _cache_key(config: Dict[str, Any]) -> int:
 
 
 def get_storage_backend(
-    config: Dict[str, Any], use_cache: bool = True
+    config: Union[Dict[str, Any], RootConfig], use_cache: bool = True
 ) -> StorageBackend:
-    cache_key = _cache_key(config)
+    # normalize typed config into dict for caching key + factory
+    cfg_dict = config.model_dump() if hasattr(config, "model_dump") else config
+    cache_key = _cache_key(cfg_dict)
     if use_cache and cache_key in _STORAGE_BACKEND_CACHE:
         return _STORAGE_BACKEND_CACHE[cache_key]
 
-    backend_type = resolve_backend_type(config)
+    backend_type = resolve_backend_type(cfg_dict)
     factory = get_backend_factory(backend_type)
-    backend = factory(config)
+    backend = factory(cfg_dict)
 
     if use_cache:
         _STORAGE_BACKEND_CACHE[cache_key] = backend
