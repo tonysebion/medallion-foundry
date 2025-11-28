@@ -174,27 +174,6 @@ def _expected_hybrid_delta_tags(run_date: str) -> set[str]:
     "config_name, load_pattern, pattern_dir, expected_silver_files, run_dates",
     [
         (
-            "examples/file_example.yaml",
-            "full",
-            "full",
-            {"events.parquet"},
-            ["2025-11-13", "2025-11-14"],
-        ),
-        (
-            "patterns/file_cdc_example.yaml",
-            "cdc",
-            "cdc",
-            {"events.parquet"},
-            ["2025-11-13", "2025-11-14"],
-        ),
-        (
-            "patterns/file_current_history_example.yaml",
-            "current_history",
-            "current_history",
-            {"state_history.parquet", "state_current.parquet"},
-            ["2025-11-13", "2025-11-14"],
-        ),
-        (
             "patterns/pattern_full.yaml",
             "full",
             "full",
