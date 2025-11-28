@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -22,6 +23,8 @@ from typing import Iterable, List
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+BRONZE_SAMPLE_ROOT = Path("sampledata/bronze_samples")
+DOC_BRONZE_SAMPLE_ROOT = REPO_ROOT / "docs" / "examples" / "data" / "bronze_samples"
 
 PATTERN_CONFIGS = [
     {"config": "docs/examples/configs/patterns/pattern_full.yaml", "pattern": "pattern1_full_events"},
@@ -86,6 +89,13 @@ def _discover_run_dates(
         raise ValueError(f"No valid files were found for {config_path}")
 
     return valid_dates
+
+
+def _sync_doc_bronze_samples() -> None:
+    if DOC_BRONZE_SAMPLE_ROOT.exists():
+        shutil.rmtree(DOC_BRONZE_SAMPLE_ROOT)
+    if BRONZE_SAMPLE_ROOT.exists():
+        shutil.copytree(BRONZE_SAMPLE_ROOT, DOC_BRONZE_SAMPLE_ROOT)
 
 
 def run_command(cmd: list[str], description: str) -> bool:
@@ -200,7 +210,7 @@ def main() -> int:
     total_runs = sum(len(entry["run_dates"]) for entry in pattern_runs)
     print(f"Configs to run: {len(pattern_runs)} ({total_runs} Bronze runs)")
 
-    bronze_root = Path("sampledata/bronze_samples")
+    bronze_root = BRONZE_SAMPLE_ROOT
     bronze_root.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as temp_dir:

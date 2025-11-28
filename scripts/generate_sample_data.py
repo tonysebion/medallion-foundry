@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 import csv
+import sys
 from datetime import datetime, date, timedelta
 from pathlib import Path
 from random import Random
 from typing import Iterable, List, Dict
+import shutil
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from core.io import write_batch_metadata
+
 CONFIG_DIR = REPO_ROOT / "docs" / "examples" / "configs"
 BASE_DIR = REPO_ROOT / "sampledata" / "source_samples"
 
@@ -187,6 +195,7 @@ def _write_hybrid_reference(
         )
     chunk_path = base_dir / "reference-part-0001.csv"
     _write_csv(chunk_path, rows)
+    _write_reference_metadata(base_dir, date_str, rows, delta_mode, delta_patterns)
 
 def _write_hybrid_delta(
     base_dir: Path,
@@ -201,6 +210,9 @@ def _write_hybrid_delta(
     base_dir.mkdir(parents=True, exist_ok=True)
     chunk_path = base_dir / "delta-part-0001.csv"
     _write_csv(chunk_path, rows)
+    _write_delta_metadata(
+        base_dir, date_str, rows, delta_mode, [delta_pattern], reference_run_date
+    )
 
 def _build_delta_rows(
     delta_pattern: str, date_str: str, seed: int
@@ -224,6 +236,49 @@ def _build_delta_rows(
             }
         )
     return rows
+
+
+def _write_reference_metadata(
+    base_dir: Path,
+    run_date: str,
+    rows: List[Dict[str, object]],
+    delta_mode: str,
+    delta_patterns: List[str],
+) -> None:
+    if not rows:
+        return
+    metadata = {
+        "run_date": run_date,
+        "reference_mode": {
+            "role": "reference",
+            "reference_run_date": run_date,
+            "delta_mode": delta_mode,
+            "delta_patterns": delta_patterns,
+        },
+    }
+    write_batch_metadata(base_dir, record_count=len(rows), chunk_count=1, extra_metadata=metadata)
+
+
+def _write_delta_metadata(
+    base_dir: Path,
+    run_date: str,
+    rows: List[Dict[str, object]],
+    delta_mode: str,
+    delta_patterns: List[str],
+    reference_run_date: date,
+) -> None:
+    if not rows:
+        return
+    metadata = {
+        "run_date": run_date,
+        "reference_mode": {
+            "role": "delta",
+            "reference_run_date": reference_run_date.isoformat(),
+            "delta_mode": delta_mode,
+            "delta_patterns": delta_patterns,
+        },
+    }
+    write_batch_metadata(base_dir, record_count=len(rows), chunk_count=1, extra_metadata=metadata)
 
 
 def generate_cdc(seed: int = 99, row_count: int = CDC_ROW_COUNT) -> None:
@@ -458,6 +513,7 @@ def main() -> None:
     generate_hybrid_combinations()
     print(f"Sample datasets written under {BASE_DIR}")
     _write_pattern_readmes()
+    _sync_doc_samples()
 
 
 def _write_pattern_readmes() -> None:
@@ -479,6 +535,13 @@ def _write_pattern_readmes() -> None:
         lines.append("")
         lines.append("These source files drive the Bronze/Silver behavior described in `docs/usage/patterns/pattern_matrix.md`.")
         readme.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _sync_doc_samples() -> None:
+    doc_target = REPO_ROOT / "docs" / "examples" / "data" / "bronze_samples"
+    if doc_target.exists():
+        shutil.rmtree(doc_target)
+    shutil.copytree(BASE_DIR, doc_target)
 
 
 if __name__ == "__main__":

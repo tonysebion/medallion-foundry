@@ -21,17 +21,43 @@ CONFIG_FILES = [
 RUN_DATES = ["2025-11-13", "2025-11-14"]
 
 
+def _ensure_source(cfg: dict) -> dict:
+    if "source" in cfg:
+        return cfg["source"]
+    bronze = cfg.get("bronze", {})
+    options = bronze.get("options", {}) or {}
+    source = {
+        "system": cfg.get("system"),
+        "table": cfg.get("entity"),
+        "run": {"load_pattern": options.get("load_pattern", "full")},
+        "file": {"path": bronze.get("path_pattern")},
+        "type": bronze.get("source_type", "file"),
+    }
+    cfg["source"] = source
+    return source
+
+
+def _resolve_pattern_folder(cfg: dict, source: dict) -> str:
+    pattern_folder = source["run"].get("pattern_folder")
+    if pattern_folder:
+        return pattern_folder
+    bronze = cfg.get("bronze", {})
+    options = bronze.get("options", {}) or {}
+    return options.get("pattern_folder") or source["run"].get("load_pattern", "full")
+
+
 def _build_sample_path(cfg: dict, run_date: str) -> Path:
-    pattern = cfg["source"]["run"].get("load_pattern", "full")
-    system = cfg["source"]["system"]
-    table = cfg["source"]["table"]
-    filename = Path(cfg["source"]["file"]["path"]).name
+    source = _ensure_source(cfg)
+    pattern_folder = _resolve_pattern_folder(cfg, source)
+    system = source["system"]
+    table = source["table"]
+    filename = Path(source["file"]["path"]).name
     return (
         BRONZE_SAMPLE_ROOT
-        / pattern
+        / pattern_folder
         / f"system={system}"
         / f"table={table}"
-        / f"pattern={pattern}"
+        / f"pattern={pattern_folder}"
         / f"dt={run_date}"
         / filename
     )
@@ -39,12 +65,15 @@ def _build_sample_path(cfg: dict, run_date: str) -> Path:
 
 def _rewrite_config(original: Path, run_date: str, tmp_dir: Path) -> Path:
     cfg = yaml.safe_load(original.read_text())
+    source = _ensure_source(cfg)
+    pattern_folder = _resolve_pattern_folder(cfg, source)
     bronze_path = _build_sample_path(cfg, run_date)
     assert bronze_path.exists(), f"Missing Bronze sample data at {bronze_path}"
     bronze_out = tmp_dir / f"bronze_out_{run_date}"
     bronze_out.mkdir(parents=True, exist_ok=True)
-    cfg["source"]["file"]["path"] = str(bronze_path.resolve())
-    cfg["source"]["run"]["local_output_dir"] = str(bronze_out.resolve())
+    source["file"]["path"] = str(bronze_path.resolve())
+    source["run"]["local_output_dir"] = str(bronze_out.resolve())
+    source["run"]["pattern_folder"] = pattern_folder
     target = tmp_dir / f"{original.stem}_bronze_{run_date}.yaml"
     target.write_text(yaml.safe_dump(cfg))
     return target
@@ -54,11 +83,14 @@ def _rewrite_silver_config(
     original: Path, run_date: str, tmp_dir: Path, fmt: str
 ) -> Path:
     cfg = yaml.safe_load(original.read_text())
+    source = _ensure_source(cfg)
     bronze_path = _build_sample_path(cfg, run_date)
     bronze_out = tmp_dir / f"bronze_out_{run_date}"
     bronze_out.mkdir(parents=True, exist_ok=True)
-    cfg["source"]["file"]["path"] = str(bronze_path.resolve())
-    cfg["source"]["run"]["local_output_dir"] = str(bronze_out.resolve())
+    source["file"]["path"] = str(bronze_path.resolve())
+    source["run"]["local_output_dir"] = str(bronze_out.resolve())
+    pattern_folder = _resolve_pattern_folder(cfg, source)
+    source["run"]["pattern_folder"] = pattern_folder
     silver_out = tmp_dir / f"silver_out_{fmt}_{run_date}"
     silver_out.mkdir(parents=True, exist_ok=True)
     cfg.setdefault("silver", {})

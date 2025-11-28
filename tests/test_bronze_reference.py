@@ -15,6 +15,7 @@ from scripts.generate_sample_data import (
     HYBRID_DELTA_DAYS,
     HYBRID_REFERENCE_INITIAL,
     HYBRID_REFERENCE_SECOND,
+    PATTERN_DIRS as SAMPLE_PATTERN_DIRS,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -97,12 +98,13 @@ def test_reference_then_incremental_delta(tmp_path: Path) -> None:
 
 def test_hybrid_samples_cover_delta_sequence() -> None:
     for combo_name, delta_mode in HYBRID_COMBOS:
+        pattern_folder = SAMPLE_PATTERN_DIRS.get(combo_name, combo_name)
         base = (
             HYBRID_DIR
-            / combo_name
+            / pattern_folder
             / "system=retail_demo"
             / "table=orders"
-            / f"pattern={combo_name}"
+            / f"pattern={pattern_folder}"
         )
         for ref_date in (HYBRID_REFERENCE_INITIAL, HYBRID_REFERENCE_SECOND):
             reference_meta_path = (

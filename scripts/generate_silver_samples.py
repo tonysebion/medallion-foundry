@@ -44,6 +44,21 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+def _ensure_source(cfg: dict) -> dict:
+    if "source" in cfg:
+        return cfg["source"]
+    bronze = cfg.get("bronze", {})
+    options = bronze.get("options", {}) or {}
+    source = {
+        "system": cfg.get("system"),
+        "table": cfg.get("entity"),
+        "run": {"load_pattern": options.get("load_pattern", "full")},
+        "file": {"path": bronze.get("path_pattern")},
+        "type": bronze.get("source_type", "file"),
+    }
+    cfg["source"] = source
+    return source
+
 
 def _find_brone_partitions() -> Iterable[Dict[str, object]]:
     seen: set[str] = set()
@@ -96,9 +111,10 @@ def _rewrite_config(
     tmp_dir: Path,
 ) -> Path:
     cfg = yaml.safe_load(template.read_text(encoding="utf-8"))
+    source = _ensure_source(cfg)
     bronze_file = partition["file"]
-    cfg["source"]["file"]["path"] = str(bronze_file)
-    run_cfg = cfg["source"]["run"]
+    source["file"]["path"] = str(bronze_file)
+    run_cfg = source["run"]
     run_cfg["local_output_dir"] = str(tmp_dir / f"bronze_out_{partition['run_date']}")
     mapped_load = PATTERN_LOAD.get(partition["pattern"])
     if mapped_load:
@@ -119,16 +135,38 @@ def _rewrite_silver_config(
     enable_csv: bool,
 ) -> Path:
     cfg = yaml.safe_load(template.read_text(encoding="utf-8"))
+    source = _ensure_source(cfg)
     bronze_file = partition["file"]
-    cfg["source"]["file"]["path"] = str(bronze_file)
-    cfg["source"]["run"]["local_output_dir"] = str(
+    source["file"]["path"] = str(bronze_file)
+    source["run"]["local_output_dir"] = str(
         tmp_dir / f"bronze_out_{partition['run_date']}"
     )
     silver_cfg = cfg.setdefault("silver", {})
+    attributes = silver_cfg.setdefault("attributes", [])
+    if not isinstance(attributes, list):
+        attributes = list(attributes)
+        silver_cfg["attributes"] = attributes
+    if (
+        partition["pattern"]
+        in {"pattern6_hybrid_incremental_point", "pattern7_hybrid_incremental_cumulative"}
+        and "changed_at" not in attributes
+    ):
+        attributes.append("changed_at")
+    dir_name = partition["dir"].name
+    if dir_name == "delta":
+        for attr in ("change_type", "delta_tag"):
+            if attr not in attributes:
+                attributes.append(attr)
     partition_cfg = dict(silver_cfg.get("partitioning", {}))
     partition_cfg["columns"] = []
     silver_cfg["partitioning"] = partition_cfg
-    silver_base = SILVER_SAMPLE_ROOT / partition["label"] / silver_model
+    label_parts = [partition["pattern"], partition["run_date"]]
+    dir_name = partition["dir"].name
+    dt_label = f"dt={partition['run_date']}"
+    if dir_name and dir_name != dt_label:
+        label_parts.append(dir_name)
+    silver_label = "_".join(label_parts)
+    silver_base = SILVER_SAMPLE_ROOT / silver_label / silver_model
     silver_base.mkdir(parents=True, exist_ok=True)
     cfg["silver"]["output_dir"] = str(silver_base)
     cfg["silver"]["write_parquet"] = enable_parquet

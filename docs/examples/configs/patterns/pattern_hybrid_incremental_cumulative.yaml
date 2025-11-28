@@ -26,6 +26,7 @@ silver:
   attributes:
     - status
     - customer_id
+    - changed_at
   partition_by:
     - effective_from_dt
   delete_mode: tombstone_state
