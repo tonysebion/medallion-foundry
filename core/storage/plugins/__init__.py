@@ -11,9 +11,10 @@ __all__ = ["LocalStorage", "S3Storage"]
 # Optional Azure backend (requires azure-storage-blob + azure-identity)
 try:
     from .azure_storage import AzureStorage
+
     __all__.append("AzureStorage")
     AZURE_AVAILABLE = True
 except ImportError:
     AZURE_AVAILABLE = False
     if TYPE_CHECKING:
-        from .azure_storage import AzureStorage  # type: ignore
+        from .azure_storage import AzureStorage  # type: ignore # noqa: F401

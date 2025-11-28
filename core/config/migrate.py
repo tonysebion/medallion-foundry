@@ -70,9 +70,9 @@ def print_migration_report(config_path: Path) -> None:
         for i, error in enumerate(errors, 1):
             print(f"\n  {i}. {error}")
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("Migration Recommendations:")
-        print("="*70)
+        print("=" * 70)
         print("""
 1. Review the errors above
 2. Update your config YAML to match the schema

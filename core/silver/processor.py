@@ -77,10 +77,14 @@ class SilverProcessor:
             return SilverProcessorResult(metrics=metrics)
 
         prepared = self._prepare_dataframe(df)
-        metrics.changed_keys = prepared[self.dataset.silver.natural_keys].drop_duplicates().shape[0]
+        metrics.changed_keys = (
+            prepared[self.dataset.silver.natural_keys].drop_duplicates().shape[0]
+        )
         frames = self._dispatch_patterns(prepared, metrics)
         if not frames:
-            logger.warning("No Silver datasets produced for %s", self.dataset.dataset_id)
+            logger.warning(
+                "No Silver datasets produced for %s", self.dataset.dataset_id
+            )
             return SilverProcessorResult(metrics=metrics)
 
         writer = DatasetWriter(
@@ -131,9 +135,15 @@ class SilverProcessor:
 
     def _prepare_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         expected = set(self.dataset.silver.natural_keys)
-        if self.dataset.silver.entity_kind.is_event_like and self.dataset.silver.event_ts_column:
+        if (
+            self.dataset.silver.entity_kind.is_event_like
+            and self.dataset.silver.event_ts_column
+        ):
             expected.add(self.dataset.silver.event_ts_column)
-        if self.dataset.silver.entity_kind.is_state_like and self.dataset.silver.change_ts_column:
+        if (
+            self.dataset.silver.entity_kind.is_state_like
+            and self.dataset.silver.change_ts_column
+        ):
             expected.add(self.dataset.silver.change_ts_column)
         expected.update(self.dataset.silver.attributes)
 
@@ -167,7 +177,10 @@ class SilverProcessor:
             )
 
         drop_subset = list(self.dataset.silver.natural_keys)
-        if self.dataset.silver.entity_kind.is_event_like and self.dataset.silver.event_ts_column:
+        if (
+            self.dataset.silver.entity_kind.is_event_like
+            and self.dataset.silver.event_ts_column
+        ):
             drop_subset.append(self.dataset.silver.event_ts_column)
         elif self.dataset.silver.change_ts_column:
             drop_subset.append(self.dataset.silver.change_ts_column)
@@ -208,7 +221,9 @@ class SilverProcessor:
         self, df: pd.DataFrame, derived: bool = False
     ) -> Dict[str, pd.DataFrame]:
         history_mode = self.dataset.silver.history_mode or HistoryMode.SCD2
-        ts_col = self.dataset.silver.change_ts_column or self.dataset.silver.event_ts_column
+        ts_col = (
+            self.dataset.silver.change_ts_column or self.dataset.silver.event_ts_column
+        )
         if not ts_col:
             raise ValueError("change_ts_column is required for state datasets")
         ordered = df.sort_values(self.dataset.silver.natural_keys + [ts_col]).copy()
@@ -231,9 +246,13 @@ class SilverProcessor:
         }
 
     def _process_derived_events(self, df: pd.DataFrame) -> pd.DataFrame:
-        ts_col = self.dataset.silver.change_ts_column or self.dataset.silver.event_ts_column
+        ts_col = (
+            self.dataset.silver.change_ts_column or self.dataset.silver.event_ts_column
+        )
         if not ts_col:
-            raise ValueError("change_ts_column (or event_ts_column) required for derived_event datasets")
+            raise ValueError(
+                "change_ts_column (or event_ts_column) required for derived_event datasets"
+            )
         attrs = self.dataset.silver.attributes or []
         rows: List[Dict[str, Any]] = []
         grouped = df.sort_values(self.dataset.silver.natural_keys + [ts_col]).groupby(
@@ -248,7 +267,10 @@ class SilverProcessor:
                     changed_cols = [
                         col for col in attrs if row.get(col) != prev.get(col)
                     ]
-                    if not changed_cols and self.dataset.silver.delete_mode == DeleteMode.IGNORE:
+                    if (
+                        not changed_cols
+                        and self.dataset.silver.delete_mode == DeleteMode.IGNORE
+                    ):
                         prev = row
                         continue
                     change_type = "update" if changed_cols else "noop"
@@ -281,9 +303,7 @@ class SilverProcessor:
         df["silver_owner"] = self.dataset.silver.semantic_owner or "semantic-team"
         return df
 
-    def _resolve_partition_columns(
-        self, frames: Dict[str, pd.DataFrame]
-    ) -> List[str]:
+    def _resolve_partition_columns(self, frames: Dict[str, pd.DataFrame]) -> List[str]:
         partition_by = self.dataset.silver.partition_by
         if partition_by:
             for frame in frames.values():
@@ -314,7 +334,10 @@ class SilverProcessor:
         if self.dataset.silver.entity_kind.is_event_like:
             column = (self.dataset.silver.event_ts_column or "event_ts") + "_dt"
             for frame in frames.values():
-                source = self.dataset.silver.event_ts_column or self.dataset.silver.change_ts_column
+                source = (
+                    self.dataset.silver.event_ts_column
+                    or self.dataset.silver.change_ts_column
+                )
                 if source and source in frame.columns:
                     frame[column] = pd.to_datetime(
                         frame[source], errors="coerce"
@@ -327,7 +350,10 @@ class SilverProcessor:
                 frame[column] = pd.to_datetime(
                     frame["effective_from"], errors="coerce"
                 ).dt.date.astype(str)
-            elif self.dataset.silver.change_ts_column and self.dataset.silver.change_ts_column in frame.columns:
+            elif (
+                self.dataset.silver.change_ts_column
+                and self.dataset.silver.change_ts_column in frame.columns
+            ):
                 frame[column] = pd.to_datetime(
                     frame[self.dataset.silver.change_ts_column], errors="coerce"
                 ).dt.date.astype(str)
@@ -354,8 +380,9 @@ def build_intent_silver_partition(
     if dataset.silver.include_pattern_folder:
         partition = partition / f"pattern={dataset.silver.entity_kind.value}"
     partition = (
-        partition
-        / f"{dataset.silver.load_partition_name}={run_date.isoformat()}"
+        partition / f"{dataset.silver.load_partition_name}={run_date.isoformat()}"
     )
     return partition
+
+
 COMMON_METADATA_COLUMNS = {"run_date"}

@@ -15,7 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from core.bronze.io import write_batch_metadata
+from core.bronze.io import write_batch_metadata  # noqa: E402
 
 CONFIG_DIR = REPO_ROOT / "docs" / "examples" / "configs"
 BASE_DIR = REPO_ROOT / "sampledata" / "source_samples"
@@ -25,8 +25,10 @@ SAMPLE_BRONZE_SAMPLES = REPO_ROOT / "sampledata" / "bronze_samples"
 SAMPLE_START_DATE = date(2025, 11, 13)
 DAILY_DAYS = 28
 
+
 def _daily_schedule(start: date, days: int) -> List[str]:
     return [(start + timedelta(days=day)).isoformat() for day in range(days)]
+
 
 FULL_DATES = _daily_schedule(SAMPLE_START_DATE, DAILY_DAYS)
 CDC_DATES = _daily_schedule(SAMPLE_START_DATE, DAILY_DAYS)
@@ -87,6 +89,8 @@ PATTERN_DETAILS = {
 
 def _pattern_dir(pattern: str) -> str:
     return PATTERN_DIRS.get(pattern, pattern)
+
+
 HYBRID_REFERENCE_INITIAL = datetime(2025, 11, 13).date()
 HYBRID_REFERENCE_SWITCH_DAY = 9
 HYBRID_REFERENCE_SECOND = HYBRID_REFERENCE_INITIAL + timedelta(
@@ -177,6 +181,7 @@ def generate_full_snapshot(seed: int = 42, row_count: int = FULL_ROW_COUNT) -> N
             total_records += len(schema_rows)
             chunk_count += 1
 
+
 def _write_hybrid_reference(
     base_dir: Path, date_str: str, seed: int, delta_patterns: List[str], delta_mode: str
 ) -> None:
@@ -199,6 +204,7 @@ def _write_hybrid_reference(
     _write_csv(chunk_path, rows)
     _write_reference_metadata(base_dir, date_str, rows, delta_mode, delta_patterns)
 
+
 def _write_hybrid_delta(
     base_dir: Path,
     date_str: str,
@@ -215,6 +221,7 @@ def _write_hybrid_delta(
     _write_delta_metadata(
         base_dir, date_str, rows, delta_mode, [delta_pattern], reference_run_date
     )
+
 
 def _build_delta_rows(
     delta_pattern: str, date_str: str, seed: int
@@ -258,7 +265,9 @@ def _write_reference_metadata(
             "delta_patterns": delta_patterns,
         },
     }
-    write_batch_metadata(base_dir, record_count=len(rows), chunk_count=1, extra_metadata=metadata)
+    write_batch_metadata(
+        base_dir, record_count=len(rows), chunk_count=1, extra_metadata=metadata
+    )
 
 
 def _write_delta_metadata(
@@ -280,7 +289,9 @@ def _write_delta_metadata(
             "delta_patterns": delta_patterns,
         },
     }
-    write_batch_metadata(base_dir, record_count=len(rows), chunk_count=1, extra_metadata=metadata)
+    write_batch_metadata(
+        base_dir, record_count=len(rows), chunk_count=1, extra_metadata=metadata
+    )
 
 
 def generate_cdc(seed: int = 99, row_count: int = CDC_ROW_COUNT) -> None:
@@ -353,6 +364,7 @@ def generate_cdc(seed: int = 99, row_count: int = CDC_ROW_COUNT) -> None:
             _write_csv(schema_chunk, schema_rows)
             total_records += len(schema_rows)
             chunk_count += 1
+
 
 def generate_current_history(
     seed: int = 7,
@@ -460,14 +472,12 @@ def generate_current_history(
             total_records += len(skew_rows)
             chunk_count += 1
 
+
 def generate_hybrid_combinations(seed: int = 123) -> None:
     for combo_name, delta_pattern, delta_mode in HYBRID_COMBOS:
         pattern_id = _pattern_dir(combo_name)
         base_pattern_dir = (
-            BASE_DIR
-            / f"sample={pattern_id}"
-            / "system=retail_demo"
-            / "table=orders"
+            BASE_DIR / f"sample={pattern_id}" / "system=retail_demo" / "table=orders"
         )
         for ref_date in (HYBRID_REFERENCE_INITIAL, HYBRID_REFERENCE_SECOND):
             ref_dir = base_pattern_dir / f"dt={ref_date.isoformat()}" / "reference"
@@ -536,7 +546,9 @@ def _write_pattern_readmes() -> None:
             lines.append("")
             lines.append(detail)
         lines.append("")
-        lines.append("These source files drive the Bronze/Silver behavior described in `docs/usage/patterns/pattern_matrix.md`.")
+        lines.append(
+            "These source files drive the Bronze/Silver behavior described in `docs/usage/patterns/pattern_matrix.md`."
+        )
         readme.write_text("\n".join(lines), encoding="utf-8")
 
 

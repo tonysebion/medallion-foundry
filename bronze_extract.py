@@ -17,7 +17,6 @@ import sys
 import argparse
 import logging
 import datetime as dt
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from core.config import load_configs

@@ -36,11 +36,7 @@ from core.run_options import RunOptions
 from core.storage.policy import enforce_storage_scope
 from core.silver.artifacts import (
     apply_schema_settings,
-    build_current_view,
-    handle_error_rows,
     normalize_dataframe,
-    partition_dataframe,
-    SilverModelPlanner,
 )
 from core.silver.writer import get_silver_writer
 from core.silver.models import SilverModel
@@ -459,9 +455,7 @@ class SilverPromotionService:
         load_pattern: LoadPattern,
     ) -> int:
         silver_base = (
-            Path(self.args.silver_base).resolve()
-            if self.args.silver_base
-            else None
+            Path(self.args.silver_base).resolve() if self.args.silver_base else None
         )
         silver_partition = build_intent_silver_partition(
             dataset, run_context.run_date, silver_base
@@ -477,9 +471,7 @@ class SilverPromotionService:
             else run_context.cfg.get("silver", {}).get("require_checksum", False)
         )
         if require_checksum:
-            verify_checksum_manifest(
-                bronze_path, expected_pattern=load_pattern.value
-            )
+            verify_checksum_manifest(bronze_path, expected_pattern=load_pattern.value)
         if self.args.dry_run:
             logger.info("Dry run complete; no Silver files written")
             return 0

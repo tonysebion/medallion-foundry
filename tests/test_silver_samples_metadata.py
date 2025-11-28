@@ -101,7 +101,9 @@ def test_silver_metadata_matches_config(silver_metadata_files: List[Path]) -> No
         silver_model_value = metadata.get("silver_model")
         if not silver_model_value:
             relative_parts = metadata_path.relative_to(SILVER_ROOT).parts
-            silver_model_value = relative_parts[1] if len(relative_parts) > 1 else "scd_type_1"
+            silver_model_value = (
+                relative_parts[1] if len(relative_parts) > 1 else "scd_type_1"
+            )
         silver_model = SilverModel(silver_model_value)
         label_dir = _label_dir_from_metadata(metadata_path)
         config_path = label_dir / "intent.yaml"

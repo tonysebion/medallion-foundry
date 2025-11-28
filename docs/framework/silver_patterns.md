@@ -2,7 +2,7 @@
 
 The Medallion Foundry is built around a simple idea:
 
-> **Bronze gets data out of source systems.  
+> **Bronze gets data out of source systems.
 > Silver represents what the source system *intended* in a consistent, queryable way.**
 
 Bronze + Silver are a **pair**:
@@ -47,7 +47,7 @@ Supported values:
 
 ### 2.1. `event` – Bronze EVENT → Silver EVENT
 
-**Story:**  
+**Story:**
 “The world happened, and we preserve each happening — but cleanly.”
 
 Use this for:
@@ -69,7 +69,7 @@ Behavior:
 
 ### 2.2. `state` – Bronze STATE → Silver STATE
 
-**Story:**  
+**Story:**
 “The world changed — and we remember exactly how, but only when it really mattered.”
 
 Use this for:
@@ -90,7 +90,7 @@ Behavior:
 
 ### 2.3. `derived_state` – Bronze EVENT → Silver STATE
 
-**Story:**  
+**Story:**
 “Events imply state, even when the source doesn’t provide it directly.”
 
 Use this when:
@@ -107,7 +107,7 @@ Behavior:
 
 ### 2.4. `derived_event` – Bronze STATE → Silver EVENT
 
-**Story:**  
+**Story:**
 “Sometimes a change in state is itself an event.”
 
 Use this when:
@@ -139,7 +139,7 @@ Supported values:
 
 ### 3.1. `scd2` – effective-dated history
 
-**Intent:**  
+**Intent:**
 Full, compact history – “as-of friendly”.
 
 Silver schema:
@@ -159,7 +159,7 @@ Use when:
 
 ### 3.2. `scd1` – overwrite-in-place
 
-**Intent:**  
+**Intent:**
 Current-only view. No historical tracking.
 
 Behavior:
@@ -177,7 +177,7 @@ Use when:
 
 ### 3.3. `latest_only` – keep just the latest snapshot
 
-**Intent:**  
+**Intent:**
 Minimal storage, tiny lookups.
 
 Behavior:
@@ -208,7 +208,7 @@ Supported values:
 
 ### 4.1. `append_log` – Bronze is a changelog
 
-**Intent:**  
+**Intent:**
 True event log.
 
 Behavior:
@@ -226,7 +226,7 @@ Use when:
 
 ### 4.2. `replace_daily` – Bronze is a full slice for a period
 
-**Intent:**  
+**Intent:**
 Bronze partitions represent **complete slices**, not just new events.
 
 Behavior:
@@ -251,13 +251,13 @@ Applies primarily to `state` and `derived_state`, but can influence derived_even
 
 Suggested values:
 
-- `ignore`  
+- `ignore`
   - Do nothing special. If a key disappears from a snapshot, we leave its last Silver state open or treat soft-delete flags as normal attributes.
 
-- `tombstone_state`  
+- `tombstone_state`
   - When a key disappears or a soft-delete flag is set, close the SCD2 row and mark the final state as deleted.
 
-- `tombstone_event`  
+- `tombstone_event`
   - Emit a derived delete event (for `derived_event`) when a key disappears.
 
 You don’t have to expose this to all users immediately. It’s an advanced control with sensible defaults.
@@ -285,10 +285,10 @@ If needed later, we can introduce a `late_data_mode`, but for now this behavior 
 
 Suggested values:
 
-- `strict`  
+- `strict`
   - If the Bronze schema deviates from what Silver expects (missing columns, type changes), fail the job and alert.
 
-- `allow_new_columns`  
+- `allow_new_columns`
   - Allow additional columns to appear in Bronze; ignore them unless added to `attributes`.
 
 This matters most once MSP and multiple teams start adding feeds. It protects you from silent drift.

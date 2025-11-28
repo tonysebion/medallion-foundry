@@ -133,7 +133,9 @@ def test_bronze_preserves_source_rows(
 
     source_path = Path(cfg_data["bronze"]["path_pattern"])
     assert source_path.exists(), f"Source path missing: {source_path}"
-    assert source_samples_root in source_path.parents, "Sample data must live under sampledata/source_samples"
+    assert (
+        source_samples_root in source_path.parents
+    ), "Sample data must live under sampledata/source_samples"
     source_df = _read_source_dataframe(source_path)
     expected_load_pattern = (
         cfg_data["bronze"].get("options", {}).get("load_pattern") or "full"
@@ -142,9 +144,8 @@ def test_bronze_preserves_source_rows(
     bronze_df = _read_bronze_dataframe(bronze_partition)
     assert set(source_df.columns) <= set(bronze_df.columns)
     for column in source_df.columns:
-        assert (
-            _value_counter(bronze_df[column])
-            == _value_counter(source_df[column])
+        assert _value_counter(bronze_df[column]) == _value_counter(
+            source_df[column]
         ), f"Column {column!r} diverged between source and Bronze outputs"
 
     assert metadata["run_date"] == run_date

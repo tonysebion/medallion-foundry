@@ -6,7 +6,6 @@ import argparse
 import datetime as dt
 import subprocess
 import sys
-from pathlib import Path
 
 
 def main() -> int:

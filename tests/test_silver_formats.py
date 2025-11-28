@@ -52,7 +52,9 @@ def _resolve_pattern_folder(cfg: dict, source: dict) -> str:
         return pattern_folder
     bronze = cfg.get("bronze", {})
     options = bronze.get("options", {}) or {}
-    resolved = options.get("pattern_folder") or source["run"].get("load_pattern", "full")
+    resolved = options.get("pattern_folder") or source["run"].get(
+        "load_pattern", "full"
+    )
     return PATTERN_DIRS.get(resolved, resolved)
 
 

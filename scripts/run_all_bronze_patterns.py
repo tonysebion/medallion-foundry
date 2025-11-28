@@ -18,7 +18,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable
 
 import yaml
 
@@ -27,13 +27,34 @@ BRONZE_SAMPLE_ROOT = Path("sampledata/bronze_samples")
 DOC_BRONZE_SAMPLE_ROOT = REPO_ROOT / "docs" / "examples" / "data" / "bronze_samples"
 
 PATTERN_CONFIGS = [
-    {"config": "docs/examples/configs/patterns/pattern_full.yaml", "pattern": "pattern1_full_events"},
-    {"config": "docs/examples/configs/patterns/pattern_cdc.yaml", "pattern": "pattern2_cdc_events"},
-    {"config": "docs/examples/configs/patterns/pattern_current_history.yaml", "pattern": "pattern3_scd_state"},
-    {"config": "docs/examples/configs/patterns/pattern_hybrid_cdc_point.yaml", "pattern": "pattern4_hybrid_cdc_point"},
-    {"config": "docs/examples/configs/patterns/pattern_hybrid_cdc_cumulative.yaml", "pattern": "pattern5_hybrid_cdc_cumulative"},
-    {"config": "docs/examples/configs/patterns/pattern_hybrid_incremental_point.yaml", "pattern": "pattern6_hybrid_incremental_point"},
-    {"config": "docs/examples/configs/patterns/pattern_hybrid_incremental_cumulative.yaml", "pattern": "pattern7_hybrid_incremental_cumulative"},
+    {
+        "config": "docs/examples/configs/patterns/pattern_full.yaml",
+        "pattern": "pattern1_full_events",
+    },
+    {
+        "config": "docs/examples/configs/patterns/pattern_cdc.yaml",
+        "pattern": "pattern2_cdc_events",
+    },
+    {
+        "config": "docs/examples/configs/patterns/pattern_current_history.yaml",
+        "pattern": "pattern3_scd_state",
+    },
+    {
+        "config": "docs/examples/configs/patterns/pattern_hybrid_cdc_point.yaml",
+        "pattern": "pattern4_hybrid_cdc_point",
+    },
+    {
+        "config": "docs/examples/configs/patterns/pattern_hybrid_cdc_cumulative.yaml",
+        "pattern": "pattern5_hybrid_cdc_cumulative",
+    },
+    {
+        "config": "docs/examples/configs/patterns/pattern_hybrid_incremental_point.yaml",
+        "pattern": "pattern6_hybrid_incremental_point",
+    },
+    {
+        "config": "docs/examples/configs/patterns/pattern_hybrid_incremental_cumulative.yaml",
+        "pattern": "pattern7_hybrid_incremental_cumulative",
+    },
 ]
 
 
@@ -142,7 +163,9 @@ def rewrite_config(
     if "silver" in config:
         config["silver"]["output_dir"] = str(output_base / "silver")
 
-    temp_config = temp_dir / f"temp_{Path(original_path).stem}_{run_date.replace('-', '')}.yaml"
+    temp_config = (
+        temp_dir / f"temp_{Path(original_path).stem}_{run_date.replace('-', '')}.yaml"
+    )
     temp_config.write_text(yaml.safe_dump(config))
     return str(temp_config)
 
@@ -157,7 +180,9 @@ def process_run(task: dict[str, object]) -> tuple[str, str, bool]:
     run_count = task["run_count"]
 
     config_name = Path(config_path).name
-    description = f"[{run_count}/{total_runs}] Bronze extraction: {config_name} ({run_date})"
+    description = (
+        f"[{run_count}/{total_runs}] Bronze extraction: {config_name} ({run_date})"
+    )
 
     actual_config = rewrite_config(
         config_path,
@@ -168,14 +193,23 @@ def process_run(task: dict[str, object]) -> tuple[str, str, bool]:
     )
 
     success = run_command(
-        [sys.executable, "bronze_extract.py", "--config", actual_config, "--date", run_date],
+        [
+            sys.executable,
+            "bronze_extract.py",
+            "--config",
+            actual_config,
+            "--date",
+            run_date,
+        ],
         description,
     )
     return config_name, run_date, success
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run Bronze extraction for all pattern configs")
+    parser = argparse.ArgumentParser(
+        description="Run Bronze extraction for all pattern configs"
+    )
     parser.add_argument(
         "--skip-sample-generation",
         action="store_true",
@@ -220,7 +254,9 @@ def main() -> int:
         for entry in pattern_runs:
             for run_date in entry["run_dates"]:
                 run_counter += 1
-                pattern_dir = bronze_root / (entry["pattern"] or Path(entry["config"]).stem)
+                pattern_dir = bronze_root / (
+                    entry["pattern"] or Path(entry["config"]).stem
+                )
                 pattern_dir.mkdir(parents=True, exist_ok=True)
                 tasks.append(
                     {
