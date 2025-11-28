@@ -4,6 +4,8 @@ import asyncio
 
 import pytest
 
+from typing import Dict
+
 from core.extractors.api_extractor import ApiExtractor
 from core.extractors.async_http import HTTPX_AVAILABLE
 
@@ -19,9 +21,11 @@ class DummySpan:
 @pytest.mark.skipif(not HTTPX_AVAILABLE, reason="httpx not installed")
 def test_api_extractor_async_pagination(monkeypatch):
     extractor = ApiExtractor()
+    base_url: str = "https://api.example.com"
+    endpoint: str = "/users"
     api_cfg = {
-        "base_url": "https://api.example.com",
-        "endpoint": "/users",
+        "base_url": base_url,
+        "endpoint": endpoint,
         "pagination": {"type": "none"},
     }
     run_cfg = {"timeout_seconds": 5}
@@ -55,10 +59,11 @@ def test_api_extractor_async_pagination(monkeypatch):
     )
 
     async def _run():
+        headers: Dict[str, str] = {}
         return await extractor._paginate_async(
-            api_cfg["base_url"],
-            api_cfg["endpoint"],
-            headers={},
+            base_url,
+            endpoint,
+            headers=headers,
             api_cfg=api_cfg,
             run_cfg=run_cfg,
         )
@@ -81,9 +86,11 @@ def test_api_extractor_async_rate_limiter(monkeypatch):
     async def _run():
         nonlocal limiter
         extractor = ApiExtractor()
+        base_url: str = "https://api.example.com"
+        endpoint: str = "/users"
         api_cfg = {
-            "base_url": "https://api.example.com",
-            "endpoint": "/users",
+            "base_url": base_url,
+            "endpoint": endpoint,
             "pagination": {"type": "none"},
         }
         run_cfg = {"timeout_seconds": 5}
@@ -105,10 +112,11 @@ def test_api_extractor_async_rate_limiter(monkeypatch):
             "core.extractors.api_extractor.trace_span", lambda name: DummySpan()
         )
 
+        headers: Dict[str, str] = {}
         response = await extractor._paginate_async(
-            api_cfg["base_url"],
-            api_cfg["endpoint"],
-            headers={},
+            base_url,
+            endpoint,
+            headers=headers,
             api_cfg=api_cfg,
             run_cfg=run_cfg,
         )

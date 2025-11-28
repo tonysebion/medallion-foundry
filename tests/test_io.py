@@ -2,6 +2,7 @@
 
 import csv
 import pandas as pd
+from typing import Any
 
 import pytest
 
@@ -19,7 +20,7 @@ class TestChunkRecords:
 
     def test_chunk_with_zero_max(self):
         """Test that max_rows=0 returns all records in one chunk."""
-        records = [{"id": i} for i in range(100)]
+        records: list[dict[str, Any]] = [{"id": i} for i in range(100)]
         chunks = chunk_records(records, 0)
 
         assert len(chunks) == 1
@@ -27,7 +28,7 @@ class TestChunkRecords:
 
     def test_chunk_with_max_rows(self):
         """Test chunking with specific max_rows."""
-        records = [{"id": i} for i in range(100)]
+        records: list[dict[str, Any]] = [{"id": i} for i in range(100)]
         chunks = chunk_records(records, 25)
 
         assert len(chunks) == 4
@@ -35,7 +36,7 @@ class TestChunkRecords:
 
     def test_chunk_uneven_division(self):
         """Test chunking when records don't divide evenly."""
-        records = [{"id": i} for i in range(105)]
+        records: list[dict[str, Any]] = [{"id": i} for i in range(105)]
         chunks = chunk_records(records, 25)
 
         assert len(chunks) == 5
@@ -43,7 +44,7 @@ class TestChunkRecords:
 
     def test_empty_records(self):
         """Test chunking empty list."""
-        records = []
+        records: list[dict[str, Any]] = []
         chunks = chunk_records(records, 10)
 
         assert len(chunks) == 0
@@ -54,7 +55,7 @@ class TestWriteCsvChunk:
 
     def test_write_csv_basic(self, tmp_path):
         """Test writing basic CSV file."""
-        records = [
+        records: list[dict[str, Any]] = [
             {"id": 1, "name": "Alice", "value": 100},
             {"id": 2, "name": "Bob", "value": 200},
         ]
@@ -104,7 +105,7 @@ class TestWriteParquetChunk:
 
     def test_write_parquet_with_compression(self, tmp_path):
         """Test writing Parquet with different compression."""
-        records = [{"id": i, "data": f"row_{i}"} for i in range(10)]
+        records: list[dict[str, Any]] = [{"id": i, "data": f"row_{i}"} for i in range(10)]
 
         parquet_path = tmp_path / "compressed.parquet"
         write_parquet_chunk(records, parquet_path, compression="gzip")

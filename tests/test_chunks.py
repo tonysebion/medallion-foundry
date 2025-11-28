@@ -11,15 +11,28 @@ from core.runner.chunks import (
     ChunkWriterConfig,
     StoragePlan,
 )
+from core.storage.backend import StorageBackend
 
 
-class DummyBackend:
+class DummyBackend(StorageBackend):
     def __init__(self) -> None:
         self.uploads: List[Tuple[Path, str]] = []
 
     def upload_file(self, local_path: str, remote_path: str) -> bool:
         self.uploads.append((Path(local_path), remote_path))
         return True
+
+    def download_file(self, remote_path: str, local_path: str) -> bool:
+        raise NotImplementedError
+
+    def list_files(self, prefix: str) -> List[str]:
+        return []
+
+    def delete_file(self, remote_path: str) -> bool:
+        raise NotImplementedError
+
+    def get_backend_type(self) -> str:
+        return "dummy"
 
 
 def _make_chunk() -> List[dict]:

@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any, Dict, cast
 
 import pandas as pd
 import pytest
@@ -52,45 +53,46 @@ def bronze_samples_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 def _build_sample_path(
-    bronze_dir: Path, cfg: dict, run_date: str, config_path: Path
+    bronze_dir: Path, cfg: Dict[str, Any], run_date: str, config_path: Path
 ) -> Path:
     bronze_options = cfg.get("bronze", {}).get("options", {})
+    tail_parts: list[str]
     if "source" in cfg:
         load_pattern = cfg["source"]["run"].get("load_pattern", "full")
         pattern_dir = _pattern_dir(load_pattern)
         system = cfg["source"]["system"]
         table = cfg["source"]["table"]
         filename = Path(cfg["source"]["file"]["path"]).name
-        tail = [filename]
+        tail_parts = [filename]
     else:
         load_pattern = bronze_options.get("load_pattern", "full")
         pattern_dir = _pattern_dir(bronze_options.get("pattern_folder") or load_pattern)
         system = cfg["system"]
         table = cfg["entity"]
         original_path = Path(cfg["bronze"].get("path_pattern", "sample.csv"))
-        tail: list[str] = []
+        tail_parts = []
         parts = list(original_path.parts)
         for idx, part in enumerate(parts):
             if part.startswith("dt="):
-                tail = parts[idx + 1 :]
+                tail_parts = parts[idx + 1 :]
                 break
-        if not tail:
-            tail = [original_path.name]
+        if not tail_parts:
+            tail_parts = [original_path.name]
     return (
         BRONZE_SAMPLE_ROOT
         / f"sample={pattern_dir}"
         / f"system={system}"
         / f"table={table}"
         / f"dt={run_date}"
-        / Path(*tail)
+        / Path(*tail_parts)
     )
 
 
 def _rewrite_config(
     original: Path, bronze_dir: Path, tmp_dir: Path, run_date: str
-) -> tuple[Path, Path, Path, dict]:
+) -> tuple[Path, Path, Path, Dict[str, Any]]:
     """Clone config and rewrite data/local output paths into the tmp dir."""
-    cfg = yaml.safe_load(original.read_text())
+    cfg = cast(Dict[str, Any], yaml.safe_load(original.read_text()))
     bronze_out = (tmp_dir / f"bronze_out_{run_date}").resolve()
     silver_out = (tmp_dir / f"silver_out_{run_date}").resolve()
 
@@ -127,8 +129,8 @@ def _collect_bronze_partition(output_root: Path) -> Path:
     return metadata_files[0].parent
 
 
-def _read_metadata(metadata_path: Path) -> dict:
-    return json.loads(metadata_path.read_text())
+def _read_metadata(metadata_path: Path) -> Dict[str, Any]:
+    return cast(Dict[str, Any], json.loads(metadata_path.read_text()))
 
 
 def _read_bronze_parquet(bronze_partition: Path) -> pd.DataFrame:
@@ -139,12 +141,17 @@ def _read_bronze_parquet(bronze_partition: Path) -> pd.DataFrame:
     )
 
 
-def _source_csv_path_from_cfg(cfg: dict[str, object]) -> Path:
-    if "source" in cfg:
-        return Path(cfg["source"]["file"]["path"])
-    bronze_cfg = cfg.get("bronze", {})
-    if "path_pattern" in bronze_cfg:
-        return Path(bronze_cfg["path_pattern"])
+def _source_csv_path_from_cfg(cfg: Dict[str, Any]) -> Path:
+    source_cfg = cfg.get("source")
+    if isinstance(source_cfg, dict):
+        file_cfg = cast(Dict[str, Any], source_cfg.get("file", {}))
+        path_value = file_cfg.get("path")
+        if isinstance(path_value, str):
+            return Path(path_value)
+    bronze_cfg = cast(Dict[str, Any], cfg.get("bronze", {}))
+    path_value = bronze_cfg.get("path_pattern")
+    if isinstance(path_value, str):
+        return Path(path_value)
     raise ValueError("Cannot determine source CSV path")
 
 
@@ -311,34 +318,36 @@ def test_bronze_to_silver_end_to_end(
             ["silver_extract.py", "--config", str(rewritten_cfg), "--date", run_date]
         )
 
-        base_silver = Path(cfg_data["silver"]["output_dir"])
-        if "source" in cfg_data:
-            domain = cfg_data["silver"].get("domain", cfg_data["source"]["system"])
-            entity = cfg_data["silver"].get("entity", cfg_data["source"]["table"])
-        else:
-            domain = cfg_data.get("domain") or cfg_data["silver"].get(
-                "domain", cfg_data["system"]
-            )
-            entity = cfg_data["silver"].get("entity", cfg_data.get("entity"))
-        version = cfg_data["silver"].get("version", 1)
-        load_part = cfg_data["silver"].get("load_partition_name", "load_date")
-        base_path = (
-            base_silver / f"domain={domain}" / f"entity={entity}" / f"v{version}"
-        )
-        if cfg_data["silver"].get("include_pattern_folder"):
-            base_path = base_path / f"pattern={pattern_dir}"
-        base_path = base_path / f"{load_part}={run_date}"
-        assert base_path.exists()
+    silver_cfg = cast(Dict[str, Any], cfg_data.get("silver", {}))
+    source_cfg = (
+        cast(Dict[str, Any], cfg_data["source"]) if "source" in cfg_data else None
+    )
+    base_silver = Path(silver_cfg["output_dir"])
+    if source_cfg:
+        domain = silver_cfg.get("domain", source_cfg["system"])
+        entity = silver_cfg.get("entity", source_cfg["table"])
+    else:
+        domain = cfg_data.get("domain") or silver_cfg.get("domain", cfg_data["system"])
+        entity = silver_cfg.get("entity", cfg_data.get("entity"))
+    version = silver_cfg.get("version", 1)
+    load_part = silver_cfg.get("load_partition_name", "load_date")
+    base_path = (
+        base_silver / f"domain={domain}" / f"entity={entity}" / f"v{version}"
+    )
+    if silver_cfg.get("include_pattern_folder"):
+        base_path = base_path / f"pattern={pattern_dir}"
+    base_path = base_path / f"{load_part}={run_date}"
+    assert base_path.exists()
 
-        produced_files = {path.name for path in silver_out.rglob("*.parquet")}
-        if expected_silver_files:
-            assert expected_silver_files <= produced_files
-        else:
-            assert produced_files, "Expected at least one Silver artifact"
+    produced_files = {path.name for path in silver_out.rglob("*.parquet")}
+    if expected_silver_files:
+        assert expected_silver_files <= produced_files
+    else:
+        assert produced_files, "Expected at least one Silver artifact"
 
-        for parquet_file in silver_out.rglob("*.parquet"):
-            df = pd.read_parquet(parquet_file)
-            assert len(df) > 0, f"{parquet_file} should contain rows"
+    for parquet_file in silver_out.rglob("*.parquet"):
+        df = pd.read_parquet(parquet_file)
+        assert len(df) > 0, f"{parquet_file} should contain rows"
 
 
 def test_silver_require_checksum_succeeds(

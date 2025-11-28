@@ -44,9 +44,9 @@ def s3_backend(localstack_config):
 
     # Create bucket if not exists
     try:
-        backend.client.head_bucket(Bucket=backend.bucket_name)
+        backend.client.head_bucket(Bucket=backend.bucket)
     except Exception:
-        backend.client.create_bucket(Bucket=backend.bucket_name)
+        backend.client.create_bucket(Bucket=backend.bucket)
 
     yield backend
 

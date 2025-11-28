@@ -64,7 +64,7 @@ def _build_config(
 
 def test_api_extractor_offset_pagination(monkeypatch: pytest.MonkeyPatch) -> None:
     os.environ["OFFSET_TOKEN"] = "token-123"
-    responses = [
+    responses: List[Dict[str, Any]] = [
         {"items": [{"id": 1}, {"id": 2}]},
         {"items": [{"id": 3}]},
     ]
@@ -93,7 +93,7 @@ def test_api_extractor_offset_pagination(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_api_extractor_cursor_pagination(monkeypatch: pytest.MonkeyPatch) -> None:
     os.environ["API_KEY"] = "key-xyz"
-    responses = [
+    responses: List[Dict[str, Any]] = [
         {"results": [{"id": 10}], "next_cursor": "abc"},
         {"results": [{"id": 20}], "next_cursor": None},
     ]
