@@ -238,7 +238,7 @@ The existing repo should feel like a clean, modern, pattern-driven framework, wi
 
 silver_patterns
 
-and docs/framework/pipeline_engine.md 
+and docs/framework/pipeline_engine.md
 
 pipeline_engine
 

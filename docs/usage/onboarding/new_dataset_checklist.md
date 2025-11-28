@@ -61,7 +61,7 @@ Applies to `entity_kind: event` or `derived_event`.
 
 ## 6. Attributes to keep
 
-10. Which columns matter for analysis or joins?  
+10. Which columns matter for analysis or joins?
     - Add them to `silver.attributes`. Keys and timestamps are specified separately.
 
 11. **Safe-first dev run controls**

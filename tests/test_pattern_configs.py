@@ -18,9 +18,7 @@ PATTERN_MAPPING = {
 
 @pytest.mark.parametrize("config_name, pattern_folder", PATTERN_MAPPING.items())
 def test_pattern_folder_is_set(config_name: str, pattern_folder: str) -> None:
-    config_path = (
-        Path("docs") / "examples" / "configs" / "patterns" / config_name
-    )
+    config_path = Path("docs") / "examples" / "configs" / "patterns" / config_name
     cfg = yaml.safe_load(config_path.read_text())
     bronze_config = cfg.get("bronze", {})
     options = bronze_config.get("options", {})

@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from enum import Enum
 
 from core.patterns import LoadPattern
-from core.silver.models import SilverModel, MODEL_PROFILES, resolve_profile
+from core.silver.models import SilverModel, resolve_profile
 
 
 class StorageBackend(str, Enum):
@@ -66,7 +66,9 @@ class RunConfig(BaseModel):
 
 
 class SourceConfig(BaseModel):
-    pattern_id: Optional[str] = None  # Configurable identifier for tracing across layers (e.g., pattern1_full_events, retail_pos_api)
+    pattern_id: Optional[str] = (
+        None  # Configurable identifier for tracing across layers (e.g., pattern1_full_events, retail_pos_api)
+    )
     type: SourceType = SourceType.api
     system: str
     table: str
@@ -128,7 +130,9 @@ class SilverNormalization(BaseModel):
             raise ValueError("silver.normalization.trim_strings must be a boolean")
         empty_strings = data.get("empty_strings_as_null", False)
         if "empty_strings_as_null" in data and not isinstance(empty_strings, bool):
-            raise ValueError("silver.normalization.empty_strings_as_null must be a boolean")
+            raise ValueError(
+                "silver.normalization.empty_strings_as_null must be a boolean"
+            )
         return cls(trim_strings=trim_strings, empty_strings_as_null=empty_strings)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -147,10 +151,15 @@ class SilverSchema(BaseModel):
         data = raw or {}
         column_order = data.get("column_order")
         if column_order is not None:
-            if not isinstance(column_order, list) or any(not isinstance(col, str) for col in column_order):
+            if not isinstance(column_order, list) or any(
+                not isinstance(col, str) for col in column_order
+            ):
                 raise ValueError("silver.schema.column_order must be a list of strings")
         rename_map = data.get("rename_map") or {}
-        if not isinstance(rename_map, dict) or any(not isinstance(k, str) or not isinstance(v, str) for k, v in rename_map.items()):
+        if not isinstance(rename_map, dict) or any(
+            not isinstance(k, str) or not isinstance(v, str)
+            for k, v in rename_map.items()
+        ):
             raise ValueError("silver.schema.rename_map must be a mapping of strings")
         return cls(column_order=column_order, rename_map=rename_map)
 
@@ -190,30 +199,36 @@ class SilverConfig(BaseModel):
         load_pattern: LoadPattern,
     ) -> "SilverConfig":
         data = raw.copy() if raw else {}
-        
+
         # Map legacy field names
         if "schema" in data and "schema_config" not in data:
             data["schema_config"] = data.pop("schema")
-        
+
         # Set defaults based on source and load_pattern
         data.setdefault("domain", source["system"])
         data.setdefault("entity", source["table"])
-        data.setdefault("model", SilverModel.default_for_load_pattern(load_pattern).value)
-        
+        data.setdefault(
+            "model", SilverModel.default_for_load_pattern(load_pattern).value
+        )
+
         # Handle model_profile
         profile_value = data.get("model_profile")
         if profile_value:
             profile_model = resolve_profile(profile_value)
             if profile_model:
                 data["model"] = profile_model.value
-        
+
         # Validate primary_keys and order_column for current_history
         if load_pattern == LoadPattern.CURRENT_HISTORY:
             if not data.get("primary_keys"):
-                raise ValueError("silver.primary_keys must be provided when load_pattern='current_history'")
+                raise ValueError(
+                    "silver.primary_keys must be provided when load_pattern='current_history'"
+                )
             if not data.get("order_column"):
-                raise ValueError("silver.order_column must be provided when load_pattern='current_history'")
-        
+                raise ValueError(
+                    "silver.order_column must be provided when load_pattern='current_history'"
+                )
+
         return cls(**data)
 
     def to_dict(self) -> Dict[str, Any]:

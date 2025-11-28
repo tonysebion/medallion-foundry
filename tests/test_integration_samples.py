@@ -34,6 +34,8 @@ HYBRID_DELTA_PATTERN = "incremental_merge"
 
 def _pattern_dir(pattern: str) -> str:
     return PATTERN_DIRS.get(pattern, pattern)
+
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GENERATE_SCRIPT = Path("scripts") / "generate_sample_data.py"
 
@@ -133,7 +135,9 @@ def _read_metadata(metadata_path: Path) -> dict:
 def _read_bronze_parquet(bronze_partition: Path) -> pd.DataFrame:
     parquet_files = list(bronze_partition.glob("*.parquet"))
     assert parquet_files, f"No Parquet artifacts found under {bronze_partition}"
-    return pd.concat((pd.read_parquet(path) for path in parquet_files), ignore_index=True)
+    return pd.concat(
+        (pd.read_parquet(path) for path in parquet_files), ignore_index=True
+    )
 
 
 def _source_csv_path_from_cfg(cfg: dict[str, object]) -> Path:
@@ -157,7 +161,12 @@ def _reference_csv_path(delta_source: Path) -> Path:
     run_date_str = dt_dir.name.split("=", 1)[1]
     delta_date = date.fromisoformat(run_date_str)
     reference_date = _reference_date_for_delta(delta_date)
-    return pattern_root / f"dt={reference_date.isoformat()}" / "reference" / "reference-part-0001.csv"
+    return (
+        pattern_root
+        / f"dt={reference_date.isoformat()}"
+        / "reference"
+        / "reference-part-0001.csv"
+    )
 
 
 def _expected_hybrid_delta_tags(run_date: str) -> set[str]:
@@ -250,29 +259,54 @@ def test_bronze_to_silver_end_to_end(
         assert metadata["record_count"] > 0
         if pattern_dir == "hybrid_incremental_cumulative":
             bronze_df = _read_bronze_parquet(bronze_partition)
-            assert {"delta_tag", "change_type"} <= set(bronze_df.columns), "Hybrid samples must emit delta metadata"
+            assert {"delta_tag", "change_type"} <= set(
+                bronze_df.columns
+            ), "Hybrid samples must emit delta metadata"
             source_path = _source_csv_path_from_cfg(cfg_data)
             source_df = pd.read_csv(source_path)
-            assert set(source_df.columns) <= set(bronze_df.columns), "Bronze schema should include source columns"
-            bronze_tag_counts = bronze_df["delta_tag"].dropna().astype(str).value_counts().to_dict()
-            source_tag_counts = source_df["delta_tag"].dropna().astype(str).value_counts().to_dict()
-            assert bronze_tag_counts == source_tag_counts, "Per-tag row counts must match source"
-            bronze_change_counts = bronze_df["change_type"].dropna().astype(str).value_counts().to_dict()
-            source_change_counts = source_df["change_type"].dropna().astype(str).value_counts().to_dict()
-            assert bronze_change_counts == source_change_counts, "Change-type counts must survive the Bronze layer"
+            assert set(source_df.columns) <= set(
+                bronze_df.columns
+            ), "Bronze schema should include source columns"
+            bronze_tag_counts = (
+                bronze_df["delta_tag"].dropna().astype(str).value_counts().to_dict()
+            )
+            source_tag_counts = (
+                source_df["delta_tag"].dropna().astype(str).value_counts().to_dict()
+            )
+            assert (
+                bronze_tag_counts == source_tag_counts
+            ), "Per-tag row counts must match source"
+            bronze_change_counts = (
+                bronze_df["change_type"].dropna().astype(str).value_counts().to_dict()
+            )
+            source_change_counts = (
+                source_df["change_type"].dropna().astype(str).value_counts().to_dict()
+            )
+            assert (
+                bronze_change_counts == source_change_counts
+            ), "Change-type counts must survive the Bronze layer"
             reference_path = _reference_csv_path(source_path)
             if reference_path.exists():
                 reference_df = pd.read_csv(reference_path)
                 delta_ids = {str(value) for value in source_df["order_id"].dropna()}
-                reference_ids = {str(value) for value in reference_df["order_id"].dropna()}
-                assert not delta_ids.intersection(reference_ids), "Delta records should not duplicate reference IDs"
+                reference_ids = {
+                    str(value) for value in reference_df["order_id"].dropna()
+                }
+                assert not delta_ids.intersection(
+                    reference_ids
+                ), "Delta records should not duplicate reference IDs"
             expected_tags = _expected_hybrid_delta_tags(run_date)
-            assert expected_tags, "Expected at least one cumulative delta tag for this run_date"
+            assert (
+                expected_tags
+            ), "Expected at least one cumulative delta tag for this run_date"
             actual_tags = {str(tag) for tag in bronze_df["delta_tag"].dropna()}
             missing_tags = expected_tags - actual_tags
             assert not missing_tags, f"Bronze is missing cumulative tags for {run_date}: {sorted(missing_tags)}"
             change_types = {str(value) for value in bronze_df["change_type"].dropna()}
-            assert {"insert", "update"} <= change_types, "Hybrid Bronze output should contain insert/update ops"
+            assert {
+                "insert",
+                "update",
+            } <= change_types, "Hybrid Bronze output should contain insert/update ops"
 
         _run_cli(
             ["silver_extract.py", "--config", str(rewritten_cfg), "--date", run_date]
@@ -293,7 +327,7 @@ def test_bronze_to_silver_end_to_end(
             base_silver / f"domain={domain}" / f"entity={entity}" / f"v{version}"
         )
         if cfg_data["silver"].get("include_pattern_folder"):
-            base_path = base_path / f"pattern={pattern}"
+            base_path = base_path / f"pattern={pattern_dir}"
         base_path = base_path / f"{load_part}={run_date}"
         assert base_path.exists()
 

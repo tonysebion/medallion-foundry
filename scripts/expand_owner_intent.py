@@ -21,7 +21,9 @@ def resolve_paths(dataset: dict, env: str | None) -> dict:
 
     system = dataset["system"]
     entity = dataset["entity"]
-    bronze_pattern = dataset.get("bronze", {}).get("options", {}).get("load_pattern", "full")
+    bronze_pattern = (
+        dataset.get("bronze", {}).get("options", {}).get("load_pattern", "full")
+    )
     silver_domain = dataset.get("domain", system)
 
     bronze_path = (

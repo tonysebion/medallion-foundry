@@ -42,12 +42,24 @@ def test_event_append_log_processor(tmp_path):
     bronze_path = _write_bronze(
         tmp_path,
         [
-            {"order_id": 1, "event_ts": "2024-01-01T10:00:00Z", "status": "new", "amount": 10},
-            {"order_id": 2, "event_ts": "2024-01-02T08:30:00Z", "status": "pending", "amount": 25},
+            {
+                "order_id": 1,
+                "event_ts": "2024-01-01T10:00:00Z",
+                "status": "new",
+                "amount": 10,
+            },
+            {
+                "order_id": 2,
+                "event_ts": "2024-01-02T08:30:00Z",
+                "status": "pending",
+                "amount": 25,
+            },
         ],
     )
     silver_partition = tmp_path / "silver" / "event"
-    processor = SilverProcessor(dataset, bronze_path, silver_partition, date(2024, 1, 3))
+    processor = SilverProcessor(
+        dataset, bronze_path, silver_partition, date(2024, 1, 3)
+    )
     result = processor.run()
     assert result.metrics.rows_written == 2
     assert "events" in result.outputs
@@ -80,12 +92,22 @@ def test_state_scd2_processor(tmp_path):
     bronze_path = _write_bronze(
         tmp_path,
         [
-            {"employee_id": "E1", "changed_at": "2024-01-01T00:00:00Z", "status": "active"},
-            {"employee_id": "E1", "changed_at": "2024-02-01T00:00:00Z", "status": "inactive"},
+            {
+                "employee_id": "E1",
+                "changed_at": "2024-01-01T00:00:00Z",
+                "status": "active",
+            },
+            {
+                "employee_id": "E1",
+                "changed_at": "2024-02-01T00:00:00Z",
+                "status": "inactive",
+            },
         ],
     )
     silver_partition = tmp_path / "silver" / "state"
-    processor = SilverProcessor(dataset, bronze_path, silver_partition, date(2024, 2, 2))
+    processor = SilverProcessor(
+        dataset, bronze_path, silver_partition, date(2024, 2, 2)
+    )
     result = processor.run()
     history_df = pd.concat(
         pd.read_parquet(path) for path in result.outputs["state_history"]
@@ -97,7 +119,9 @@ def test_state_scd2_processor(tmp_path):
         "effective_to",
         "is_current",
     }
-    assert history_df.loc[history_df["is_current"] == 1, "status"].tolist() == ["inactive"]
+    assert history_df.loc[history_df["is_current"] == 1, "status"].tolist() == [
+        "inactive"
+    ]
 
 
 def test_state_latest_only_processor(tmp_path):
@@ -128,11 +152,11 @@ def test_state_latest_only_processor(tmp_path):
         ],
     )
     silver_partition = tmp_path / "silver" / "latest"
-    processor = SilverProcessor(dataset, bronze_path, silver_partition, date(2024, 1, 5))
-    result = processor.run()
-    df = pd.concat(
-        pd.read_parquet(path) for path in result.outputs["state_current"]
+    processor = SilverProcessor(
+        dataset, bronze_path, silver_partition, date(2024, 1, 5)
     )
+    result = processor.run()
+    df = pd.concat(pd.read_parquet(path) for path in result.outputs["state_current"])
     assert df.shape[0] == 1
     assert df["value"].iloc[0] == 1.3
 
@@ -162,11 +186,17 @@ def test_derived_state_processor(tmp_path):
         tmp_path,
         [
             {"ticket_id": "T1", "event_ts": "2024-03-01T00:00:00Z", "status": "new"},
-            {"ticket_id": "T1", "event_ts": "2024-03-02T00:00:00Z", "status": "assigned"},
+            {
+                "ticket_id": "T1",
+                "event_ts": "2024-03-02T00:00:00Z",
+                "status": "assigned",
+            },
         ],
     )
     silver_partition = tmp_path / "silver" / "derived_state"
-    processor = SilverProcessor(dataset, bronze_path, silver_partition, date(2024, 3, 2))
+    processor = SilverProcessor(
+        dataset, bronze_path, silver_partition, date(2024, 3, 2)
+    )
     result = processor.run()
     assert "state_history" in result.outputs
     history_df = pd.concat(
@@ -200,7 +230,11 @@ def test_derived_event_processor(tmp_path):
     bronze_path = _write_bronze(
         tmp_path,
         [
-            {"project_id": "P1", "change_ts": "2024-04-01T00:00:00Z", "status": "planned"},
+            {
+                "project_id": "P1",
+                "change_ts": "2024-04-01T00:00:00Z",
+                "status": "planned",
+            },
             {
                 "project_id": "P1",
                 "change_ts": "2024-04-02T00:00:00Z",
@@ -209,7 +243,9 @@ def test_derived_event_processor(tmp_path):
         ],
     )
     silver_partition = tmp_path / "silver" / "derived_events"
-    processor = SilverProcessor(dataset, bronze_path, silver_partition, date(2024, 4, 2))
+    processor = SilverProcessor(
+        dataset, bronze_path, silver_partition, date(2024, 4, 2)
+    )
     result = processor.run()
     events_df = pd.concat(
         pd.read_parquet(path) for path in result.outputs["derived_events"]

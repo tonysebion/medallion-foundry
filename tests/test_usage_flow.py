@@ -28,6 +28,8 @@ PATTERN_DIRS = {
 
 def _pattern_dir(pattern: str) -> str:
     return PATTERN_DIRS.get(pattern, pattern)
+
+
 CONFIG_ROOT = Path("docs/examples/configs")
 
 

@@ -1,8 +1,8 @@
 # medallion-foundry Project Review
 
-**Last Updated:** November 28, 2025  
-**Reviewer:** GitHub Copilot  
-**Project Version:** 1.0.0+ (Unreleased)  
+**Last Updated:** November 28, 2025
+**Reviewer:** GitHub Copilot
+**Project Version:** 1.0.0+ (Unreleased)
 **Status:** Production-Ready, Active Development
 
 ---
@@ -432,13 +432,13 @@ platform:
     prefix: bronze/          # Path prefix
     region: us-east-1        # S3 region
     output_dir: ./output     # Local fallback
-    
+
     output_defaults:
       allow_parquet: true
       allow_csv: false
       max_file_size_mb: 256
       parquet_compression: snappy
-      
+
     partitioning:
       use_dt_partition: true
       use_pattern_folder: true
@@ -452,12 +452,12 @@ platform:
 # Sources: data-source-specific settings (owned by domain teams)
 sources:
   - name: my_api_source
-    
+
     source:
       type: api                  # api | db | file | custom
       system: my_system
       table: my_table
-      
+
       # API-specific config
       api:
         base_url: https://api.example.com
@@ -466,81 +466,81 @@ sources:
         auth_header: X-API-Key
         auth_env_var: MY_API_KEY
         method: GET
-        
+
         pagination:
           type: offset             # offset | page | cursor | none
           offset_param: skip
           limit_param: limit
           page_param: page
           page_size: 100
-          
+
           cursor:
             type: link_header       # link_header | response_field | body
             field: _next_page_url
-            
+
       # OR DB-specific config
       db:
         driver: psycopg2           # psycopg2 | pymssql | mysql
         host_env_var: DB_HOST
         database: mydb
         query: "SELECT * FROM users WHERE created_at > ?"
-        
+
       # OR file-specific config
       file:
         path: ./data/sample.csv
         format: csv                # csv | tsv | json | jsonl | parquet
         columns: [id, name]
         limit_rows: 1000
-        
+
       run:
         # Extraction behavior
         load_pattern: full         # full | cdc | current_history
         max_rows_per_file: 10000
         timeout_seconds: 300
-        
+
         # Output formats
         write_parquet: true
         write_csv: false
         parquet_compression: snappy
-        
+
         # Rate limiting
         rate_limit_hz: 10          # Requests/sec
-        
+
         # Async HTTP
         use_async: true
         prefetch_pages: 5
-        
+
     # Silver-specific config (optional)
     silver:
       domain: my_domain
       entity: my_entity
       version: 1
-      
+
       # Asset model
       model: scd_type_2           # or use model_profile
       model_profile: analytics    # analytics | operational | merge_ready | cdc_delta | snapshot
-      
+
       # Output
       write_parquet: true
       write_csv: false
-      
+
       # Partitioning
       load_partition_name: load_date
       include_pattern_folder: false
       partitioning:
         columns: [status, region]
-        
+
       # Schema refinement
       schema:
         rename_map:
           old_col_name: new_col_name
         column_order: [id, name, status]
-        
+
       # Data normalization
       normalization:
         trim_strings: true
         empty_strings_as_null: true
-        
+
       # Error handling
       error_handling:
         enabled: true
@@ -550,7 +550,7 @@ sources:
 
 ### Validation (Pydantic)
 
-- **Typed Models** (`core/config/typed_models.py`): 
+- **Typed Models** (`core/config/typed_models.py`):
   - `RootConfig`, `PlatformConfig`, `BronzeConfig`, `SourceConfig`, `ApiConfig`, `SilverConfig`
   - Full type checking + validation at load time
   - Clear error messages for invalid configs
@@ -892,6 +892,6 @@ ls -la silver_output/domain=*/entity=*/v*/
 
 ---
 
-**Document Version**: 1.0  
-**Last Reviewed**: November 28, 2025  
+**Document Version**: 1.0
+**Last Reviewed**: November 28, 2025
 **Next Review**: Quarterly or upon major feature additions

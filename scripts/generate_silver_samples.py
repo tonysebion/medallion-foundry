@@ -63,7 +63,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 def _find_bronze_partitions() -> Iterable[Dict[str, Any]]:
     """Find all Bronze partitions with CSV files.
-    
+
     Now looks for sample= prefixes in Bronze structure.
     """
     seen: set[str] = set()
@@ -75,14 +75,14 @@ def _find_bronze_partitions() -> Iterable[Dict[str, Any]]:
         if not csv_files:
             continue
         rel_parts = dir_path.relative_to(BRONZE_SAMPLE_ROOT).parts
-        
+
         # Look for sample= prefix (new structure: sample=pattern_id)
         sample_part = next((p for p in rel_parts if p.startswith("sample=")), None)
         dt_part = next((p for p in rel_parts if p.startswith("dt=")), None)
-        
+
         if not sample_part or not dt_part:
             continue
-        
+
         pattern = sample_part.split("=", 1)[1]
         run_date = dt_part.split("=", 1)[1]
 
@@ -280,7 +280,9 @@ def _generate_for_partition(
     else:
         cmd.append("--no-write-csv")
 
-    print(f"Generating: sample={pattern_id}/silver_model={config.silver_model} for {run_date}")
+    print(
+        f"Generating: sample={pattern_id}/silver_model={config.silver_model} for {run_date}"
+    )
     _run_cli(cmd)
 
     # Copy config to pattern root for reference
@@ -312,7 +314,9 @@ def main() -> None:
     for partition in partitions:
         configs = pattern_configs.get(partition["pattern"])
         if not configs:
-            print(f"⚠ No pattern configs found for pattern '{partition['pattern']}' - skipping")
+            print(
+                f"⚠ No pattern configs found for pattern '{partition['pattern']}' - skipping"
+            )
             continue
 
         for config_variant in configs:
@@ -321,12 +325,14 @@ def main() -> None:
             )
             generated_count += 1
 
-    print(f"\n✅ Generated {generated_count} Silver sample(s) under {SILVER_SAMPLE_ROOT}")
-    print(f"\nDirectory structure now matches Bronze hierarchy with sample= prefix:")
+    print(
+        f"\n✅ Generated {generated_count} Silver sample(s) under {SILVER_SAMPLE_ROOT}"
+    )
+    print("\nDirectory structure now matches Bronze hierarchy with sample= prefix:")
     print(f"  {SILVER_SAMPLE_ROOT}/")
-    print(f"    sample={{pattern_id}}/")
-    print(f"      silver_model={{model}}/")
-    print(f"        domain={{domain}}/...")
+    print("    sample={pattern_id}/")
+    print("      silver_model={model}/")
+    print("        domain={domain}/...")
 
 
 if __name__ == "__main__":

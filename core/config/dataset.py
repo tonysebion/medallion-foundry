@@ -8,6 +8,8 @@ focus on semantic intent so higher-level orchestration can remain simple.
 from __future__ import annotations
 
 import logging
+from core.deprecation import emit_compat
+from core.patterns import LoadPattern
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -58,7 +60,9 @@ DEFAULT_SILVER_BASE = Path("sampledata") / "silver_samples"
 def _require_list_of_strings(values: Any, field_name: str) -> List[str]:
     if values is None:
         return []
-    if not isinstance(values, list) or any(not isinstance(item, str) for item in values):
+    if not isinstance(values, list) or any(
+        not isinstance(item, str) for item in values
+    ):
         raise ValueError(f"{field_name} must be a list of strings")
     return [item.strip() for item in values if item and item.strip()]
 
@@ -124,8 +128,12 @@ class BronzeIntent:
             source_query=source_query,
             path_pattern=path_pattern,
             partition_column=partition_column,
-            owner_team=_require_optional_str(data.get("owner_team"), "bronze.owner_team"),
-            owner_contact=_require_optional_str(data.get("owner_contact"), "bronze.owner_contact"),
+            owner_team=_require_optional_str(
+                data.get("owner_team"), "bronze.owner_team"
+            ),
+            owner_contact=_require_optional_str(
+                data.get("owner_contact"), "bronze.owner_contact"
+            ),
             options=options,
         )
 
@@ -272,9 +280,7 @@ class SilverIntent:
         write_parquet = _require_bool(
             data.get("write_parquet"), "silver.write_parquet", True
         )
-        write_csv = _require_bool(
-            data.get("write_csv"), "silver.write_csv", False
-        )
+        write_csv = _require_bool(data.get("write_csv"), "silver.write_csv", False)
 
         return cls(
             enabled=enabled,
@@ -364,9 +370,6 @@ def is_new_intent_config(raw: Dict[str, Any]) -> bool:
 
 
 ### Compatibility helpers ######################################################
-
-from core.deprecation import emit_compat
-from core.patterns import LoadPattern
 
 logger = logging.getLogger(__name__)
 
@@ -537,7 +540,9 @@ def legacy_to_dataset(cfg: Dict[str, Any]) -> Optional[DatasetConfig]:
         system = source["system"]
         entity = source["table"]
     except Exception as exc:  # pragma: no cover - defensive
-        logger.debug("Legacy config missing required keys for dataset conversion: %s", exc)
+        logger.debug(
+            "Legacy config missing required keys for dataset conversion: %s", exc
+        )
         return None
 
     source_type = source.get("type", "file")
@@ -617,9 +622,7 @@ def legacy_to_dataset(cfg: Dict[str, Any]) -> Optional[DatasetConfig]:
     write_parquet = _require_bool(
         silver_raw.get("write_parquet"), "silver.write_parquet", True
     )
-    write_csv = _require_bool(
-        silver_raw.get("write_csv"), "silver.write_csv", False
-    )
+    write_csv = _require_bool(silver_raw.get("write_csv"), "silver.write_csv", False)
     silver_intent = SilverIntent(
         enabled=True,
         entity_kind=entity_kind,

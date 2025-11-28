@@ -55,7 +55,7 @@ The goal is that a source system owner or semantic owner can fill this out and t
 
 Applies when `entity_kind` is `state` or `derived_state`.
 
-6. Do you need to answer “what was true at a specific time?”  
+6. Do you need to answer “what was true at a specific time?”
 
 - **Yes** → `silver.history_mode: scd2`
 
@@ -201,11 +201,11 @@ Here’s the **single** mega-prompt you can paste into Copilot Chat / Codex in �
 
 It tells it to:
 
-- analyze your current Bronze/Silver pair  
-- add these docs  
-- extend the config model  
-- reshape your **existing examples** into the new structure  
-- implement the pattern-based Silver engine  
+- analyze your current Bronze/Silver pair
+- add these docs
+- extend the config model
+- reshape your **existing examples** into the new structure
+- implement the pattern-based Silver engine
 - and keep all the extra concerns in mind (deletes, schema, partitioning, observability, backfill posture).
 
 ---
@@ -680,7 +680,3 @@ Creating a config file in the new structure,
 No pipeline code changes.
 
 Gold can treat Silver as the authoritative analytic layer without reading from Bronze or source systems.
-
-
-
-
