@@ -347,8 +347,6 @@ class ApiExtractor(BaseExtractor):
                     cursor_val = obj
 
                 cursor = cursor_val
-                if cursor is None:
-                    break
 
         else:
             raise ValueError(f"Unsupported pagination type: '{pagination_type}'")
@@ -497,8 +495,6 @@ class ApiExtractor(BaseExtractor):
                             break
                     cursor_val = obj
                 cursor = cursor_val
-                if not cursor:
-                    break
         else:
             raise ValueError(f"Unsupported pagination type: '{pagination_type}'")
 
