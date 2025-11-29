@@ -547,11 +547,11 @@ def generate_current_history(
         combined_rows.append(
             {
                 "order_id": None,
-                "customer_id": "",
+                "customer_id": None,
                 "status": "unknown",
-                "effective_start": "",
-                "effective_end": "",
-                "current_flag": "",
+                "effective_start": None,
+                "effective_end": None,
+                "current_flag": None,
                 "updated_at": datetime.fromisoformat(f"{date_str}T00:00:00").isoformat()
                 + "Z",
                 "run_date": date_str,
@@ -575,7 +575,7 @@ def generate_current_history(
                             - timedelta(days=idx % 5)
                         ).isoformat()
                         + "Z",
-                        "effective_end": "",
+                        "effective_end": None,
                         "current_flag": 1,
                         "updated_at": (
                             datetime.fromisoformat(f"{date_str}T12:00:00")
