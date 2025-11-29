@@ -32,7 +32,7 @@ def test_environment_config():
     print(f"   S3 Endpoint: {env_config.s3.endpoint_url}")
     print(f"   Access Key: {env_config.s3.access_key_id}")
     print(f"   Region: {env_config.s3.region}")
-    print(f"   Buckets:")
+    print("   Buckets:")
     for name, bucket in env_config.s3.buckets.items():
         print(f"     - {name} -> {bucket}")
     print()

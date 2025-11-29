@@ -26,7 +26,7 @@ from core.logging_config import setup_logging
 from core.storage import get_storage_backend
 from core.patterns import LoadPattern
 from core.catalog import notify_catalog, report_run_metadata
-from core.context import build_run_context
+from core.context import build_run_context, RunContext
 from core.hooks import fire_webhooks
 from core.run_options import RunOptions
 from core.config.typed_models import RootConfig
@@ -215,7 +215,6 @@ class BronzeOrchestrator:
 
         contexts: List[RunContext] = []
         for cfg in configs:
-            cfg_dict = cfg.model_dump()
             env_config = getattr(cfg, "__env_config__", None)
             context = build_run_context(
                 cfg,
@@ -260,10 +259,17 @@ class BronzeOrchestrator:
                     tcfg = cfg
                     cfg_dict = cfg.model_dump()
                     logger.info(
-                        f"  ✓ System: {tcfg.source.system}, Table: {tcfg.source.table}, Type: {cfg_dict.get('source', {}).get('type', 'api')}, Config: {cfg_dict.get('source', {}).get('config_name')}"
+                        "  ✓ System: %s, Table: %s, Type: %s, Config: %s",
+                        tcfg.source.system,
+                        tcfg.source.table,
+                        cfg_dict.get("source", {}).get("type", "api"),
+                        cfg_dict.get("source", {}).get("config_name"),
                     )
                     logger.info(
-                        f"  ✓ Load pattern: {tcfg.source.run.load_pattern.value if getattr(tcfg.source, 'run', None) else LoadPattern.FULL.value}"
+                        "  ✓ Load pattern: %s",
+                        tcfg.source.run.load_pattern.value
+                        if getattr(tcfg.source, "run", None)
+                        else LoadPattern.FULL.value,
                     )
                     platform = cfg.model_dump()["platform"]
                     storage_backend = platform["bronze"].get("storage_backend", "s3")

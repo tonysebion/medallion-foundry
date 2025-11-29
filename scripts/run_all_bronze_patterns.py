@@ -20,15 +20,15 @@ import tempfile
 from pathlib import Path
 from typing import Iterable, Any, Dict
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 import boto3
 import yaml
 
 from core.config.loader import load_config_with_env
 from core.config.environment import EnvironmentConfig
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 BRONZE_SAMPLE_ROOT = Path("sampledata/bronze_samples")
 DOC_BRONZE_SAMPLE_ROOT = REPO_ROOT / "docs" / "examples" / "data" / "bronze_samples"
 
