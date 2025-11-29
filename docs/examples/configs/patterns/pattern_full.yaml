@@ -39,3 +39,7 @@ silver:
     - order_total
   partition_by:
     - event_ts_dt
+  # V1 Unified temporal configuration: partition by record time, not load time
+  record_time_column: "updated_at"  # Column with event occurrence time
+  record_time_partition: "event_date"  # Partition key name for event date
+  load_batch_id_column: "load_batch_id"  # Standard column for batch tracking

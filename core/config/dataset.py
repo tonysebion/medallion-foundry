@@ -160,6 +160,10 @@ class SilverIntent:
     require_checksum: bool = False
     semantic_owner: Optional[str] = None
     semantic_contact: Optional[str] = None
+    # Unified temporal configuration (V1: record_time only, no secondary partitions)
+    record_time_column: Optional[str] = None  # Column with record/event/change time
+    record_time_partition: Optional[str] = None  # Partition key name (e.g., "event_date", "effective_from_date")
+    load_batch_id_column: str = "load_batch_id"  # Standard column for batch tracking
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SilverIntent":
@@ -284,6 +288,17 @@ class SilverIntent:
         )
         write_csv = _require_bool(data.get("write_csv"), "silver.write_csv", False)
 
+        # Unified temporal configuration
+        record_time_column = _require_optional_str(
+            data.get("record_time_column"), "silver.record_time_column"
+        )
+        record_time_partition = _require_optional_str(
+            data.get("record_time_partition"), "silver.record_time_partition"
+        )
+        load_batch_id_column = _require_optional_str(
+            data.get("load_batch_id_column"), "silver.load_batch_id_column"
+        ) or "load_batch_id"
+
         return cls(
             enabled=enabled,
             entity_kind=entity_kind,
@@ -305,6 +320,9 @@ class SilverIntent:
             require_checksum=require_checksum,
             semantic_owner=semantic_owner,
             semantic_contact=semantic_contact,
+            record_time_column=record_time_column,
+            record_time_partition=record_time_partition,
+            load_batch_id_column=load_batch_id_column,
         )
 
 
