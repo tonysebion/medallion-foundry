@@ -1,0 +1,20 @@
+# Development Environment Configuration
+# This file contains storage backend settings for local MinIO development
+
+name: dev
+
+s3:
+  # MinIO local S3-compatible storage for development
+  # Note: Port 9000 is the API endpoint (not 9001 which is the browser UI)
+  endpoint_url: http://localhost:9000
+  access_key_id: minioadmin
+  secret_access_key: minioadmin123
+  region: us-east-1
+
+  # Named bucket references
+  # All data is in the "mdf" bucket at the root level
+  # Pattern configs can reference these by name (e.g., "source_data")
+  buckets:
+    source_data: mdf
+    bronze_data: mdf
+    silver_data: mdf

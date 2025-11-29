@@ -1,0 +1,31 @@
+# Production Environment Configuration
+# This file contains storage backend settings for production
+
+name: prod
+
+s3:
+  # Use default AWS endpoints (null means use AWS defaults)
+  endpoint_url: null
+
+  # Credentials from environment variables (recommended for production)
+  # Use ${VAR_NAME} syntax to reference environment variables
+  access_key_id: ${AWS_ACCESS_KEY_ID}
+  secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+
+  # AWS region
+  region: us-west-2
+
+  # Named bucket references
+  # Pattern configs can reference these by name
+  buckets:
+    source_data: prod-source-bucket
+    bronze_data: prod-bronze-bucket
+    silver_data: prod-silver-bucket
+
+# Azure configuration (future support)
+# azure:
+#   storage_account: ${AZURE_STORAGE_ACCOUNT}
+#   access_key: ${AZURE_STORAGE_KEY}
+#   containers:
+#     source_data: prod-source-container
+#     bronze_data: prod-bronze-container
