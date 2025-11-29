@@ -56,17 +56,30 @@ def _get_path_keys(pattern_id: str) -> Dict[str, str]:
     }
 
 
-def _get_runtime_values(pattern_id: str) -> Dict[str, str]:
+def _get_runtime_values(pattern_id: str) -> Dict[str, Any]:
     """Extract runtime values (system, entity, pattern_folder) from pattern config."""
     config = PATTERN_CONFIGS.get(pattern_id, {})
     bronze = config.get("bronze", {})
     options = bronze.get("options", {}) or {}
+    raw_formats = options.get("output_formats") or options.get("formats") or []
+    if isinstance(raw_formats, str):
+        raw_formats_list = [raw_formats]
+    else:
+        raw_formats_list = list(raw_formats)
+    normalized_formats: List[str] = [
+        fmt.strip().lower()
+        for fmt in raw_formats_list
+        if isinstance(fmt, str) and fmt.strip()
+    ]
+    if not normalized_formats:
+        normalized_formats = ["csv", "parquet"]
 
     return {
         "system": config.get("system", "retail_demo"),
         "entity": config.get("entity", "orders"),
         "pattern_folder": options.get("pattern_folder", pattern_id),
         "load_pattern": options.get("load_pattern", "full"),
+        "output_formats": normalized_formats,
     }
 
 
@@ -149,29 +162,40 @@ HYBRID_COMBOS = [
 ]
 
 
-def _write_chunk_files(path: Path, rows: Iterable[Dict[str, object]]) -> List[Path]:
-    """Write CSV and Parquet copies of the chunk and return their paths."""
+def _write_chunk_files(
+    path: Path, rows: Iterable[Dict[str, object]], formats: Iterable[str] | None = None
+) -> List[Path]:
+    """Write CSV/parquet chunk copies according to the requested formats."""
     rows_list = list(rows)
     if not rows_list:
         return []
     path.parent.mkdir(parents=True, exist_ok=True)
-    # Write CSV
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=rows_list[0].keys())
-        writer.writeheader()
-        writer.writerows(rows_list)
+    fmt_set = {fmt.strip().lower() for fmt in (formats or []) if isinstance(fmt, str) and fmt.strip()}
+    if not fmt_set:
+        fmt_set = {"csv", "parquet"}
 
-    # Write Parquet
-    df = pd.DataFrame(rows_list)
-    parquet_path = path.with_suffix(".parquet")
-    df.to_parquet(parquet_path, index=False)
+    files: List[Path] = []
 
-    return [path, parquet_path]
+    if "csv" in fmt_set:
+        with path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=rows_list[0].keys())
+            writer.writeheader()
+            writer.writerows(rows_list)
+        files.append(path)
+
+    if "parquet" in fmt_set:
+        df = pd.DataFrame(rows_list)
+        parquet_path = path.with_suffix(".parquet")
+        df.to_parquet(parquet_path, index=False)
+        files.append(parquet_path)
+
+    return files
 
 
 def generate_full_snapshot(seed: int = 42, row_count: int = FULL_ROW_COUNT) -> None:
     pattern_id = _pattern_dir("full")
     runtime = _get_runtime_values(pattern_id)
+    formats = runtime["output_formats"]
     path_keys = _get_path_keys(pattern_id)
 
     for day_offset, date_str in enumerate(FULL_DATES):
@@ -213,7 +237,7 @@ def generate_full_snapshot(seed: int = 42, row_count: int = FULL_ROW_COUNT) -> N
         )
 
         chunk_path = base_dir / "full-part-0001.csv"
-        chunk_files = _write_chunk_files(chunk_path, rows)
+        chunk_files = _write_chunk_files(chunk_path, rows, formats=formats)
         total_records = len(rows)
         chunk_count = 1
 
@@ -233,7 +257,7 @@ def generate_full_snapshot(seed: int = 42, row_count: int = FULL_ROW_COUNT) -> N
                     }
                 )
             schema_chunk = base_dir / "full-part-0002.csv"
-            chunk_files.extend(_write_chunk_files(schema_chunk, schema_rows))
+            chunk_files.extend(_write_chunk_files(schema_chunk, schema_rows, formats=formats))
             total_records += len(schema_rows)
             chunk_count += 1
 
@@ -365,6 +389,7 @@ def _write_delta_metadata(
 def generate_cdc(seed: int = 99, row_count: int = CDC_ROW_COUNT) -> None:
     pattern_id = _pattern_dir("cdc")
     runtime = _get_runtime_values(pattern_id)
+    formats = runtime["output_formats"]
     path_keys = _get_path_keys(pattern_id)
     change_types = ["insert", "update", "delete"]
 
@@ -411,7 +436,7 @@ def generate_cdc(seed: int = 99, row_count: int = CDC_ROW_COUNT) -> None:
         )
 
         chunk_path = base_dir / "cdc-part-0001.csv"
-        chunk_files = _write_chunk_files(chunk_path, rows)
+        chunk_files = _write_chunk_files(chunk_path, rows, formats=formats)
         total_records = len(rows)
         chunk_count = 1
 
@@ -432,7 +457,7 @@ def generate_cdc(seed: int = 99, row_count: int = CDC_ROW_COUNT) -> None:
                     }
                 )
             schema_chunk = base_dir / "cdc-part-0002.csv"
-            chunk_files.extend(_write_chunk_files(schema_chunk, schema_rows))
+            chunk_files.extend(_write_chunk_files(schema_chunk, schema_rows, formats=formats))
             total_records += len(schema_rows)
             chunk_count += 1
 
@@ -456,6 +481,7 @@ def generate_current_history(
 ) -> None:
     pattern_id = _pattern_dir("current_history")
     runtime = _get_runtime_values(pattern_id)
+    formats = runtime["output_formats"]
     path_keys = _get_path_keys(pattern_id)
 
     for day_offset, date_str in enumerate(CURRENT_HISTORY_DATES):
@@ -528,7 +554,7 @@ def generate_current_history(
         total_records = len(combined_rows)
         chunk_count = 1
         chunk_path = base_dir / "current-history-part-0001.csv"
-        chunk_files = _write_chunk_files(chunk_path, combined_rows)
+        chunk_files = _write_chunk_files(chunk_path, combined_rows, formats=formats)
 
         if day_offset == 1:
             skew_rows: List[Dict[str, object]] = []
@@ -555,7 +581,7 @@ def generate_current_history(
                     }
                 )
             skew_chunk = base_dir / "current-history-part-0002.csv"
-            chunk_files.extend(_write_chunk_files(skew_chunk, skew_rows))
+            chunk_files.extend(_write_chunk_files(skew_chunk, skew_rows, formats=formats))
             total_records += len(skew_rows)
             chunk_count += 1
 
