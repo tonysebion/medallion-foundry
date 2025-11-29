@@ -227,14 +227,17 @@ class BronzeOrchestrator:
             tables=[f"{cfg.source.system}.{cfg.source.table}" for cfg in configs],
         )
 
-        contexts = [
-            build_run_context(
+        contexts: List[RunContext] = []
+        for cfg in configs:
+            cfg_dict = cfg.model_dump()
+            env_config = getattr(cfg, "__env_config__", None)
+            context = build_run_context(
                 cfg,
                 run_date,
                 load_pattern_override=self.args.load_pattern,
+                env_config=env_config,
             )
-            for cfg in configs
-        ]
+            contexts.append(context)
 
         self._update_hook_context(
             config_names=[ctx.config_name for ctx in contexts],

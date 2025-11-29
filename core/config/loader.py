@@ -18,6 +18,7 @@ from .env_substitution import apply_env_substitution
 from .typed_models import RootConfig, parse_root_config
 from core.deprecation import emit_compat
 from core.paths import build_bronze_relative_path
+from core.config.environment import EnvironmentConfig
 from .validation import validate_config_dict
 from .v2_validation import validate_v2_config_dict
 
@@ -61,19 +62,27 @@ def load_config(
         cfg = apply_env_substitution(cfg)
 
     if "datasets" in cfg:
-        datasets = _load_intent_datasets(cfg)
+        datasets = _load_intent_datasets(cfg, config_path=Path(path))
         if len(datasets) != 1:
             raise ValueError(
                 "Config file contains multiple datasets; use load_configs() instead."
             )
         runtime = datasets[0]
         # Parse into typed RootConfig
-        return parse_root_config(runtime)
+        typed = parse_root_config(runtime)
+        env_config = runtime.get("__env_config__")
+        if env_config:
+            setattr(typed, "__env_config__", env_config)
+        return typed
 
     if is_new_intent_config(cfg):
         dataset = DatasetConfig.from_dict(cfg)
-        runtime = _build_dataset_runtime(dataset)
-        return parse_root_config(runtime)
+        env_config = _load_environment_config(Path(path), dataset.environment)
+        runtime = _build_dataset_runtime(dataset, env_config)
+        typed = parse_root_config(runtime)
+        if env_config:
+            setattr(typed, "__env_config__", env_config)
+        return typed
 
     if "sources" in cfg:
         raise ValueError(
@@ -106,9 +115,16 @@ def load_configs(
         raw = apply_env_substitution(raw)
 
     if "datasets" in raw or is_new_intent_config(raw):
-        datasets = _load_intent_datasets(raw)
+        datasets = _load_intent_datasets(raw, config_path=Path(path))
         if datasets:
-            return [parse_root_config(ds) for ds in datasets]
+            results = []
+            for ds in datasets:
+                typed = parse_root_config(ds)
+                env_cfg = ds.get("__env_config__")
+                if env_cfg:
+                    setattr(typed, "__env_config__", env_cfg)
+                results.append(typed)
+            return results
         raise ValueError("'datasets' must be a non-empty list when provided")
 
     if "sources" not in raw:
@@ -153,6 +169,9 @@ def load_configs(
         validated = validate_config_dict(merged_cfg)
         try:
             typed = parse_root_config(validated)
+            env_cfg = validated.get("__env_config__")
+            if env_cfg:
+                setattr(typed, "__env_config__", env_cfg)
             if "config_version" not in validated:
                 if strict:
                     raise ValueError(
@@ -180,11 +199,37 @@ def build_relative_path(cfg: Dict[str, Any], run_date: _date) -> str:
     return build_bronze_relative_path(cfg, run_date)
 
 
-def _build_dataset_runtime(dataset: DatasetConfig) -> Dict[str, Any]:
+def _load_environment_config(
+    config_path: Path, env_name: Optional[str]
+) -> Optional[EnvironmentConfig]:
+    if not env_name:
+        return None
+
+    env_config_path = config_path.parent.parent / "environments"
+    if not env_config_path.exists():
+        env_config_path = Path("environments")
+
+    env_file = env_config_path / f"{env_name}.yaml"
+
+    if env_file.exists():
+        logger.info(f"Loading environment config: {env_file}")
+        return EnvironmentConfig.from_yaml(env_file)
+
+    logger.warning(
+        f"Environment '{env_name}' referenced in config but not found at {env_file}"
+    )
+    return None
+
+
+def _build_dataset_runtime(
+    dataset: DatasetConfig, env_config: Optional[EnvironmentConfig] = None
+) -> Dict[str, Any]:
     runtime = dataset_to_runtime_config(dataset)
     validated = validate_config_dict(runtime)
     validated["__dataset__"] = dataset
     validated["_intent_config"] = True
+    if env_config:
+        validated["__env_config__"] = env_config
     return validated
 
 
@@ -201,7 +246,7 @@ def ensure_root_config(cfg: Dict[str, Any]) -> RootConfig:
         raise
 
 
-def _load_intent_datasets(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _load_intent_datasets(raw: Dict[str, Any], *, config_path: Path) -> List[Dict[str, Any]]:
     """Load intent-style configs (single dict or list under 'datasets')."""
     entries: List[Dict[str, Any]]
     if "datasets" in raw:
@@ -219,13 +264,15 @@ def _load_intent_datasets(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
                 raise ValueError("Each entry in 'datasets' must be a dictionary")
             merged = {**defaults, **item}
             dataset = DatasetConfig.from_dict(merged)
-            runtime = _build_dataset_runtime(dataset)
+            env_config = _load_environment_config(config_path, dataset.environment)
+            runtime = _build_dataset_runtime(dataset, env_config)
             runtime["source"]["config_name"] = item.get("name") or dataset.dataset_id
             entries.append(runtime)
         return entries
 
     dataset = DatasetConfig.from_dict(raw)
-    return [_build_dataset_runtime(dataset)]
+    env_config = _load_environment_config(config_path, dataset.environment)
+    return [_build_dataset_runtime(dataset, env_config)]
 
 
 def load_config_with_env(

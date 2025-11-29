@@ -21,6 +21,7 @@ from core.context import RunContext
 from core.extractors.api_extractor import ApiExtractor
 from core.extractors.base import BaseExtractor
 from core.extractors.db_extractor import DbExtractor
+from core.config.environment import EnvironmentConfig
 from core.extractors.file_extractor import FileExtractor
 from core.bronze.io import chunk_records
 from core.patterns import LoadPattern
@@ -30,7 +31,9 @@ from core.storage import get_storage_backend
 logger = logging.getLogger(__name__)
 
 
-def build_extractor(cfg: Dict[str, Any]) -> BaseExtractor:
+def build_extractor(
+    cfg: Dict[str, Any], env_config: Optional[EnvironmentConfig] = None
+) -> BaseExtractor:
     src = cfg["source"]
     src_type = src.get("type", "api")
 
@@ -51,7 +54,7 @@ def build_extractor(cfg: Dict[str, Any]) -> BaseExtractor:
         cls_typed: Type[BaseExtractor] = cast(Type[BaseExtractor], cls)
         return cls_typed()
     if src_type == "file":
-        return FileExtractor()
+        return FileExtractor(env_config=env_config)
 
     raise ValueError(f"Unknown source.type: {src_type}")
 
@@ -85,7 +88,7 @@ class ExtractJob:
             raise
 
     def _run(self) -> int:
-        extractor = build_extractor(self.cfg)
+        extractor = build_extractor(self.cfg, self.ctx.env_config)
         logger.info(
             "Starting extract for %s.%s on %s",
             self.source_cfg["system"],

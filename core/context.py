@@ -5,10 +5,11 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from core.config import build_relative_path
 from core.config.typed_models import RootConfig
+from core.config.environment import EnvironmentConfig
 from core.patterns import LoadPattern
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ class RunContext:
     dataset_id: str
     config_name: str
     load_pattern: LoadPattern
+    env_config: Optional[EnvironmentConfig]
 
     @property
     def bronze_dir(self) -> Path:
@@ -43,6 +45,7 @@ def build_run_context(
     relative_override: str | None = None,
     load_pattern_override: str | None = None,
     bronze_path_override: Path | None = None,
+    env_config: Optional[EnvironmentConfig] = None,
 ) -> RunContext:
     typed: RootConfig | None
     if isinstance(cfg, RootConfig):
@@ -101,6 +104,7 @@ def build_run_context(
         dataset_id=dataset_id,
         config_name=config_name,
         load_pattern=load_pattern,
+        env_config=env_config,
     )
 
 

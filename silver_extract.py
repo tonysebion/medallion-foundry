@@ -531,6 +531,7 @@ class SilverPromotionService:
             bronze_path,
             silver_partition,
             run_context.run_date,
+            env_config=run_context.env_config,
             write_parquet=write_parquet,
             write_csv=write_csv,
             parquet_compression=compression,
@@ -718,6 +719,7 @@ class SilverPromotionService:
         load_pattern_override = (
             None if (self.args.pattern in (None, "auto")) else self.args.pattern
         )
+        env_config = getattr(cfg, "__env_config__", None)
         return build_run_context(
             cfg_dict,
             run_date,
@@ -725,6 +727,7 @@ class SilverPromotionService:
             relative_override=relative_path,
             load_pattern_override=load_pattern_override,
             bronze_path_override=bronze_path,
+            env_config=env_config,
         )
 
     def _resolve_load_pattern(
