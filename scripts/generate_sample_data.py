@@ -103,12 +103,14 @@ def _daily_schedule(start: date, days: int) -> List[str]:
 FULL_DATES = _daily_schedule(SAMPLE_START_DATE, DAILY_DAYS)
 CDC_DATES = _daily_schedule(SAMPLE_START_DATE, DAILY_DAYS)
 CURRENT_HISTORY_DATES = _daily_schedule(SAMPLE_START_DATE, DAILY_DAYS)
-FULL_ROW_COUNT = 1200
-CDC_ROW_COUNT = 800
+FULL_ROW_COUNT = 250_000
+CDC_ROW_COUNT = 250_000
 CURRENT_HISTORY_CURRENT = 500
 CURRENT_HISTORY_HISTORY = 1400
 LARGE_DEFAULT_ROW_COUNT = 250_000
 LARGE_DAYS = 60
+DEFAULT_LINEAR_GROWTH = 2500
+DEFAULT_ENABLE_UPDATES = True
 PATTERN_DIRS = {
     "full": "pattern1_full_events",
     "cdc": "pattern2_cdc_events",
@@ -735,12 +737,23 @@ def main() -> None:
         "--history-rows", type=int, default=None, help="Initial history rows for current-history pattern."
     )
     parser.add_argument(
-        "--linear-growth", type=int, default=50, help="Linear daily increment to simulate growth."
+        "--linear-growth",
+        type=int,
+        default=DEFAULT_LINEAR_GROWTH,
+        help="Linear daily increment to simulate growth.",
     )
     parser.add_argument(
         "--enable-updates",
+        dest="enable_updates",
         action="store_true",
+        default=DEFAULT_ENABLE_UPDATES,
         help="Enable updates simulation for full snapshot pattern (mutate existing order_ids across days).",
+    )
+    parser.add_argument(
+        "--disable-updates",
+        dest="enable_updates",
+        action="store_false",
+        help="Disable the update simulation even though the default dataset enables it.",
     )
     parser.add_argument(
         "--large",
