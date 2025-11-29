@@ -391,7 +391,7 @@ def _consolidate_silver_samples() -> None:
 def _write_polybase_configs(pattern_configs: Dict[str, List[PatternConfig]]) -> None:
     """Write suggested Polybase configuration files for each dataset path."""
     generate_polybase_setup, _ = _get_polybase_generators()
-    dataset_map: Dict[Path, tuple[str, str, DatasetConfig, str]] = {}
+    dataset_map: Dict[Path, tuple[str, str, "DatasetConfig", str]] = {}
     for configs in pattern_configs.values():
         for config in configs:
             dataset = config.dataset

@@ -1,6 +1,9 @@
-import subprocess, sys, uuid, time
-from pathlib import Path
 import shutil
+import subprocess
+import sys
+import time
+import uuid
+from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 bronze = ROOT / 'sampledata' / 'bronze_samples' / 'sample=pattern2_cdc_events' / 'system=retail_demo' / 'table=orders' / 'dt=2025-11-14'
 config = ROOT / 'docs' / 'examples' / 'configs' / 'patterns' / 'pattern_cdc.yaml'
