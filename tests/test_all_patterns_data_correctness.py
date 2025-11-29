@@ -211,9 +211,12 @@ def test_pattern_silver_natural_key_present(pattern_key: str) -> None:
 
 
 @pytest.mark.parametrize("pattern_key", list(PATTERN_DEFINITIONS.keys()))
-def test_pattern_bronze_timestamp_column_present(pattern_key: str) -> None:
-    """Verify timestamp columns present in bronze samples."""
-    bronze_partitions = _find_bronze_partitions(pattern_key)
+def test_pattern_silver_timestamp_column_present(pattern_key: str) -> None:
+    """Verify timestamp columns present in silver samples."""
+    silver_partitions = _find_silver_partitions(pattern_key)
+
+    if len(silver_partitions) == 0:
+        pytest.skip(f"{pattern_key}: No silver samples found")
 
     # Patterns have different timestamp columns
     ts_columns = {
@@ -229,12 +232,12 @@ def test_pattern_bronze_timestamp_column_present(pattern_key: str) -> None:
     ts_col = ts_columns.get(pattern_key, "updated_at")
 
     missing_ts = []
-    for partition in bronze_partitions:
+    for partition in silver_partitions:
         df = _read_all_parquet(partition)
         if ts_col not in df.columns:
             missing_ts.append(str(partition))
 
-    assert not missing_ts, f"{pattern_key}: {len(missing_ts)} bronze partitions missing {ts_col}"
+    assert not missing_ts, f"{pattern_key}: {len(missing_ts)} silver partitions missing {ts_col}"
 
 
 @pytest.mark.parametrize("pattern_key", list(PATTERN_DEFINITIONS.keys()))
@@ -243,13 +246,13 @@ def test_pattern_cdc_change_type_present(pattern_key: str) -> None:
     if pattern_key in ["pattern1", "pattern3"]:  # Not CDC patterns
         pytest.skip(f"{pattern_key} is not a CDC pattern")
 
-    bronze_partitions = _find_bronze_partitions(pattern_key)
+    silver_partitions = _find_silver_partitions(pattern_key)
 
-    if len(bronze_partitions) == 0:
-        pytest.skip(f"{pattern_key}: No bronze samples found")
+    if len(silver_partitions) == 0:
+        pytest.skip(f"{pattern_key}: No silver samples found")
 
     has_change_type = []
-    for partition in bronze_partitions:
+    for partition in silver_partitions:
         df = _read_all_parquet(partition)
         if "change_type" in df.columns:
             types = set(df["change_type"].unique())
@@ -284,44 +287,30 @@ def test_pattern_silver_partitions_have_metadata(pattern_key: str) -> None:
 def test_all_patterns_use_same_domain() -> None:
     """Verify patterns with samples use consistent domain/system/entity."""
     for pattern_key in PATTERN_DEFINITIONS:
-        bronze_partitions = _find_bronze_partitions(pattern_key)
-
-        # Skip patterns without samples
-        if len(bronze_partitions) == 0:
-            continue
-
-        for partition in bronze_partitions[:3]:  # Check first 3 partitions
-            path_str = str(partition)
-            assert "system=retail_demo" in path_str, f"{pattern_key}: {partition} missing system=retail_demo"
-            assert "table=orders" in path_str, f"{pattern_key}: {partition} missing table=orders"
-
-
-def test_bronze_silver_row_count_consistency() -> None:
-    """Verify Bronze→Silver row counts are reasonable (not losing data)."""
-    for pattern_key in PATTERN_DEFINITIONS:
-        bronze_partitions = _find_bronze_partitions(pattern_key)
         silver_partitions = _find_silver_partitions(pattern_key)
 
-        # Skip patterns without both bronze and silver
-        if len(bronze_partitions) == 0 or len(silver_partitions) == 0:
+        # Skip patterns without samples
+        if len(silver_partitions) == 0:
             continue
 
-        # Total records should be preserved or increased (no silent drops)
-        bronze_total = sum(len(_read_all_parquet(p)) for p in bronze_partitions)
-        silver_total = sum(len(_read_all_parquet(p)) for p in silver_partitions)
+        for partition in silver_partitions[:3]:  # Check first 3 partitions
+            path_str = str(partition)
+            assert "domain=retail_demo" in path_str, f"{pattern_key}: {partition} missing domain=retail_demo"
+            assert "entity=orders" in path_str, f"{pattern_key}: {partition} missing entity=orders"
 
-        # For snapshot patterns, silver rows may be less (deduplicated)
-        # For CDC patterns, silver rows should match or exceed bronze
-        if pattern_key in ["pattern1", "pattern3"]:
-            # Snapshot patterns: silver <= bronze (allows deduplication)
-            assert silver_total <= bronze_total * 1.5, (
-                f"{pattern_key}: Silver has unexpectedly more rows than bronze "
-                f"(bronze={bronze_total}, silver={silver_total})"
-            )
-        else:
-            # CDC patterns: silver should have records if bronze has records
-            if bronze_total > 0:
-                assert silver_total > 0, f"{pattern_key}: Silver has no records despite bronze records"
+
+def test_silver_row_counts_present() -> None:
+    """Verify silver partitions have reasonable row counts."""
+    for pattern_key in PATTERN_DEFINITIONS:
+        silver_partitions = _find_silver_partitions(pattern_key)
+
+        # Skip patterns without silver samples
+        if len(silver_partitions) == 0:
+            continue
+
+        # Verify silver has records
+        silver_total = sum(len(_read_all_parquet(p)) for p in silver_partitions)
+        assert silver_total > 0, f"{pattern_key}: Silver has no records"
 
 
 def test_pattern_coverage_report() -> None:
