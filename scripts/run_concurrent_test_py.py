@@ -1,13 +1,15 @@
-import subprocess, sys, uuid, time
+import shutil
+import subprocess
+import sys
+import time
+import uuid
 from pathlib import Path
-import os
 
-ROOT=Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[1]
 bronze = ROOT/'sampledata'/'bronze_samples'/'sample=pattern3_scd_state'/'system=retail_demo'/'table=orders'/'dt=2025-11-28'
 config = ROOT/'docs'/'examples'/'configs'/'patterns'/'pattern_current_history.yaml'
 silver_tmp = ROOT/'output'/'silver_tmp_run_test'
 if silver_tmp.exists():
-    import shutil
     shutil.rmtree(silver_tmp)
 silver_tmp.mkdir(parents=True, exist_ok=True)
 
@@ -48,7 +50,8 @@ while True:
 
 # read outputs
 for t,p in procs:
-    out='' ; err=''
+    out = ''
+    err = ''
     stdout_path = silver_tmp / f"{t}.out"
     stderr_path = silver_tmp / f"{t}.err"
     if stdout_path.exists():
