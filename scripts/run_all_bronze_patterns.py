@@ -280,23 +280,23 @@ def main() -> int:
         run_counter = 0
         for entry in pattern_runs:
             for run_info in entry["run_dates"]:
-            run_counter += 1
-            pattern_dir = bronze_root / (
-                entry["pattern"] or Path(entry["config"]).stem
-            )
-            pattern_dir.mkdir(parents=True, exist_ok=True)
-            tasks.append(
-                {
-                    "config_path": entry["config"],
-                    "run_date": run_info["run_date"],
-                    "run_count": run_counter,
-                    "temp_path": temp_path,
-                    "output_base": pattern_dir,
-                    "total_runs": total_runs,
-                    "pattern": entry["pattern"],
-                    "sample_path": run_info.get("sample_path"),
-                }
-            )
+                run_counter += 1
+                pattern_dir = bronze_root / (
+                    entry["pattern"] or Path(entry["config"]).stem
+                )
+                pattern_dir.mkdir(parents=True, exist_ok=True)
+                tasks.append(
+                    {
+                        "config_path": entry["config"],
+                        "run_date": run_info["run_date"],
+                        "run_count": run_counter,
+                        "temp_path": temp_path,
+                        "output_base": pattern_dir,
+                        "total_runs": total_runs,
+                        "pattern": entry["pattern"],
+                        "sample_path": run_info.get("sample_path"),
+                    }
+                )
 
         results: list[tuple[str, str, bool]] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
