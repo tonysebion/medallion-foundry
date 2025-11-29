@@ -95,6 +95,11 @@ class BronzeIntent:
     owner_team: Optional[str] = None
     owner_contact: Optional[str] = None
     options: Dict[str, Any] = field(default_factory=dict)
+    # Storage backend configuration
+    source_storage: str = "local"  # "local" or "s3" - where to read source files from
+    output_storage: str = "local"  # "local" or "s3" - where to write Bronze chunks
+    output_bucket: Optional[str] = None  # Bucket name or reference (for S3)
+    output_prefix: str = ""  # Prefix within bucket (for S3)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "BronzeIntent":
@@ -121,6 +126,23 @@ class BronzeIntent:
         options = data.get("options") or {}
         if options and not isinstance(options, dict):
             raise ValueError("bronze.options must be a dictionary when provided")
+
+        # Storage backend configuration
+        source_storage = data.get("source_storage", "local")
+        if source_storage not in {"local", "s3"}:
+            raise ValueError("bronze.source_storage must be 'local' or 's3'")
+
+        output_storage = data.get("output_storage", "local")
+        if output_storage not in {"local", "s3"}:
+            raise ValueError("bronze.output_storage must be 'local' or 's3'")
+
+        output_bucket = _require_optional_str(
+            data.get("output_bucket"), "bronze.output_bucket"
+        )
+        output_prefix = data.get("output_prefix", "")
+        if output_prefix and not isinstance(output_prefix, str):
+            raise ValueError("bronze.output_prefix must be a string")
+
         return cls(
             enabled=enabled,
             source_type=source_type,
@@ -135,6 +157,10 @@ class BronzeIntent:
                 data.get("owner_contact"), "bronze.owner_contact"
             ),
             options=options,
+            source_storage=source_storage,
+            output_storage=output_storage,
+            output_bucket=output_bucket,
+            output_prefix=output_prefix,
         )
 
 
@@ -164,6 +190,11 @@ class SilverIntent:
     record_time_column: Optional[str] = None  # Column with record/event/change time
     record_time_partition: Optional[str] = None  # Partition key name (e.g., "event_date", "effective_from_date")
     load_batch_id_column: str = "load_batch_id"  # Standard column for batch tracking
+    # Storage backend configuration
+    input_storage: str = "local"  # "local" or "s3" - where to read Bronze data from
+    output_storage: str = "local"  # "local" or "s3" - where to write Silver artifacts
+    output_bucket: Optional[str] = None  # Bucket name or reference (for S3)
+    output_prefix: str = ""  # Prefix within bucket (for S3)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SilverIntent":
