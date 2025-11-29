@@ -170,17 +170,21 @@ def rewrite_config(
     temp_dir: Path,
     output_base: Path,
     pattern_folder: str | None,
+    sample_path: Path | None = None,
 ) -> str:
     config = yaml.safe_load(Path(original_path).read_text())
 
     if "bronze" in config and "path_pattern" in config["bronze"]:
         import re
 
-        config["bronze"]["path_pattern"] = re.sub(
-            r"dt=\d{4}-\d{2}-\d{2}",
-            f"dt={run_date}",
-            config["bronze"]["path_pattern"],
-        )
+        if sample_path:
+            config["bronze"]["path_pattern"] = str(sample_path)
+        else:
+            config["bronze"]["path_pattern"] = re.sub(
+                r"dt=\d{4}-\d{2}-\d{2}",
+                f"dt={run_date}",
+                config["bronze"]["path_pattern"],
+            )
 
     if "bronze" in config:
         options = config["bronze"].setdefault("options", {})
@@ -275,23 +279,24 @@ def main() -> int:
         tasks: list[Dict[str, Any]] = []
         run_counter = 0
         for entry in pattern_runs:
-            for run_date in entry["run_dates"]:
-                run_counter += 1
-                pattern_dir = bronze_root / (
-                    entry["pattern"] or Path(entry["config"]).stem
-                )
-                pattern_dir.mkdir(parents=True, exist_ok=True)
-                tasks.append(
-                    {
-                        "config_path": entry["config"],
-                        "run_date": run_date,
-                        "run_count": run_counter,
-                        "temp_path": temp_path,
-                        "output_base": pattern_dir,
-                        "total_runs": total_runs,
-                        "pattern": entry["pattern"],
-                    }
-                )
+        for run_info in entry["run_dates"]:
+            run_counter += 1
+            pattern_dir = bronze_root / (
+                entry["pattern"] or Path(entry["config"]).stem
+            )
+            pattern_dir.mkdir(parents=True, exist_ok=True)
+            tasks.append(
+                {
+                    "config_path": entry["config"],
+                    "run_date": run_info["run_date"],
+                    "run_count": run_counter,
+                    "temp_path": temp_path,
+                    "output_base": pattern_dir,
+                    "total_runs": total_runs,
+                    "pattern": entry["pattern"],
+                    "sample_path": run_info.get("sample_path"),
+                }
+            )
 
         results: list[tuple[str, str, bool]] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
