@@ -583,11 +583,28 @@ class DatasetConfig:
             bronze_storage = storage_config.get("bronze", {})
             silver_storage = storage_config.get("silver", {})
 
-            # Map storage.source to bronze.source_storage/path_pattern
+            # Map storage.source to bronze.source_storage and construct full path
             if "backend" in source_storage:
-                bronze_data.setdefault("source_storage", source_storage["backend"])
-            if "path" in source_storage:
-                bronze_data.setdefault("path_pattern", source_storage["path"])
+                backend = source_storage["backend"]
+                bronze_data.setdefault("source_storage", backend)
+
+                # Get path pattern from bronze section (relative path)
+                path_pattern = bronze_data.get("path_pattern", "")
+
+                # Construct full path from storage config + bronze.path_pattern
+                if path_pattern and not path_pattern.startswith("s3://") and not path_pattern.startswith("./"):
+                    # Path is relative, combine with storage prefix
+                    bucket = source_storage.get("bucket", "")
+                    prefix = source_storage.get("prefix", "")
+
+                    if backend == "s3":
+                        # Build S3 URI: s3://bucket/prefix/path_pattern
+                        full_path = f"s3://{bucket}/{prefix}{path_pattern}"
+                        bronze_data["path_pattern"] = full_path
+                    elif backend == "local" and prefix:
+                        # Build local path: prefix/path_pattern
+                        full_path = f"{prefix}{path_pattern}"
+                        bronze_data["path_pattern"] = full_path
 
             # Map storage.bronze to bronze.output_storage/bucket/prefix
             if "backend" in bronze_storage:
