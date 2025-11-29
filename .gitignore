@@ -232,3 +232,4 @@ _checksums.json
 /config/*.*
 sampledata/
 .claude/settings.local.json
+DATA_CORRECTNESS_VALIDATION_REPORT.json
