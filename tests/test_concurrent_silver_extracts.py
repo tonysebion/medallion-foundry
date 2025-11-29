@@ -162,9 +162,22 @@ def test_concurrent_writes_with_locks(tmp_path: Path) -> None:
                 err = stderr_path.read_text(encoding="utf-8") if stderr_path.exists() else ""
                 return (rc, out, err, t)
 
+    overall_timeout = 600
     with ThreadPoolExecutor(max_workers=3) as ex:
         futures = [ex.submit(_run_locked_chunk, t) for t in tags]
-        for fut in as_completed(futures):
+        try:
+            for fut in as_completed(futures, timeout=overall_timeout):
+                pass
+        except Exception as exc:
+            # If we hit a timeout or unexpected error, print diagnostic info
+            print(f"Timeout or error during concurrent lock test: {exc}")
+            for t in tags:
+                sfile = silver_tmp / f"{t}.status"
+                if sfile.exists():
+                    print(f"Status {t}:\n", sfile.read_text(encoding='utf-8'))
+            raise
+        # Collect results after futures have completed
+        for fut in futures:
                 rc, out, err, t = fut.result()
                 print(f"Process {t} RC={rc}")
                 print("STDOUT:\n", out[:2000])
