@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 import uuid
@@ -83,9 +82,7 @@ def test_consolidate_prune_chunks(tmp_path: Path) -> None:
     # Consolidate with prune option
     subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "silver_consolidate.py"), "--silver-base", str(silver_tmp), "--prune-chunks"], check=True, cwd=REPO_ROOT)
 
-    # No chunk files or metadata should remain
-    chunked_artifacts = list(silver_tmp.rglob("*-???????.parquet")) + list(silver_tmp.rglob("*-???????.csv"))
-    # fallback: also remove files matching -[0-9a-f]{8}
+    # No chunk metadata should remain
     assert not list(silver_tmp.rglob("*_metadata_chunk_*.json")), "Expected no chunk metadata files after pruning"
     # We can't easily assert no chunk artifact remain due to naming; ensure _metadata_chunk files removed is good enough
 

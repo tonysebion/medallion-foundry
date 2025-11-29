@@ -6,9 +6,7 @@ from core.config.dataset import (
     PolybaseExternalFileFormat,
     PolybaseExternalTable,
     PolybaseSetup,
-    EntityKind,
 )
-from pathlib import Path
 from typing import Optional
 
 

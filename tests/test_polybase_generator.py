@@ -1,7 +1,6 @@
 """Unit tests for Polybase setup generation from dataset configurations."""
 
 import pytest
-from pathlib import Path
 
 from core.config.dataset import DatasetConfig, EntityKind
 from core.polybase import generate_polybase_setup

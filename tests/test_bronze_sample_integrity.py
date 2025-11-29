@@ -8,7 +8,7 @@ import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, Tuple, cast
+from typing import Any, Dict, cast
 
 import pandas as pd
 import pytest
