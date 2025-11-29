@@ -26,7 +26,13 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List
 import yaml
 
 if TYPE_CHECKING:
-    from core.config.dataset import DatasetConfig
+    from core.config.dataset import (
+        DatasetConfig,
+        PolybaseExternalDataSource,
+        PolybaseExternalFileFormat,
+        PolybaseExternalTable,
+        PolybaseSetup,
+    )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
