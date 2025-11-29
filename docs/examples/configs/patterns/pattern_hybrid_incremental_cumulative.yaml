@@ -38,10 +38,12 @@ silver:
     - status
     - customer_id
     - changed_at
-  partition_by:
-    - change_ts_dt
+  partition_by: []
+  # IMPORTANT: SCD Type 1 (Pattern 7) stores CURRENT state only with overwrites, no history
+  # Therefore: NOT partitioned - single artifact represents current dimensional snapshot
+  # Users query: "What's the current status of order X?" - no partitioning needed
+  # SCD1 overwrites old values, so partition by change date doesn't make sense
   delete_mode: ignore
-  # V1 Unified temporal configuration: partition by record time (state change time), not load time
   record_time_column: "changed_at"  # Column with state change time
-  record_time_partition: "effective_from_date"  # Partition key name for state change date
+  record_time_partition: null  # NO partitioning for current-state-only tables
   load_batch_id_column: "load_batch_id"  # Standard column for batch tracking
