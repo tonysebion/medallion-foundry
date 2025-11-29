@@ -1,0 +1,60 @@
+{
+  "timestamp": "2025-11-28T21:29:07.150528",
+  "patterns": {
+    "pattern1": {
+      "name": "Full Events",
+      "bronze_files": 28,
+      "silver_files": 28,
+      "bronze_total_records": 0,
+      "silver_total_records": 0
+    },
+    "pattern2": {
+      "name": "CDC Events",
+      "bronze_files": 28,
+      "silver_files": 28,
+      "bronze_total_records": 0,
+      "silver_total_records": 0
+    },
+    "pattern3": {
+      "name": "SCD State",
+      "bronze_files": 28,
+      "silver_files": 28,
+      "bronze_total_records": 0,
+      "silver_total_records": 0
+    },
+    "pattern4": {
+      "name": "Hybrid CDC Point",
+      "bronze_files": 30,
+      "silver_files": 28,
+      "bronze_total_records": 0,
+      "silver_total_records": 0
+    },
+    "pattern5": {
+      "name": "Hybrid CDC Cumulative",
+      "bronze_files": 30,
+      "silver_files": 28,
+      "bronze_total_records": 0,
+      "silver_total_records": 0
+    },
+    "pattern6": {
+      "name": "Hybrid Incremental Point",
+      "bronze_files": 30,
+      "silver_files": 28,
+      "bronze_total_records": 0,
+      "silver_total_records": 0
+    },
+    "pattern7": {
+      "name": "Hybrid Incremental Cumulative",
+      "bronze_files": 30,
+      "silver_files": 28,
+      "bronze_total_records": 0,
+      "silver_total_records": 0
+    }
+  },
+  "totals": {
+    "total_bronze_files": 204,
+    "total_silver_files": 196,
+    "total_bronze_records": 0,
+    "total_silver_records": 0
+  }
+}
