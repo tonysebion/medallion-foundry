@@ -279,7 +279,7 @@ def main() -> int:
         tasks: list[Dict[str, Any]] = []
         run_counter = 0
         for entry in pattern_runs:
-        for run_info in entry["run_dates"]:
+            for run_info in entry["run_dates"]:
             run_counter += 1
             pattern_dir = bronze_root / (
                 entry["pattern"] or Path(entry["config"]).stem
