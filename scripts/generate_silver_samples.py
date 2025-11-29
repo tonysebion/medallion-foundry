@@ -321,12 +321,18 @@ def parse_args() -> argparse.Namespace:
     )
     chunking_group = parser.add_mutually_exclusive_group()
     chunking_group.add_argument(
+        "--chunking",
+        dest="chunking",
+        action="store_true",
+        help="Enable chunked generation and consolidation (slower, safer; not the default)",
+    )
+    chunking_group.add_argument(
         "--no-chunking",
         dest="chunking",
         action="store_false",
-        help="Generate Silver partitions directly instead of chunking and consolidating",
+        help="Generate Silver partitions directly without chunking/consolidation (default)",
     )
-    parser.set_defaults(chunking=True)
+    parser.set_defaults(chunking=False)
     return parser.parse_args()
 
 
