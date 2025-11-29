@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+﻿#!/usr/bin/env python
 """
 Run Bronze extraction for every sample pattern so Bronze outputs mirror the source layout.
 
@@ -149,20 +149,20 @@ def _sync_doc_bronze_samples() -> None:
 
 def run_command(cmd: list[str], description: str) -> bool:
     print("\n" + "=" * 60)
-    print(f"🔄 {description}")
-    print(f"Command: {' '.join(cmd)}")
+    print(f"Running: {description}")
+    joined_cmd = " ".join(cmd)
+    print(f"Command: {joined_cmd}")
     print("=" * 60)
     result = subprocess.run(cmd, check=False, capture_output=True, text=True)
     if result.returncode == 0:
-        print("✅ SUCCESS")
+        print("SUCCESS")
         return True
-    print(f"❌ FAILED ({description})")
+    print(f"FAILED ({description})")
     if result.stdout:
         print("STDOUT:", result.stdout.strip())
     if result.stderr:
         print("STDERR:", result.stderr.strip())
     return False
-
 
 def rewrite_config(
     original_path: str,
@@ -326,3 +326,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
