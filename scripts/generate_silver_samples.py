@@ -28,8 +28,17 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from core.config.dataset import DatasetConfig
-from core.polybase.polybase_generator import generate_polybase_setup
+from core.config.dataset import (
+    DatasetConfig,
+    PolybaseExternalDataSource,
+    PolybaseExternalFileFormat,
+    PolybaseExternalTable,
+    PolybaseSetup,
+)
+from core.polybase.polybase_generator import (
+    generate_polybase_setup,
+    generate_temporal_functions_sql,
+)
 BRONZE_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "bronze_samples"
 SILVER_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "silver_samples"
 TEMP_SILVER_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "silver_samples_tmp"
@@ -416,6 +425,7 @@ def _write_polybase_configs(pattern_configs: Dict[str, List[PatternConfig]]) -> 
             "artifact_path": artifact_relative,
             "data_source_location": base_location,
             "polybase_setup": asdict(polybase_setup),
+            "polybase_ddl": _render_polybase_ddl(polybase_setup, dataset, artifact_relative),
         }
         config_path = dataset_root / "_polybase.json"
         content = json.dumps(payload, indent=2, sort_keys=True)
@@ -425,6 +435,113 @@ def _write_polybase_configs(pattern_configs: Dict[str, List[PatternConfig]]) -> 
                 continue
         config_path.write_text(content, encoding="utf-8")
         print(f"[INFO] Wrote polybase config to {config_path}")
+
+
+def _render_polybase_ddl(
+    setup: PolybaseSetup,
+    dataset: DatasetConfig,
+    artifact_relative: str,
+) -> Dict[str, str]:
+    """Build DDL statements for Polybase setup and temporal helpers."""
+    assertions = {}
+    assertions["external_data_source"] = _external_data_source_sql(setup.external_data_source)
+    assertions["external_file_format"] = _external_file_format_sql(setup.external_file_format)
+    tables = []
+    for ext_table in setup.external_tables:
+        tables.append(
+            _external_table_sql(ext_table, dataset, artifact_relative, setup)
+        )
+    assertions["external_tables"] = "\n\n".join(tables) if tables else ""
+    assertions["temporal_functions"] = generate_temporal_functions_sql(dataset)
+    return assertions
+
+
+def _external_data_source_sql(eds: PolybaseExternalDataSource | None) -> str:
+    if not eds:
+        return ""
+    credential = (
+        f",\n    CREDENTIAL = {eds.credential_name}" if eds.credential_name else ""
+    )
+    return (
+        f"-- Create External Data Source\n"
+        f"CREATE EXTERNAL DATA SOURCE [{eds.name}]\n"
+        f"WITH (\n"
+        f"    TYPE = {eds.data_source_type},\n"
+        f"    LOCATION = '{eds.location}'{credential}\n"
+        f");\n"
+    )
+
+
+def _external_file_format_sql(eff: PolybaseExternalFileFormat | None) -> str:
+    if not eff:
+        return ""
+    compression = f",\n  COMPRESSION = '{eff.compression}'" if eff.compression else ""
+    return (
+        f"-- Create External File Format\n"
+        f"CREATE EXTERNAL FILE FORMAT [{eff.name}]\n"
+        f"WITH (\n"
+        f"  FORMAT_TYPE = {eff.format_type}{compression}\n"
+        f");\n"
+    )
+
+
+def _external_table_sql(
+    ext_table: PolybaseExternalTable,
+    dataset: DatasetConfig,
+    artifact_relative: str,
+    setup: PolybaseSetup,
+) -> str:
+    attributes = dataset.silver.attributes or []
+    partition_cols = ext_table.partition_columns or []
+    column_defs = _render_column_defs(attributes, partition_cols)
+
+    data_source_name = (
+        f"[{setup.external_data_source.name}]"
+        if setup.external_data_source
+        else "[undefined_data_source]"
+    )
+    file_format_name = (
+        f"[{setup.external_file_format.name}]"
+        if setup.external_file_format
+        else "[undefined_file_format]"
+    )
+
+    query_comments = ""
+    if ext_table.sample_queries:
+        query_comments = "\n".join(f"-- Sample query: {q}" for q in ext_table.sample_queries)
+
+    return (
+        f"-- Create External Table: {ext_table.table_name}\n"
+        f"CREATE EXTERNAL TABLE [{ext_table.schema_name}].[{ext_table.table_name}] (\n"
+        f"{column_defs}\n"
+        f")\n"
+        f"WITH (\n"
+        f"    LOCATION = '{artifact_relative}/',\n"
+        f"    DATA_SOURCE = {data_source_name},\n"
+        f"    FILE_FORMAT = {file_format_name},\n"
+        f"    REJECT_TYPE = {ext_table.reject_type},\n"
+        f"    REJECT_VALUE = {ext_table.reject_value}\n"
+        f");\n"
+        f"{query_comments}\n"
+    )
+
+
+def _render_column_defs(attributes: List[str], partition_columns: List[str]) -> str:
+    seen: set[str] = set()
+    defs: List[str] = []
+    for attr in attributes:
+        if attr in seen:
+            continue
+        seen.add(attr)
+        defs.append(f"    [{attr}] VARCHAR(255)")
+    for partition in partition_columns:
+        if partition in seen:
+            continue
+        seen.add(partition)
+        defs.append(f"    [{partition}] VARCHAR(255)")
+    if not defs:
+        defs.append("    -- No column metadata available")
+    return ",\n".join(defs)
 
 
 def _generate_for_partition(
