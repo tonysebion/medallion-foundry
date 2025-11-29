@@ -112,7 +112,7 @@ def test_pattern1_source_to_bronze_preserves_rows(
     source_df = _read_source_csv(source_path)
     assert len(source_df) > 0, f"Source data empty for {run_date}"
 
-    _run_extraction(rewritten_cfg, run_date, tmp_path, "bronze")
+    _run_extraction(rewritten_cfg, run_date, "bronze")
 
     bronze_partition = _collect_bronze_partition(bronze_out)
     bronze_df = _read_bronze_parquet(bronze_partition)
@@ -139,7 +139,7 @@ def test_pattern1_bronze_timestamp_parsing(tmp_path: Path) -> None:
     rewritten_cfg, bronze_out, _, _ = _rewrite_extraction_config(config_path, run_date, tmp_path)
 
     source_df = _read_source_csv(source_path)
-    _run_extraction(rewritten_cfg, run_date, tmp_path, "bronze")
+    _run_extraction(rewritten_cfg, run_date, "bronze")
 
     bronze_partition = _collect_bronze_partition(bronze_out)
     bronze_df = _read_bronze_parquet(bronze_partition)
@@ -174,8 +174,8 @@ def test_pattern1_silver_event_deduplication(tmp_path: Path) -> None:
         config_path, run_date, tmp_path
     )
 
-    _run_extraction(rewritten_cfg, run_date, tmp_path, "bronze")
-    _run_extraction(rewritten_cfg, run_date, tmp_path, "silver")
+    _run_extraction(rewritten_cfg, run_date, "bronze")
+    _run_extraction(rewritten_cfg, run_date, "silver")
 
     silver_df = _read_silver_parquet(silver_out, "events")
 
@@ -200,8 +200,8 @@ def test_pattern1_silver_partition_structure(tmp_path: Path) -> None:
         config_path, run_date, tmp_path
     )
 
-    _run_extraction(rewritten_cfg, run_date, tmp_path, "bronze")
-    _run_extraction(rewritten_cfg, run_date, tmp_path, "silver")
+    _run_extraction(rewritten_cfg, run_date, "bronze")
+    _run_extraction(rewritten_cfg, run_date, "silver")
 
     # Silver should be partitioned by load_date (and possibly event_date)
     silver_df = _read_silver_parquet(silver_out, "events")
@@ -224,8 +224,8 @@ def test_pattern1_silver_business_metadata(tmp_path: Path) -> None:
         config_path, run_date, tmp_path
     )
 
-    _run_extraction(rewritten_cfg, run_date, tmp_path, "bronze")
-    _run_extraction(rewritten_cfg, run_date, tmp_path, "silver")
+    _run_extraction(rewritten_cfg, run_date, "bronze")
+    _run_extraction(rewritten_cfg, run_date, "silver")
 
     silver_df = _read_silver_parquet(silver_out, "events")
 
@@ -274,7 +274,7 @@ def test_pattern2_source_to_bronze_change_type_preserved(
     source_df = _read_source_csv(source_path)
     assert "change_type" in source_df.columns, "Source missing change_type column"
 
-    _run_extraction(rewritten_cfg, run_date, tmp_path, "bronze")
+    _run_extraction(rewritten_cfg, run_date, "bronze")
 
     bronze_partition = _collect_bronze_partition(bronze_out)
     bronze_df = _read_bronze_parquet(bronze_partition)
@@ -304,7 +304,7 @@ def test_pattern2_cdc_event_counts_by_type(tmp_path: Path) -> None:
     source_df = _read_source_csv(source_path)
     source_counts = source_df["change_type"].value_counts().to_dict()
 
-    _run_extraction(rewritten_cfg, run_date, tmp_path, "bronze")
+    _run_extraction(rewritten_cfg, run_date, "bronze")
 
     bronze_partition = _collect_bronze_partition(bronze_out)
     bronze_df = _read_bronze_parquet(bronze_partition)
@@ -332,8 +332,8 @@ def test_pattern2_silver_append_log_preserves_history(tmp_path: Path) -> None:
         config_path, run_date, tmp_path
     )
 
-    _run_extraction(rewritten_cfg, run_date, tmp_path, "bronze")
-    _run_extraction(rewritten_cfg, run_date, tmp_path, "silver")
+    _run_extraction(rewritten_cfg, run_date, "bronze")
+    _run_extraction(rewritten_cfg, run_date, "silver")
 
     # Compare row counts
     bronze_partition = _collect_bronze_partition(bronze_out)
@@ -356,8 +356,8 @@ def test_pattern2_silver_change_type_distributions(tmp_path: Path) -> None:
         config_path, run_date, tmp_path
     )
 
-    _run_extraction(rewritten_cfg, run_date, tmp_path, "bronze")
-    _run_extraction(rewritten_cfg, run_date, tmp_path, "silver")
+    _run_extraction(rewritten_cfg, run_date, "bronze")
+    _run_extraction(rewritten_cfg, run_date, "silver")
 
     bronze_partition = _collect_bronze_partition(bronze_out)
     bronze_df = _read_bronze_parquet(bronze_partition)
@@ -383,8 +383,8 @@ def test_pattern2_timestamp_precision(tmp_path: Path) -> None:
         config_path, run_date, tmp_path
     )
 
-    _run_extraction(rewritten_cfg, run_date, tmp_path, "bronze")
-    _run_extraction(rewritten_cfg, run_date, tmp_path, "silver")
+    _run_extraction(rewritten_cfg, run_date, "bronze")
+    _run_extraction(rewritten_cfg, run_date, "silver")
 
     silver_df = _read_silver_parquet(silver_out, "events")
 
@@ -414,8 +414,8 @@ def test_pattern1_polybase_external_table_generation(tmp_path: Path) -> None:
         config_path, run_date, tmp_path
     )
 
-    _run_extraction(rewritten_cfg, run_date, tmp_path, "bronze")
-    _run_extraction(rewritten_cfg, run_date, tmp_path, "silver")
+    _run_extraction(rewritten_cfg, run_date, "bronze")
+    _run_extraction(rewritten_cfg, run_date, "silver")
 
     silver_df = _read_silver_parquet(silver_out, "events")
 
@@ -442,8 +442,8 @@ def test_pattern2_polybase_query_predicates(tmp_path: Path) -> None:
         config_path, run_date, tmp_path
     )
 
-    _run_extraction(rewritten_cfg, run_date, tmp_path, "bronze")
-    _run_extraction(rewritten_cfg, run_date, tmp_path, "silver")
+    _run_extraction(rewritten_cfg, run_date, "bronze")
+    _run_extraction(rewritten_cfg, run_date, "silver")
 
     silver_df = _read_silver_parquet(silver_out, "events")
 
