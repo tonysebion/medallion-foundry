@@ -183,19 +183,28 @@ def _discover_run_dates_s3(
 
     client = _build_s3_client(env_config)
     bucket = env_config.s3.get_bucket(bucket_ref)
-    run_dates: list[dict] = []
-    for dt_prefix in _list_s3_prefixes(client, bucket, base_root):
-        dt_name = Path(dt_prefix.rstrip("/")).name
-        if not dt_name.startswith("dt="):
-            continue
-        date_value = dt_name.split("=", 1)[1]
-        candidate = f"{base}/{dt_name}"
-        if tail:
-            candidate = f"{candidate}/{tail}"
-        sample_path = _resolve_s3_sample_path(client, bucket, candidate)
-        if not sample_path:
-            continue
-        run_dates.append({"run_date": date_value, "sample_path": sample_path})
+    run_dates_dict: dict[str, str] = {}
+    paginator = client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=base_root):
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            if not key.startswith(base_root):
+                continue
+            remainder = key[len(base_root) :].lstrip("/")
+            if not remainder.startswith("dt="):
+                continue
+            parts = remainder.split("/", 1)
+            dt_name = parts[0]
+            date_value = dt_name.split("=", 1)[1]
+            tail_path = parts[1] if len(parts) > 1 else ""
+            candidate = f"{base}/{dt_name}"
+            if tail_path:
+                candidate = f"{candidate}/{tail_path}"
+            sample_path = _resolve_s3_sample_path(client, bucket, candidate) or candidate
+            if sample_path and date_value not in run_dates_dict:
+                run_dates_dict[date_value] = sample_path
+
+    run_dates = [{"run_date": dt, "sample_path": sample} for dt, sample in sorted(run_dates_dict.items())]
 
     if not run_dates:
         raise ValueError(f"No dt= prefixes found under s3://{bucket}/{base_root}")

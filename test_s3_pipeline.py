@@ -17,7 +17,7 @@ def test_config_loading(config_path: Path):
 
     dataset, env_config = load_config_with_env(config_path)
 
-    print(f"\n[OK] Config loaded successfully")
+    print("\n[OK] Config loaded successfully")
     print(f"Dataset: {dataset.system}.{dataset.entity}")
     print(f"Environment: {dataset.environment}")
     print()
