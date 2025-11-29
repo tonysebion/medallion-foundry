@@ -1,0 +1,8 @@
+# Ignore actual environment configs with credentials
+# These contain sensitive access keys and secrets
+*.yaml
+
+# EXCEPT: Keep the example templates
+*.yaml.example
+dev.yaml.example
+prod.yaml.example
