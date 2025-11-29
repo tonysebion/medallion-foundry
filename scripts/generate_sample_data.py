@@ -737,12 +737,23 @@ def main() -> None:
         "--history-rows", type=int, default=None, help="Initial history rows for current-history pattern."
     )
     parser.add_argument(
-        "--linear-growth", type=int, default=50, help="Linear daily increment to simulate growth."
+        "--linear-growth",
+        type=int,
+        default=DEFAULT_LINEAR_GROWTH,
+        help="Linear daily increment to simulate growth.",
     )
     parser.add_argument(
         "--enable-updates",
+        dest="enable_updates",
         action="store_true",
+        default=DEFAULT_ENABLE_UPDATES,
         help="Enable updates simulation for full snapshot pattern (mutate existing order_ids across days).",
+    )
+    parser.add_argument(
+        "--disable-updates",
+        dest="enable_updates",
+        action="store_false",
+        help="Disable the update simulation even though the default dataset enables it.",
     )
     parser.add_argument(
         "--large",
