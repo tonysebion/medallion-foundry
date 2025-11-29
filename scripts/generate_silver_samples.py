@@ -441,19 +441,30 @@ def _render_polybase_ddl(
     setup: PolybaseSetup,
     dataset: DatasetConfig,
     artifact_relative: str,
-) -> Dict[str, str]:
+) -> Dict[str, Any]:
     """Build DDL statements for Polybase setup and temporal helpers."""
-    assertions = {}
-    assertions["external_data_source"] = _external_data_source_sql(setup.external_data_source)
-    assertions["external_file_format"] = _external_file_format_sql(setup.external_file_format)
-    tables = []
+    ddl: Dict[str, Any] = {}
+    ddl["external_data_source"] = _split_lines(
+        _external_data_source_sql(setup.external_data_source)
+    )
+    ddl["external_file_format"] = _split_lines(
+        _external_file_format_sql(setup.external_file_format)
+    )
+    tables: List[Dict[str, Any]] = []
     for ext_table in setup.external_tables:
         tables.append(
-            _external_table_sql(ext_table, dataset, artifact_relative, setup)
+            {
+                "table_name": ext_table.table_name,
+                "ddl": _split_lines(
+                    _external_table_sql(ext_table, dataset, artifact_relative, setup)
+                ),
+            }
         )
-    assertions["external_tables"] = "\n\n".join(tables) if tables else ""
-    assertions["temporal_functions"] = generate_temporal_functions_sql(dataset)
-    return assertions
+    ddl["external_tables"] = tables
+    ddl["temporal_functions"] = _split_lines(
+        generate_temporal_functions_sql(dataset)
+    )
+    return ddl
 
 
 def _external_data_source_sql(eds: PolybaseExternalDataSource | None) -> str:
@@ -542,6 +553,12 @@ def _render_column_defs(attributes: List[str], partition_columns: List[str]) -> 
     if not defs:
         defs.append("    -- No column metadata available")
     return ",\n".join(defs)
+
+
+def _split_lines(value: str) -> List[str]:
+    if not value:
+        return []
+    return value.splitlines()
 
 
 def _generate_for_partition(
