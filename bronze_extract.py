@@ -275,7 +275,6 @@ class BronzeOrchestrator:
                 cfgs = self._apply_load_pattern_override(cfgs)
                 for cfg in cfgs:
                     tcfg = cfg
-                    source = tcfg.source
                     cfg_dict = cfg.model_dump()
                     logger.info(
                         f"  ✓ System: {tcfg.source.system}, Table: {tcfg.source.table}, Type: {cfg_dict.get('source', {}).get('type', 'api')}, Config: {cfg_dict.get('source', {}).get('config_name')}"

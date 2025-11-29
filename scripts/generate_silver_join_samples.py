@@ -9,7 +9,7 @@ import subprocess
 import sys
 from itertools import product
 from pathlib import Path
-from typing import Any, Dict, List, cast
+from typing import Any, Dict, cast
 
 import yaml
 

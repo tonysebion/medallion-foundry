@@ -18,27 +18,20 @@ import json
 import shutil
 import subprocess
 import sys
+import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List
 
 import yaml
+
+if TYPE_CHECKING:
+    from core.config.dataset import DatasetConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from core.config.dataset import (
-    DatasetConfig,
-    PolybaseExternalDataSource,
-    PolybaseExternalFileFormat,
-    PolybaseExternalTable,
-    PolybaseSetup,
-)
-from core.polybase.polybase_generator import (
-    generate_polybase_setup,
-    generate_temporal_functions_sql,
-)
 BRONZE_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "bronze_samples"
 SILVER_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "silver_samples"
 TEMP_SILVER_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "silver_samples_tmp"

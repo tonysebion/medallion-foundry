@@ -1,11 +1,22 @@
-import subprocess,sys,uuid,time
-from pathlib import Path
-ROOT=Path(__file__).resolve().parents[1]
-bronze=str(ROOT/'sampledata'/'bronze_samples'/'sample=pattern3_scd_state'/'system=retail_demo'/'table=orders'/'dt=2025-11-28')
-silver_tmp=str(ROOT/'output'/'silver_tmp_debug2')
 import os
-os.makedirs(silver_tmp,exist_ok=True)
-config=str(ROOT/'docs'/'examples'/'configs'/'patterns'/'pattern_current_history.yaml')
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+bronze = str(
+    ROOT
+    / "sampledata"
+    / "bronze_samples"
+    / "sample=pattern3_scd_state"
+    / "system=retail_demo"
+    / "table=orders"
+    / "dt=2025-11-28"
+)
+silver_tmp = str(ROOT / "output" / "silver_tmp_debug2")
+os.makedirs(silver_tmp, exist_ok=True)
+config = str(ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml")
 procs=[]
 for i in range(3):
     tag=f'tag{i}'
