@@ -301,7 +301,7 @@ class SilverProcessor:
     def _append_metadata(self, df: pd.DataFrame) -> pd.DataFrame:
         df["load_batch_id"] = self.load_batch_id
         df["record_source"] = self.dataset.system
-        df["pipeline_run_at"] = datetime.utcnow()
+        df["pipeline_run_at"] = datetime.combine(self.run_date, datetime.min.time())
         df["environment"] = self.dataset.environment or "unknown"
         df["domain"] = self.dataset.domain or self.dataset.system
         df["entity"] = self.dataset.entity
