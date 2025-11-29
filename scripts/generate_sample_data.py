@@ -753,7 +753,15 @@ def main() -> None:
     args = parser.parse_args()
 
     global DAILY_DAYS, SAMPLE_START_DATE, FULL_DATES, CDC_DATES, CURRENT_HISTORY_DATES
-    # Use defaults for any values that were omitted on cmdline
+    # If --large flag is set, pre-fill only unspecified values with large defaults
+    if args.large:
+        if args.full_row_count is None:
+            args.full_row_count = LARGE_DEFAULT_ROW_COUNT
+        if args.cdc_row_count is None:
+            args.cdc_row_count = LARGE_DEFAULT_ROW_COUNT
+        if args.days is None:
+            args.days = LARGE_DAYS
+    # Use defaults for any values that are still omitted on the command line
     if args.days is None:
         args.days = DAILY_DAYS
     if args.start_date is None:
@@ -766,11 +774,6 @@ def main() -> None:
         args.current_rows = CURRENT_HISTORY_CURRENT
     if args.history_rows is None:
         args.history_rows = CURRENT_HISTORY_HISTORY
-
-    if args.large:
-        args.full_row_count = LARGE_DEFAULT_ROW_COUNT
-        args.cdc_row_count = LARGE_DEFAULT_ROW_COUNT
-        args.days = LARGE_DAYS
     # Set runtime variables
     DAILY_DAYS = args.days
     SAMPLE_START_DATE = args.start_date
