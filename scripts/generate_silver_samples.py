@@ -37,6 +37,34 @@ SILVER_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "silver_samples"
 TEMP_SILVER_SAMPLE_ROOT = REPO_ROOT / "sampledata" / "silver_samples_tmp"
 CONFIGS_DIR = REPO_ROOT / "docs" / "examples" / "configs" / "patterns"
 
+_dataset_config_cls: type["DatasetConfig"] | None = None
+_polybase_generator_funcs: tuple[Callable[..., Any], Callable[..., str]] | None = None
+
+
+def _get_dataset_config_class() -> type["DatasetConfig"]:
+    global _dataset_config_cls
+    if _dataset_config_cls is None:
+        from core.config.dataset import DatasetConfig
+
+        _dataset_config_cls = DatasetConfig
+    return _dataset_config_cls
+
+
+def _get_polybase_generators() -> tuple[Callable[..., Any], Callable[..., str]]:
+    global _polybase_generator_funcs
+    if _polybase_generator_funcs is None:
+        from core.polybase.polybase_generator import (
+            generate_polybase_setup,
+            generate_temporal_functions_sql,
+        )
+
+        _polybase_generator_funcs = (
+            generate_polybase_setup,
+            generate_temporal_functions_sql,
+        )
+    return _polybase_generator_funcs
+
+
 # Mapping from silver entity_kind + history_mode to silver_model name
 SILVER_MODEL_MAP = {
     ("state", "scd2"): "scd_type_2",
@@ -116,13 +144,8 @@ class PatternConfig:
     silver_model: str
     domain: str
     entity: str
-    dataset: DatasetConfig
+    dataset: "DatasetConfig"
 
-
-# Ensure project root on sys.path when executed as standalone script
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
 
 def _find_bronze_partitions() -> Iterable[Dict[str, Any]]:
@@ -196,6 +219,7 @@ def _silver_model_from_config(cfg: Dict[str, Any]) -> str:
 
 def _discover_pattern_configs() -> Dict[str, List[PatternConfig]]:
     """Discover and parse all pattern config files."""
+    DatasetConfig = _get_dataset_config_class()
     configs: Dict[str, List[PatternConfig]] = {}
     if not CONFIGS_DIR.is_dir():
         raise FileNotFoundError(f"Patterns directory {CONFIGS_DIR} not found")
@@ -665,7 +689,6 @@ def main() -> None:
             # create a deterministic-ish unique chunk_tag per task
             chunk_tag = None
             if args.chunking:
-                import uuid
                 chunk_tag = f"{partition['run_date']}-{uuid.uuid4().hex[:8]}"
             task_args = (partition, config_variant, enable_parquet, enable_csv, args.artifact_writer, chunk_tag, args.use_locks)
             task_list.append(task_args)
