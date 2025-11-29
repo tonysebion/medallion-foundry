@@ -1,0 +1,109 @@
+{
+  "validation_date": "2025-11-28T21:31:04.515109",
+  "patterns": {
+    "pattern1": {
+      "name": "Full Events",
+      "load_pattern": "full",
+      "bronze": {
+        "partitions": 0,
+        "total_records": 0,
+        "avg_per_partition": 0
+      },
+      "silver": {
+        "partitions": 28,
+        "total_records": 0,
+        "avg_per_partition": 0.0
+      }
+    },
+    "pattern2": {
+      "name": "CDC Events",
+      "load_pattern": "cdc",
+      "bronze": {
+        "partitions": 0,
+        "total_records": 0,
+        "avg_per_partition": 0
+      },
+      "silver": {
+        "partitions": 28,
+        "total_records": 0,
+        "avg_per_partition": 0.0
+      }
+    },
+    "pattern3": {
+      "name": "SCD State",
+      "load_pattern": "full",
+      "bronze": {
+        "partitions": 0,
+        "total_records": 0,
+        "avg_per_partition": 0
+      },
+      "silver": {
+        "partitions": 28,
+        "total_records": 0,
+        "avg_per_partition": 0.0
+      }
+    },
+    "pattern4": {
+      "name": "Hybrid CDC Point",
+      "load_pattern": "cdc",
+      "bronze": {
+        "partitions": 0,
+        "total_records": 0,
+        "avg_per_partition": 0
+      },
+      "silver": {
+        "partitions": 28,
+        "total_records": 0,
+        "avg_per_partition": 0.0
+      }
+    },
+    "pattern5": {
+      "name": "Hybrid CDC Cumulative",
+      "load_pattern": "cdc",
+      "bronze": {
+        "partitions": 0,
+        "total_records": 0,
+        "avg_per_partition": 0
+      },
+      "silver": {
+        "partitions": 28,
+        "total_records": 0,
+        "avg_per_partition": 0.0
+      }
+    },
+    "pattern6": {
+      "name": "Hybrid Incremental Point",
+      "load_pattern": "cdc",
+      "bronze": {
+        "partitions": 0,
+        "total_records": 0,
+        "avg_per_partition": 0
+      },
+      "silver": {
+        "partitions": 28,
+        "total_records": 0,
+        "avg_per_partition": 0.0
+      }
+    },
+    "pattern7": {
+      "name": "Hybrid Incremental Cumulative",
+      "load_pattern": "cdc",
+      "bronze": {
+        "partitions": 0,
+        "total_records": 0,
+        "avg_per_partition": 0
+      },
+      "silver": {
+        "partitions": 28,
+        "total_records": 0,
+        "avg_per_partition": 0.0
+      }
+    }
+  },
+  "quality_metrics": {
+    "total_samples": 196,
+    "total_records": 0,
+    "patterns_validated": 7,
+    "avg_records_per_partition": 0.0
+  }
+}
