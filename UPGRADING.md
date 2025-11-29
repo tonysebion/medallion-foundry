@@ -29,16 +29,7 @@
    ```
 5. Ensure Bronze fixtures exist before testing or extraction by running `python scripts/generate_sample_data.py` (or providing an equivalent `sampledata/source_samples` tree); the old bootstrap helper is no longer available.
 
-To generate a larger, 2-month dataset with 250K base rows and daily growth, use:
-
-```powershell
-python scripts/generate_sample_data.py --large --days 60 --full-row-count 250000 --cdc-row-count 250000 --linear-growth 2500 --enable-updates
-```
-
-Notes:
-- The `--large` flag will set the row counts to 250,000 and span 60 days by default.
-- `--linear-growth` allows you to simulate daily growth in rows. Use smaller values for dev/test.
-- `--enable-updates` simulates records persisting across daily full snapshots with occasional updates (so that Silver merges and SCD flows can be validated).
+Previously the large-scale command above was required; the script now defaults to 60 days, 250K rows (full/CDC), linear growth of 2500, and the update mutation pattern so that reruns reproduce the same fixture without extra flags. Use the CLI to override any of those values when you need a different footprint.
 6. Remove any workflows or docs still invoking `--stream`/`--resume`; reruns now rely on `_metadata.json`/`_checksums.json` plus Bronze load patterns.
 
 ### Future (Post 1.1.0)

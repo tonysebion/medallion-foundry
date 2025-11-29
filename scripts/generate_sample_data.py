@@ -39,7 +39,7 @@ SAMPLE_BRONZE_SAMPLES = REPO_ROOT / "sampledata" / "bronze_samples"
 # Mirror the generated source_samples into sampledata/bronze_samples for quick lookups
 
 SAMPLE_START_DATE = date(2025, 11, 13)
-DAILY_DAYS = 28
+DAILY_DAYS = 60
 
 
 def load_pattern_configs() -> Dict[str, Any]:
@@ -212,8 +212,8 @@ def _write_chunk_files(
 def generate_full_snapshot(
     seed: int = 42,
     row_count: int = FULL_ROW_COUNT,
-    linear_growth: int = 50,
-    enable_updates: bool = False,
+    linear_growth: int = DEFAULT_LINEAR_GROWTH,
+    enable_updates: bool = DEFAULT_ENABLE_UPDATES,
 ) -> None:
     pattern_id = _pattern_dir("full")
     runtime = _get_runtime_values(pattern_id)
