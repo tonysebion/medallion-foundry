@@ -27,6 +27,7 @@ if str(REPO_ROOT) not in sys.path:
 import boto3  # noqa: E402
 import yaml  # noqa: E402
 
+from botocore.exceptions import ClientError
 from core.config.loader import load_config_with_env
 from core.config.environment import EnvironmentConfig
 BRONZE_SAMPLE_ROOT = Path("sampledata/bronze_samples")
@@ -128,6 +129,28 @@ def _list_s3_prefixes(client, bucket: str, prefix: str) -> Iterable[str]:
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix, Delimiter="/"):
         for cp in page.get("CommonPrefixes", []):
             yield cp["Prefix"]
+
+
+def _object_exists(client, bucket: str, key: str) -> bool:
+    try:
+        client.head_object(Bucket=bucket, Key=key)
+        return True
+    except ClientError as exc:
+        if exc.response["Error"]["Code"] in {"NoSuchKey", "404"}:
+            return False
+        raise
+
+
+def _resolve_s3_sample_path(client, bucket: str, candidate: str) -> str | None:
+    normalized = candidate.rstrip("/")
+    if "." in Path(normalized).name:
+        return normalized if _object_exists(client, bucket, normalized) else None
+
+    for ext in ("parquet", "csv"):
+        candidate_with_ext = f"{normalized}.{ext}"
+        if _object_exists(client, bucket, candidate_with_ext):
+            return candidate_with_ext
+    return None
 
 
 def _discover_run_dates_s3(

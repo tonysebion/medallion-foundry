@@ -170,7 +170,7 @@ def test_file_reading(env_config):
                             break
                         elif subitem.endswith(".csv") and not csv_file:
                             csv_file = subitem
-                except:
+                except Exception:
                     pass
 
                 if parquet_file:
