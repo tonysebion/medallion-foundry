@@ -161,8 +161,7 @@ def test_sample_coverage_summary() -> None:
     report_path.write_text(json.dumps({
         "patterns": summary,
         "totals": {
-            "total_partitions": total_partitions,
-            "total_bronze_records": total_bronze_records,
+            "total_silver_partitions": total_silver_partitions,
             "total_silver_records": total_silver_records,
         }
     }, indent=2))
@@ -195,17 +194,20 @@ def test_pattern_silver_has_data(pattern_key: str) -> None:
 
 
 @pytest.mark.parametrize("pattern_key", list(PATTERN_DEFINITIONS.keys()))
-def test_pattern_bronze_natural_key_present(pattern_key: str) -> None:
-    """Verify order_id (natural key) present in all bronze samples."""
-    bronze_partitions = _find_bronze_partitions(pattern_key)
+def test_pattern_silver_natural_key_present(pattern_key: str) -> None:
+    """Verify order_id (natural key) present in all silver samples."""
+    silver_partitions = _find_silver_partitions(pattern_key)
+
+    if len(silver_partitions) == 0:
+        pytest.skip(f"{pattern_key}: No silver samples found")
 
     missing_key = []
-    for partition in bronze_partitions:
+    for partition in silver_partitions:
         df = _read_all_parquet(partition)
         if "order_id" not in df.columns:
             missing_key.append(str(partition))
 
-    assert not missing_key, f"{pattern_key}: {len(missing_key)} bronze partitions missing order_id"
+    assert not missing_key, f"{pattern_key}: {len(missing_key)} silver partitions missing order_id"
 
 
 @pytest.mark.parametrize("pattern_key", list(PATTERN_DEFINITIONS.keys()))
