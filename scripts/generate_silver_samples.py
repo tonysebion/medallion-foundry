@@ -24,6 +24,10 @@ from typing import Any, Dict, Iterable, List, cast
 
 import yaml
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from core.config.dataset import DatasetConfig
 from core.polybase.polybase_generator import generate_polybase_setup
 
