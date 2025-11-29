@@ -106,6 +106,9 @@ def test_concurrent_writes_with_locks(tmp_path: Path) -> None:
         time.sleep(0.2)
     for p in procs:
         out, err = p.communicate()
+        print("Process finished RC=", p.returncode)
+        print("STDOUT:\n", out[:2000])
+        print("STDERR:\n", err[:2000])
         failures.append((p.returncode, out, err))
     nonzeros = [t for t in failures if t[0] != 0]
     if nonzeros:
