@@ -107,6 +107,8 @@ FULL_ROW_COUNT = 250_000
 CDC_ROW_COUNT = 250_000
 CURRENT_HISTORY_CURRENT = 250_000
 CURRENT_HISTORY_HISTORY = 100_000
+HYBRID_REFERENCE_ROWS = 150
+HYBRID_DELTA_ROWS_PER_DAY = 50
 LARGE_DEFAULT_ROW_COUNT = 250_000
 LARGE_DAYS = 60
 DEFAULT_LINEAR_GROWTH = 2500
@@ -207,6 +209,30 @@ def _write_chunk_files(
         files.append(parquet_path)
 
     return files
+
+
+def _build_hybrid_reference_rows(
+    run_date: str, rng: Random, row_count: int, order_id_offset: int
+) -> List[Dict[str, object]]:
+    """Produce a deterministic set of reference rows for hybrid patterns."""
+    start = datetime.fromisoformat(f"{run_date}T00:00:00")
+    interval_seconds = max(1, 86400 // max(row_count, 1))
+    statuses = ["new", "processing", "shipped", "delivered", "returned"]
+    rows: List[Dict[str, object]] = []
+    for idx in range(row_count):
+        event_time = start + timedelta(seconds=idx * interval_seconds)
+        rows.append(
+            {
+                "order_id": f"HYB-{order_id_offset + idx + 1:08d}",
+                "customer_id": f"CUST-{rng.randint(1000, 9999)}",
+                "status": rng.choice(statuses),
+                "order_total": round(rng.uniform(10.0, 300.0), 2),
+                "changed_at": event_time.isoformat() + "Z",
+                "updated_at": event_time.isoformat() + "Z",
+                "run_date": run_date,
+            }
+        )
+    return rows
 
 
 def generate_full_snapshot(
@@ -333,22 +359,11 @@ def _write_hybrid_reference(
     delta_patterns: List[str],
     delta_mode: str,
     formats: Iterable[str],
+    row_count: int,
+    order_id_offset: int,
 ) -> None:
     rng = Random(seed)
-    rows: List[Dict[str, object]] = []
-    start = datetime.fromisoformat(f"{date_str}T00:00:00")
-    for order_id in range(1, 151):
-        rows.append(
-            {
-                "order_id": f"HYB-{order_id:05d}",
-                "customer_id": f"CUST-{rng.randint(1000, 9999)}",
-                "status": rng.choice(["new", "shipped"]),
-                "order_total": round(rng.uniform(10.0, 250.0), 2),
-                "changed_at": (start + timedelta(hours=order_id)).isoformat() + "Z",
-                "updated_at": (start + timedelta(hours=order_id)).isoformat() + "Z",
-                "run_date": date_str,
-            }
-        )
+    rows = _build_hybrid_reference_rows(date_str, rng, row_count, order_id_offset)
     chunk_path = base_dir / "reference-part-0001.csv"
     _write_chunk_files(chunk_path, rows, formats=formats)
     _write_reference_metadata(base_dir, date_str, rows, delta_mode, delta_patterns)
@@ -374,19 +389,25 @@ def _write_hybrid_delta(
 
 
 def _build_delta_rows(
-    delta_pattern: str, date_str: str, seed: int
+    delta_pattern: str,
+    date_str: str,
+    seed: int,
+    row_count: int,
+    order_id_start: int,
 ) -> List[Dict[str, object]]:
     rng = Random(seed)
     start = datetime.fromisoformat(f"{date_str}T08:00:00")
+    interval_seconds = max(1, 86400 // max(row_count, 1))
     rows: List[Dict[str, object]] = []
-    for idx in range(1, 51):
-        change_time = start + timedelta(minutes=idx * 5)
+    change_types = ["insert", "update"]
+    for idx in range(row_count):
+        change_time = start + timedelta(seconds=idx * interval_seconds)
         rows.append(
             {
-                "order_id": f"HYB-{idx + 150:05d}",
+                "order_id": f"HYB-{order_id_start + idx:08d}",
                 "customer_id": f"CUST-{rng.randint(1000, 9999)}",
                 "status": rng.choice(["processing", "shipped", "cancelled"]),
-                "change_type": rng.choice(["insert", "update"]),
+                "change_type": rng.choices(change_types, weights=[0.7, 0.3])[0],
                 "changed_at": change_time.isoformat() + "Z",
                 "updated_at": change_time.isoformat() + "Z",
                 "order_total": round(rng.uniform(15.0, 300.0), 2),
@@ -672,28 +693,47 @@ def generate_hybrid_combinations(seed: int = 123) -> None:
             / f"{path_keys['system_key']}={runtime['system']}"
             / f"{path_keys['entity_key']}={runtime['entity']}"
         )
-        for ref_date in (HYBRID_REFERENCE_INITIAL, HYBRID_REFERENCE_SECOND):
-            ref_dir = base_pattern_dir / f"{path_keys['date_key']}={ref_date.isoformat()}" / "reference"
+        reference_dates = (HYBRID_REFERENCE_INITIAL, HYBRID_REFERENCE_SECOND)
+        reference_total_rows = len(reference_dates) * HYBRID_REFERENCE_ROWS
+
+        for ref_idx, ref_date in enumerate(reference_dates):
+            ref_dir = (
+                base_pattern_dir
+                / f"{path_keys['date_key']}={ref_date.isoformat()}"
+                / "reference"
+            )
             _write_hybrid_reference(
                 ref_dir,
                 ref_date.isoformat(),
-                seed,
+                seed + ref_idx,
                 [delta_pattern],
                 delta_mode,
                 formats=formats,
+                row_count=HYBRID_REFERENCE_ROWS,
+                order_id_offset=ref_idx * HYBRID_REFERENCE_ROWS,
             )
+
         cumulative_rows: List[Dict[str, object]] = []
         for offset in range(1, HYBRID_DELTA_DAYS + 1):
             delta_date = HYBRID_REFERENCE_INITIAL + timedelta(days=offset)
+            order_id_start = reference_total_rows + (offset - 1) * HYBRID_DELTA_ROWS_PER_DAY + 1
             rows = _build_delta_rows(
-                delta_pattern, delta_date.isoformat(), seed + offset * 10
+                delta_pattern,
+                delta_date.isoformat(),
+                seed + offset * 10,
+                row_count=HYBRID_DELTA_ROWS_PER_DAY,
+                order_id_start=order_id_start,
             )
             if delta_mode == "cumulative":
                 cumulative_rows.extend(rows)
                 rows_to_write = cumulative_rows.copy()
             else:
                 rows_to_write = rows
-            delta_dir = base_pattern_dir / f"{path_keys['date_key']}={delta_date.isoformat()}" / "delta"
+            delta_dir = (
+                base_pattern_dir
+                / f"{path_keys['date_key']}={delta_date.isoformat()}"
+                / "delta"
+            )
             if delta_date == HYBRID_REFERENCE_SECOND:
                 reference_run_date = HYBRID_REFERENCE_INITIAL
             elif delta_date > HYBRID_REFERENCE_SECOND:
@@ -714,7 +754,7 @@ def generate_hybrid_combinations(seed: int = 123) -> None:
 
 
 def main() -> None:
-    global DAILY_DAYS, SAMPLE_START_DATE, FULL_DATES, CDC_DATES, CURRENT_HISTORY_DATES
+    global DAILY_DAYS, SAMPLE_START_DATE, FULL_DATES, CDC_DATES, CURRENT_HISTORY_DATES, HYBRID_REFERENCE_ROWS, HYBRID_DELTA_ROWS_PER_DAY
     parser = argparse.ArgumentParser(
         description="Generate Bronze source sample datasets with configurable scale and time ranges."
     )
@@ -735,6 +775,21 @@ def main() -> None:
     )
     parser.add_argument(
         "--history-rows", type=int, default=None, help="Initial history rows for current-history pattern."
+    )
+    parser.add_argument(
+        "--hybrid-reference-rows",
+        type=int,
+        default=None,
+        help="Row count for each hybrid reference snapshot (defaults to --full-row-count).",
+    )
+    parser.add_argument(
+        "--hybrid-delta-rows",
+        type=int,
+        default=None,
+        help=(
+            "Row count for each hybrid delta partition (defaults to --cdc-row-count "
+            f"/ {HYBRID_DELTA_DAYS})."
+        ),
     )
     parser.add_argument(
         "--linear-growth",
@@ -787,6 +842,14 @@ def main() -> None:
         args.current_rows = CURRENT_HISTORY_CURRENT
     if args.history_rows is None:
         args.history_rows = CURRENT_HISTORY_HISTORY
+    if args.hybrid_reference_rows is None:
+        args.hybrid_reference_rows = args.full_row_count
+    if args.hybrid_delta_rows is None:
+        args.hybrid_delta_rows = max(1, args.cdc_row_count // max(HYBRID_DELTA_DAYS, 1))
+    args.hybrid_reference_rows = max(1, args.hybrid_reference_rows)
+    args.hybrid_delta_rows = max(1, args.hybrid_delta_rows)
+    HYBRID_REFERENCE_ROWS = args.hybrid_reference_rows
+    HYBRID_DELTA_ROWS_PER_DAY = args.hybrid_delta_rows
     # Set runtime variables
     DAILY_DAYS = args.days
     SAMPLE_START_DATE = args.start_date
