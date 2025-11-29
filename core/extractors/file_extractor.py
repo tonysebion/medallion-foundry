@@ -1,27 +1,47 @@
-"""Extractor that loads records from a local file.
+"""Extractor that loads records from local or remote files.
 
-This is primarily intended for offline development and testing scenarios
-where hitting a live API or database isn't possible.
+Supports reading from local filesystem, S3, and other storage backends
+using the fsspec streaming interface.
 """
 
 import csv
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple, cast, TYPE_CHECKING
 from datetime import date
 
 import pandas as pd
+import fsspec
 
 from core.extractors.base import BaseExtractor
+from core.storage.uri import StorageURI
+from core.storage.filesystem import create_filesystem
+
+if TYPE_CHECKING:
+    from core.config.environment import EnvironmentConfig
 
 logger = logging.getLogger(__name__)
 
 
 class FileExtractor(BaseExtractor):
-    """Load records from a local file in CSV, TSV, JSON, JSONL, or Parquet format."""
+    """Load records from local or remote files using streaming.
+
+    Supports CSV, TSV, JSON, JSONL, and Parquet formats from:
+    - Local filesystem
+    - S3 (via s3:// URIs)
+    - Azure Blob Storage (future)
+    """
 
     SUPPORTED_FORMATS = {"csv", "tsv", "json", "jsonl", "parquet"}
+
+    def __init__(self, env_config: Optional["EnvironmentConfig"] = None):
+        """Initialize FileExtractor with optional environment config.
+
+        Args:
+            env_config: Environment configuration for S3/cloud storage credentials
+        """
+        self.env_config = env_config
 
     def fetch_records(
         self,
@@ -31,16 +51,14 @@ class FileExtractor(BaseExtractor):
         source_cfg = cfg["source"]
         file_cfg = source_cfg["file"]
 
-        file_path = Path(file_cfg["path"]).expanduser()
-        if not file_path.is_absolute():
-            file_path = file_path.resolve()
+        # Parse storage URI (supports local paths and s3:// URIs)
+        path_str = file_cfg["path"]
+        uri = StorageURI.parse(path_str)
 
-        if not file_path.exists():
-            raise FileNotFoundError(f"Local data file not found: {file_path}")
-
+        # Determine file format
         file_format = file_cfg.get("format")
         if not file_format:
-            file_format = file_path.suffix.lstrip(".")
+            file_format = Path(uri.key).suffix.lstrip(".")
         file_format = (file_format or "csv").lower()
 
         if file_format not in self.SUPPORTED_FORMATS:
@@ -49,22 +67,28 @@ class FileExtractor(BaseExtractor):
                 f"Supported formats: {sorted(self.SUPPORTED_FORMATS)}"
             )
 
-        logger.info(f"Loading records from {file_path} as {file_format.upper()}")
+        # Create filesystem (local or S3)
+        fs = create_filesystem(uri, self.env_config)
+        fsspec_path = uri.to_fsspec_path(self.env_config)
 
+        logger.info(f"Loading records from {fsspec_path} as {file_format.upper()}")
+
+        # Read based on format using streaming
         if file_format in {"csv", "tsv"}:
             delimiter = file_cfg.get("delimiter") or (
                 "\t" if file_format == "tsv" else ","
             )
-            records = self._read_csv(file_path, delimiter, file_cfg)
+            records = self._read_csv_streaming(fs, fsspec_path, delimiter, file_cfg)
         elif file_format == "json":
-            records = self._read_json(file_path, file_cfg)
+            records = self._read_json_streaming(fs, fsspec_path, file_cfg)
         elif file_format == "jsonl":
-            records = self._read_json_lines(file_path, file_cfg)
+            records = self._read_jsonl_streaming(fs, fsspec_path, file_cfg)
         elif file_format == "parquet":
-            records = self._read_parquet(file_path, file_cfg)
+            records = self._read_parquet_streaming(fs, fsspec_path, file_cfg)
         else:
             raise ValueError(f"Unsupported file format '{file_format}'")
 
+        # Apply filtering
         limit_rows = file_cfg.get("limit_rows")
         if limit_rows:
             records = records[:limit_rows]
@@ -76,12 +100,17 @@ class FileExtractor(BaseExtractor):
                 filtered.append({col: record.get(col) for col in columns})
             records = filtered
 
-        logger.info(f"Loaded {len(records)} records from local file {file_path}")
+        logger.info(f"Loaded {len(records)} records from {fsspec_path}")
         return records, None
 
-    def _read_csv(
-        self, file_path: Path, delimiter: str, file_cfg: Dict[str, Any]
+    def _read_csv_streaming(
+        self,
+        fs: fsspec.AbstractFileSystem,
+        path: str,
+        delimiter: str,
+        file_cfg: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
+        """Read CSV using pandas with fsspec streaming."""
         encoding = file_cfg.get("encoding", "utf-8")
         has_header = file_cfg.get("has_header", True)
         fieldnames = file_cfg.get("fieldnames")
@@ -91,25 +120,42 @@ class FileExtractor(BaseExtractor):
                 "CSV/TSV files without headers require 'fieldnames' in source.file config"
             )
 
-        with file_path.open("r", encoding=encoding, newline="") as handle:
+        # Use pandas with fsspec for streaming
+        with fs.open(path, "r", encoding=encoding) as f:
             if has_header:
-                reader = csv.DictReader(handle, delimiter=delimiter)
+                df = pd.read_csv(f, delimiter=delimiter)
             else:
-                reader = csv.DictReader(
-                    handle, fieldnames=fieldnames, delimiter=delimiter
-                )
-            records = [dict(row) for row in reader]
+                df = pd.read_csv(f, delimiter=delimiter, names=fieldnames, header=None)
 
-        return records
+        return cast(List[Dict[str, Any]], df.to_dict(orient="records"))
 
-    def _read_json(
-        self, file_path: Path, file_cfg: Dict[str, Any]
+    def _read_parquet_streaming(
+        self,
+        fs: fsspec.AbstractFileSystem,
+        path: str,
+        file_cfg: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
+        """Read Parquet using pandas with fsspec streaming."""
+        columns = file_cfg.get("columns")
+
+        # Pandas can read Parquet directly from fsspec filesystem
+        with fs.open(path, "rb") as f:
+            df = pd.read_parquet(f, columns=columns)
+
+        return cast(List[Dict[str, Any]], df.to_dict(orient="records"))
+
+    def _read_json_streaming(
+        self,
+        fs: fsspec.AbstractFileSystem,
+        path: str,
+        file_cfg: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Read JSON file via fsspec."""
         encoding = file_cfg.get("encoding", "utf-8")
         data_path = file_cfg.get("json_path")
 
-        with file_path.open("r", encoding=encoding) as handle:
-            data = json.load(handle)
+        with fs.open(path, "r", encoding=encoding) as f:
+            data = json.load(f)
 
         if data_path:
             for part in data_path.split("."):
@@ -117,36 +163,61 @@ class FileExtractor(BaseExtractor):
                     data = data.get(part, [])
                 else:
                     raise ValueError(
-                        f"Cannot follow json_path '{data_path}' in file {file_path}"
+                        f"Cannot follow json_path '{data_path}' in file {path}"
                     )
 
         if isinstance(data, list):
-            return data
+            return cast(List[Dict[str, Any]], data)
 
         if isinstance(data, dict):
             return [data]
 
-        raise ValueError(
-            f"JSON file {file_path} must contain an object or list of objects"
-        )
+        raise ValueError(f"JSON file {path} must contain an object or list of objects")
+
+    def _read_jsonl_streaming(
+        self,
+        fs: fsspec.AbstractFileSystem,
+        path: str,
+        file_cfg: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Read JSON Lines file via fsspec."""
+        encoding = file_cfg.get("encoding", "utf-8")
+        records: List[Dict[str, Any]] = []
+
+        with fs.open(path, "r", encoding=encoding) as f:
+            for line in f:
+                line_str = line.strip() if isinstance(line, str) else line.decode(encoding).strip()
+                if not line_str:
+                    continue
+                records.append(json.loads(line_str))
+
+        return records
+
+    # Legacy methods for backward compatibility (deprecated)
+    def _read_csv(
+        self, file_path: Path, delimiter: str, file_cfg: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Legacy CSV reader - use _read_csv_streaming instead."""
+        fs = fsspec.filesystem("file")
+        return self._read_csv_streaming(fs, str(file_path), delimiter, file_cfg)
+
+    def _read_json(
+        self, file_path: Path, file_cfg: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Legacy JSON reader - use _read_json_streaming instead."""
+        fs = fsspec.filesystem("file")
+        return self._read_json_streaming(fs, str(file_path), file_cfg)
 
     def _read_json_lines(
         self, file_path: Path, file_cfg: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
-        encoding = file_cfg.get("encoding", "utf-8")
-        records: List[Dict[str, Any]] = []
-
-        with file_path.open("r", encoding=encoding) as handle:
-            for line in handle:
-                if not line.strip():
-                    continue
-                records.append(json.loads(line))
-
-        return records
+        """Legacy JSONL reader - use _read_jsonl_streaming instead."""
+        fs = fsspec.filesystem("file")
+        return self._read_jsonl_streaming(fs, str(file_path), file_cfg)
 
     def _read_parquet(
         self, file_path: Path, file_cfg: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
-        columns = file_cfg.get("columns")
-        df = pd.read_parquet(file_path, columns=columns)
-        return cast(List[Dict[str, Any]], df.to_dict(orient="records"))
+        """Legacy Parquet reader - use _read_parquet_streaming instead."""
+        fs = fsspec.filesystem("file")
+        return self._read_parquet_streaming(fs, str(file_path), file_cfg)

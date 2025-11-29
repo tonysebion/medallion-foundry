@@ -1,0 +1,19 @@
+# Development Environment Configuration
+# This file contains storage backend settings for local development
+
+name: dev
+
+s3:
+  # MinIO local S3-compatible storage for development
+  endpoint_url: http://localhost:9000
+  access_key_id: minioadmin
+  secret_access_key: minioadmin
+  region: us-east-1
+
+  # Named bucket references
+  # Pattern configs can reference these by name (e.g., "source_data")
+  # or use actual bucket names directly
+  buckets:
+    source_data: dev-source-bucket
+    bronze_data: dev-bronze-bucket
+    silver_data: dev-silver-bucket

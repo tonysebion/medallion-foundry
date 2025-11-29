@@ -6,9 +6,10 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, cast, TYPE_CHECKING
 
 import pandas as pd
+import fsspec
 
 from core.config.dataset import (
     DatasetConfig,
@@ -19,6 +20,11 @@ from core.config.dataset import (
     SchemaMode,
 )
 from core.silver.artifacts import DatasetWriter
+from core.storage.uri import StorageURI
+from core.storage.filesystem import create_filesystem
+
+if TYPE_CHECKING:
+    from core.config.environment import EnvironmentConfig
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +55,7 @@ class SilverProcessor:
         silver_partition: Path,
         run_date: date,
         *,
+        env_config: Optional["EnvironmentConfig"] = None,
         write_parquet: bool = True,
         write_csv: bool = False,
         parquet_compression: str = "snappy",
@@ -58,6 +65,7 @@ class SilverProcessor:
         self.bronze_path = bronze_path
         self.silver_partition = silver_partition
         self.run_date = run_date
+        self.env_config = env_config
         self.write_parquet = write_parquet
         self.write_csv = write_csv
         self.parquet_compression = parquet_compression
@@ -125,17 +133,97 @@ class SilverProcessor:
     # ------------------------------------------------------------------ helpers
 
     def _load_bronze_dataframe(self) -> pd.DataFrame:
+        """Load Bronze data from local or S3 storage."""
+        # Determine storage backend
+        input_storage = self.dataset.silver.input_storage
+
+        if input_storage == "local":
+            return self._load_bronze_from_local()
+        elif input_storage == "s3":
+            return self._load_bronze_from_s3()
+        else:
+            raise ValueError(f"Unsupported Silver input storage: {input_storage}")
+
+    def _load_bronze_from_local(self) -> pd.DataFrame:
+        """Load Bronze data from local filesystem (existing logic)."""
         csv_files = sorted(self.bronze_path.glob("*.csv"))
         parquet_files = sorted(self.bronze_path.glob("*.parquet"))
         frames: List[pd.DataFrame] = []
+
         for csv_path in csv_files:
             logger.debug("Reading Bronze CSV %s", csv_path.name)
             frames.append(pd.read_csv(csv_path))
+
         for parquet_path in parquet_files:
             logger.debug("Reading Bronze Parquet %s", parquet_path.name)
             frames.append(pd.read_parquet(parquet_path))
+
         if not frames:
             raise FileNotFoundError(f"No chunk files found in {self.bronze_path}")
+
+        return pd.concat(frames, ignore_index=True)
+
+    def _load_bronze_from_s3(self) -> pd.DataFrame:
+        """Load Bronze data from S3 using streaming."""
+        if not self.env_config or not self.env_config.s3:
+            raise ValueError(
+                "S3 storage requires environment config with S3 settings. "
+                "Please provide an environment config when initializing SilverProcessor."
+            )
+
+        # Build S3 URI for Bronze path
+        bucket_ref = self.dataset.bronze.output_bucket or "bronze_data"
+        bucket = self.env_config.s3.get_bucket(bucket_ref)
+
+        # Convert bronze_path to S3 key
+        # bronze_path is typically a local Path object, we need to convert to S3 key
+        bronze_key = str(self.bronze_path).replace("\\", "/")
+        if bronze_key.startswith("./"):
+            bronze_key = bronze_key[2:]
+
+        # Prepend prefix if configured
+        if self.dataset.bronze.output_prefix:
+            bronze_key = f"{self.dataset.bronze.output_prefix.rstrip('/')}/{bronze_key}"
+
+        s3_uri = StorageURI(
+            backend="s3",
+            bucket=bucket,
+            key=bronze_key,
+            original=f"s3://{bucket}/{bronze_key}"
+        )
+
+        # Create filesystem
+        fs = create_filesystem(s3_uri, self.env_config)
+
+        # List files in the Bronze partition
+        fsspec_path = s3_uri.to_fsspec_path(self.env_config)
+
+        try:
+            all_files = fs.ls(fsspec_path, detail=False)
+        except FileNotFoundError:
+            raise FileNotFoundError(f"No Bronze partition found at {fsspec_path}")
+
+        # Filter for CSV and Parquet files
+        csv_files = [f for f in all_files if f.endswith(".csv")]
+        parquet_files = [f for f in all_files if f.endswith(".parquet")]
+
+        if not csv_files and not parquet_files:
+            raise FileNotFoundError(f"No chunk files found in {fsspec_path}")
+
+        frames: List[pd.DataFrame] = []
+
+        # Read CSV files
+        for csv_file in csv_files:
+            logger.debug("Reading Bronze CSV from S3: %s", csv_file)
+            with fs.open(csv_file, "r") as f:
+                frames.append(pd.read_csv(f))
+
+        # Read Parquet files
+        for parquet_file in parquet_files:
+            logger.debug("Reading Bronze Parquet from S3: %s", parquet_file)
+            with fs.open(parquet_file, "rb") as f:
+                frames.append(pd.read_parquet(f))
+
         return pd.concat(frames, ignore_index=True)
 
     def _prepare_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
