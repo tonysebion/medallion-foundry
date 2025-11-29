@@ -93,31 +93,34 @@ def test_concurrent_writes_with_locks(tmp_path: Path) -> None:
             f.unlink()
         except Exception:
             pass
-    for t in tags:
-        # Don't capture verbose output of child processes (avoid blocking on pipes)
-        stdout_path = silver_tmp / f"{t}.out"
-        stderr_path = silver_tmp / f"{t}.err"
-        p = subprocess.Popen(
-            [sys.executable, str(REPO_ROOT / "silver_extract.py"), "--config", str(config_path), "--bronze-path", str(bronze_part), "--silver-base", str(silver_tmp), "--write-parquet", "--artifact-writer", "transactional", "--chunk-tag", t, "--use-locks", "--lock-timeout", "10"],
-            cwd=REPO_ROOT,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            text=True,
-        )
-        procs.append((t, p))
-        # stagger start to reduce lock contention & avoid excessive waiting
-        time.sleep(0.2)
-    # Wait for processes to finish, then read their redirected output files
-    for t, p in procs:
-        try:
-            p.wait(timeout=300)
-        except Exception:
-            p.kill()
-            # continue; we'll collect outputs below
-    for t, p in procs:
-        # Child output redirected to DEVNULL; just check exit code
-        print("Process finished RC=", p.returncode)
-        failures.append((p.returncode, "", ""))
+        def _run_locked_chunk(t: str):
+            cmd = [
+                sys.executable,
+                str(REPO_ROOT / "silver_extract.py"),
+                "--config",
+                str(config_path),
+                "--bronze-path",
+                str(bronze_part),
+                "--silver-base",
+                str(silver_tmp),
+                "--write-parquet",
+                "--artifact-writer",
+                "transactional",
+                "--chunk-tag",
+                t,
+                "--use-locks",
+                "--lock-timeout",
+                "10",
+            ]
+            proc = subprocess.run(cmd, cwd=REPO_ROOT, capture_output=True, text=True)
+            return (proc.returncode, proc.stdout, proc.stderr, t)
+
+        with ThreadPoolExecutor(max_workers=3) as ex:
+            futures = [ex.submit(_run_locked_chunk, t) for t in tags]
+            for fut in as_completed(futures):
+                rc, out, err, t = fut.result()
+                print(f"Process {t} RC={rc}")
+                failures.append((rc, out, err))
     nonzeros = [t for t in failures if t[0] != 0]
     if nonzeros:
         for rc, out, err in nonzeros:
