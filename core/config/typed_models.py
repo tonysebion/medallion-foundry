@@ -61,6 +61,7 @@ class CustomExtractorConfig(BaseModel):
 
 
 class RunConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
     load_pattern: LoadPattern = LoadPattern.FULL
     local_output_dir: str = "./output"
     write_csv: bool = True

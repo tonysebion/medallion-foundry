@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import Enum
 from typing import Any, Callable, Dict, List, TYPE_CHECKING
 if TYPE_CHECKING:
     from core.storage.backend import StorageBackend
@@ -15,7 +16,12 @@ def list_backends() -> List[str]:
 def resolve_backend_type(config: Dict[str, Any]) -> str:
     """Determine the backend type from the provided config."""
     backend = config.get("bronze", {}).get("storage_backend", "s3")
-    return str(backend).lower()
+    if isinstance(backend, Enum):
+        backend_value = backend.value
+    else:
+        backend_value = str(backend)
+    backend_value = backend_value.split(".")[-1]
+    return backend_value.lower()
 
 
 def get_backend_factory(backend_type: str) -> Callable[[Dict[str, Any]], "StorageBackend"]:

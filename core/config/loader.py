@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import os
 from datetime import date as _date
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -18,7 +19,7 @@ from .env_substitution import apply_env_substitution
 from .typed_models import RootConfig, parse_root_config
 from core.deprecation import emit_compat
 from core.paths import build_bronze_relative_path
-from core.config.environment import EnvironmentConfig
+from core.config.environment import EnvironmentConfig, S3ConnectionConfig
 from .validation import validate_config_dict
 from .v2_validation import validate_v2_config_dict
 
@@ -213,7 +214,9 @@ def _load_environment_config(
 
     if env_file.exists():
         logger.info(f"Loading environment config: {env_file}")
-        return EnvironmentConfig.from_yaml(env_file)
+        env_config = EnvironmentConfig.from_yaml(env_file)
+        _export_s3_env_vars(env_config.s3)
+        return env_config
 
     logger.warning(
         f"Environment '{env_name}' referenced in config but not found at {env_file}"
@@ -231,6 +234,19 @@ def _build_dataset_runtime(
     if env_config:
         validated["__env_config__"] = env_config
     return validated
+
+
+def _export_s3_env_vars(config: Optional[S3ConnectionConfig]) -> None:
+    if not config:
+        return
+    if config.access_key_id:
+        os.environ["AWS_ACCESS_KEY_ID"] = config.access_key_id
+    if config.secret_access_key:
+        os.environ["AWS_SECRET_ACCESS_KEY"] = config.secret_access_key
+    if config.region:
+        os.environ["AWS_DEFAULT_REGION"] = config.region
+    if config.endpoint_url:
+        os.environ["BRONZE_S3_ENDPOINT"] = config.endpoint_url
 
 
 def ensure_root_config(cfg: Dict[str, Any]) -> RootConfig:
@@ -265,6 +281,15 @@ def _load_intent_datasets(raw: Dict[str, Any], *, config_path: Path) -> List[Dic
             merged = {**defaults, **item}
             dataset = DatasetConfig.from_dict(merged)
             env_config = _load_environment_config(config_path, dataset.environment)
+            if env_config and env_config.s3:
+                if dataset.bronze.output_bucket:
+                    dataset.bronze.output_bucket = env_config.s3.get_bucket(
+                        dataset.bronze.output_bucket
+                    )
+                if dataset.silver.output_bucket:
+                    dataset.silver.output_bucket = env_config.s3.get_bucket(
+                        dataset.silver.output_bucket
+                    )
             runtime = _build_dataset_runtime(dataset, env_config)
             runtime["source"]["config_name"] = item.get("name") or dataset.dataset_id
             entries.append(runtime)
@@ -272,6 +297,15 @@ def _load_intent_datasets(raw: Dict[str, Any], *, config_path: Path) -> List[Dic
 
     dataset = DatasetConfig.from_dict(raw)
     env_config = _load_environment_config(config_path, dataset.environment)
+    if env_config and env_config.s3:
+        if dataset.bronze.output_bucket:
+            dataset.bronze.output_bucket = env_config.s3.get_bucket(
+                dataset.bronze.output_bucket
+            )
+        if dataset.silver.output_bucket:
+            dataset.silver.output_bucket = env_config.s3.get_bucket(
+                dataset.silver.output_bucket
+            )
     return [_build_dataset_runtime(dataset, env_config)]
 
 

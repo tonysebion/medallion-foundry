@@ -57,6 +57,11 @@ def build_run_context(
         cfg_dict = cfg
         run_cfg = cfg_dict["source"].get("run", {})
 
+    if "storage_enabled" not in run_cfg:
+        bronze_backend = cfg_dict.get("platform", {}).get("bronze", {}).get("storage_backend")
+        run_cfg["storage_enabled"] = str(bronze_backend).lower() == "s3"
+        cfg_dict["source"]["run"]["storage_enabled"] = run_cfg["storage_enabled"]
+
     local_output_dir = Path(
         local_output_override or run_cfg.get("local_output_dir", "./output")
     ).resolve()

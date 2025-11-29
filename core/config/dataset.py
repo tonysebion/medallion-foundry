@@ -690,11 +690,14 @@ def dataset_to_runtime_config(dataset: DatasetConfig) -> Dict[str, Any]:
         load_pattern_value = LoadPattern.normalize(pattern_override).value
     else:
         load_pattern_value = LoadPattern.FULL.value
+
+    bronze_backend = dataset.bronze.output_storage or "local"
     local_run = {
         "load_pattern": load_pattern_value,
         "local_output_dir": bronze_base,
         "write_parquet": dataset.silver.write_parquet,
         "write_csv": dataset.silver.write_csv,
+        "storage_enabled": bronze_backend == "s3",
     }
 
     source_cfg: Dict[str, Any] = {
@@ -757,20 +760,30 @@ def dataset_to_runtime_config(dataset: DatasetConfig) -> Dict[str, Any]:
     if dataset.bronze.partition_column:
         partitioning["column"] = dataset.bronze.partition_column
 
+    bronze_cfg: Dict[str, Any] = {
+        "storage_backend": bronze_backend,
+        "local_path": bronze_base,
+        "partitioning": partitioning,
+        "output_defaults": dataset.bronze.options.get(
+            "output_defaults",
+            {
+                "allow_csv": True,
+                "allow_parquet": True,
+                "parquet_compression": "snappy",
+            },
+        ),
+    }
+    if bronze_backend == "s3":
+        bronze_cfg["s3_bucket"] = dataset.bronze.output_bucket
+        bronze_cfg["s3_prefix"] = dataset.bronze.output_prefix
+
     platform_cfg = {
-        "bronze": {
-            "storage_backend": "local",
-            "local_path": bronze_base,
-            "partitioning": partitioning,
-            "output_defaults": dataset.bronze.options.get(
-                "output_defaults",
-                {
-                    "allow_csv": True,
-                    "allow_parquet": True,
-                    "parquet_compression": "snappy",
-                },
-            ),
-        }
+        "bronze": bronze_cfg,
+        "s3_connection": {
+            "endpoint_url_env": "BRONZE_S3_ENDPOINT",
+            "access_key_env": "AWS_ACCESS_KEY_ID",
+            "secret_key_env": "AWS_SECRET_ACCESS_KEY",
+        },
     }
 
     order_column = (
