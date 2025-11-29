@@ -412,7 +412,7 @@ class SilverPromotionService:
         )
         writer = get_silver_writer(run_opts.artifact_writer_kind)
         if self.args.use_locks:
-            lock_ctx = file_lock(silver_partition, timeout=60.0)
+            lock_ctx = file_lock(silver_partition, timeout=float(self.args.lock_timeout))
         else:
             lock_ctx = None
 
@@ -539,12 +539,8 @@ class SilverPromotionService:
         bronze_size_bytes = self._calculate_directory_size(bronze_path)
         start = time.perf_counter()
         if self.args.use_locks:
-            with file_lock(silver_partition, timeout=60.0):
-                if self.args.use_locks:
-                    with file_lock(silver_partition, timeout=60.0):
-                        result = processor.run()
-                else:
-                    result = processor.run()
+            with file_lock(silver_partition, timeout=float(self.args.lock_timeout)):
+                result = processor.run()
         else:
             result = processor.run()
         runtime_seconds = time.perf_counter() - start
@@ -1250,6 +1246,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--use-locks",
         action="store_true",
         help="Acquire a local filesystem lock around write/metadata steps to avoid clash when multiple processes target same partition",
+    )
+    parser.add_argument(
+        "--lock-timeout",
+        type=float,
+        default=60.0,
+        help="Maximum seconds to wait for filesystem lock acquisition when --use-locks is set (default: 60)",
     )
     return parser
 
