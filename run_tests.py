@@ -172,14 +172,20 @@ def main():
 
     # Run black format checking
     if run_black:
+        black_targets = [
+            "core",
+            "tests",
+            "bronze_extract.py",
+            "silver_extract.py",
+        ]
+        extractors_path = ROOT_DIR / "extractors"
+        if extractors_path.exists():
+            black_targets.insert(1, "extractors")
         black_cmd = [
             "black",
             "--check",
             "--line-length=120",
-            "core",
-            "extractors",
-            "tests",
-            "bronze_extract.py",
+            *black_targets,
         ]
         results.append(run_command(black_cmd, "Code Formatting (black)"))
 

@@ -401,9 +401,6 @@ def test_pattern2_timestamp_precision(tmp_path: Path) -> None:
 
     silver_df = _read_silver_parquet(silver_out, "events")
 
-    # changed_at should be parseable as datetime
-    changed_at = silver_df["changed_at"].iloc[0]
-
     # Should be able to parse as datetime
     try:
         parsed = pd.to_datetime(silver_df["changed_at"])

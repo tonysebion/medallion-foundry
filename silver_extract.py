@@ -43,7 +43,11 @@ from core.storage.policy import enforce_storage_scope
 from core.storage.locks import file_lock
 from core.silver.artifacts import (
     apply_schema_settings,
+    build_current_view,
+    handle_error_rows,
     normalize_dataframe,
+    partition_dataframe,
+    SilverModelPlanner,
 )
 from core.silver.defaults import (
     DEFAULT_ERROR_HANDLING,
@@ -1266,3 +1270,13 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+# Export helpers that tests import directly from this module.
+_artifact_exports = (
+    apply_schema_settings,
+    build_current_view,
+    handle_error_rows,
+    normalize_dataframe,
+    partition_dataframe,
+    SilverModelPlanner,
+)
+del _artifact_exports
