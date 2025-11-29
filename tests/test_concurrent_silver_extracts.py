@@ -94,22 +94,30 @@ def test_concurrent_writes_with_locks(tmp_path: Path) -> None:
         except Exception:
             pass
     for t in tags:
+        # Don't capture verbose output of child processes (avoid blocking on pipes)
+        stdout_path = silver_tmp / f"{t}.out"
+        stderr_path = silver_tmp / f"{t}.err"
         p = subprocess.Popen(
             [sys.executable, str(REPO_ROOT / "silver_extract.py"), "--config", str(config_path), "--bronze-path", str(bronze_part), "--silver-base", str(silver_tmp), "--write-parquet", "--artifact-writer", "transactional", "--chunk-tag", t, "--use-locks", "--lock-timeout", "10"],
             cwd=REPO_ROOT,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             text=True,
         )
-        procs.append(p)
+        procs.append((t, p))
         # stagger start to reduce lock contention & avoid excessive waiting
         time.sleep(0.2)
-    for p in procs:
-        out, err = p.communicate()
+    # Wait for processes to finish, then read their redirected output files
+    for t, p in procs:
+        try:
+            p.wait(timeout=300)
+        except Exception:
+            p.kill()
+            # continue; we'll collect outputs below
+    for t, p in procs:
+        # Child output redirected to DEVNULL; just check exit code
         print("Process finished RC=", p.returncode)
-        print("STDOUT:\n", out[:2000])
-        print("STDERR:\n", err[:2000])
-        failures.append((p.returncode, out, err))
+        failures.append((p.returncode, "", ""))
     nonzeros = [t for t in failures if t[0] != 0]
     if nonzeros:
         for rc, out, err in nonzeros:

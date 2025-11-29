@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import os
 import time
+import errno
+import logging
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator, Optional
@@ -39,6 +41,7 @@ def file_lock(dir_path: Path, lock_name: str = ".silver.lock", timeout: float = 
                 with os.fdopen(fd, "w") as f:
                     f.write(str(os.getpid()))
                 fd = None
+                logging.getLogger(__name__).debug("Acquired lock %s by pid %s", lock_path, os.getpid())
                 break
             except FileExistsError:
                 # If the existing lock file looks stale (pid not running), remove it and retry
@@ -57,13 +60,25 @@ def file_lock(dir_path: Path, lock_name: str = ".silver.lock", timeout: float = 
                     try:
                         os.kill(pid, 0)
                         # Process exists, so wait
-                    except OSError:
-                        # Process does not exist -> stale lock
-                        try:
-                            lock_path.unlink()
-                        except Exception:
-                            pass
-                        continue
+                    except OSError as exc:
+                        # Only treat the lock as stale if the underlying error indicates
+                        # that the process does not exist (ESRCH). Other errors such as
+                        # EPERM (permission denied) or platform specific errors should be
+                        # treated as 'process exists' to avoid incorrectly removing the
+                        # lock while the owning process is still running.
+                        if getattr(exc, "errno", None) == errno.ESRCH:
+                            try:
+                                lock_path.unlink()
+                            except Exception:
+                                pass
+                            continue
+                        # otherwise, don't remove lock; just wait for the poll interval
+                        logging.getLogger(__name__).debug(
+                            "Lock file %s appears to be held by PID %s; os.kill raised %s",
+                            lock_path,
+                            pid,
+                            exc,
+                        )
                 if time.time() - start >= timeout:
                     raise LockAcquireError(f"Unable to acquire lock {lock_path} after {timeout}s")
                 time.sleep(poll_interval)
@@ -76,6 +91,7 @@ def file_lock(dir_path: Path, lock_name: str = ".silver.lock", timeout: float = 
                 pass
         try:
             lock_path.unlink()
+            logging.getLogger(__name__).debug("Released lock %s by pid %s", lock_path, os.getpid())
         except FileNotFoundError:
             pass
         except Exception:
