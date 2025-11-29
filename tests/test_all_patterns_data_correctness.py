@@ -110,7 +110,7 @@ def _read_metadata(directory: Path) -> Dict[str, Any]:
     for metadata_file in directory.rglob("_metadata.json"):
         try:
             return json.loads(metadata_file.read_text())
-        except:
+        except Exception:
             continue
     return {}
 

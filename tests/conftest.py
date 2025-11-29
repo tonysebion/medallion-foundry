@@ -30,7 +30,8 @@ def ensure_sample_data_available() -> None:
             except Exception as exc:  # noqa: BLE001 - we report to user rather than silently swallowing
                 pytest.exit(
                     "Bronze sample data missing and automatic generation failed; "
-                    "populate `sampledata/source_samples` before running tests (e.g., `python scripts/generate_sample_data.py`).\n"
+                    "populate `sampledata/source_samples` before running tests.\n"
+                    "(e.g., `python scripts/generate_sample_data.py`).\n"
                     f"Automatic generation error: {exc}"
                 )
         else:

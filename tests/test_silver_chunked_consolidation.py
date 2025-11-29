@@ -180,9 +180,12 @@ def test_intent_chunk_metadata_written(tmp_path: Path) -> None:
     ]
     p = subprocess.run([*cmd_base, "--chunk-tag", chunk_tag], cwd=REPO_ROOT, capture_output=True, text=True)
     if p.returncode != 0:
-        raise RuntimeError(
-            f"silver_extract failed for intent config: returncode={p.returncode}\nSTDOUT:\n{p.stdout}\nSTDERR:\n{p.stderr}"
+        msg = (
+            f"silver_extract failed for intent config: returncode={p.returncode}\n"
+            f"STDOUT:\n{p.stdout}\n"
+            f"STDERR:\n{p.stderr}"
         )
+        raise RuntimeError(msg)
 
     # Assert chunk metadata exists
     chunk_meta_files = list(silver_tmp.rglob("_metadata_chunk_*.json"))

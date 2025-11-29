@@ -48,7 +48,8 @@ class RetryPolicy:
         )
     )
     retry_if: Optional[Predicate] = None  # custom predicate
-    # Optional callback to compute delay from an exception (e.g., Retry-After). If returns None, fall back to exponential.
+    # Optional callback to compute delay from an exception (e.g., Retry-After).
+    # If it returns None, fall back to exponential backoff.
     delay_from_exception: Optional[DelayCallback] = None
 
     def should_retry(self, exc: BaseException) -> bool:

@@ -124,13 +124,6 @@ def _build_s3_client(env_config: EnvironmentConfig):
     )
 
 
-def _list_s3_prefixes(client, bucket: str, prefix: str) -> Iterable[str]:
-    paginator = client.get_paginator("list_objects_v2")
-    for page in paginator.paginate(Bucket=bucket, Prefix=prefix, Delimiter="/"):
-        for cp in page.get("CommonPrefixes", []):
-            yield cp["Prefix"]
-
-
 def _object_exists(client, bucket: str, key: str) -> bool:
     try:
         client.head_object(Bucket=bucket, Key=key)
@@ -416,6 +409,9 @@ def main() -> int:
             print(f"Environment config missing for {config_path}")
             return 1
         run_dates = _discover_run_dates(REPO_ROOT / config_path, None, env_config)
+        print(f"Pattern {entry.get('pattern', config_path)} has {len(run_dates)} dates")
+        for d in run_dates[:3]:
+            print(f"  sample path: {d['sample_path']} (run_date={d['run_date']})")
         pattern_runs.append(
             {
                 "config": config_path,

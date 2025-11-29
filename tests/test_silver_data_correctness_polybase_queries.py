@@ -167,7 +167,7 @@ def test_pattern1_polybase_query_point_selection(tmp_path: Path) -> None:
 
     # Validate results
     assert len(query_result) >= 1, f"Query returned no rows for order_id={sample_order}"
-    assert all(query_result["order_id"] == sample_order), f"Query returned rows with wrong order_id"
+    assert all(query_result["order_id"] == sample_order), "Query returned rows with wrong order_id"
 
 
 def test_pattern1_polybase_combined_predicates(tmp_path: Path) -> None:
