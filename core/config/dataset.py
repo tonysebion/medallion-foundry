@@ -454,7 +454,7 @@ class PolybaseSetup:
     iceberg_enabled: bool = False
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "PolybaseSetup":
+    def from_dict(cls, data: Optional[Dict[str, Any]]) -> "PolybaseSetup":
         if not data:
             return cls(enabled=False)
         if not isinstance(data, dict):
