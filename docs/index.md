@@ -41,10 +41,12 @@ python bronze_extract.py --config config/my_api.yaml --date 2025-11-27
 ### **I want to...**
 
 - **Learn the basics** → [README Quick Start](../README.md)
-- **Customize configs** → [`Copy & Customize Guide`](usage/beginner/COPY_AND_CUSTOMIZE.md)
-- **Set up production** → [`Intent Owner Guide`](usage/onboarding/intent-owner-guide.md)
-- **Choose the right pattern** → [`Pattern Picker`](usage/patterns/QUICK_REFERENCE.md)
-- **Troubleshoot** → [`Config Doctor`](framework/operations/CONFIG_DOCTOR.md)
+- **Customize configs** → [Copy & Customize Guide](usage/beginner/COPY_AND_CUSTOMIZE.md)
+- **Set up production** → [Intent Owner Guide](usage/onboarding/intent-owner-guide.md)
+- **Choose the right pattern** → [Pattern Picker](usage/patterns/QUICK_REFERENCE.md) - Bronze patterns + Silver models
+- **Troubleshoot** → [Config Doctor](framework/operations/CONFIG_DOCTOR.md)
+- **Set up S3 storage** → [S3 Setup Guide](framework/operations/s3-setup-guide.md)
+- **Understand Silver models** → [Silver Models Explained](usage/patterns/silver-models-explained.md)
 
 ---
 
@@ -57,12 +59,12 @@ python bronze_extract.py --config config/my_api.yaml --date 2025-11-27
 
 ### **Path 2: Production Data Pipeline (Advanced)**
 1. [Intent Owner Guide](usage/onboarding/intent-owner-guide.md) - Define your dataset
-2. [Pattern Picker](usage/patterns/QUICK_REFERENCE.md) - Choose load strategy
+2. [Pattern Picker](usage/patterns/QUICK_REFERENCE.md) - Choose Bronze pattern + Silver model
 3. [Config Doctor](framework/operations/CONFIG_DOCTOR.md) - Pre-flight checks
 
 ### **Path 3: Extend the Framework (Developer)**
 1. [Architecture](framework/architecture.md) - System design
-2. [Contributing](framework/operations/CONTRIBUTING.md) - Add features
+2. [Custom Extractor Examples](framework/extending/custom-extractor-examples.md) - Build your own extractors
 3. [Testing](framework/operations/TESTING.md) - Quality assurance
 
 ---
@@ -82,9 +84,11 @@ python bronze_extract.py --config config/my_api.yaml --date 2025-11-27
 ## 📖 **Reference**
 
 - [Configuration Reference](framework/reference/CONFIG_REFERENCE.md) - All config options
+- [Glossary](framework/reference/glossary.md) - Key terms and concepts
 - [API Documentation](api/core.md) - Code reference
 - [Operations Playbook](framework/operations/OPS_PLAYBOOK.md) - Production runbooks
-- [Troubleshooting](framework/operations/ERROR_CODES.md) - Common issues
+- [Troubleshooting Guide](framework/operations/troubleshooting-guide.md) - Common issues & solutions
+- [Scripts Overview](scripts/README.md) - Utility scripts reference
 
 ---
 
@@ -94,6 +98,8 @@ python bronze_extract.py --config config/my_api.yaml --date 2025-11-27
 1. Run `python scripts/run_demo.py` - See working examples
 2. Check [Copy & Customize Guide](usage/beginner/COPY_AND_CUSTOMIZE.md) - Step-by-step config adaptation
 3. Use [Config Doctor](framework/operations/CONFIG_DOCTOR.md) - Automated troubleshooting
-4. Search [Pattern Reference](usage/patterns/QUICK_REFERENCE.md) - Find your use case
+4. Search [Pattern Reference](usage/patterns/QUICK_REFERENCE.md) - Find Bronze + Silver combinations
+5. Check [Troubleshooting Guide](framework/operations/troubleshooting-guide.md) - Detailed problem solving
+6. Review [S3 Setup Guide](framework/operations/s3-setup-guide.md) - Storage configuration
 
 **Still stuck?** Check the [examples](../examples/) directory for working configs.

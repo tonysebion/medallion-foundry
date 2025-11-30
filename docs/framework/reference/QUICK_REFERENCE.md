@@ -268,7 +268,7 @@ grep "metadata" logs/*.log
 - **Complete Guide:** [DOCUMENTATION.md](DOCUMENTATION.md)
 - **Enhanced Features:** [ENHANCED_FEATURES.md](../../usage/patterns/ENHANCED_FEATURES.md)
 - **Config Reference:** [CONFIG_REFERENCE.md](CONFIG_REFERENCE.md)
-- **Quick Start:** [README](../../../README.md)
+- **Quick Start:** [README](../../README.md)
 
 ---
 

@@ -727,5 +727,5 @@ WHERE dt = DATE '2025-01-12'
 ## Next Steps
 
 - See [framework/reference/CONFIG_REFERENCE.md](../../framework/reference/CONFIG_REFERENCE.md) for complete configuration options
-- See [README Quick Start](../../../README.md) for basic usage
+- See [README Quick Start](../../README.md) for basic usage
 - See [EXTENDING_EXTRACTORS.md](../../framework/EXTENDING_EXTRACTORS.md) for custom extractors

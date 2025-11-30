@@ -4,7 +4,7 @@
 
 ## 🚀 **I'm New - Just Get Started**
 
-1. **[README Quick Start](../../README.md)** - Run sample data in 10 minutes
+1. **[README Quick Start](../README.md)** - Run sample data in 10 minutes
 2. **[Copy & Customize](beginner/COPY_AND_CUSTOMIZE.md)** - Adapt configs for your data
 3. **[Intent Owner Guide](onboarding/intent-owner-guide.md)** - Define datasets and ownership
 

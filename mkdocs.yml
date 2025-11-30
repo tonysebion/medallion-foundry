@@ -57,6 +57,7 @@ plugins:
 
 nav:
   - Home: index.md
+  - README: README.md
   - Setup:
     - Installation: setup/INSTALLATION.md
   - Usage:
@@ -71,9 +72,10 @@ nav:
       - New Dataset Checklist: usage/onboarding/new_dataset_checklist.md
       - Bronze Readiness Checklist: usage/onboarding/bronze_readiness_checklist.md
     - Patterns:
-      - Pattern Matrix: usage/patterns/pattern_matrix.md
+      - Pattern Picker: usage/patterns/QUICK_REFERENCE.md
       - Extraction Guidance: usage/patterns/EXTRACTION_GUIDANCE.md
       - Enhanced Features: usage/patterns/ENHANCED_FEATURES.md
+      - Silver Models Explained: usage/patterns/silver-models-explained.md
   - Reference:
     - Architecture: framework/architecture.md
     - Silver Patterns: framework/silver_patterns.md
