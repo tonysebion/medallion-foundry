@@ -11,5 +11,6 @@
     "python.testing.autoTestDiscoverOnSaveEnabled": true,
     "python.testing.cwd": "${workspaceFolder}",
     "python-envs.pythonProjects": [],
-    "makefile.configureOnOpen": false
+    "makefile.configureOnOpen": false,
+    "claudeCode.respectGitIgnore": false
 }
