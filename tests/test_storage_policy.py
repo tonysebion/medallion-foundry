@@ -9,7 +9,9 @@ import pytest
 from core.storage.policy import validate_storage_metadata, enforce_storage_scope
 
 
-def _platform(metadata: Mapping[str, object | None] | None = None, backend: str = "s3") -> dict[str, object]:
+def _platform(
+    metadata: Mapping[str, object | None] | None = None, backend: str = "s3"
+) -> dict[str, object]:
     bronze: dict[str, object] = {"storage_backend": backend}
     if metadata is not None:
         bronze["storage_metadata"] = dict(metadata)

@@ -26,7 +26,9 @@ def test_substitution_with_default():
 
 def test_missing_var_raises():
     """Test that missing variable without default raises."""
-    with pytest.raises(ValueError, match="Environment variable 'MISSING_VAR' is not set"):
+    with pytest.raises(
+        ValueError, match="Environment variable 'MISSING_VAR' is not set"
+    ):
         substitute_env_vars("${MISSING_VAR}")
 
 
@@ -35,7 +37,9 @@ def test_dict_substitution():
     os.environ["HOST"] = "localhost"
     os.environ["PORT"] = "5432"
 
-    config = {"database": {"host": "${HOST}", "port": "${PORT}", "name": "${DB_NAME:testdb}"}}
+    config = {
+        "database": {"host": "${HOST}", "port": "${PORT}", "name": "${DB_NAME:testdb}"}
+    }
 
     result = substitute_env_vars(config)
     assert result["database"]["host"] == "localhost"

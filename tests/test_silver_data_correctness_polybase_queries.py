@@ -41,7 +41,9 @@ def _run_extraction(config_path: Path, run_date: str, extraction_type: str) -> N
     )
 
 
-def _rewrite_extraction_config(original: Path, run_date: str, tmp_dir: Path) -> tuple[Path, Path, Path, Dict[str, Any]]:
+def _rewrite_extraction_config(
+    original: Path, run_date: str, tmp_dir: Path
+) -> tuple[Path, Path, Path, Dict[str, Any]]:
     """Rewrite config to use temp directories for extraction."""
     cfg = cast(Dict[str, Any], yaml.safe_load(original.read_text()))
 
@@ -75,7 +77,9 @@ def _read_silver_parquet(silver_dir: Path, model_type: str = "events") -> pd.Dat
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 
-def _extract_partition_date_from_path(partition_path: Path, partition_key: str) -> str | None:
+def _extract_partition_date_from_path(
+    partition_path: Path, partition_key: str
+) -> str | None:
     """Extract date from partition directory path."""
     for part in partition_path.parts:
         if part.startswith(f"{partition_key}="):
@@ -97,7 +101,9 @@ def test_pattern1_polybase_query_events_by_date(tmp_path: Path) -> None:
     config_path = CONFIGS_ROOT / "patterns" / "pattern_full.yaml"
     run_date = "2025-11-13"
 
-    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     _run_extraction(rewritten_cfg, run_date, "bronze")
     _run_extraction(rewritten_cfg, run_date, "silver")
@@ -106,7 +112,9 @@ def test_pattern1_polybase_query_events_by_date(tmp_path: Path) -> None:
 
     # Extract event_date from updated_at timestamp
     silver_df_converted = silver_df.copy()
-    silver_df_converted["event_date"] = pd.to_datetime(silver_df_converted["updated_at"]).dt.date
+    silver_df_converted["event_date"] = pd.to_datetime(
+        silver_df_converted["updated_at"]
+    ).dt.date
 
     # Simulate Polybase query: filter by event_date
     target_date = pd.to_datetime("2025-11-15").date()
@@ -114,7 +122,9 @@ def test_pattern1_polybase_query_events_by_date(tmp_path: Path) -> None:
 
     # Validate results
     assert len(query_result) > 0, f"Query returned no rows for event_date={target_date}"
-    assert all(query_result["event_date"] == target_date), "Query returned rows with wrong event_date"
+    assert all(
+        query_result["event_date"] == target_date
+    ), "Query returned rows with wrong event_date"
 
     # Validate required columns are present
     required_cols = {"order_id", "status", "updated_at"}
@@ -132,7 +142,9 @@ def test_pattern1_polybase_query_events_date_range(tmp_path: Path) -> None:
     config_path = CONFIGS_ROOT / "patterns" / "pattern_full.yaml"
     run_date = "2025-11-13"
 
-    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     _run_extraction(rewritten_cfg, run_date, "bronze")
     _run_extraction(rewritten_cfg, run_date, "silver")
@@ -144,12 +156,20 @@ def test_pattern1_polybase_query_events_date_range(tmp_path: Path) -> None:
     start_date = pd.to_datetime("2025-11-13").date()
     end_date = pd.to_datetime("2025-11-20").date()
 
-    query_result = silver_df[(silver_df["event_date"] >= start_date) & (silver_df["event_date"] <= end_date)]
+    query_result = silver_df[
+        (silver_df["event_date"] >= start_date) & (silver_df["event_date"] <= end_date)
+    ]
 
     # Validate results
-    assert len(query_result) > 0, f"Query returned no rows for date range [{start_date}, {end_date}]"
-    assert all(query_result["event_date"] >= start_date), "Query returned rows before start_date"
-    assert all(query_result["event_date"] <= end_date), "Query returned rows after end_date"
+    assert (
+        len(query_result) > 0
+    ), f"Query returned no rows for date range [{start_date}, {end_date}]"
+    assert all(
+        query_result["event_date"] >= start_date
+    ), "Query returned rows before start_date"
+    assert all(
+        query_result["event_date"] <= end_date
+    ), "Query returned rows after end_date"
 
 
 def test_pattern1_polybase_query_point_selection(tmp_path: Path) -> None:
@@ -161,7 +181,9 @@ def test_pattern1_polybase_query_point_selection(tmp_path: Path) -> None:
     config_path = CONFIGS_ROOT / "patterns" / "pattern_full.yaml"
     run_date = "2025-11-13"
 
-    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     _run_extraction(rewritten_cfg, run_date, "bronze")
     _run_extraction(rewritten_cfg, run_date, "silver")
@@ -174,7 +196,9 @@ def test_pattern1_polybase_query_point_selection(tmp_path: Path) -> None:
 
     # Validate results
     assert len(query_result) >= 1, f"Query returned no rows for order_id={sample_order}"
-    assert all(query_result["order_id"] == sample_order), "Query returned rows with wrong order_id"
+    assert all(
+        query_result["order_id"] == sample_order
+    ), "Query returned rows with wrong order_id"
 
 
 def test_pattern1_polybase_combined_predicates(tmp_path: Path) -> None:
@@ -187,7 +211,9 @@ def test_pattern1_polybase_combined_predicates(tmp_path: Path) -> None:
     config_path = CONFIGS_ROOT / "patterns" / "pattern_full.yaml"
     run_date = "2025-11-13"
 
-    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     _run_extraction(rewritten_cfg, run_date, "bronze")
     _run_extraction(rewritten_cfg, run_date, "silver")
@@ -204,7 +230,10 @@ def test_pattern1_polybase_combined_predicates(tmp_path: Path) -> None:
     )
 
     if sample_order:
-        query_result = silver_df[(silver_df["event_date"] == target_date) & (silver_df["order_id"] == sample_order)]
+        query_result = silver_df[
+            (silver_df["event_date"] == target_date)
+            & (silver_df["order_id"] == sample_order)
+        ]
 
         assert len(query_result) >= 1
         assert all(query_result["event_date"] == target_date)
@@ -225,7 +254,9 @@ def test_pattern2_polybase_query_by_change_type(tmp_path: Path) -> None:
     config_path = CONFIGS_ROOT / "patterns" / "pattern_cdc.yaml"
     run_date = "2025-11-13"
 
-    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     _run_extraction(rewritten_cfg, run_date, "bronze")
     _run_extraction(rewritten_cfg, run_date, "silver")
@@ -237,7 +268,9 @@ def test_pattern2_polybase_query_by_change_type(tmp_path: Path) -> None:
         query_result = silver_df[silver_df["change_type"] == "insert"]
 
         assert len(query_result) > 0, "No insert events found"
-        assert all(query_result["change_type"] == "insert"), "Query returned non-insert events"
+        assert all(
+            query_result["change_type"] == "insert"
+        ), "Query returned non-insert events"
 
 
 # ============================================================================
@@ -256,7 +289,9 @@ def test_pattern3_polybase_query_state_as_of(tmp_path: Path) -> None:
     config_path = CONFIGS_ROOT / "patterns" / "pattern_current_history.yaml"
     run_date = "2025-11-13"
 
-    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     _run_extraction(rewritten_cfg, run_date, "bronze")
     _run_extraction(rewritten_cfg, run_date, "silver")
@@ -277,7 +312,8 @@ def test_pattern3_polybase_query_state_as_of(tmp_path: Path) -> None:
     )
 
     query_result = silver_df[
-        (silver_df["from_date"] <= target_date) & ((silver_df["to_date"].isna()) | (silver_df["to_date"] > target_date))
+        (silver_df["from_date"] <= target_date)
+        & ((silver_df["to_date"].isna()) | (silver_df["to_date"] > target_date))
     ]
 
     # Validate: one record per entity as of target date
@@ -301,13 +337,16 @@ def test_pattern1_silver_attribute_values_match_source(tmp_path: Path) -> None:
     config_path = CONFIGS_ROOT / "patterns" / "pattern_full.yaml"
     run_date = "2025-11-13"
     source_path = (
-        SOURCE_ROOT / f"sample=pattern1_full_events/system=retail_demo/table=orders/dt={run_date}/full-part-0001.csv"
+        SOURCE_ROOT
+        / f"sample=pattern1_full_events/system=retail_demo/table=orders/dt={run_date}/full-part-0001.csv"
     )
 
     if not source_path.exists():
         pytest.skip(f"Source data not found for {run_date}")
 
-    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     source_df = _read_source_csv(source_path)
     _run_extraction(rewritten_cfg, run_date, "bronze")
@@ -323,13 +362,16 @@ def test_pattern1_silver_attribute_values_match_source(tmp_path: Path) -> None:
 
         # Find corresponding Silver row
         silver_rows = silver_df[silver_df["order_id"] == order_id]
-        assert len(silver_rows) >= 1, f"Order {order_id} from source not found in Silver"
+        assert (
+            len(silver_rows) >= 1
+        ), f"Order {order_id} from source not found in Silver"
 
         silver_row = silver_rows.iloc[0]
 
         # Validate key attributes match
         assert silver_row["status"] == src_row["status"], (
-            f"Status mismatch for {order_id}: " f"source={src_row['status']}, silver={silver_row['status']}"
+            f"Status mismatch for {order_id}: "
+            f"source={src_row['status']}, silver={silver_row['status']}"
         )
 
         # Validate timestamp is present and parseable
@@ -347,13 +389,16 @@ def test_pattern2_silver_cdc_events_match_source(tmp_path: Path) -> None:
     config_path = CONFIGS_ROOT / "patterns" / "pattern_cdc.yaml"
     run_date = "2025-11-13"
     source_path = (
-        SOURCE_ROOT / f"sample=pattern2_cdc_events/system=retail_demo/table=orders/dt={run_date}/cdc-part-0001.csv"
+        SOURCE_ROOT
+        / f"sample=pattern2_cdc_events/system=retail_demo/table=orders/dt={run_date}/cdc-part-0001.csv"
     )
 
     if not source_path.exists():
         pytest.skip(f"Source data not found for {run_date}")
 
-    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     source_df = _read_source_csv(source_path)
     _run_extraction(rewritten_cfg, run_date, "bronze")
@@ -367,7 +412,8 @@ def test_pattern2_silver_cdc_events_match_source(tmp_path: Path) -> None:
         silver_change_types = set(silver_df["change_type"].unique())
 
         assert source_change_types <= silver_change_types, (
-            f"Silver missing change_type values: " f"source={source_change_types}, silver={silver_change_types}"
+            f"Silver missing change_type values: "
+            f"source={source_change_types}, silver={silver_change_types}"
         )
 
         # Validate counts per change type match
@@ -375,10 +421,13 @@ def test_pattern2_silver_cdc_events_match_source(tmp_path: Path) -> None:
         silver_counts = silver_df["change_type"].value_counts().to_dict()
 
         for change_type, count in source_counts.items():
-            assert change_type in silver_counts, f"Change type '{change_type}' missing from Silver"
+            assert (
+                change_type in silver_counts
+            ), f"Change type '{change_type}' missing from Silver"
             # Allow some variance (10%) due to potential filtering
             assert silver_counts[change_type] >= int(count * 0.9), (
-                f"Change type '{change_type}' count mismatch: " f"source={count}, silver={silver_counts[change_type]}"
+                f"Change type '{change_type}' count mismatch: "
+                f"source={count}, silver={silver_counts[change_type]}"
             )
 
 
@@ -396,7 +445,9 @@ def test_pattern1_partition_structure_effectiveness(tmp_path: Path) -> None:
     config_path = CONFIGS_ROOT / "patterns" / "pattern_full.yaml"
     run_date = "2025-11-13"
 
-    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     _run_extraction(rewritten_cfg, run_date, "bronze")
     _run_extraction(rewritten_cfg, run_date, "silver")
@@ -409,7 +460,9 @@ def test_pattern1_partition_structure_effectiveness(tmp_path: Path) -> None:
 
     # For each partition, verify all data has that date
     for partition_dir in event_date_dirs:
-        partition_date_str = _extract_partition_date_from_path(partition_dir, "event_date")
+        partition_date_str = _extract_partition_date_from_path(
+            partition_dir, "event_date"
+        )
         if not partition_date_str:
             continue
 
@@ -430,7 +483,9 @@ def test_pattern1_partition_structure_effectiveness(tmp_path: Path) -> None:
                     # This is OK for events that span dates, but should be documented
                     pass  # Events can span dates, so partition containment isn't strict
                     # Just log for awareness
-                    print(f"Note: {len(wrong_dates)}/{len(df_dates)} rows in {partition_dir} have different dates")
+                    print(
+                        f"Note: {len(wrong_dates)}/{len(df_dates)} rows in {partition_dir} have different dates"
+                    )
 
 
 if __name__ == "__main__":

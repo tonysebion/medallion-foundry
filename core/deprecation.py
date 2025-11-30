@@ -38,4 +38,6 @@ def emit_deprecation(spec: DeprecationSpec) -> None:
 
 
 def emit_compat(message: str, code: str) -> None:
-    warnings.warn(f"[{code}] {message}", BronzeFoundryCompatibilityWarning, stacklevel=2)
+    warnings.warn(
+        f"[{code}] {message}", BronzeFoundryCompatibilityWarning, stacklevel=2
+    )

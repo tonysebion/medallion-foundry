@@ -37,7 +37,9 @@ def generate_polybase_setup(
     # Derive data source location (where silver samples are stored)
     if not external_data_source_location:
         silver_base = dataset.silver_base_path
-        external_data_source_location = f"/{silver_base.as_posix()}/{dataset.bronze_relative_prefix()}/"
+        external_data_source_location = (
+            f"/{silver_base.as_posix()}/{dataset.bronze_relative_prefix()}/"
+        )
 
     # Derive data source name from pattern or entity
     if not external_data_source_name:
@@ -67,8 +69,12 @@ def generate_polybase_setup(
     # Simplify artifact name: just use pattern_folder for location
     artifact_location = pattern_folder
     table_name = _derive_external_table_name(dataset, pattern_folder)
-    partition_columns = dataset.silver.record_time_partition or dataset.silver.partition_by or []
-    partition_columns = [partition_columns] if isinstance(partition_columns, str) else partition_columns
+    partition_columns = (
+        dataset.silver.record_time_partition or dataset.silver.partition_by or []
+    )
+    partition_columns = (
+        [partition_columns] if isinstance(partition_columns, str) else partition_columns
+    )
 
     # Generate sample queries based on entity kind
     sample_queries = _generate_sample_queries(dataset, table_name, schema_name)

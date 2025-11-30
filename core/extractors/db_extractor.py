@@ -97,7 +97,9 @@ class DbExtractor(BaseExtractor):
         retry=retry_if_exception_type(Exception),
         reraise=True,
     )
-    def _execute_query(self, driver: str, conn_str: str, query: str, params: Optional[Tuple] = None) -> Any:
+    def _execute_query(
+        self, driver: str, conn_str: str, query: str, params: Optional[Tuple] = None
+    ) -> Any:
         """Execute database query with retry logic for the selected driver."""
         logger.debug("Executing query with driver=%s params=%s", driver, params)
 
@@ -115,7 +117,9 @@ class DbExtractor(BaseExtractor):
                 "Use 'pyodbc' or open an issue if you need first-class pymssql support."
             )
         else:
-            raise ValueError(f"Unsupported db.driver '{driver}'. Use 'pyodbc' (default) or 'pymssql'.")
+            raise ValueError(
+                f"Unsupported db.driver '{driver}'. Use 'pyodbc' (default) or 'pymssql'."
+            )
 
     def fetch_records(
         self,
@@ -136,7 +140,9 @@ class DbExtractor(BaseExtractor):
 
         conn_str = os.environ.get(conn_env)
         if not conn_str:
-            raise ValueError(f"Environment variable '{conn_env}' not set for DB connection string")
+            raise ValueError(
+                f"Environment variable '{conn_env}' not set for DB connection string"
+            )
 
         base_query = db_cfg["base_query"]
 
@@ -154,9 +160,13 @@ class DbExtractor(BaseExtractor):
             last_cursor = self._load_cursor(state_file)
 
         # Build query with incremental filter
-        query = self._build_incremental_query(base_query, cursor_column if use_incremental else None, last_cursor)
+        query = self._build_incremental_query(
+            base_query, cursor_column if use_incremental else None, last_cursor
+        )
 
-        logger.info(f"Executing database query (incremental={'yes' if use_incremental else 'no'})")
+        logger.info(
+            f"Executing database query (incremental={'yes' if use_incremental else 'no'})"
+        )
 
         # Execute query
         records: List[Dict[str, Any]] = []

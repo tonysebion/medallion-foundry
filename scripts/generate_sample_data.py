@@ -80,7 +80,9 @@ def _get_runtime_values(pattern_id: str) -> Dict[str, Any]:
     else:
         raw_formats_list = list(raw_formats)
     normalized_formats: List[str] = [
-        fmt.strip().lower() for fmt in raw_formats_list if isinstance(fmt, str) and fmt.strip()
+        fmt.strip().lower()
+        for fmt in raw_formats_list
+        if isinstance(fmt, str) and fmt.strip()
     ]
     if not normalized_formats:
         normalized_formats = ["csv", "parquet"]
@@ -167,7 +169,9 @@ def _pattern_dir(pattern: str) -> str:
 
 HYBRID_REFERENCE_INITIAL = datetime(2025, 11, 13).date()
 HYBRID_REFERENCE_SWITCH_DAY = 9
-HYBRID_REFERENCE_SECOND = HYBRID_REFERENCE_INITIAL + timedelta(days=HYBRID_REFERENCE_SWITCH_DAY)
+HYBRID_REFERENCE_SECOND = HYBRID_REFERENCE_INITIAL + timedelta(
+    days=HYBRID_REFERENCE_SWITCH_DAY
+)
 HYBRID_DELTA_DAYS = 11
 HYBRID_COMBOS = [
     ("hybrid_cdc_point", "cdc", "point_in_time"),
@@ -185,7 +189,11 @@ def _write_chunk_files(
     if not rows_list:
         return []
     path.parent.mkdir(parents=True, exist_ok=True)
-    fmt_set = {fmt.strip().lower() for fmt in (formats or []) if isinstance(fmt, str) and fmt.strip()}
+    fmt_set = {
+        fmt.strip().lower()
+        for fmt in (formats or [])
+        if isinstance(fmt, str) and fmt.strip()
+    }
     if not fmt_set:
         fmt_set = {"csv", "parquet"}
 
@@ -272,7 +280,9 @@ def generate_full_snapshot(
                 {
                     "order_id": oid,
                     "customer_id": f"CUST-{rng.randint(1000, 9999)}",
-                    "status": rng.choice(["new", "processing", "shipped", "delivered", "returned"]),
+                    "status": rng.choice(
+                        ["new", "processing", "shipped", "delivered", "returned"]
+                    ),
                     "order_total": round(rng.uniform(25.0, 500.0), 2),
                     "updated_at": order_time.isoformat() + "Z",
                     "run_date": date_str,
@@ -287,7 +297,9 @@ def generate_full_snapshot(
                 {
                     "order_id": oid,
                     "customer_id": f"CUST-{rng.randint(1000, 9999)}",
-                    "status": rng.choice(["new", "processing", "shipped", "delivered", "returned"]),
+                    "status": rng.choice(
+                        ["new", "processing", "shipped", "delivered", "returned"]
+                    ),
                     "order_total": round(rng.uniform(25.0, 500.0), 2),
                     "updated_at": order_time.isoformat() + "Z",
                     "run_date": date_str,
@@ -300,7 +312,8 @@ def generate_full_snapshot(
                 "customer_id": f"CUST-{rng.randint(1000, 9999)}",
                 "status": "processing",
                 "order_total": round(rng.uniform(25.0, 500.0), 2),
-                "updated_at": (start + timedelta(days=total_rows + 1)).isoformat() + "Z",
+                "updated_at": (start + timedelta(days=total_rows + 1)).isoformat()
+                + "Z",
                 "run_date": date_str,
             }
         )
@@ -326,7 +339,9 @@ def generate_full_snapshot(
                     }
                 )
             schema_chunk = base_dir / "full-part-0002.csv"
-            chunk_files.extend(_write_chunk_files(schema_chunk, schema_rows, formats=formats))
+            chunk_files.extend(
+                _write_chunk_files(schema_chunk, schema_rows, formats=formats)
+            )
             total_records += len(schema_rows)
             chunk_count += 1
 
@@ -374,7 +389,9 @@ def _write_hybrid_delta(
     base_dir.mkdir(parents=True, exist_ok=True)
     chunk_path = base_dir / "delta-part-0001.csv"
     _write_chunk_files(chunk_path, rows, formats=formats)
-    _write_delta_metadata(base_dir, date_str, rows, delta_mode, [delta_pattern], reference_run_date)
+    _write_delta_metadata(
+        base_dir, date_str, rows, delta_mode, [delta_pattern], reference_run_date
+    )
 
 
 def _build_delta_rows(
@@ -425,7 +442,9 @@ def _write_reference_metadata(
             "delta_patterns": delta_patterns,
         },
     }
-    write_batch_metadata(base_dir, record_count=len(rows), chunk_count=1, extra_metadata=metadata)
+    write_batch_metadata(
+        base_dir, record_count=len(rows), chunk_count=1, extra_metadata=metadata
+    )
 
 
 def _write_delta_metadata(
@@ -447,7 +466,9 @@ def _write_delta_metadata(
             "delta_patterns": delta_patterns,
         },
     }
-    write_batch_metadata(base_dir, record_count=len(rows), chunk_count=1, extra_metadata=metadata)
+    write_batch_metadata(
+        base_dir, record_count=len(rows), chunk_count=1, extra_metadata=metadata
+    )
 
 
 def generate_cdc(seed: int = 99, row_count: int = CDC_ROW_COUNT) -> None:
@@ -479,7 +500,9 @@ def generate_cdc(seed: int = 99, row_count: int = CDC_ROW_COUNT) -> None:
                     # We pick random orders from a larger range for variation
                     "order_id": f"ORD-{rng.randint(1, max(800, total_rows)) :05d}",
                     "customer_id": f"CUST-{rng.randint(1000, 9999)}",
-                    "change_type": rng.choices(change_types, weights=[0.7, 0.25, 0.05])[0],
+                    "change_type": rng.choices(change_types, weights=[0.7, 0.25, 0.05])[
+                        0
+                    ],
                     "changed_at": change_time.isoformat() + "Z",
                     "status": rng.choice(["processing", "shipped", "cancelled"]),
                     "order_total": round(rng.uniform(10.0, 800.0), 2),
@@ -492,7 +515,10 @@ def generate_cdc(seed: int = 99, row_count: int = CDC_ROW_COUNT) -> None:
                 "order_id": None,
                 "customer_id": f"CUST-{rng.randint(1000, 9999)}",
                 "change_type": "insert",
-                "changed_at": (start + timedelta(minutes=total_rows * 3 + 5)).isoformat() + "Z",
+                "changed_at": (
+                    start + timedelta(minutes=total_rows * 3 + 5)
+                ).isoformat()
+                + "Z",
                 "status": "processing",
                 "order_total": round(rng.uniform(10.0, 800.0), 2),
                 "run_date": date_str,
@@ -521,7 +547,9 @@ def generate_cdc(seed: int = 99, row_count: int = CDC_ROW_COUNT) -> None:
                     }
                 )
             schema_chunk = base_dir / "cdc-part-0002.csv"
-            chunk_files.extend(_write_chunk_files(schema_chunk, schema_rows, formats=formats))
+            chunk_files.extend(
+                _write_chunk_files(schema_chunk, schema_rows, formats=formats)
+            )
             total_records += len(schema_rows)
             chunk_count += 1
 
@@ -592,7 +620,8 @@ def generate_current_history(
                         "effective_start": "",
                         "effective_end": "",
                         "current_flag": 1,
-                        "updated_at": (start_time + timedelta(hours=idx)).isoformat() + "Z",
+                        "updated_at": (start_time + timedelta(hours=idx)).isoformat()
+                        + "Z",
                         "run_date": date_str,
                     }
                 )
@@ -609,7 +638,8 @@ def generate_current_history(
                 "effective_start": None,
                 "effective_end": None,
                 "current_flag": None,
-                "updated_at": datetime.fromisoformat(f"{date_str}T00:00:00").isoformat() + "Z",
+                "updated_at": datetime.fromisoformat(f"{date_str}T00:00:00").isoformat()
+                + "Z",
                 "run_date": date_str,
             }
         )
@@ -627,13 +657,15 @@ def generate_current_history(
                         "customer_id": f"CUST-{rng.randint(2000, 9999)}",
                         "status": "active",
                         "effective_start": (
-                            datetime.fromisoformat(f"{date_str}T00:00:00") - timedelta(days=idx % 5)
+                            datetime.fromisoformat(f"{date_str}T00:00:00")
+                            - timedelta(days=idx % 5)
                         ).isoformat()
                         + "Z",
                         "effective_end": None,
                         "current_flag": 1,
                         "updated_at": (
-                            datetime.fromisoformat(f"{date_str}T12:00:00") + timedelta(minutes=idx)
+                            datetime.fromisoformat(f"{date_str}T12:00:00")
+                            + timedelta(minutes=idx)
                         ).isoformat()
                         + "Z",
                         "run_date": date_str,
@@ -641,7 +673,9 @@ def generate_current_history(
                     }
                 )
             skew_chunk = base_dir / "current-history-part-0002.csv"
-            chunk_files.extend(_write_chunk_files(skew_chunk, skew_rows, formats=formats))
+            chunk_files.extend(
+                _write_chunk_files(skew_chunk, skew_rows, formats=formats)
+            )
             total_records += len(skew_rows)
             chunk_count += 1
 
@@ -675,7 +709,11 @@ def generate_hybrid_combinations(seed: int = 123) -> None:
         reference_total_rows = len(reference_dates) * HYBRID_REFERENCE_ROWS
 
         for ref_idx, ref_date in enumerate(reference_dates):
-            ref_dir = base_pattern_dir / f"{path_keys['date_key']}={ref_date.isoformat()}" / "reference"
+            ref_dir = (
+                base_pattern_dir
+                / f"{path_keys['date_key']}={ref_date.isoformat()}"
+                / "reference"
+            )
             _write_hybrid_reference(
                 ref_dir,
                 ref_date.isoformat(),
@@ -690,7 +728,9 @@ def generate_hybrid_combinations(seed: int = 123) -> None:
         cumulative_rows: List[Dict[str, object]] = []
         for offset in range(1, HYBRID_DELTA_DAYS + 1):
             delta_date = HYBRID_REFERENCE_INITIAL + timedelta(days=offset)
-            order_id_start = reference_total_rows + (offset - 1) * HYBRID_DELTA_ROWS_PER_DAY + 1
+            order_id_start = (
+                reference_total_rows + (offset - 1) * HYBRID_DELTA_ROWS_PER_DAY + 1
+            )
             rows = _build_delta_rows(
                 delta_pattern,
                 delta_date.isoformat(),
@@ -703,7 +743,11 @@ def generate_hybrid_combinations(seed: int = 123) -> None:
                 rows_to_write = cumulative_rows.copy()
             else:
                 rows_to_write = rows
-            delta_dir = base_pattern_dir / f"{path_keys['date_key']}={delta_date.isoformat()}" / "delta"
+            delta_dir = (
+                base_pattern_dir
+                / f"{path_keys['date_key']}={delta_date.isoformat()}"
+                / "delta"
+            )
             if delta_date == HYBRID_REFERENCE_SECOND:
                 reference_run_date = HYBRID_REFERENCE_INITIAL
             elif delta_date > HYBRID_REFERENCE_SECOND:
@@ -724,7 +768,14 @@ def generate_hybrid_combinations(seed: int = 123) -> None:
 
 
 def main() -> None:
-    global DAILY_DAYS, SAMPLE_START_DATE, FULL_DATES, CDC_DATES, CURRENT_HISTORY_DATES, HYBRID_REFERENCE_ROWS, HYBRID_DELTA_ROWS_PER_DAY
+    global \
+        DAILY_DAYS, \
+        SAMPLE_START_DATE, \
+        FULL_DATES, \
+        CDC_DATES, \
+        CURRENT_HISTORY_DATES, \
+        HYBRID_REFERENCE_ROWS, \
+        HYBRID_DELTA_ROWS_PER_DAY
     parser = argparse.ArgumentParser(
         description="Generate Bronze source sample datasets with configurable scale and time ranges."
     )
@@ -746,7 +797,9 @@ def main() -> None:
         default=None,
         help="Initial full snapshot row count.",
     )
-    parser.add_argument("--cdc-row-count", type=int, default=None, help="Initial CDC row count.")
+    parser.add_argument(
+        "--cdc-row-count", type=int, default=None, help="Initial CDC row count."
+    )
     parser.add_argument(
         "--current-rows",
         type=int,
@@ -852,7 +905,9 @@ def main() -> None:
     CDC_DATES = _daily_schedule(SAMPLE_START_DATE, DAILY_DAYS)
     CURRENT_HISTORY_DATES = _daily_schedule(SAMPLE_START_DATE, DAILY_DAYS)
 
-    print(f"Generating samples for {DAILY_DAYS} day(s) starting {SAMPLE_START_DATE}. Large={args.large}")
+    print(
+        f"Generating samples for {DAILY_DAYS} day(s) starting {SAMPLE_START_DATE}. Large={args.large}"
+    )
     generate_full_snapshot(
         seed=42,
         row_count=args.full_row_count,
@@ -860,7 +915,9 @@ def main() -> None:
         enable_updates=args.enable_updates,
     )
     generate_cdc(seed=99, row_count=args.cdc_row_count)
-    generate_current_history(seed=7, current_rows=args.current_rows, history_rows=args.history_rows)
+    generate_current_history(
+        seed=7, current_rows=args.current_rows, history_rows=args.history_rows
+    )
     generate_hybrid_combinations(seed=123)
     print(f"Sample datasets written under {BASE_DIR}")
     _write_pattern_readmes()
@@ -873,7 +930,9 @@ def _write_pattern_readmes() -> None:
         # Get the pattern_folder from YAML config
         runtime = _get_runtime_values(pattern_key)
         path_keys = _get_path_keys(pattern_key)
-        pattern_dir = BASE_DIR / f"{path_keys['sample_key']}={runtime['pattern_folder']}"
+        pattern_dir = (
+            BASE_DIR / f"{path_keys['sample_key']}={runtime['pattern_folder']}"
+        )
         pattern_dir.mkdir(parents=True, exist_ok=True)
         readme = pattern_dir / "README.md"
         lines = [

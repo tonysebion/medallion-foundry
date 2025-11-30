@@ -77,7 +77,9 @@ def _label_dir_from_metadata(metadata_path: Path) -> Path:
 
 
 def _find_intent_config(label_dir: Path) -> Path:
-    pattern_name = label_dir.name.split("=", 1)[1] if "=" in label_dir.name else label_dir.name
+    pattern_name = (
+        label_dir.name.split("=", 1)[1] if "=" in label_dir.name else label_dir.name
+    )
     candidate = label_dir / f"intent_{pattern_name}.yaml"
     if candidate.exists():
         return candidate
@@ -87,7 +89,9 @@ def _find_intent_config(label_dir: Path) -> Path:
     raise FileNotFoundError(f"No intent config found under {label_dir}")
 
 
-def _expected_artifact_names(model: SilverModel, silver_cfg: Dict[str, Any]) -> List[str]:
+def _expected_artifact_names(
+    model: SilverModel, silver_cfg: Dict[str, Any]
+) -> List[str]:
     artifact_names: Dict[str, str] = {
         "full_snapshot": str(silver_cfg["full_output_name"]),
         "cdc": str(silver_cfg["cdc_output_name"]),
@@ -115,7 +119,9 @@ def _extract_load_date(metadata_path: Path) -> str:
 @pytest.fixture(scope="module")
 def silver_metadata_files() -> List[Path]:
     if not SILVER_ROOT.exists():
-        pytest.skip("Silver samples are missing; run scripts/generate_silver_samples.py")
+        pytest.skip(
+            "Silver samples are missing; run scripts/generate_silver_samples.py"
+        )
     return list(SILVER_ROOT.rglob("_metadata.json"))
 
 
@@ -138,7 +144,9 @@ def test_silver_metadata_matches_config(silver_metadata_files: List[Path]) -> No
         assert metadata["silver_owner"] == expected_cfg["silver_owner"]
         load_date = _extract_load_date(metadata_path)
         if load_date:
-            assert metadata["load_batch_id"] == f"{expected_cfg['dataset_id']}-{load_date}"
+            assert (
+                metadata["load_batch_id"] == f"{expected_cfg['dataset_id']}-{load_date}"
+            )
         assert metadata["rows_written"] >= 0
         assert metadata["rows_read"] >= metadata["rows_written"]
         assert expected_cfg["domain"] in bronze_path

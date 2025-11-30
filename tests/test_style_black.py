@@ -26,10 +26,14 @@ def test_black_formatting_check():
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     except subprocess.TimeoutExpired:
-        raise AssertionError("black check timed out; try running black directly to diagnose")
+        raise AssertionError(
+            "black check timed out; try running black directly to diagnose"
+        )
 
     if result.returncode != 0:
         # Include stdout/stderr in assertion to help fix quickly
         raise AssertionError(
-            "black check failed; run 'black --line-length=120 .' to fix formatting\n" + result.stdout + result.stderr
+            "black check failed; run 'black --line-length=120 .' to fix formatting\n"
+            + result.stdout
+            + result.stderr
         )

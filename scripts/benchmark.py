@@ -37,10 +37,14 @@ class BenchmarkResult:
             "iterations": len(self.timings),
             "mean_seconds": statistics.mean(self.timings),
             "median_seconds": statistics.median(self.timings),
-            "stdev_seconds": statistics.stdev(self.timings) if len(self.timings) > 1 else 0.0,
+            "stdev_seconds": statistics.stdev(self.timings)
+            if len(self.timings) > 1
+            else 0.0,
             "min_seconds": min(self.timings),
             "max_seconds": max(self.timings),
-            "throughput_ops_per_sec": 1.0 / statistics.mean(self.timings) if statistics.mean(self.timings) > 0 else 0,
+            "throughput_ops_per_sec": 1.0 / statistics.mean(self.timings)
+            if statistics.mean(self.timings) > 0
+            else 0,
             **self.metadata,
         }
 

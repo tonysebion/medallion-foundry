@@ -32,7 +32,14 @@ def test_chunked_promotion_and_consolidation(tmp_path: Path) -> None:
     chunk1 = f"test-{uuid.uuid4().hex[:6]}"
     chunk2 = f"test-{uuid.uuid4().hex[:6]}"
 
-    config_path = REPO_ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
+    config_path = (
+        REPO_ROOT
+        / "docs"
+        / "examples"
+        / "configs"
+        / "patterns"
+        / "pattern_current_history.yaml"
+    )
     cmd_base = [
         sys.executable,
         str(REPO_ROOT / "silver_extract.py"),
@@ -98,7 +105,14 @@ def test_consolidate_prune_chunks(tmp_path: Path) -> None:
 
     chunk1 = f"test-{uuid.uuid4().hex[:6]}"
     chunk2 = f"test-{uuid.uuid4().hex[:6]}"
-    config_path = REPO_ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
+    config_path = (
+        REPO_ROOT
+        / "docs"
+        / "examples"
+        / "configs"
+        / "patterns"
+        / "pattern_current_history.yaml"
+    )
     cmd_base = [
         sys.executable,
         str(REPO_ROOT / "silver_extract.py"),
@@ -148,7 +162,9 @@ def test_consolidate_prune_chunks(tmp_path: Path) -> None:
     )
 
     # No chunk metadata should remain
-    assert not list(silver_tmp.rglob("*_metadata_chunk_*.json")), "Expected no chunk metadata files after pruning"
+    assert not list(
+        silver_tmp.rglob("*_metadata_chunk_*.json")
+    ), "Expected no chunk metadata files after pruning"
     # We can't easily assert no chunk artifact remain due to naming; ensure _metadata_chunk files removed is good enough
 
 

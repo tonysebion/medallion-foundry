@@ -32,7 +32,9 @@ class AzureStorage(StorageBackend):
 
         self.prefix = bronze_cfg.get("azure_prefix", "").strip("/")
         self._client = self._build_client(azure_cfg)
-        self.container: ContainerClient = self._client.get_container_client(self.container_name)
+        self.container: ContainerClient = self._client.get_container_client(
+            self.container_name
+        )
 
         try:
             self.container.get_container_properties()
@@ -40,7 +42,9 @@ class AzureStorage(StorageBackend):
             logger.info("Creating Azure container %s", self.container_name)
             self.container.create_container()
         except AzureError as exc:
-            logger.warning("Unable to verify Azure container %s: %s", self.container_name, exc)
+            logger.warning(
+                "Unable to verify Azure container %s: %s", self.container_name, exc
+            )
 
         # circuit breakers per operation
         def _emit(state: str) -> None:
@@ -96,7 +100,9 @@ class AzureStorage(StorageBackend):
         if account_url_any:
             account_url = str(account_url_any)
         if account_url:
-            return BlobServiceClient(account_url=account_url, credential=DefaultAzureCredential())
+            return BlobServiceClient(
+                account_url=account_url, credential=DefaultAzureCredential()
+            )
         raise ValueError(
             "azure.account_url must be provided in config when connection_string or account_key are not used"
         )
@@ -181,7 +187,9 @@ class AzureStorage(StorageBackend):
         blob_prefix = self._remote_path(prefix)
 
         def _retry_if(exc: BaseException) -> bool:
-            return isinstance(exc, AzureError) and not isinstance(exc, ResourceNotFoundError)
+            return isinstance(exc, AzureError) and not isinstance(
+                exc, ResourceNotFoundError
+            )
 
         policy = RetryPolicy(
             max_attempts=5,
@@ -196,7 +204,10 @@ class AzureStorage(StorageBackend):
         try:
 
             def _once() -> List[str]:
-                return [blob.name for blob in self.container.list_blobs(name_starts_with=blob_prefix)]
+                return [
+                    blob.name
+                    for blob in self.container.list_blobs(name_starts_with=blob_prefix)
+                ]
 
             return execute_with_retry(
                 _once,
@@ -212,7 +223,9 @@ class AzureStorage(StorageBackend):
         blob_path = self._remote_path(remote_path)
 
         def _retry_if(exc: BaseException) -> bool:
-            return isinstance(exc, AzureError) and not isinstance(exc, ResourceNotFoundError)
+            return isinstance(exc, AzureError) and not isinstance(
+                exc, ResourceNotFoundError
+            )
 
         policy = RetryPolicy(
             max_attempts=5,

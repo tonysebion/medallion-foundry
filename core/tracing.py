@@ -28,7 +28,9 @@ def trace_span(name: str, **kwargs: Any) -> Iterator[None]:
     avoid importing SDK types; users can attach attributes via context
     managers externally if needed.
     """
-    if _OTEL_AVAILABLE and _enabled() and otel_trace is not None:  # pragma: no cover - optional path
+    if (
+        _OTEL_AVAILABLE and _enabled() and otel_trace is not None
+    ):  # pragma: no cover - optional path
         tracer = otel_trace.get_tracer("bronze-foundry")
         with tracer.start_as_current_span(name):
             yield

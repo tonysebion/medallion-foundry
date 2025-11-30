@@ -45,7 +45,10 @@ def build_bronze_relative_path(cfg: dict, run_date: date) -> str:
         from datetime import datetime as dt
         import uuid
 
-        batch_id = run_cfg.get("batch_id") or f"{dt.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        batch_id = (
+            run_cfg.get("batch_id")
+            or f"{dt.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        )
         return f"{base_path}dt={run_date.isoformat()}/batch_id={batch_id}/"
     else:
         return f"{base_path}dt={run_date.isoformat()}/"

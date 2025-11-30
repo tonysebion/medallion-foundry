@@ -57,7 +57,9 @@ def test_event_append_log_processor(tmp_path):
         ],
     )
     silver_partition = tmp_path / "silver" / "event"
-    processor = SilverProcessor(dataset, bronze_path, silver_partition, date(2024, 1, 3))
+    processor = SilverProcessor(
+        dataset, bronze_path, silver_partition, date(2024, 1, 3)
+    )
     result = processor.run()
     assert result.metrics.rows_written == 2
     assert "events" in result.outputs
@@ -103,9 +105,13 @@ def test_state_scd2_processor(tmp_path):
         ],
     )
     silver_partition = tmp_path / "silver" / "state"
-    processor = SilverProcessor(dataset, bronze_path, silver_partition, date(2024, 2, 2))
+    processor = SilverProcessor(
+        dataset, bronze_path, silver_partition, date(2024, 2, 2)
+    )
     result = processor.run()
-    history_df = pd.concat(pd.read_parquet(path) for path in result.outputs["state_history"])
+    history_df = pd.concat(
+        pd.read_parquet(path) for path in result.outputs["state_history"]
+    )
     assert set(history_df.columns) >= {
         "employee_id",
         "status",
@@ -113,7 +119,9 @@ def test_state_scd2_processor(tmp_path):
         "effective_to",
         "is_current",
     }
-    assert history_df.loc[history_df["is_current"] == 1, "status"].tolist() == ["inactive"]
+    assert history_df.loc[history_df["is_current"] == 1, "status"].tolist() == [
+        "inactive"
+    ]
 
 
 def test_state_latest_only_processor(tmp_path):
@@ -144,7 +152,9 @@ def test_state_latest_only_processor(tmp_path):
         ],
     )
     silver_partition = tmp_path / "silver" / "latest"
-    processor = SilverProcessor(dataset, bronze_path, silver_partition, date(2024, 1, 5))
+    processor = SilverProcessor(
+        dataset, bronze_path, silver_partition, date(2024, 1, 5)
+    )
     result = processor.run()
     df = pd.concat(pd.read_parquet(path) for path in result.outputs["state_current"])
     assert df.shape[0] == 1
@@ -184,10 +194,14 @@ def test_derived_state_processor(tmp_path):
         ],
     )
     silver_partition = tmp_path / "silver" / "derived_state"
-    processor = SilverProcessor(dataset, bronze_path, silver_partition, date(2024, 3, 2))
+    processor = SilverProcessor(
+        dataset, bronze_path, silver_partition, date(2024, 3, 2)
+    )
     result = processor.run()
     assert "state_history" in result.outputs
-    history_df = pd.concat(pd.read_parquet(path) for path in result.outputs["state_history"])
+    history_df = pd.concat(
+        pd.read_parquet(path) for path in result.outputs["state_history"]
+    )
     assert history_df["is_current"].sum() == 1
 
 
@@ -229,9 +243,13 @@ def test_derived_event_processor(tmp_path):
         ],
     )
     silver_partition = tmp_path / "silver" / "derived_events"
-    processor = SilverProcessor(dataset, bronze_path, silver_partition, date(2024, 4, 2))
+    processor = SilverProcessor(
+        dataset, bronze_path, silver_partition, date(2024, 4, 2)
+    )
     result = processor.run()
-    events_df = pd.concat(pd.read_parquet(path) for path in result.outputs["derived_events"])
+    events_df = pd.concat(
+        pd.read_parquet(path) for path in result.outputs["derived_events"]
+    )
     assert events_df.shape[0] == 2
     assert set(events_df["change_type"]) == {"upsert", "update"}
 
@@ -307,4 +325,6 @@ def test_deterministic_pipeline_run_at_idempotency(tmp_path):
     assert df1["pipeline_run_at"].iloc[0] == pd.Timestamp(run_date)
 
     # Verify data is identical (byte-for-byte reproducible)
-    pd.testing.assert_frame_equal(df1.reset_index(drop=True), df2.reset_index(drop=True))
+    pd.testing.assert_frame_equal(
+        df1.reset_index(drop=True), df2.reset_index(drop=True)
+    )

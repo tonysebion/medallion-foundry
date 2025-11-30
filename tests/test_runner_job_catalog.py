@@ -54,7 +54,9 @@ def test_run_extract_emits_catalog_events(
     captured: Dict[str, List[Any]] = {"schema": [], "quality": [], "run": []}
     monkeypatch.setattr(
         "core.runner.job.report_schema_snapshot",
-        lambda dataset_id, schema: captured["schema"].append((dataset_id, list(schema))),
+        lambda dataset_id, schema: captured["schema"].append(
+            (dataset_id, list(schema))
+        ),
     )
     monkeypatch.setattr(
         "core.runner.job.report_quality_snapshot",
@@ -71,7 +73,9 @@ def test_run_extract_emits_catalog_events(
     assert captured["run"][0][1]["status"] == "success"
 
 
-def test_cleanup_on_failure_removes_files(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_cleanup_on_failure_removes_files(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     from core.runner.job import ExtractJob
 
     context = _build_context(tmp_path)

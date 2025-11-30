@@ -58,14 +58,20 @@ def build_run_context(
         run_cfg = cfg_dict["source"].get("run", {})
 
     if "storage_enabled" not in run_cfg:
-        bronze_backend = cfg_dict.get("platform", {}).get("bronze", {}).get("storage_backend")
+        bronze_backend = (
+            cfg_dict.get("platform", {}).get("bronze", {}).get("storage_backend")
+        )
         run_cfg["storage_enabled"] = str(bronze_backend).lower() == "s3"
         cfg_dict["source"]["run"]["storage_enabled"] = run_cfg["storage_enabled"]
 
-    local_output_dir = Path(local_output_override or run_cfg.get("local_output_dir", "./output")).resolve()
+    local_output_dir = Path(
+        local_output_override or run_cfg.get("local_output_dir", "./output")
+    ).resolve()
     relative_path = relative_override or build_relative_path(cfg_dict, run_date)
     bronze_path = (
-        Path(bronze_path_override).resolve() if bronze_path_override else (local_output_dir / relative_path).resolve()
+        Path(bronze_path_override).resolve()
+        if bronze_path_override
+        else (local_output_dir / relative_path).resolve()
     )
 
     if typed:
@@ -81,7 +87,9 @@ def build_run_context(
         config_name = cfg_dict["source"].get("config_name", dataset_id)
 
     pattern_value = load_pattern_override or run_cfg.get("load_pattern")
-    load_pattern = LoadPattern.normalize(pattern_value) if pattern_value else LoadPattern.FULL
+    load_pattern = (
+        LoadPattern.normalize(pattern_value) if pattern_value else LoadPattern.FULL
+    )
 
     logger.debug(
         "Built RunContext(dataset_id=%s, run_date=%s, relative_path=%s)",

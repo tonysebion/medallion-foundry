@@ -42,7 +42,9 @@ def _run_extraction(config_path: Path, run_date: str, extraction_type: str) -> N
     )
 
 
-def _rewrite_extraction_config(original: Path, run_date: str, tmp_dir: Path) -> tuple[Path, Path, Path, Dict[str, Any]]:
+def _rewrite_extraction_config(
+    original: Path, run_date: str, tmp_dir: Path
+) -> tuple[Path, Path, Path, Dict[str, Any]]:
     """Rewrite config to use temp directories for extraction."""
     cfg = cast(Dict[str, Any], yaml.safe_load(original.read_text()))
 
@@ -102,17 +104,22 @@ def _read_silver_parquet(silver_dir: Path, model_type: str = "events") -> pd.Dat
         "2025-11-13",
     ],
 )
-def test_pattern1_source_to_bronze_preserves_rows(tmp_path: Path, run_date: str) -> None:
+def test_pattern1_source_to_bronze_preserves_rows(
+    tmp_path: Path, run_date: str
+) -> None:
     """Pattern 1: Verify source rows are loaded into Bronze (same date only)."""
     config_path = CONFIGS_ROOT / "patterns" / "pattern_full.yaml"
     source_path = (
-        SOURCE_ROOT / f"sample=pattern1_full_events/system=retail_demo/table=orders/dt={run_date}/full-part-0001.csv"
+        SOURCE_ROOT
+        / f"sample=pattern1_full_events/system=retail_demo/table=orders/dt={run_date}/full-part-0001.csv"
     )
 
     if not source_path.exists():
         pytest.skip(f"Source data not found for {run_date}")
 
-    rewritten_cfg, bronze_out, _, _ = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, _, _ = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     source_df = _read_source_csv(source_path)
     assert len(source_df) > 0, f"Source data empty for {run_date}"
@@ -124,12 +131,14 @@ def test_pattern1_source_to_bronze_preserves_rows(tmp_path: Path, run_date: str)
 
     # Core assertion: row count must match
     assert len(bronze_df) == len(source_df), (
-        f"Row count mismatch: source={len(source_df)}, " f"bronze={len(bronze_df)} for {run_date}"
+        f"Row count mismatch: source={len(source_df)}, "
+        f"bronze={len(bronze_df)} for {run_date}"
     )
 
     # Verify all source columns present in Bronze
     assert set(source_df.columns) <= set(bronze_df.columns), (
-        f"Missing columns in Bronze. Source: {set(source_df.columns)}, " f"Bronze: {set(bronze_df.columns)}"
+        f"Missing columns in Bronze. Source: {set(source_df.columns)}, "
+        f"Bronze: {set(bronze_df.columns)}"
     )
 
 
@@ -138,10 +147,13 @@ def test_pattern1_bronze_timestamp_parsing(tmp_path: Path) -> None:
     config_path = CONFIGS_ROOT / "patterns" / "pattern_full.yaml"
     run_date = "2025-11-13"
     source_path = (
-        SOURCE_ROOT / f"sample=pattern1_full_events/system=retail_demo/table=orders/dt={run_date}/full-part-0001.csv"
+        SOURCE_ROOT
+        / f"sample=pattern1_full_events/system=retail_demo/table=orders/dt={run_date}/full-part-0001.csv"
     )
 
-    rewritten_cfg, bronze_out, _, _ = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, _, _ = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     source_df = _read_source_csv(source_path)
     _run_extraction(rewritten_cfg, run_date, "bronze")
@@ -150,9 +162,13 @@ def test_pattern1_bronze_timestamp_parsing(tmp_path: Path) -> None:
     bronze_df = _read_bronze_parquet(bronze_partition)
 
     # Extract event_date from updated_at timestamp
-    source_df["extracted_date"] = pd.to_datetime(source_df["updated_at"]).dt.date.astype(str)
+    source_df["extracted_date"] = pd.to_datetime(
+        source_df["updated_at"]
+    ).dt.date.astype(str)
     bronze_df_converted = bronze_df.copy()
-    bronze_df_converted["extracted_date"] = pd.to_datetime(bronze_df_converted["updated_at"]).dt.date.astype(str)
+    bronze_df_converted["extracted_date"] = pd.to_datetime(
+        bronze_df_converted["updated_at"]
+    ).dt.date.astype(str)
 
     # Verify dates parse correctly and Bronze has same date distribution as source
     source_unique_dates = set(source_df["extracted_date"].unique())
@@ -175,7 +191,9 @@ def test_pattern1_silver_event_deduplication(tmp_path: Path) -> None:
     config_path = CONFIGS_ROOT / "patterns" / "pattern_full.yaml"
     run_date = "2025-11-13"
 
-    rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     _run_extraction(rewritten_cfg, run_date, "bronze")
     _run_extraction(rewritten_cfg, run_date, "silver")
@@ -189,7 +207,9 @@ def test_pattern1_silver_event_deduplication(tmp_path: Path) -> None:
     duplicate_count = silver_df.groupby(natural_key).size()
     duplicates = duplicate_count[duplicate_count > 1]
 
-    assert len(duplicates) == 0, f"Found {len(duplicates)} duplicate order_ids in Silver: {duplicates.index.tolist()}"
+    assert (
+        len(duplicates) == 0
+    ), f"Found {len(duplicates)} duplicate order_ids in Silver: {duplicates.index.tolist()}"
 
 
 def test_pattern1_silver_partition_structure(tmp_path: Path) -> None:
@@ -197,7 +217,9 @@ def test_pattern1_silver_partition_structure(tmp_path: Path) -> None:
     config_path = CONFIGS_ROOT / "patterns" / "pattern_full.yaml"
     run_date = "2025-11-13"
 
-    rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     _run_extraction(rewritten_cfg, run_date, "bronze")
     _run_extraction(rewritten_cfg, run_date, "silver")
@@ -232,7 +254,9 @@ def test_pattern1_silver_business_metadata(tmp_path: Path) -> None:
     config_path = CONFIGS_ROOT / "patterns" / "pattern_full.yaml"
     run_date = "2025-11-13"
 
-    rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     _run_extraction(rewritten_cfg, run_date, "bronze")
     _run_extraction(rewritten_cfg, run_date, "silver")
@@ -253,9 +277,13 @@ def test_pattern1_silver_business_metadata(tmp_path: Path) -> None:
     assert not missing, f"Missing metadata columns: {missing}"
 
     # load_batch_id should follow pattern: domain.entity-YYYY-MM-DD
-    assert silver_df["load_batch_id"].nunique() == 1, "Expected single load_batch_id per run"
+    assert (
+        silver_df["load_batch_id"].nunique() == 1
+    ), "Expected single load_batch_id per run"
     batch_id = silver_df["load_batch_id"].iloc[0]
-    assert batch_id == f"retail_demo.orders-{run_date}", f"Unexpected batch_id: {batch_id}"
+    assert (
+        batch_id == f"retail_demo.orders-{run_date}"
+    ), f"Unexpected batch_id: {batch_id}"
 
 
 # ============================================================================
@@ -269,17 +297,22 @@ def test_pattern1_silver_business_metadata(tmp_path: Path) -> None:
         "2025-11-13",
     ],
 )
-def test_pattern2_source_to_bronze_change_type_preserved(tmp_path: Path, run_date: str) -> None:
+def test_pattern2_source_to_bronze_change_type_preserved(
+    tmp_path: Path, run_date: str
+) -> None:
     """Pattern 2: Verify change_type (insert/update/delete) is preserved in Bronze."""
     config_path = CONFIGS_ROOT / "patterns" / "pattern_cdc.yaml"
     source_path = (
-        SOURCE_ROOT / f"sample=pattern2_cdc_events/system=retail_demo/table=orders/dt={run_date}/cdc-part-0001.csv"
+        SOURCE_ROOT
+        / f"sample=pattern2_cdc_events/system=retail_demo/table=orders/dt={run_date}/cdc-part-0001.csv"
     )
 
     if not source_path.exists():
         pytest.skip(f"Source data not found for {run_date}")
 
-    rewritten_cfg, bronze_out, _, _ = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, _, _ = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     source_df = _read_source_csv(source_path)
     assert "change_type" in source_df.columns, "Source missing change_type column"
@@ -294,7 +327,9 @@ def test_pattern2_source_to_bronze_change_type_preserved(tmp_path: Path, run_dat
     source_changes = set(source_df["change_type"].unique())
     bronze_changes = set(bronze_df["change_type"].unique())
 
-    assert source_changes == bronze_changes, f"Change types diverged: source={source_changes}, bronze={bronze_changes}"
+    assert (
+        source_changes == bronze_changes
+    ), f"Change types diverged: source={source_changes}, bronze={bronze_changes}"
 
 
 def test_pattern2_cdc_event_counts_by_type(tmp_path: Path) -> None:
@@ -306,10 +341,13 @@ def test_pattern2_cdc_event_counts_by_type(tmp_path: Path) -> None:
     config_path = CONFIGS_ROOT / "patterns" / "pattern_cdc.yaml"
     run_date = "2025-11-13"
     source_path = (
-        SOURCE_ROOT / f"sample=pattern2_cdc_events/system=retail_demo/table=orders/dt={run_date}/cdc-part-0001.csv"
+        SOURCE_ROOT
+        / f"sample=pattern2_cdc_events/system=retail_demo/table=orders/dt={run_date}/cdc-part-0001.csv"
     )
 
-    rewritten_cfg, bronze_out, _, _ = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, _, _ = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     source_df = _read_source_csv(source_path)
     source_counts = source_df["change_type"].value_counts().to_dict()
@@ -321,7 +359,9 @@ def test_pattern2_cdc_event_counts_by_type(tmp_path: Path) -> None:
     bronze_counts = bronze_df["change_type"].value_counts().to_dict()
 
     assert source_counts == bronze_counts, (
-        f"Change type counts diverged:\n" f"  source: {source_counts}\n" f"  bronze: {bronze_counts}"
+        f"Change type counts diverged:\n"
+        f"  source: {source_counts}\n"
+        f"  bronze: {bronze_counts}"
     )
 
 
@@ -336,7 +376,9 @@ def test_pattern2_silver_append_log_preserves_history(tmp_path: Path) -> None:
     config_path = CONFIGS_ROOT / "patterns" / "pattern_cdc.yaml"
     run_date = "2025-11-13"
 
-    rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     _run_extraction(rewritten_cfg, run_date, "bronze")
     _run_extraction(rewritten_cfg, run_date, "silver")
@@ -348,7 +390,8 @@ def test_pattern2_silver_append_log_preserves_history(tmp_path: Path) -> None:
 
     # For append_log, Silver should have at least as many rows as Bronze
     assert len(silver_df) >= len(bronze_df), (
-        f"Silver has fewer rows than Bronze (append_log mode): " f"silver={len(silver_df)}, bronze={len(bronze_df)}"
+        f"Silver has fewer rows than Bronze (append_log mode): "
+        f"silver={len(silver_df)}, bronze={len(bronze_df)}"
     )
 
 
@@ -357,7 +400,9 @@ def test_pattern2_silver_change_type_distributions(tmp_path: Path) -> None:
     config_path = CONFIGS_ROOT / "patterns" / "pattern_cdc.yaml"
     run_date = "2025-11-13"
 
-    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     _run_extraction(rewritten_cfg, run_date, "bronze")
     _run_extraction(rewritten_cfg, run_date, "silver")
@@ -372,7 +417,9 @@ def test_pattern2_silver_change_type_distributions(tmp_path: Path) -> None:
         silver_types = silver_df["change_type"].value_counts().to_dict()
 
         for change_type in bronze_types:
-            assert silver_types.get(change_type, 0) > 0, f"Silver missing {change_type} events from Bronze"
+            assert (
+                silver_types.get(change_type, 0) > 0
+            ), f"Silver missing {change_type} events from Bronze"
 
 
 def test_pattern2_timestamp_precision(tmp_path: Path) -> None:
@@ -380,7 +427,9 @@ def test_pattern2_timestamp_precision(tmp_path: Path) -> None:
     config_path = CONFIGS_ROOT / "patterns" / "pattern_cdc.yaml"
     run_date = "2025-11-13"
 
-    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     _run_extraction(rewritten_cfg, run_date, "bronze")
     _run_extraction(rewritten_cfg, run_date, "silver")
@@ -406,7 +455,9 @@ def test_pattern1_polybase_external_table_generation(tmp_path: Path) -> None:
     config_path = CONFIGS_ROOT / "patterns" / "pattern_full.yaml"
     run_date = "2025-11-13"
 
-    rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, silver_out, cfg_data = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     _run_extraction(rewritten_cfg, run_date, "bronze")
     _run_extraction(rewritten_cfg, run_date, "silver")
@@ -439,7 +490,9 @@ def test_pattern2_polybase_query_predicates(tmp_path: Path) -> None:
     config_path = CONFIGS_ROOT / "patterns" / "pattern_cdc.yaml"
     run_date = "2025-11-13"
 
-    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, silver_out, _ = _rewrite_extraction_config(
+        config_path, run_date, tmp_path
+    )
 
     _run_extraction(rewritten_cfg, run_date, "bronze")
     _run_extraction(rewritten_cfg, run_date, "silver")

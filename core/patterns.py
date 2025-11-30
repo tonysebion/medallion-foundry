@@ -25,7 +25,9 @@ class LoadPattern(str, Enum):
         for pattern in cls:
             if pattern.value == candidate:
                 return pattern
-        raise ValueError(f"Invalid load pattern '{value}'. Valid options: {', '.join(cls.choices())}")
+        raise ValueError(
+            f"Invalid load pattern '{value}'. Valid options: {', '.join(cls.choices())}"
+        )
 
     @property
     def chunk_prefix(self) -> str:

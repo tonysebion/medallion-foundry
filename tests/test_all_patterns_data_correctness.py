@@ -181,8 +181,12 @@ def test_sample_coverage_summary() -> None:
         total_silver_partitions += len(silver_partitions)
 
     # Verify minimum coverage (allowing for partial sample data)
-    assert total_silver_partitions > 50, f"Expected >50 silver partitions, got {total_silver_partitions}"
-    assert total_silver_records > 1000, f"Expected >1k silver records, got {total_silver_records}"
+    assert (
+        total_silver_partitions > 50
+    ), f"Expected >50 silver partitions, got {total_silver_partitions}"
+    assert (
+        total_silver_records > 1000
+    ), f"Expected >1k silver records, got {total_silver_records}"
 
     # Write summary
     report_path = REPO_ROOT / "SAMPLE_DATA_COVERAGE.json"
@@ -223,7 +227,9 @@ def test_pattern_silver_has_data(pattern_key: str) -> None:
         if len(df) > 0:
             non_empty_partitions.append(partition)
 
-    assert len(non_empty_partitions) > 0, f"{pattern_key}: All silver partitions are empty"
+    assert (
+        len(non_empty_partitions) > 0
+    ), f"{pattern_key}: All silver partitions are empty"
 
 
 @pytest.mark.parametrize("pattern_key", list(PATTERN_DEFINITIONS.keys()))
@@ -240,7 +246,9 @@ def test_pattern_silver_natural_key_present(pattern_key: str) -> None:
         if "order_id" not in df.columns:
             missing_key.append(str(partition))
 
-    assert not missing_key, f"{pattern_key}: {len(missing_key)} silver partitions missing order_id"
+    assert (
+        not missing_key
+    ), f"{pattern_key}: {len(missing_key)} silver partitions missing order_id"
 
 
 @pytest.mark.parametrize("pattern_key", list(PATTERN_DEFINITIONS.keys()))
@@ -270,7 +278,9 @@ def test_pattern_silver_timestamp_column_present(pattern_key: str) -> None:
         if ts_col not in df.columns:
             missing_ts.append(str(partition))
 
-    assert not missing_ts, f"{pattern_key}: {len(missing_ts)} silver partitions missing {ts_col}"
+    assert (
+        not missing_ts
+    ), f"{pattern_key}: {len(missing_ts)} silver partitions missing {ts_col}"
 
 
 @pytest.mark.parametrize("pattern_key", list(PATTERN_DEFINITIONS.keys()))
@@ -293,7 +303,9 @@ def test_pattern_cdc_change_type_present(pattern_key: str) -> None:
             if len(types) > 0:
                 has_change_type.append((str(partition), types))
 
-    assert len(has_change_type) > 0, f"{pattern_key}: No partitions have change_type column"
+    assert (
+        len(has_change_type) > 0
+    ), f"{pattern_key}: No partitions have change_type column"
 
 
 # ============================================================================
@@ -405,7 +417,9 @@ def test_pattern7_includes_customer_id(pattern_key: str) -> None:
                 has_customer_id = True
                 break
 
-    assert has_customer_id, f"{pattern_key}: No partitions have customer_id column with values"
+    assert (
+        has_customer_id
+    ), f"{pattern_key}: No partitions have customer_id column with values"
 
 
 @pytest.mark.parametrize("pattern_key", list(PATTERN_DEFINITIONS.keys()))
@@ -441,8 +455,12 @@ def test_all_patterns_use_same_domain() -> None:
 
         for partition in silver_partitions[:3]:  # Check first 3 partitions
             path_str = str(partition)
-            assert "domain=retail_demo" in path_str, f"{pattern_key}: {partition} missing domain=retail_demo"
-            assert "entity=orders" in path_str, f"{pattern_key}: {partition} missing entity=orders"
+            assert (
+                "domain=retail_demo" in path_str
+            ), f"{pattern_key}: {partition} missing domain=retail_demo"
+            assert (
+                "entity=orders" in path_str
+            ), f"{pattern_key}: {partition} missing entity=orders"
 
 
 def test_silver_row_counts_present() -> None:
@@ -484,7 +502,9 @@ def test_pattern_coverage_report() -> None:
             "silver": {
                 "partitions": len(silver),
                 "total_records": sum(silver_records),
-                "avg_per_partition": round(sum(silver_records) / len(silver), 1) if silver else 0,
+                "avg_per_partition": round(sum(silver_records) / len(silver), 1)
+                if silver
+                else 0,
             },
         }
 
@@ -494,7 +514,8 @@ def test_pattern_coverage_report() -> None:
 
     if report["quality_metrics"]["total_samples"] > 0:
         report["quality_metrics"]["avg_records_per_partition"] = round(
-            report["quality_metrics"]["total_records"] / report["quality_metrics"]["total_samples"],
+            report["quality_metrics"]["total_records"]
+            / report["quality_metrics"]["total_samples"],
             1,
         )
 

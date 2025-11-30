@@ -287,7 +287,11 @@ def test_polybase_sample_queries_state():
 
     # Queries should involve temporal predicates
     all_queries = " ".join(queries)
-    assert "effective_from_date" in all_queries or "effective_from_dt" in all_queries or "is_current" in all_queries
+    assert (
+        "effective_from_date" in all_queries
+        or "effective_from_dt" in all_queries
+        or "is_current" in all_queries
+    )
 
 
 def test_polybase_custom_schema_name():

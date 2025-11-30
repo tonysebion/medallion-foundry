@@ -22,11 +22,25 @@ def resolve_paths(dataset: Dict[str, Any], env: Optional[str]) -> Dict[str, str]
 
     system = dataset["system"]
     entity = dataset["entity"]
-    bronze_pattern = dataset.get("bronze", {}).get("options", {}).get("load_pattern", "full")
+    bronze_pattern = (
+        dataset.get("bronze", {}).get("options", {}).get("load_pattern", "full")
+    )
     silver_domain = dataset.get("domain", system)
 
-    bronze_path = bronze_base / f"system={system}" / f"table={entity}" / f"pattern={bronze_pattern}" / "dt=<run_date>"
-    silver_path = silver_base / f"domain={silver_domain}" / f"entity={entity}" / "v1" / "load_date=<run_date>"
+    bronze_path = (
+        bronze_base
+        / f"system={system}"
+        / f"table={entity}"
+        / f"pattern={bronze_pattern}"
+        / "dt=<run_date>"
+    )
+    silver_path = (
+        silver_base
+        / f"domain={silver_domain}"
+        / f"entity={entity}"
+        / "v1"
+        / "load_date=<run_date>"
+    )
     return {
         "bronze": str(bronze_path),
         "silver": str(silver_path),
@@ -46,7 +60,9 @@ def persist_resolved(path: Path, data: Dict[str, Any]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Expand owner intent templates into resolved path guidance.")
+    parser = argparse.ArgumentParser(
+        description="Expand owner intent templates into resolved path guidance."
+    )
     parser.add_argument(
         "--config",
         type=Path,

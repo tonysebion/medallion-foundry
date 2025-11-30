@@ -103,7 +103,9 @@ def _run_join(config_path: Path) -> None:
     )
 
 
-def _write_readme(output_path: Path, left: Path, right: Path, formats: tuple[str, ...]) -> None:
+def _write_readme(
+    output_path: Path, left: Path, right: Path, formats: tuple[str, ...]
+) -> None:
     readme_path = output_path / "README.md"
     readme_path.write_text(
         f"""# Silver join output
@@ -119,7 +121,9 @@ Generated via `python scripts/generate_silver_join_samples.py --formats both`.
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Create silver_join samples for every combination")
+    parser = argparse.ArgumentParser(
+        description="Create silver_join samples for every combination"
+    )
     parser.add_argument(
         "--formats",
         choices=["parquet", "csv", "both"],
@@ -141,7 +145,9 @@ def main() -> None:
     OUTPUT_ROOT.mkdir(parents=True)
     assets = _gather_silver_assets()
     if not assets:
-        raise RuntimeError("No Silver samples found; run scripts/generate_silver_samples.py first.")
+        raise RuntimeError(
+            "No Silver samples found; run scripts/generate_silver_samples.py first."
+        )
 
     format_sets = {
         "parquet": [FORMAT_COMBINATIONS[0]],
@@ -151,7 +157,9 @@ def main() -> None:
     selected_formats = format_sets[args.formats]
 
     combos = list(product(assets, repeat=2))
-    print(f"Generating {len(combos)} silver_join combos with {len(selected_formats)} format sets")
+    print(
+        f"Generating {len(combos)} silver_join combos with {len(selected_formats)} format sets"
+    )
 
     for left, right in combos:
         for format_combination in selected_formats:
@@ -165,7 +173,9 @@ def main() -> None:
                 shutil.rmtree(output_dir)
             output_dir.mkdir(parents=True, exist_ok=True)
             (output_dir / ".join_progress").mkdir(parents=True, exist_ok=True)
-            config_path = _build_join_config(left, right, format_combination, output_dir)
+            config_path = _build_join_config(
+                left, right, format_combination, output_dir
+            )
             _run_join(config_path)
             _write_readme(output_dir, left, right, format_combination)
 

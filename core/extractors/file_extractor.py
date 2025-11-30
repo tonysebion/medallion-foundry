@@ -62,7 +62,8 @@ class FileExtractor(BaseExtractor):
 
         if file_format not in self.SUPPORTED_FORMATS:
             raise ValueError(
-                f"Unsupported file format '{file_format}'. " f"Supported formats: {sorted(self.SUPPORTED_FORMATS)}"
+                f"Unsupported file format '{file_format}'. "
+                f"Supported formats: {sorted(self.SUPPORTED_FORMATS)}"
             )
 
         # Create filesystem (local or S3)
@@ -73,7 +74,9 @@ class FileExtractor(BaseExtractor):
 
         # Read based on format using streaming
         if file_format in {"csv", "tsv"}:
-            delimiter = file_cfg.get("delimiter") or ("\t" if file_format == "tsv" else ",")
+            delimiter = file_cfg.get("delimiter") or (
+                "\t" if file_format == "tsv" else ","
+            )
             records = self._read_csv_streaming(fs, fsspec_path, delimiter, file_cfg)
         elif file_format == "json":
             records = self._read_json_streaming(fs, fsspec_path, file_cfg)
@@ -112,7 +115,9 @@ class FileExtractor(BaseExtractor):
         fieldnames = file_cfg.get("fieldnames")
 
         if not has_header and not fieldnames:
-            raise ValueError("CSV/TSV files without headers require 'fieldnames' in source.file config")
+            raise ValueError(
+                "CSV/TSV files without headers require 'fieldnames' in source.file config"
+            )
 
         # Use pandas with fsspec for streaming
         with fs.open(path, "r", encoding=encoding) as f:
@@ -150,7 +155,9 @@ class FileExtractor(BaseExtractor):
                 if isinstance(data, dict):
                     data = data.get(part, [])
                 else:
-                    raise ValueError(f"Cannot follow json_path '{data_path}' in file {path}")
+                    raise ValueError(
+                        f"Cannot follow json_path '{data_path}' in file {path}"
+                    )
 
         if isinstance(data, list):
             return cast(List[Dict[str, Any]], data)
@@ -169,7 +176,11 @@ class FileExtractor(BaseExtractor):
 
         with fs.open(path, "r", encoding=encoding) as f:
             for line in f:
-                line_str = line.strip() if isinstance(line, str) else line.decode(encoding).strip()
+                line_str = (
+                    line.strip()
+                    if isinstance(line, str)
+                    else line.decode(encoding).strip()
+                )
                 if not line_str:
                     continue
                 records.append(json.loads(line_str))
@@ -177,22 +188,30 @@ class FileExtractor(BaseExtractor):
         return records
 
     # Legacy methods for backward compatibility (deprecated)
-    def _read_csv(self, file_path: Path, delimiter: str, file_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _read_csv(
+        self, file_path: Path, delimiter: str, file_cfg: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """Legacy CSV reader - use _read_csv_streaming instead."""
         fs = fsspec.filesystem("file")
         return self._read_csv_streaming(fs, str(file_path), delimiter, file_cfg)
 
-    def _read_json(self, file_path: Path, file_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _read_json(
+        self, file_path: Path, file_cfg: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """Legacy JSON reader - use _read_json_streaming instead."""
         fs = fsspec.filesystem("file")
         return self._read_json_streaming(fs, str(file_path), file_cfg)
 
-    def _read_json_lines(self, file_path: Path, file_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _read_json_lines(
+        self, file_path: Path, file_cfg: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """Legacy JSONL reader - use _read_jsonl_streaming instead."""
         fs = fsspec.filesystem("file")
         return self._read_jsonl_streaming(fs, str(file_path), file_cfg)
 
-    def _read_parquet(self, file_path: Path, file_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _read_parquet(
+        self, file_path: Path, file_cfg: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """Legacy Parquet reader - use _read_parquet_streaming instead."""
         fs = fsspec.filesystem("file")
         return self._read_parquet_streaming(fs, str(file_path), file_cfg)

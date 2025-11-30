@@ -11,11 +11,17 @@ from core.patterns import LoadPattern
 def infer_schema(records: List[Dict[str, Any]]) -> List[Dict[str, str]]:
     if not records:
         return []
-    keys = sorted({key for record in records if isinstance(record, dict) for key in record.keys()})
+    keys = sorted(
+        {key for record in records if isinstance(record, dict) for key in record.keys()}
+    )
     schema_snapshot: List[Dict[str, str]] = []
     for key in keys:
         value = next(
-            (record.get(key) for record in records if isinstance(record, dict) and key in record),
+            (
+                record.get(key)
+                for record in records
+                if isinstance(record, dict) and key in record
+            ),
             None,
         )
         schema_snapshot.append(
@@ -27,7 +33,9 @@ def infer_schema(records: List[Dict[str, Any]]) -> List[Dict[str, str]]:
     return schema_snapshot
 
 
-def build_reference_info(reference_mode: Dict[str, Any] | None, out_dir: Path) -> Optional[Dict[str, Any]]:
+def build_reference_info(
+    reference_mode: Dict[str, Any] | None, out_dir: Path
+) -> Optional[Dict[str, Any]]:
     if not reference_mode or not reference_mode.get("enabled"):
         return None
     return {
@@ -35,7 +43,9 @@ def build_reference_info(reference_mode: Dict[str, Any] | None, out_dir: Path) -
         "cadence_days": reference_mode.get("cadence_days"),
         "delta_patterns": reference_mode.get("delta_patterns"),
         "reference_path": str(out_dir),
-        "reference_type": "reference" if reference_mode.get("role") == "reference" else "delta",
+        "reference_type": "reference"
+        if reference_mode.get("role") == "reference"
+        else "delta",
     }
 
 

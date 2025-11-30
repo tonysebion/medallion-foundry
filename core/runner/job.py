@@ -31,7 +31,9 @@ from core.storage import get_storage_backend
 logger = logging.getLogger(__name__)
 
 
-def build_extractor(cfg: Dict[str, Any], env_config: Optional[EnvironmentConfig] = None) -> BaseExtractor:
+def build_extractor(
+    cfg: Dict[str, Any], env_config: Optional[EnvironmentConfig] = None
+) -> BaseExtractor:
     src = cfg["source"]
     src_type = src.get("type", "api")
 
@@ -103,7 +105,9 @@ class ExtractJob:
 
         chunk_count, chunk_files = self._process_chunks(records)
         self.created_files.extend(chunk_files)
-        self._emit_metadata(record_count=len(records), chunk_count=chunk_count, cursor=new_cursor)
+        self._emit_metadata(
+            record_count=len(records), chunk_count=chunk_count, cursor=new_cursor
+        )
 
         logger.info("Finished Bronze extract run successfully")
         return 0
@@ -125,10 +129,14 @@ class ExtractJob:
         bronze_output = platform_cfg["bronze"]["output_defaults"]
         self.output_formats = compute_output_formats(run_cfg, bronze_output)
 
-        storage_enabled = run_cfg.get("storage_enabled", run_cfg.get("s3_enabled", False))
+        storage_enabled = run_cfg.get(
+            "storage_enabled", run_cfg.get("s3_enabled", False)
+        )
         storage_backend = get_storage_backend(platform_cfg) if storage_enabled else None
         if storage_backend:
-            logger.info("Initialized %s storage backend", storage_backend.get_backend_type())
+            logger.info(
+                "Initialized %s storage backend", storage_backend.get_backend_type()
+            )
 
         self._out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -148,7 +156,9 @@ class ExtractJob:
         chunk_files = processor.process(chunks)
         return len(chunks), chunk_files
 
-    def _emit_metadata(self, record_count: int, chunk_count: int, cursor: Optional[str]) -> None:
+    def _emit_metadata(
+        self, record_count: int, chunk_count: int, cursor: Optional[str]
+    ) -> None:
         reference_mode = self.source_cfg["run"].get("reference_mode")
         from datetime import datetime
 

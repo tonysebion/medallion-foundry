@@ -37,7 +37,9 @@ def _cache_key(config: Dict[str, Any]) -> int:
     return id(config)
 
 
-def get_storage_backend(config: Union[Dict[str, Any], RootConfig], use_cache: bool = True) -> StorageBackend:
+def get_storage_backend(
+    config: Union[Dict[str, Any], RootConfig], use_cache: bool = True
+) -> StorageBackend:
     # normalize typed config into dict for caching key + factory
     cfg_dict = config.model_dump() if hasattr(config, "model_dump") else config
     cache_key = _cache_key(cfg_dict)

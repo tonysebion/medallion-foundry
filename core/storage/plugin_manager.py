@@ -32,7 +32,8 @@ def get_backend_factory(
     if not factory:
         available = list(BACKEND_REGISTRY.keys())
         error_msg = (
-            f"Storage backend '{backend_type}' is not available. " f"Available backends: {', '.join(available)}."
+            f"Storage backend '{backend_type}' is not available. "
+            f"Available backends: {', '.join(available)}."
         )
 
         # Provide helpful hints for common missing backends

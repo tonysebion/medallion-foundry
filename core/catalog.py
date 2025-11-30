@@ -22,7 +22,9 @@ def notify_catalog(event_name: str, payload: Mapping[str, Any]) -> None:
     logger.info("Catalog event '%s': %s", event_name, payload)
 
 
-def report_schema_snapshot(dataset_id: str, schema: Iterable[Mapping[str, Any]]) -> None:
+def report_schema_snapshot(
+    dataset_id: str, schema: Iterable[Mapping[str, Any]]
+) -> None:
     """
     Future hook to push schema snapshots to a catalog (e.g., OpenMetadata).
 
@@ -36,9 +38,13 @@ def report_run_metadata(dataset_id: str, metadata: Mapping[str, Any]) -> None:
     logger.info("Catalog run metadata for %s: %s", dataset_id, metadata)
 
 
-def report_lineage(source_dataset: str, target_dataset: str, metadata: Mapping[str, Any]) -> None:
+def report_lineage(
+    source_dataset: str, target_dataset: str, metadata: Mapping[str, Any]
+) -> None:
     """Hook to emit lineage between datasets (Bronze -> Silver)."""
-    logger.info("Catalog lineage: %s -> %s (%s)", source_dataset, target_dataset, metadata)
+    logger.info(
+        "Catalog lineage: %s -> %s (%s)", source_dataset, target_dataset, metadata
+    )
 
 
 def report_quality_snapshot(dataset_id: str, metrics: Mapping[str, Any]) -> None:

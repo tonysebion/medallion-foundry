@@ -52,7 +52,9 @@ class ConfigValidationError(BronzeFoundryError):
 
     error_code = "CFG001"
 
-    def __init__(self, message: str, config_path: Optional[str] = None, key: Optional[str] = None):
+    def __init__(
+        self, message: str, config_path: Optional[str] = None, key: Optional[str] = None
+    ):
         """
         Initialize configuration validation error.
 

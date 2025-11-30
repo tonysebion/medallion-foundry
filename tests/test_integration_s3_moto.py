@@ -4,7 +4,9 @@ import pytest
 pytestmark = pytest.mark.integration
 
 
-@pytest.mark.skipif(os.environ.get("RUN_SMOKE") != "1", reason="Set RUN_SMOKE=1 to run smoke tests")
+@pytest.mark.skipif(
+    os.environ.get("RUN_SMOKE") != "1", reason="Set RUN_SMOKE=1 to run smoke tests"
+)
 def test_s3_roundtrip_with_moto():
     try:
         from moto import mock_aws

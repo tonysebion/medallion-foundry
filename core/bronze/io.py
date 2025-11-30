@@ -88,7 +88,8 @@ def chunk_records(
         chunks.append(current_chunk)
 
     logger.info(
-        f"Chunked {len(records)} records into {len(chunks)} chunks " f"(max_rows={max_rows}, max_size_mb={max_size_mb})"
+        f"Chunked {len(records)} records into {len(chunks)} chunks "
+        f"(max_rows={max_rows}, max_size_mb={max_size_mb})"
     )
     return chunks
 
@@ -114,13 +115,17 @@ def write_csv_chunk(chunk: List[Any], out_path: Path) -> None:
     logger.info(f"Wrote {len(chunk)} rows to CSV at {out_path}")
 
 
-def write_parquet_chunk(chunk: List[Any], out_path: Path, compression: str = "snappy") -> None:
+def write_parquet_chunk(
+    chunk: List[Any], out_path: Path, compression: str = "snappy"
+) -> None:
     if not chunk:
         return
 
     first = chunk[0]
     if not isinstance(first, dict):
-        logger.warning(f"Records are not dict-like; skipping Parquet for {out_path.name}")
+        logger.warning(
+            f"Records are not dict-like; skipping Parquet for {out_path.name}"
+        )
         return
 
     df = pd.DataFrame.from_records(chunk)
@@ -255,7 +260,9 @@ def verify_checksum_manifest(
 
     files = manifest.get("files")
     if not isinstance(files, list) or not files:
-        raise ValueError(f"Checksum manifest at {manifest_path} does not list any files to validate")
+        raise ValueError(
+            f"Checksum manifest at {manifest_path} does not list any files to validate"
+        )
 
     missing_files = []
     mismatched_files = []
@@ -288,6 +295,8 @@ def verify_checksum_manifest(
             issues.append(f"missing files: {missing_files}")
         if mismatched_files:
             issues.append(f"checksum mismatches: {mismatched_files}")
-        raise ValueError(f"Checksum verification failed for {manifest_path}: {', '.join(issues)}")
+        raise ValueError(
+            f"Checksum verification failed for {manifest_path}: {', '.join(issues)}"
+        )
 
     return manifest

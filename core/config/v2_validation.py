@@ -15,7 +15,9 @@ def validate_v2_config_dict(cfg: Dict[str, Any]) -> None:
     platform = cfg.get("platform") or {}
     bronze = platform.get("bronze") or {}
     if "local_path" in bronze:
-        raise ValueError("platform.bronze.local_path is deprecated in v2; use platform.bronze.output_dir")
+        raise ValueError(
+            "platform.bronze.local_path is deprecated in v2; use platform.bronze.output_dir"
+        )
 
     source = cfg.get("source") or {}
     api = source.get("api") or {}

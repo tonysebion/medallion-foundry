@@ -30,7 +30,9 @@ except Exception:
 class AsyncApiClient:
     """Async HTTP client with retry and rate limiting support."""
 
-    _breaker = CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0, half_open_max_calls=1)
+    _breaker = CircuitBreaker(
+        failure_threshold=5, cooldown_seconds=30.0, half_open_max_calls=1
+    )
 
     def __init__(
         self,
@@ -41,7 +43,9 @@ class AsyncApiClient:
         max_concurrent: int = 5,
     ):
         if not HTTPX_AVAILABLE:
-            raise ImportError("httpx is required for async HTTP. Install via: pip install httpx")
+            raise ImportError(
+                "httpx is required for async HTTP. Install via: pip install httpx"
+            )
 
         self.base_url = base_url.rstrip("/")
         self.headers = headers
@@ -104,7 +108,9 @@ class AsyncApiClient:
                             return False
             return False
 
-        def _delay_from_exc(exc: BaseException, attempt: int, default_delay: float) -> Optional[float]:
+        def _delay_from_exc(
+            exc: BaseException, attempt: int, default_delay: float
+        ) -> Optional[float]:
             if hasattr(exc, "response"):
                 resp = getattr(exc, "response", None)
                 if resp and hasattr(resp, "headers"):

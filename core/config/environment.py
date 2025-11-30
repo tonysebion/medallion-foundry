@@ -41,7 +41,9 @@ def resolve_env_vars(value: Any) -> Any:
             var_name = match.group(1)
             env_value = os.environ.get(var_name)
             if env_value is None:
-                logger.warning(f"Environment variable {var_name} not found, keeping placeholder")
+                logger.warning(
+                    f"Environment variable {var_name} not found, keeping placeholder"
+                )
                 return match.group(0)
             return env_value
 

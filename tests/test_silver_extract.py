@@ -38,7 +38,14 @@ def test_build_current_view_with_primary_keys():
 
 
 def test_derive_relative_partition_detects_system_folder(tmp_path):
-    partition = tmp_path / "output" / "system=demo" / "table=sample" / "pattern=full" / "dt=2025-01-01"
+    partition = (
+        tmp_path
+        / "output"
+        / "system=demo"
+        / "table=sample"
+        / "pattern=full"
+        / "dt=2025-01-01"
+    )
     partition.mkdir(parents=True)
 
     relative = derive_relative_partition(partition)

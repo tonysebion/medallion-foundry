@@ -139,7 +139,9 @@ def test_async_client_handles_rate_limit():
             async def fake_sleep(delay):
                 sleep_calls.append(delay)
 
-            with patch("core.extractors.async_http.asyncio.sleep", side_effect=fake_sleep):
+            with patch(
+                "core.extractors.async_http.asyncio.sleep", side_effect=fake_sleep
+            ):
                 await client.get("/rate")
 
                 assert any(call >= 0.01 for call in sleep_calls)
@@ -236,7 +238,9 @@ def test_async_client_get_many_respects_max_concurrent():
             mock_client.get = fake_get
             mock_httpx.AsyncClient.return_value = mock_client
 
-            client = AsyncApiClient("https://api.example.com", headers={}, max_concurrent=2)
+            client = AsyncApiClient(
+                "https://api.example.com", headers={}, max_concurrent=2
+            )
 
             class TrackingSemaphore(asyncio.Semaphore):
                 def __init__(self, value: int) -> None:

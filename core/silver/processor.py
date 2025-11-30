@@ -74,7 +74,9 @@ class SilverProcessor:
     def run(self) -> SilverProcessorResult:
         metrics = SilverRunMetrics()
         if not self.dataset.silver.enabled:
-            logger.info("Silver disabled for %s; skipping promotion", self.dataset.dataset_id)
+            logger.info(
+                "Silver disabled for %s; skipping promotion", self.dataset.dataset_id
+            )
             return SilverProcessorResult(metrics=metrics)
 
         df = self._load_bronze_dataframe()
@@ -84,10 +86,14 @@ class SilverProcessor:
             return SilverProcessorResult(metrics=metrics)
 
         prepared = self._prepare_dataframe(df)
-        metrics.changed_keys = prepared[self.dataset.silver.natural_keys].drop_duplicates().shape[0]
+        metrics.changed_keys = (
+            prepared[self.dataset.silver.natural_keys].drop_duplicates().shape[0]
+        )
         frames = self._dispatch_patterns(prepared, metrics)
         if not frames:
-            logger.warning("No Silver datasets produced for %s", self.dataset.dataset_id)
+            logger.warning(
+                "No Silver datasets produced for %s", self.dataset.dataset_id
+            )
             return SilverProcessorResult(metrics=metrics)
 
         writer = DatasetWriter(
@@ -108,7 +114,10 @@ class SilverProcessor:
                 continue
             enriched = self._append_metadata(frame.copy())
             if not schema_snapshot:
-                schema_snapshot = [{"name": col, "dtype": str(dtype)} for col, dtype in enriched.dtypes.items()]
+                schema_snapshot = [
+                    {"name": col, "dtype": str(dtype)}
+                    for col, dtype in enriched.dtypes.items()
+                ]
             if self.chunk_tag:
                 written = writer.write_dataset_chunk(name, enriched, self.chunk_tag)
             else:
@@ -116,7 +125,9 @@ class SilverProcessor:
             outputs[name] = written
             metrics.rows_written += len(enriched)
 
-        return SilverProcessorResult(outputs=outputs, schema_snapshot=schema_snapshot, metrics=metrics)
+        return SilverProcessorResult(
+            outputs=outputs, schema_snapshot=schema_snapshot, metrics=metrics
+        )
 
     # ------------------------------------------------------------------ helpers
 
@@ -216,15 +227,23 @@ class SilverProcessor:
 
     def _prepare_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         expected = set(self.dataset.silver.natural_keys)
-        if self.dataset.silver.entity_kind.is_event_like and self.dataset.silver.event_ts_column:
+        if (
+            self.dataset.silver.entity_kind.is_event_like
+            and self.dataset.silver.event_ts_column
+        ):
             expected.add(self.dataset.silver.event_ts_column)
-        if self.dataset.silver.entity_kind.is_state_like and self.dataset.silver.change_ts_column:
+        if (
+            self.dataset.silver.entity_kind.is_state_like
+            and self.dataset.silver.change_ts_column
+        ):
             expected.add(self.dataset.silver.change_ts_column)
         expected.update(self.dataset.silver.attributes)
 
         missing = [col for col in expected if col not in df.columns]
         if missing:
-            raise ValueError(f"Bronze data missing required columns for {self.dataset.dataset_id}: {missing}")
+            raise ValueError(
+                f"Bronze data missing required columns for {self.dataset.dataset_id}: {missing}"
+            )
 
         allowed = set(expected)
         allowed.update({"is_deleted", "deleted_flag"})
@@ -250,14 +269,21 @@ class SilverProcessor:
             )
 
         drop_subset = list(self.dataset.silver.natural_keys)
-        if self.dataset.silver.entity_kind.is_event_like and self.dataset.silver.event_ts_column:
+        if (
+            self.dataset.silver.entity_kind.is_event_like
+            and self.dataset.silver.event_ts_column
+        ):
             drop_subset.append(self.dataset.silver.event_ts_column)
         elif self.dataset.silver.change_ts_column:
             drop_subset.append(self.dataset.silver.change_ts_column)
-        working = working.sort_values(drop_subset).drop_duplicates(subset=drop_subset, keep="last")
+        working = working.sort_values(drop_subset).drop_duplicates(
+            subset=drop_subset, keep="last"
+        )
         return working.reset_index(drop=True)
 
-    def _dispatch_patterns(self, df: pd.DataFrame, metrics: SilverRunMetrics) -> Dict[str, pd.DataFrame]:
+    def _dispatch_patterns(
+        self, df: pd.DataFrame, metrics: SilverRunMetrics
+    ) -> Dict[str, pd.DataFrame]:
         kind = self.dataset.silver.entity_kind
         if kind == EntityKind.EVENT:
             return {"events": self._process_events(df)}
@@ -283,19 +309,27 @@ class SilverProcessor:
             sorted_df = sorted_df.drop_duplicates(subset=subset, keep="last")
         return sorted_df.reset_index(drop=True)
 
-    def _process_state(self, df: pd.DataFrame, derived: bool = False) -> Dict[str, pd.DataFrame]:
+    def _process_state(
+        self, df: pd.DataFrame, derived: bool = False
+    ) -> Dict[str, pd.DataFrame]:
         history_mode = self.dataset.silver.history_mode or HistoryMode.SCD2
-        ts_col = self.dataset.silver.change_ts_column or self.dataset.silver.event_ts_column
+        ts_col = (
+            self.dataset.silver.change_ts_column or self.dataset.silver.event_ts_column
+        )
         if not ts_col:
             raise ValueError("change_ts_column is required for state datasets")
         ordered = df.sort_values(self.dataset.silver.natural_keys + [ts_col]).copy()
         if history_mode == HistoryMode.SCD1 or history_mode == HistoryMode.LATEST_ONLY:
-            current = ordered.drop_duplicates(subset=self.dataset.silver.natural_keys, keep="last")
+            current = ordered.drop_duplicates(
+                subset=self.dataset.silver.natural_keys, keep="last"
+            )
             return {"state_current": current.reset_index(drop=True)}
 
         history = ordered.copy()
         history["effective_from"] = history[ts_col]
-        history["effective_to"] = history.groupby(self.dataset.silver.natural_keys)["effective_from"].shift(-1)
+        history["effective_to"] = history.groupby(self.dataset.silver.natural_keys)[
+            "effective_from"
+        ].shift(-1)
         history["is_current"] = history["effective_to"].isna().astype(int)
         current = history[history["is_current"] == 1].copy()
         return {
@@ -304,12 +338,18 @@ class SilverProcessor:
         }
 
     def _process_derived_events(self, df: pd.DataFrame) -> pd.DataFrame:
-        ts_col = self.dataset.silver.change_ts_column or self.dataset.silver.event_ts_column
+        ts_col = (
+            self.dataset.silver.change_ts_column or self.dataset.silver.event_ts_column
+        )
         if not ts_col:
-            raise ValueError("change_ts_column (or event_ts_column) required for derived_event datasets")
+            raise ValueError(
+                "change_ts_column (or event_ts_column) required for derived_event datasets"
+            )
         attrs = self.dataset.silver.attributes or []
         rows: List[Dict[str, Any]] = []
-        grouped = df.sort_values(self.dataset.silver.natural_keys + [ts_col]).groupby(self.dataset.silver.natural_keys)
+        grouped = df.sort_values(self.dataset.silver.natural_keys + [ts_col]).groupby(
+            self.dataset.silver.natural_keys
+        )
         for _, group in grouped:
             prev: Optional[pd.Series] = None
             for _, row_raw in group.iterrows():
@@ -317,12 +357,20 @@ class SilverProcessor:
                 change_type = "upsert"
                 changed_cols = list(attrs)
                 if prev is not None:
-                    changed_cols = [col for col in attrs if row.get(col) != prev.get(col)]
-                    if not changed_cols and self.dataset.silver.delete_mode == DeleteMode.IGNORE:
+                    changed_cols = [
+                        col for col in attrs if row.get(col) != prev.get(col)
+                    ]
+                    if (
+                        not changed_cols
+                        and self.dataset.silver.delete_mode == DeleteMode.IGNORE
+                    ):
                         prev = row
                         continue
                     change_type = "update" if changed_cols else "noop"
-                if self.dataset.silver.delete_mode == DeleteMode.TOMBSTONE_EVENT and row.get("is_deleted"):
+                if (
+                    self.dataset.silver.delete_mode == DeleteMode.TOMBSTONE_EVENT
+                    and row.get("is_deleted")
+                ):
                     change_type = "delete"
                 event = {key: row[key] for key in self.dataset.silver.natural_keys}
                 for attr in attrs:
@@ -355,13 +403,19 @@ class SilverProcessor:
             source_column = self.dataset.silver.record_time_column
 
             if not source_column:
-                raise ValueError("record_time_partition specified but record_time_column is missing")
+                raise ValueError(
+                    "record_time_partition specified but record_time_column is missing"
+                )
 
             for frame in frames.values():
                 if source_column not in frame.columns:
-                    raise ValueError(f"record_time_column '{source_column}' not found in Silver output")
+                    raise ValueError(
+                        f"record_time_column '{source_column}' not found in Silver output"
+                    )
                 # Create partition column from record time (event_ts or change_ts)
-                frame[partition_key] = pd.to_datetime(frame[source_column], errors="coerce").dt.date.astype(str)
+                frame[partition_key] = pd.to_datetime(
+                    frame[source_column], errors="coerce"
+                ).dt.date.astype(str)
 
             return [partition_key]
 
@@ -379,34 +433,52 @@ class SilverProcessor:
                             else self.dataset.silver.change_ts_column
                         )
                         if source and source in frame.columns:
-                            frame[column] = pd.to_datetime(frame[source], errors="coerce").dt.date.astype(str)
+                            frame[column] = pd.to_datetime(
+                                frame[source], errors="coerce"
+                            ).dt.date.astype(str)
                         else:
-                            raise ValueError(f"Unable to derive partition column '{column}'")
+                            raise ValueError(
+                                f"Unable to derive partition column '{column}'"
+                            )
                     else:
-                        raise ValueError(f"Partition column '{column}' missing from Silver output")
+                        raise ValueError(
+                            f"Partition column '{column}' missing from Silver output"
+                        )
             return partition_by
 
         # Defaults when not provided.
         if self.dataset.silver.entity_kind.is_event_like:
             column = (self.dataset.silver.event_ts_column or "event_ts") + "_dt"
             for frame in frames.values():
-                source = self.dataset.silver.event_ts_column or self.dataset.silver.change_ts_column
+                source = (
+                    self.dataset.silver.event_ts_column
+                    or self.dataset.silver.change_ts_column
+                )
                 if source and source in frame.columns:
-                    frame[column] = pd.to_datetime(frame[source], errors="coerce").dt.date.astype(str)
+                    frame[column] = pd.to_datetime(
+                        frame[source], errors="coerce"
+                    ).dt.date.astype(str)
             return [column]
 
         column = "effective_from_dt"
         for frame in frames.values():
             if "effective_from" in frame.columns:
-                frame[column] = pd.to_datetime(frame["effective_from"], errors="coerce").dt.date.astype(str)
-            elif self.dataset.silver.change_ts_column and self.dataset.silver.change_ts_column in frame.columns:
+                frame[column] = pd.to_datetime(
+                    frame["effective_from"], errors="coerce"
+                ).dt.date.astype(str)
+            elif (
+                self.dataset.silver.change_ts_column
+                and self.dataset.silver.change_ts_column in frame.columns
+            ):
                 frame[column] = pd.to_datetime(
                     frame[self.dataset.silver.change_ts_column], errors="coerce"
                 ).dt.date.astype(str)
         return [column]
 
 
-def build_intent_silver_partition(dataset: DatasetConfig, run_date: date, base_dir: Optional[Path] = None) -> Path:
+def build_intent_silver_partition(
+    dataset: DatasetConfig, run_date: date, base_dir: Optional[Path] = None
+) -> Path:
     """Derive the Silver partition path that pairs with Bronze for intent configs."""
     if base_dir:
         base_path = base_dir
@@ -415,10 +487,17 @@ def build_intent_silver_partition(dataset: DatasetConfig, run_date: date, base_d
     else:
         base_path = dataset.silver_base_path
     domain = dataset.domain or dataset.system
-    partition = base_path / f"domain={domain}" / f"entity={dataset.entity}" / f"v{dataset.silver.version}"
+    partition = (
+        base_path
+        / f"domain={domain}"
+        / f"entity={dataset.entity}"
+        / f"v{dataset.silver.version}"
+    )
     if dataset.silver.include_pattern_folder:
         partition = partition / f"pattern={dataset.silver.entity_kind.value}"
-    partition = partition / f"{dataset.silver.load_partition_name}={run_date.isoformat()}"
+    partition = (
+        partition / f"{dataset.silver.load_partition_name}={run_date.isoformat()}"
+    )
     return partition
 
 

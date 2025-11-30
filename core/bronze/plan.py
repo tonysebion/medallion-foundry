@@ -12,9 +12,13 @@ def resolve_load_pattern(run_cfg: Dict[str, Any]) -> LoadPattern:
     return LoadPattern.normalize(run_cfg.get("load_pattern"))
 
 
-def compute_output_formats(run_cfg: Dict[str, Any], bronze_output: Dict[str, Any]) -> Dict[str, bool]:
+def compute_output_formats(
+    run_cfg: Dict[str, Any], bronze_output: Dict[str, Any]
+) -> Dict[str, bool]:
     write_csv = run_cfg.get("write_csv", True) and bronze_output.get("allow_csv", True)
-    write_parquet = run_cfg.get("write_parquet", True) and bronze_output.get("allow_parquet", True)
+    write_parquet = run_cfg.get("write_parquet", True) and bronze_output.get(
+        "allow_parquet", True
+    )
     return {"csv": write_csv, "parquet": write_parquet}
 
 

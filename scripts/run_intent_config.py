@@ -33,7 +33,9 @@ def main() -> int:
     )
 
     args = parser.parse_args()
-    run_date = (dt.date.fromisoformat(args.date) if args.date else dt.date.today()).isoformat()
+    run_date = (
+        dt.date.fromisoformat(args.date) if args.date else dt.date.today()
+    ).isoformat()
     bronze_cmd = [
         sys.executable,
         "bronze_extract.py",

@@ -30,7 +30,9 @@ def test_config_validation_error_code():
 
 def test_extraction_error_code():
     """Test ExtractionError has correct error code."""
-    err = ExtractionError("Extraction failed", extractor_type="api", system="test_system")
+    err = ExtractionError(
+        "Extraction failed", extractor_type="api", system="test_system"
+    )
     assert err.error_code == "EXT001"
     assert "[EXT001]" in str(err)
 

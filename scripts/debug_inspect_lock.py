@@ -16,7 +16,9 @@ bronze = str(
 )
 silver_tmp = str(ROOT / "output" / "silver_tmp_debug2")
 os.makedirs(silver_tmp, exist_ok=True)
-config = str(ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml")
+config = str(
+    ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
+)
 procs = []
 for i in range(3):
     tag = f"tag{i}"
@@ -39,11 +41,20 @@ for i in range(3):
         "--lock-timeout",
         "5",
     ]
-    p = subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    p = subprocess.Popen(
+        cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
     procs.append((tag, p))
     time.sleep(0.2)
 # Monitor lock file and processes
-lock_path = Path(silver_tmp) / "domain=retail_demo" / "entity=orders" / "v1" / "load_date=2025-11-28" / ".silver.lock"
+lock_path = (
+    Path(silver_tmp)
+    / "domain=retail_demo"
+    / "entity=orders"
+    / "v1"
+    / "load_date=2025-11-28"
+    / ".silver.lock"
+)
 print("Lock path", lock_path)
 for i in range(60):
     msg = []

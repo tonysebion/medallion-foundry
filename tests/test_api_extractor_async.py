@@ -54,7 +54,9 @@ def test_api_extractor_async_pagination(monkeypatch):
         "core.extractors.api_extractor.RateLimiter.from_config",
         DummyLimiter.from_config,
     )
-    monkeypatch.setattr("core.extractors.api_extractor.trace_span", lambda name: DummySpan())
+    monkeypatch.setattr(
+        "core.extractors.api_extractor.trace_span", lambda name: DummySpan()
+    )
 
     async def _run():
         headers: Dict[str, str] = {}
@@ -106,7 +108,9 @@ def test_api_extractor_async_rate_limiter(monkeypatch):
             "core.extractors.api_extractor.RateLimiter.from_config",
             lambda *args, **kwargs: limiter,
         )
-        monkeypatch.setattr("core.extractors.api_extractor.trace_span", lambda name: DummySpan())
+        monkeypatch.setattr(
+            "core.extractors.api_extractor.trace_span", lambda name: DummySpan()
+        )
 
         headers: Dict[str, str] = {}
         response = await extractor._paginate_async(

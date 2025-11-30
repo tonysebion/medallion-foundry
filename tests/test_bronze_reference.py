@@ -29,8 +29,13 @@ HYBRID_COMBOS = [
 ]
 
 
-def _write_metadata_with_reference(tmp_path: Path, run_date: dt.date, reference_mode: Dict[str, Any]) -> Path:
-    path = tmp_path / f"system=retail_demo/table=orders/pattern=full/dt={run_date.isoformat()}"
+def _write_metadata_with_reference(
+    tmp_path: Path, run_date: dt.date, reference_mode: Dict[str, Any]
+) -> Path:
+    path = (
+        tmp_path
+        / f"system=retail_demo/table=orders/pattern=full/dt={run_date.isoformat()}"
+    )
     path.mkdir(parents=True, exist_ok=True)
     metadata = {
         "record_count": 100,
@@ -64,8 +69,12 @@ def test_reference_then_cdc_delta(tmp_path: Path) -> None:
         dt.date(2025, 11, 14),
         {"role": "delta", "delta_patterns": ["cdc"]},
     )
-    ref_meta = cast(Dict[str, Any], json.loads((ref_path / "_metadata.json").read_text()))
-    delta_meta = cast(Dict[str, Any], json.loads((delta_path / "_metadata.json").read_text()))
+    ref_meta = cast(
+        Dict[str, Any], json.loads((ref_path / "_metadata.json").read_text())
+    )
+    delta_meta = cast(
+        Dict[str, Any], json.loads((delta_path / "_metadata.json").read_text())
+    )
     assert ref_meta["reference_mode"]["role"] == "reference"
     assert delta_meta["reference_mode"]["role"] == "delta"
     assert delta_meta["reference_mode"]["delta_patterns"] == ["cdc"]
@@ -86,8 +95,12 @@ def test_reference_then_incremental_delta(tmp_path: Path) -> None:
         dt.date(2025, 11, 14),
         {"role": "delta", "delta_patterns": ["incremental_merge"]},
     )
-    ref_meta = cast(Dict[str, Any], json.loads((ref_path / "_metadata.json").read_text()))
-    delta_meta = cast(Dict[str, Any], json.loads((delta_path / "_metadata.json").read_text()))
+    ref_meta = cast(
+        Dict[str, Any], json.loads((ref_path / "_metadata.json").read_text())
+    )
+    delta_meta = cast(
+        Dict[str, Any], json.loads((delta_path / "_metadata.json").read_text())
+    )
     assert "incremental_merge" in ref_meta["reference_mode"]["delta_patterns"]
     assert delta_meta["reference_mode"]["role"] == "delta"
 
@@ -95,16 +108,30 @@ def test_reference_then_incremental_delta(tmp_path: Path) -> None:
 def test_hybrid_samples_cover_delta_sequence() -> None:
     for combo_name, delta_mode in HYBRID_COMBOS:
         pattern_folder = SAMPLE_PATTERN_DIRS.get(combo_name, combo_name)
-        base = HYBRID_DIR / f"sample={pattern_folder}" / "system=retail_demo" / "table=orders"
+        base = (
+            HYBRID_DIR
+            / f"sample={pattern_folder}"
+            / "system=retail_demo"
+            / "table=orders"
+        )
         for ref_date in (HYBRID_REFERENCE_INITIAL, HYBRID_REFERENCE_SECOND):
-            reference_meta_path = base / f"dt={ref_date.isoformat()}" / "reference" / "_metadata.json"
+            reference_meta_path = (
+                base / f"dt={ref_date.isoformat()}" / "reference" / "_metadata.json"
+            )
             assert reference_meta_path.exists()
-            reference_meta = cast(Dict[str, Any], json.loads(reference_meta_path.read_text()))
-            assert reference_meta["reference_mode"]["reference_run_date"] == ref_date.isoformat()
+            reference_meta = cast(
+                Dict[str, Any], json.loads(reference_meta_path.read_text())
+            )
+            assert (
+                reference_meta["reference_mode"]["reference_run_date"]
+                == ref_date.isoformat()
+            )
             assert reference_meta["reference_mode"]["delta_mode"] == delta_mode
         for offset in range(1, HYBRID_DELTA_DAYS + 1):
             delta_date = HYBRID_REFERENCE_INITIAL + dt.timedelta(days=offset)
-            delta_meta_path = base / f"dt={delta_date.isoformat()}" / "delta" / "_metadata.json"
+            delta_meta_path = (
+                base / f"dt={delta_date.isoformat()}" / "delta" / "_metadata.json"
+            )
             assert delta_meta_path.exists()
             delta_meta = cast(Dict[str, Any], json.loads(delta_meta_path.read_text()))
             assert delta_meta["reference_mode"]["role"] == "delta"
@@ -113,4 +140,6 @@ def test_hybrid_samples_cover_delta_sequence() -> None:
                 expected_reference = HYBRID_REFERENCE_SECOND.isoformat()
             else:
                 expected_reference = HYBRID_REFERENCE_INITIAL.isoformat()
-            assert delta_meta["reference_mode"]["reference_run_date"] == expected_reference
+            assert (
+                delta_meta["reference_mode"]["reference_run_date"] == expected_reference
+            )

@@ -45,7 +45,9 @@ def _read_yaml(path: str) -> Dict[str, Any]:
     return cfg
 
 
-def load_config(path: str, *, strict: bool = False, enable_env_substitution: bool = True) -> RootConfig:
+def load_config(
+    path: str, *, strict: bool = False, enable_env_substitution: bool = True
+) -> RootConfig:
     """Load a single config file and return both dict and typed model.
 
     For backward compatibility we still return a validated dict, but attach
@@ -63,7 +65,9 @@ def load_config(path: str, *, strict: bool = False, enable_env_substitution: boo
     if "datasets" in cfg:
         datasets = _load_intent_datasets(cfg, config_path=Path(path))
         if len(datasets) != 1:
-            raise ValueError("Config file contains multiple datasets; use load_configs() instead.")
+            raise ValueError(
+                "Config file contains multiple datasets; use load_configs() instead."
+            )
         runtime = datasets[0]
         # Parse into typed RootConfig
         typed = parse_root_config(runtime)
@@ -82,7 +86,9 @@ def load_config(path: str, *, strict: bool = False, enable_env_substitution: boo
         return typed
 
     if "sources" in cfg:
-        raise ValueError("Config contains multiple sources; use load_configs() instead.")
+        raise ValueError(
+            "Config contains multiple sources; use load_configs() instead."
+        )
     validated = validate_config_dict(cfg)
     typed = parse_root_config(validated)
     if "config_version" not in validated:
@@ -95,7 +101,9 @@ def load_config(path: str, *, strict: bool = False, enable_env_substitution: boo
     return typed
 
 
-def load_configs(path: str, *, strict: bool = False, enable_env_substitution: bool = True) -> List[RootConfig]:
+def load_configs(
+    path: str, *, strict: bool = False, enable_env_substitution: bool = True
+) -> List[RootConfig]:
     """Load multi-source config file.
 
     Args:
@@ -167,13 +175,19 @@ def load_configs(path: str, *, strict: bool = False, enable_env_substitution: bo
                 setattr(typed, "__env_config__", env_cfg)
             if "config_version" not in validated:
                 if strict:
-                    raise ValueError("Missing required config_version in strict mode (multi-config load)")
-                emit_compat("Config missing config_version; defaulting to 1", code="CFG004")
+                    raise ValueError(
+                        "Missing required config_version in strict mode (multi-config load)"
+                    )
+                emit_compat(
+                    "Config missing config_version; defaulting to 1", code="CFG004"
+                )
             if strict and int(validated.get("config_version", 1) or 1) >= 2:
                 validate_v2_config_dict(validated)
             validated["__typed_model__"] = typed
         except Exception as exc:  # pragma: no cover
-            logger.warning("Typed config parse failed for source index %s: %s", idx, exc)
+            logger.warning(
+                "Typed config parse failed for source index %s: %s", idx, exc
+            )
         dataset_intent = legacy_to_dataset(validated)
         if dataset_intent:
             validated["__dataset__"] = dataset_intent
@@ -186,7 +200,9 @@ def build_relative_path(cfg: Dict[str, Any], run_date: _date) -> str:
     return build_bronze_relative_path(cfg, run_date)
 
 
-def _load_environment_config(config_path: Path, env_name: Optional[str]) -> Optional[EnvironmentConfig]:
+def _load_environment_config(
+    config_path: Path, env_name: Optional[str]
+) -> Optional[EnvironmentConfig]:
     if not env_name:
         return None
 
@@ -202,11 +218,15 @@ def _load_environment_config(config_path: Path, env_name: Optional[str]) -> Opti
         _export_s3_env_vars(env_config.s3)
         return env_config
 
-    logger.warning(f"Environment '{env_name}' referenced in config but not found at {env_file}")
+    logger.warning(
+        f"Environment '{env_name}' referenced in config but not found at {env_file}"
+    )
     return None
 
 
-def _build_dataset_runtime(dataset: DatasetConfig, env_config: Optional[EnvironmentConfig] = None) -> Dict[str, Any]:
+def _build_dataset_runtime(
+    dataset: DatasetConfig, env_config: Optional[EnvironmentConfig] = None
+) -> Dict[str, Any]:
     runtime = dataset_to_runtime_config(dataset)
     validated = validate_config_dict(runtime)
     validated["__dataset__"] = dataset
@@ -242,14 +262,20 @@ def ensure_root_config(cfg: Dict[str, Any]) -> RootConfig:
         raise
 
 
-def _load_intent_datasets(raw: Dict[str, Any], *, config_path: Path) -> List[Dict[str, Any]]:
+def _load_intent_datasets(
+    raw: Dict[str, Any], *, config_path: Path
+) -> List[Dict[str, Any]]:
     """Load intent-style configs (single dict or list under 'datasets')."""
     entries: List[Dict[str, Any]]
     if "datasets" in raw:
         datasets = raw["datasets"]
         if not isinstance(datasets, list) or not datasets:
             raise ValueError("'datasets' must be a non-empty list")
-        defaults = {key: raw.get(key) for key in ("environment", "domain") if raw.get(key) is not None}
+        defaults = {
+            key: raw.get(key)
+            for key in ("environment", "domain")
+            if raw.get(key) is not None
+        }
         entries = []
         for idx, item in enumerate(datasets):
             if not isinstance(item, dict):
@@ -259,9 +285,13 @@ def _load_intent_datasets(raw: Dict[str, Any], *, config_path: Path) -> List[Dic
             env_config = _load_environment_config(config_path, dataset.environment)
             if env_config and env_config.s3:
                 if dataset.bronze.output_bucket:
-                    dataset.bronze.output_bucket = env_config.s3.get_bucket(dataset.bronze.output_bucket)
+                    dataset.bronze.output_bucket = env_config.s3.get_bucket(
+                        dataset.bronze.output_bucket
+                    )
                 if dataset.silver.output_bucket:
-                    dataset.silver.output_bucket = env_config.s3.get_bucket(dataset.silver.output_bucket)
+                    dataset.silver.output_bucket = env_config.s3.get_bucket(
+                        dataset.silver.output_bucket
+                    )
             runtime = _build_dataset_runtime(dataset, env_config)
             runtime["source"]["config_name"] = item.get("name") or dataset.dataset_id
             entries.append(runtime)
@@ -271,9 +301,13 @@ def _load_intent_datasets(raw: Dict[str, Any], *, config_path: Path) -> List[Dic
     env_config = _load_environment_config(config_path, dataset.environment)
     if env_config and env_config.s3:
         if dataset.bronze.output_bucket:
-            dataset.bronze.output_bucket = env_config.s3.get_bucket(dataset.bronze.output_bucket)
+            dataset.bronze.output_bucket = env_config.s3.get_bucket(
+                dataset.bronze.output_bucket
+            )
         if dataset.silver.output_bucket:
-            dataset.silver.output_bucket = env_config.s3.get_bucket(dataset.silver.output_bucket)
+            dataset.silver.output_bucket = env_config.s3.get_bucket(
+                dataset.silver.output_bucket
+            )
     return [_build_dataset_runtime(dataset, env_config)]
 
 
@@ -309,7 +343,10 @@ def load_config_with_env(
 
     # Parse into DatasetConfig
     if not is_new_intent_config(raw):
-        raise ValueError("load_config_with_env requires intent-style config. " "Use load_config() for legacy configs.")
+        raise ValueError(
+            "load_config_with_env requires intent-style config. "
+            "Use load_config() for legacy configs."
+        )
 
     dataset = DatasetConfig.from_dict(raw)
 
@@ -332,6 +369,8 @@ def load_config_with_env(
             logger.info(f"Loading environment config: {env_file}")
             env_config = EnvironmentConfig.from_yaml(env_file)
         else:
-            logger.warning(f"Environment '{env_name}' referenced in config but not found at {env_file}")
+            logger.warning(
+                f"Environment '{env_name}' referenced in config but not found at {env_file}"
+            )
 
     return dataset, env_config

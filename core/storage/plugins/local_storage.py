@@ -18,7 +18,9 @@ class LocalStorage(StorageBackend):
     def __init__(self, config: Dict[str, Any]) -> None:
         bronze_cfg = config.get("bronze", {})
         root = bronze_cfg.get("local_root")
-        self.base_dir = Path(root).expanduser().resolve() if root else Path(".").resolve()
+        self.base_dir = (
+            Path(root).expanduser().resolve() if root else Path(".").resolve()
+        )
 
     def _resolve_path(self, remote_path: str) -> Path:
         candidate = Path(remote_path)

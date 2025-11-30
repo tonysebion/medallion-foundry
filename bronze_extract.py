@@ -90,7 +90,9 @@ def main() -> int:
         action="store_true",
         help="Enable verbose (DEBUG level) logging",
     )
-    parser.add_argument("--quiet", "-q", action="store_true", help="Suppress all output except errors")
+    parser.add_argument(
+        "--quiet", "-q", action="store_true", help="Suppress all output except errors"
+    )
     parser.add_argument(
         "--version",
         action="version",
@@ -149,11 +151,15 @@ def main() -> int:
         print("Available storage backends:")
         for backend in backends:
             print(f"  - {backend}")
-        print("\nNote: Azure requires additional dependencies. See docs/setup/INSTALLATION.md")
+        print(
+            "\nNote: Azure requires additional dependencies. See docs/setup/INSTALLATION.md"
+        )
         return 0
 
     # Configure logging based on flags
-    log_level = logging.DEBUG if args.verbose else logging.ERROR if args.quiet else logging.INFO
+    log_level = (
+        logging.DEBUG if args.verbose else logging.ERROR if args.quiet else logging.INFO
+    )
     setup_logging(level=log_level, format_type=args.log_format, use_colors=True)
 
     orchestrator = BronzeOrchestrator(parser, args)
@@ -163,10 +169,14 @@ def main() -> int:
 class BronzeOrchestrator:
     """Encapsulates Bronze CLI workflows (validation, dry-run, execution)."""
 
-    def __init__(self, parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    def __init__(
+        self, parser: argparse.ArgumentParser, args: argparse.Namespace
+    ) -> None:
         self.parser = parser
         self.args = args
-        self.config_paths = [p.strip() for p in args.config.split(",")] if args.config else []
+        self.config_paths = (
+            [p.strip() for p in args.config.split(",")] if args.config else []
+        )
         self._hook_context: Dict[str, Any] = {
             "layer": "bronze",
             "config_paths": list(self.config_paths),
@@ -192,7 +202,9 @@ class BronzeOrchestrator:
             return self._validate_configs(dry_run=False)
 
         if self.args.dry_run:
-            logger.info("Running in dry-run mode (validation + connection tests, no extraction)")
+            logger.info(
+                "Running in dry-run mode (validation + connection tests, no extraction)"
+            )
             return self._validate_configs(dry_run=True)
 
         configs = self._load_all_configs()
@@ -204,12 +216,16 @@ class BronzeOrchestrator:
         for cfg in configs:
             enforce_storage_scope(cfg.platform, self.args.storage_scope)
 
-        run_date = dt.date.fromisoformat(self.args.date) if self.args.date else dt.date.today()
+        run_date = (
+            dt.date.fromisoformat(self.args.date) if self.args.date else dt.date.today()
+        )
         self._record_configs_info(configs, run_date)
         self._run_options = self._build_run_options(configs, run_date)
         self._update_hook_context(run_date=run_date.isoformat())
         self._update_hook_context(
-            config_names=[cfg.model_dump()["source"].get("config_name") for cfg in configs],
+            config_names=[
+                cfg.model_dump()["source"].get("config_name") for cfg in configs
+            ],
             tables=[f"{cfg.source.system}.{cfg.source.table}" for cfg in configs],
         )
 
@@ -236,17 +252,23 @@ class BronzeOrchestrator:
                 info["relative_path"] = relative_path
             return run_extract(contexts[0])
 
-        logger.info(f"Running {len(contexts)} configs with {self.args.parallel_workers} workers")
+        logger.info(
+            f"Running {len(contexts)} configs with {self.args.parallel_workers} workers"
+        )
         results = run_parallel_extracts(contexts, self.args.parallel_workers)
         failed = sum(1 for _, status, _ in results if status != 0)
         self._update_hook_context(
-            parallel_results=[{"config_name": name, "status": status} for name, status, _ in results]
+            parallel_results=[
+                {"config_name": name, "status": status} for name, status, _ in results
+            ]
         )
         return 1 if failed > 0 else 0
 
     def _require_config(self) -> None:
         if not self.args.config:
-            self.parser.error("--config is required (unless using --list-backends or --version)")
+            self.parser.error(
+                "--config is required (unless using --list-backends or --version)"
+            )
 
     def _validate_configs(self, dry_run: bool) -> int:
         all_valid = True
@@ -280,9 +302,13 @@ class BronzeOrchestrator:
                     if dry_run:
                         try:
                             backend = get_storage_backend(platform)
-                            logger.info(f"  ✓ Storage backend initialized: {backend.get_backend_type()}")
+                            logger.info(
+                                f"  ✓ Storage backend initialized: {backend.get_backend_type()}"
+                            )
                         except Exception as exc:
-                            logger.warning(f"  ⚠ Storage backend validation failed: {exc}")
+                            logger.warning(
+                                f"  ⚠ Storage backend validation failed: {exc}"
+                            )
 
                 logger.info(f"  ✓ Config valid: {config_path} ({len(cfgs)} source(s))")
             except Exception as exc:
@@ -300,7 +326,9 @@ class BronzeOrchestrator:
                 cfgs = self._apply_load_pattern_override(cfgs)
                 configs.extend(cfgs)
             except Exception as exc:
-                logger.error(f"Failed to load config {config_path}: {exc}", exc_info=True)
+                logger.error(
+                    f"Failed to load config {config_path}: {exc}", exc_info=True
+                )
                 return None
         return configs
 
@@ -311,11 +339,15 @@ class BronzeOrchestrator:
         updated: List[RootConfig] = []
         for cfg in cfgs:
             cfg_dict = cfg.model_dump()
-            cfg_dict.setdefault("source", {}).setdefault("run", {})["load_pattern"] = normalized
+            cfg_dict.setdefault("source", {}).setdefault("run", {})["load_pattern"] = (
+                normalized
+            )
             updated.append(ensure_root_config(cfg_dict))
         return updated
 
-    def _dispatch_hooks(self, success: bool, extra: Optional[Dict[str, Any]] = None) -> None:
+    def _dispatch_hooks(
+        self, success: bool, extra: Optional[Dict[str, Any]] = None
+    ) -> None:
         payload: Dict[str, Any] = {
             **self._hook_context,
             "status": "success" if success else "failure",
@@ -324,9 +356,17 @@ class BronzeOrchestrator:
             payload.update(extra)
 
         if self._run_options:
-            urls = self._run_options.on_success_webhooks if success else self._run_options.on_failure_webhooks
+            urls = (
+                self._run_options.on_success_webhooks
+                if success
+                else self._run_options.on_failure_webhooks
+            )
         else:
-            urls = self.args.on_success_webhook if success else self.args.on_failure_webhook
+            urls = (
+                self.args.on_success_webhook
+                if success
+                else self.args.on_failure_webhook
+            )
         fire_webhooks(urls, payload)
 
         event = "bronze_run_completed" if success else "bronze_run_failed"
@@ -338,13 +378,17 @@ class BronzeOrchestrator:
             if value is not None:
                 self._hook_context[key] = value
 
-    def _build_run_options(self, configs: List[RootConfig], run_date: dt.date) -> RunOptions:
+    def _build_run_options(
+        self, configs: List[RootConfig], run_date: dt.date
+    ) -> RunOptions:
         # Prefer typed model if available to reduce dict key errors.
         typed: RootConfig | None = configs[0]
         if typed and typed.silver:
             run_cfg = typed.source.run
             load_pattern = LoadPattern.normalize(
-                run_cfg.load_pattern.value if hasattr(run_cfg.load_pattern, "value") else run_cfg.load_pattern
+                run_cfg.load_pattern.value
+                if hasattr(run_cfg.load_pattern, "value")
+                else run_cfg.load_pattern
             )
             silver_cfg = typed.silver
             return RunOptions(
@@ -395,7 +439,9 @@ class BronzeOrchestrator:
             artifact_writer_kind=getattr(self.args, "artifact_writer", "default"),
         )
 
-    def _record_configs_info(self, configs: List[RootConfig], run_date: dt.date) -> None:
+    def _record_configs_info(
+        self, configs: List[RootConfig], run_date: dt.date
+    ) -> None:
         self._configs_info = []
         for cfg in configs:
             dataset_id = f"bronze:{cfg.source.system}.{cfg.source.table}"
@@ -409,7 +455,9 @@ class BronzeOrchestrator:
                     "table": cfg.source.table,
                 }
             )
-        self._update_hook_context(datasets=[info["dataset_id"] for info in self._configs_info])
+        self._update_hook_context(
+            datasets=[info["dataset_id"] for info in self._configs_info]
+        )
 
     def _report_run_metadata(self, success: bool, extra: Dict[str, Any]) -> None:
         if not self._configs_info:

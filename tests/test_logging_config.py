@@ -33,9 +33,15 @@ def test_setup_logging_writes_json_file(tmp_path: Path) -> None:
             include_context=True,
         )
         handlers = list(root.handlers)
-        console_handler = next(handler for handler in handlers if isinstance(handler, logging.StreamHandler))
+        console_handler = next(
+            handler
+            for handler in handlers
+            if isinstance(handler, logging.StreamHandler)
+        )
         file_handler = next(
-            handler for handler in handlers if isinstance(handler, logging.handlers.RotatingFileHandler)
+            handler
+            for handler in handlers
+            if isinstance(handler, logging.handlers.RotatingFileHandler)
         )
 
         assert isinstance(console_handler.formatter, JSONFormatter)

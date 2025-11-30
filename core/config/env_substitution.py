@@ -40,7 +40,9 @@ def substitute_env_vars(value: Any) -> Any:
                 return env_value
             if default_value is not None:
                 return str(default_value)
-            raise ValueError(f"Environment variable '{var_name}' is not set and no default provided")
+            raise ValueError(
+                f"Environment variable '{var_name}' is not set and no default provided"
+            )
 
         return _ENV_VAR_PATTERN.sub(replacer, value)
 

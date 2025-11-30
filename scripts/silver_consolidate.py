@@ -30,7 +30,9 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Remove chunk files after consolidation",
     )
-    parser.add_argument("--dedupe", action="store_true", help="Attempt de-duplication by primary keys")
+    parser.add_argument(
+        "--dedupe", action="store_true", help="Attempt de-duplication by primary keys"
+    )
     parser.add_argument(
         "--primary-keys",
         help="Comma-separated primary key columns used for dedupe",
@@ -69,7 +71,9 @@ def find_chunk_partitions(base: Path) -> List[Path]:
 
 
 def _read_chunk_files_for_artifact(partition: Path, artifact_name: str) -> List[Path]:
-    files = list(partition.glob(f"{artifact_name}-*.parquet")) + list(partition.glob(f"{artifact_name}-*.csv"))
+    files = list(partition.glob(f"{artifact_name}-*.parquet")) + list(
+        partition.glob(f"{artifact_name}-*.csv")
+    )
     return sorted(files)
 
 
@@ -85,7 +89,9 @@ def _consolidate_parquet(
     if frames:
         merged = pd.concat(frames, ignore_index=True)
         if dedupe_keys and order_column and order_column in merged.columns:
-            merged = merged.sort_values(order_column).drop_duplicates(subset=dedupe_keys, keep="last")
+            merged = merged.sort_values(order_column).drop_duplicates(
+                subset=dedupe_keys, keep="last"
+            )
         tmp = final_path.parent / f".{final_path.name}.tmp"
         merged.to_parquet(tmp, index=False)
         tmp.replace(final_path)
@@ -103,7 +109,9 @@ def _consolidate_csv(
     if frames:
         merged = pd.concat(frames, ignore_index=True)
         if dedupe_keys and order_column and order_column in merged.columns:
-            merged = merged.sort_values(order_column).drop_duplicates(subset=dedupe_keys, keep="last")
+            merged = merged.sort_values(order_column).drop_duplicates(
+                subset=dedupe_keys, keep="last"
+            )
         tmp = final_path.parent / f".{final_path.name}.tmp"
         merged.to_csv(tmp, index=False)
         tmp.replace(final_path)
@@ -116,7 +124,9 @@ def _consolidate_partition(partition: Path, args: argparse.Namespace) -> None:
     chunk_meta_files = sorted(partition.glob("_metadata_chunk_*.json"))
     if not chunk_meta_files:
         # No explicit chunk metadata; continue if we declared partitions via artifact detection
-        print(f"No `_metadata_chunk_` files under {partition}; attempting discovery via artifact filenames")
+        print(
+            f"No `_metadata_chunk_` files under {partition}; attempting discovery via artifact filenames"
+        )
     chunk_tags = []
     for f in chunk_meta_files:
         j = json.loads(f.read_text(encoding="utf-8"))
@@ -148,7 +158,9 @@ def _consolidate_partition(partition: Path, args: argparse.Namespace) -> None:
         csv_files = [p for p in files if p.suffix == ".csv"]
         if parquet_files:
             final_path = partition / f"{base}.parquet"
-            _consolidate_parquet(sorted(parquet_files), final_path, dedupe_keys, order_column)
+            _consolidate_parquet(
+                sorted(parquet_files), final_path, dedupe_keys, order_column
+            )
             outputs.append(final_path)
         if csv_files:
             final_path = partition / f"{base}.csv"
@@ -190,7 +202,11 @@ def main() -> None:
     from core.storage.locks import file_lock
 
     args = parse_args()
-    base = Path(args.silver_base) if args.silver_base else Path("sampledata") / "silver_samples"
+    base = (
+        Path(args.silver_base)
+        if args.silver_base
+        else Path("sampledata") / "silver_samples"
+    )
     if not base.exists():
         raise FileNotFoundError(f"Silver base {base} not found")
 

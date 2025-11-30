@@ -16,7 +16,9 @@ bronze = str(
 )
 silver_tmp = str(ROOT / "output" / "silver_tmp_simple")
 os.makedirs(silver_tmp, exist_ok=True)
-config = str(ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml")
+config = str(
+    ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
+)
 procs = []
 for i in range(3):
     tag = f"tag{i}"
@@ -39,7 +41,9 @@ for i in range(3):
         "--lock-timeout",
         "1",
     ]
-    p = subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    p = subprocess.Popen(
+        cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
     procs.append((tag, p))
     time.sleep(0.2)
 results = []

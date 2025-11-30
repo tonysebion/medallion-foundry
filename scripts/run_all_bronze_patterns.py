@@ -18,6 +18,7 @@ import os
 import subprocess
 import sys
 import tempfile
+from datetime import date
 from pathlib import Path
 from typing import Any, Dict, Iterable
 
@@ -29,7 +30,8 @@ import boto3  # noqa: E402
 import yaml  # noqa: E402
 
 from botocore.exceptions import ClientError  # noqa: E402
-from core.config.loader import load_config_with_env  # noqa: E402
+from core.config.dataset import DatasetConfig, dataset_to_runtime_config  # noqa: E402
+from core.config.loader import build_relative_path, load_config_with_env  # noqa: E402
 from core.config.environment import EnvironmentConfig  # noqa: E402
 
 PATTERN_CONFIGS = [
@@ -149,11 +151,15 @@ def _bronze_relative_path(config: Dict[str, Any], run_date_str: str) -> str:
     system = config.get("system", "unknown")
     table = config.get("entity", "dataset")
     bronze_options = config.get("bronze", {}).get("options", {})
-    pattern_folder = bronze_options.get("pattern_folder") or config.get("pattern_id") or "default"
+    pattern_folder = (
+        bronze_options.get("pattern_folder") or config.get("pattern_id") or "default"
+    )
     return f"system={system}/table={table}/pattern={pattern_folder}/dt={run_date_str}/"
 
 
-def _build_bronze_destination(config: Dict[str, Any], env_config: EnvironmentConfig, run_date_str: str) -> str:
+def _build_bronze_destination(
+    config: Dict[str, Any], env_config: EnvironmentConfig, run_date_str: str
+) -> str:
     storage_cfg = config.get("storage", {}).get("bronze", {})
     bucket_ref = storage_cfg.get("bucket")
     prefix = storage_cfg.get("prefix", "").lstrip("/")
@@ -213,11 +219,16 @@ def _discover_run_dates_s3(
             candidate = f"{base}/{dt_name}"
             if tail_path:
                 candidate = f"{candidate}/{tail_path}"
-            sample_path = _resolve_s3_sample_path(client, bucket, candidate) or candidate
+            sample_path = (
+                _resolve_s3_sample_path(client, bucket, candidate) or candidate
+            )
             if sample_path and date_value not in run_dates_dict:
                 run_dates_dict[date_value] = sample_path
 
-    run_dates = [{"run_date": dt, "sample_path": sample} for dt, sample in sorted(run_dates_dict.items())]
+    run_dates = [
+        {"run_date": dt, "sample_path": sample}
+        for dt, sample in sorted(run_dates_dict.items())
+    ]
 
     if not run_dates:
         raise ValueError(f"No dt= prefixes found under s3://{bucket}/{base_root}")
@@ -244,7 +255,9 @@ def _discover_run_dates_local(
         candidate = dt_dir / tail if tail.parts else dt_dir
         sample_path = _resolve_sample_path(dt_dir, candidate)
         if sample_path:
-            valid_dates.append({"run_date": dt_dir.name.split("=", 1)[1], "sample_path": sample_path})
+            valid_dates.append(
+                {"run_date": dt_dir.name.split("=", 1)[1], "sample_path": sample_path}
+            )
     if not valid_dates:
         raise ValueError(f"No valid files were found for {config_path}")
 
@@ -358,7 +371,9 @@ def rewrite_config(
         file_cfg["limit_rows"] = limit_records
 
     os.makedirs(output_base, exist_ok=True)
-    temp_config = temp_dir / f"temp_{Path(original_path).stem}_{run_date.replace('-', '')}.yaml"
+    temp_config = (
+        temp_dir / f"temp_{Path(original_path).stem}_{run_date.replace('-', '')}.yaml"
+    )
     temp_config.write_text(yaml.safe_dump(config))
     return str(temp_config), config
 
@@ -374,7 +389,9 @@ def process_run(task: Dict[str, Any]) -> tuple[str, str, bool]:
     env_config = task["env_config"]
 
     config_name = Path(config_path).name
-    description = f"[{run_count}/{total_runs}] Bronze extraction: {config_name} ({run_date})"
+    description = (
+        f"[{run_count}/{total_runs}] Bronze extraction: {config_name} ({run_date})"
+    )
 
     actual_config, rewritten_cfg = rewrite_config(
         config_path,
@@ -406,7 +423,9 @@ def process_run(task: Dict[str, Any]) -> tuple[str, str, bool]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run Bronze extraction for all pattern configs")
+    parser = argparse.ArgumentParser(
+        description="Run Bronze extraction for all pattern configs"
+    )
     parser.add_argument(
         "--limit-records",
         type=int,
@@ -510,7 +529,9 @@ def main() -> int:
     print(f"\nCompleted: {successful}/{total} runs")
     if successful == total:
         print("ALL BRONZE EXTRACTIONS SUCCEEDED!")
-        print("Bronze outputs were uploaded per configuration and temporary staging directories were removed.")
+        print(
+            "Bronze outputs were uploaded per configuration and temporary staging directories were removed."
+        )
     else:
         print("SOME BRONZE EXTRACTIONS FAILED")
         print("Failed runs:")

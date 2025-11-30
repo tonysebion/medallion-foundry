@@ -273,7 +273,9 @@ class TestDataPathExtraction:
 
         with patch("requests.Session.get") as mock_get:
             mock_response = Mock()
-            mock_response.json.return_value = {"response": {"items": [{"id": 1}, {"id": 2}], "total": 2}}
+            mock_response.json.return_value = {
+                "response": {"items": [{"id": 1}, {"id": 2}], "total": 2}
+            }
             mock_response.status_code = 200
             mock_get.return_value = mock_response
 

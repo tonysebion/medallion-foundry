@@ -52,7 +52,9 @@ def _build_cfg() -> Dict[str, Any]:
     }
 
 
-def test_db_extractor_incremental_query(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_db_extractor_incremental_query(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     cfg = _build_cfg()
     state_file = tmp_path / "state.json"
     state_file.write_text(json.dumps({"cursor": "100", "last_run": "2025-01-01"}))
@@ -68,7 +70,9 @@ def test_db_extractor_incremental_query(monkeypatch: pytest.MonkeyPatch, tmp_pat
 
     call_info: Dict[str, Any] = {}
 
-    def fake_execute(self, driver: str, conn_str: str, query: str, params: Optional[Tuple] = None):
+    def fake_execute(
+        self, driver: str, conn_str: str, query: str, params: Optional[Tuple] = None
+    ):
         call_info["query"] = query
         call_info["params"] = params
         return DummyCursor(rows, ["id", "value"])
@@ -94,7 +98,9 @@ def test_db_extractor_respects_batch_size(monkeypatch: pytest.MonkeyPatch) -> No
     rows = [(1, "a"), (2, "b"), (3, "c")]
     cursor = DummyCursor(rows, ["id", "state"])
 
-    def fake_execute(self, driver: str, conn_str: str, query: str, params: Optional[Tuple] = None):
+    def fake_execute(
+        self, driver: str, conn_str: str, query: str, params: Optional[Tuple] = None
+    ):
         return cursor
 
     monkeypatch.setattr(DbExtractor, "_execute_query", fake_execute)

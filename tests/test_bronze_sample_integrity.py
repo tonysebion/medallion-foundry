@@ -31,7 +31,10 @@ def _replace_dt_in_path(path: str, run_date: str) -> str:
 
 def _value_counter(series: pd.Series) -> Counter[str]:
     """Normalize column values so we can compare source rows to Bronze output."""
-    values = (NULL_SENTINEL if pd.isna(value) else str(value) for value in series.astype(object))
+    values = (
+        NULL_SENTINEL if pd.isna(value) else str(value)
+        for value in series.astype(object)
+    )
     return Counter(values)
 
 
@@ -60,7 +63,9 @@ def _read_source_dataframe(source_path: Path) -> pd.DataFrame:
     raise ValueError(f"Unsupported sample format: {suffix}")
 
 
-def _rewrite_bronze_config(config_path: Path, run_date: str, tmp_dir: Path) -> tuple[Path, Path, Dict[str, Any]]:
+def _rewrite_bronze_config(
+    config_path: Path, run_date: str, tmp_dir: Path
+) -> tuple[Path, Path, Dict[str, Any]]:
     cfg = cast(Dict[str, Any], yaml.safe_load(config_path.read_text()))
     bronze_cfg = cfg.setdefault("bronze", {})
     path_pattern = bronze_cfg.get("path_pattern")
@@ -118,18 +123,26 @@ def test_bronze_preserves_source_rows(
     run_date: str,
 ) -> None:
     config_path = CONFIG_ROOT / config_name
-    rewritten_cfg, bronze_out, cfg_data = _rewrite_bronze_config(config_path, run_date, tmp_path)
+    rewritten_cfg, bronze_out, cfg_data = _rewrite_bronze_config(
+        config_path, run_date, tmp_path
+    )
 
     _run_cli(["bronze_extract.py", "--config", str(rewritten_cfg), "--date", run_date])
 
     bronze_partition = _collect_bronze_partition(bronze_out)
-    metadata = cast(Dict[str, Any], json.loads((bronze_partition / "_metadata.json").read_text()))
+    metadata = cast(
+        Dict[str, Any], json.loads((bronze_partition / "_metadata.json").read_text())
+    )
 
     source_path = Path(cfg_data["bronze"]["path_pattern"])
     assert source_path.exists(), f"Source path missing: {source_path}"
-    assert source_samples_root in source_path.parents, "Sample data must live under sampledata/source_samples"
+    assert (
+        source_samples_root in source_path.parents
+    ), "Sample data must live under sampledata/source_samples"
     source_df = _read_source_dataframe(source_path)
-    expected_load_pattern = cfg_data["bronze"].get("options", {}).get("load_pattern") or "full"
+    expected_load_pattern = (
+        cfg_data["bronze"].get("options", {}).get("load_pattern") or "full"
+    )
 
     bronze_df = _read_bronze_dataframe(bronze_partition)
     assert set(source_df.columns) <= set(bronze_df.columns)

@@ -49,7 +49,11 @@ def test_chunk_records_combined():
 def test_partition_strategy_date():
     """Test date partitioning strategy."""
     cfg = {
-        "platform": {"bronze": {"partitioning": {"use_dt_partition": True, "partition_strategy": "date"}}},
+        "platform": {
+            "bronze": {
+                "partitioning": {"use_dt_partition": True, "partition_strategy": "date"}
+            }
+        },
         "source": {"system": "test_system", "table": "test_table", "run": {}},
     }
 
@@ -77,7 +81,9 @@ def test_partition_strategy_hourly():
     path = build_relative_path(cfg, run_date)
 
     # Should include hour partition
-    assert path.startswith("system=test_system/table=test_table/pattern=full/dt=2025-01-12/hour=")
+    assert path.startswith(
+        "system=test_system/table=test_table/pattern=full/dt=2025-01-12/hour="
+    )
     assert path.endswith("/")
 
 
@@ -102,7 +108,10 @@ def test_partition_strategy_batch_id():
     run_date = date(2025, 1, 12)
     path = build_relative_path(cfg, run_date)
 
-    assert path == "system=test_system/table=test_table/pattern=full/dt=2025-01-12/batch_id=test_batch_123/"
+    assert (
+        path
+        == "system=test_system/table=test_table/pattern=full/dt=2025-01-12/batch_id=test_batch_123/"
+    )
 
 
 def test_write_batch_metadata(tmp_path):
@@ -241,7 +250,9 @@ def test_parallel_workers_invalid():
         temp_path = f.name
 
     try:
-        with pytest.raises(ValueError, match="parallel_workers must be a positive integer"):
+        with pytest.raises(
+            ValueError, match="parallel_workers must be a positive integer"
+        ):
             load_config(temp_path)
     finally:
         import os

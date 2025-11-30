@@ -57,8 +57,12 @@ class S3Storage(StorageBackend):
             session_kwargs["aws_secret_access_key"] = secret_key
 
         try:
-            self.client = boto3.client("s3", endpoint_url=endpoint_url, **session_kwargs)
-            logger.debug(f"Created S3 client for bucket '{self.bucket}' with endpoint: {endpoint_url or 'default'}")
+            self.client = boto3.client(
+                "s3", endpoint_url=endpoint_url, **session_kwargs
+            )
+            logger.debug(
+                f"Created S3 client for bucket '{self.bucket}' with endpoint: {endpoint_url or 'default'}"
+            )
         except Exception as e:
             logger.error(f"Failed to create S3 client: {e}")
             raise
@@ -118,19 +122,37 @@ class S3Storage(StorageBackend):
                 return True
             if isinstance(exc, ClientError):
                 try:
-                    status = int(exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode", 0))
+                    status = int(
+                        exc.response.get("ResponseMetadata", {}).get(
+                            "HTTPStatusCode", 0
+                        )
+                    )
                 except Exception:
                     status = 0
-                code = exc.response.get("Error", {}).get("Code") if hasattr(exc, "response") else None
-                return status == 429 or status >= 500 or code in {"SlowDown", "RequestLimitExceeded"}
+                code = (
+                    exc.response.get("Error", {}).get("Code")
+                    if hasattr(exc, "response")
+                    else None
+                )
+                return (
+                    status == 429
+                    or status >= 500
+                    or code in {"SlowDown", "RequestLimitExceeded"}
+                )
             return False
 
-        def _delay_from_exc(exc: BaseException, attempt: int, default_delay: float) -> float | None:
+        def _delay_from_exc(
+            exc: BaseException, attempt: int, default_delay: float
+        ) -> float | None:
             if isinstance(exc, ClientError):
                 headers = (
-                    exc.response.get("ResponseMetadata", {}).get("HTTPHeaders", {}) if hasattr(exc, "response") else {}
+                    exc.response.get("ResponseMetadata", {}).get("HTTPHeaders", {})
+                    if hasattr(exc, "response")
+                    else {}
                 )
-                retry_after = headers.get("retry-after") or headers.get("x-amz-retry-after")
+                retry_after = headers.get("retry-after") or headers.get(
+                    "x-amz-retry-after"
+                )
                 if retry_after:
                     try:
                         return float(retry_after)
@@ -153,7 +175,9 @@ class S3Storage(StorageBackend):
 
             def _once() -> bool:
                 self.client.upload_file(local_path, self.bucket, key)
-                logger.info(f"Uploaded {Path(local_path).name} to s3://{self.bucket}/{key}")
+                logger.info(
+                    f"Uploaded {Path(local_path).name} to s3://{self.bucket}/{key}"
+                )
                 return True
 
             return execute_with_retry(
@@ -189,19 +213,37 @@ class S3Storage(StorageBackend):
                 return True
             if isinstance(exc, ClientError):
                 try:
-                    status = int(exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode", 0))
+                    status = int(
+                        exc.response.get("ResponseMetadata", {}).get(
+                            "HTTPStatusCode", 0
+                        )
+                    )
                 except Exception:
                     status = 0
-                code = exc.response.get("Error", {}).get("Code") if hasattr(exc, "response") else None
-                return status == 429 or status >= 500 or code in {"SlowDown", "RequestLimitExceeded"}
+                code = (
+                    exc.response.get("Error", {}).get("Code")
+                    if hasattr(exc, "response")
+                    else None
+                )
+                return (
+                    status == 429
+                    or status >= 500
+                    or code in {"SlowDown", "RequestLimitExceeded"}
+                )
             return False
 
-        def _delay_from_exc(exc: BaseException, attempt: int, default_delay: float) -> float | None:
+        def _delay_from_exc(
+            exc: BaseException, attempt: int, default_delay: float
+        ) -> float | None:
             if isinstance(exc, ClientError):
                 headers = (
-                    exc.response.get("ResponseMetadata", {}).get("HTTPHeaders", {}) if hasattr(exc, "response") else {}
+                    exc.response.get("ResponseMetadata", {}).get("HTTPHeaders", {})
+                    if hasattr(exc, "response")
+                    else {}
                 )
-                retry_after = headers.get("retry-after") or headers.get("x-amz-retry-after")
+                retry_after = headers.get("retry-after") or headers.get(
+                    "x-amz-retry-after"
+                )
                 if retry_after:
                     try:
                         return float(retry_after)
@@ -259,19 +301,37 @@ class S3Storage(StorageBackend):
                 return True
             if isinstance(exc, ClientError):
                 try:
-                    status = int(exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode", 0))
+                    status = int(
+                        exc.response.get("ResponseMetadata", {}).get(
+                            "HTTPStatusCode", 0
+                        )
+                    )
                 except Exception:
                     status = 0
-                code = exc.response.get("Error", {}).get("Code") if hasattr(exc, "response") else None
-                return status == 429 or status >= 500 or code in {"SlowDown", "RequestLimitExceeded"}
+                code = (
+                    exc.response.get("Error", {}).get("Code")
+                    if hasattr(exc, "response")
+                    else None
+                )
+                return (
+                    status == 429
+                    or status >= 500
+                    or code in {"SlowDown", "RequestLimitExceeded"}
+                )
             return False
 
-        def _delay_from_exc(exc: BaseException, attempt: int, default_delay: float) -> float | None:
+        def _delay_from_exc(
+            exc: BaseException, attempt: int, default_delay: float
+        ) -> float | None:
             if isinstance(exc, ClientError):
                 headers = (
-                    exc.response.get("ResponseMetadata", {}).get("HTTPHeaders", {}) if hasattr(exc, "response") else {}
+                    exc.response.get("ResponseMetadata", {}).get("HTTPHeaders", {})
+                    if hasattr(exc, "response")
+                    else {}
                 )
-                retry_after = headers.get("retry-after") or headers.get("x-amz-retry-after")
+                retry_after = headers.get("retry-after") or headers.get(
+                    "x-amz-retry-after"
+                )
                 if retry_after:
                     try:
                         return float(retry_after)
@@ -293,7 +353,9 @@ class S3Storage(StorageBackend):
         try:
 
             def _once() -> List[str]:
-                response = self.client.list_objects_v2(Bucket=self.bucket, Prefix=full_prefix)
+                response = self.client.list_objects_v2(
+                    Bucket=self.bucket, Prefix=full_prefix
+                )
                 files = [obj["Key"] for obj in response.get("Contents", [])]
                 logger.debug(f"Listed {len(files)} files with prefix '{full_prefix}'")
                 return files
@@ -330,19 +392,37 @@ class S3Storage(StorageBackend):
                 return True
             if isinstance(exc, ClientError):
                 try:
-                    status = int(exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode", 0))
+                    status = int(
+                        exc.response.get("ResponseMetadata", {}).get(
+                            "HTTPStatusCode", 0
+                        )
+                    )
                 except Exception:
                     status = 0
-                code = exc.response.get("Error", {}).get("Code") if hasattr(exc, "response") else None
-                return status == 429 or status >= 500 or code in {"SlowDown", "RequestLimitExceeded"}
+                code = (
+                    exc.response.get("Error", {}).get("Code")
+                    if hasattr(exc, "response")
+                    else None
+                )
+                return (
+                    status == 429
+                    or status >= 500
+                    or code in {"SlowDown", "RequestLimitExceeded"}
+                )
             return False
 
-        def _delay_from_exc(exc: BaseException, attempt: int, default_delay: float) -> float | None:
+        def _delay_from_exc(
+            exc: BaseException, attempt: int, default_delay: float
+        ) -> float | None:
             if isinstance(exc, ClientError):
                 headers = (
-                    exc.response.get("ResponseMetadata", {}).get("HTTPHeaders", {}) if hasattr(exc, "response") else {}
+                    exc.response.get("ResponseMetadata", {}).get("HTTPHeaders", {})
+                    if hasattr(exc, "response")
+                    else {}
                 )
-                retry_after = headers.get("retry-after") or headers.get("x-amz-retry-after")
+                retry_after = headers.get("retry-after") or headers.get(
+                    "x-amz-retry-after"
+                )
                 if retry_after:
                     try:
                         return float(retry_after)
@@ -409,7 +489,9 @@ def build_s3_client(platform_cfg: Dict[str, Any]) -> boto3.client:
     return storage.client
 
 
-def upload_to_s3(local_path: Path, platform_cfg: Dict[str, Any], relative_path: str) -> None:
+def upload_to_s3(
+    local_path: Path, platform_cfg: Dict[str, Any], relative_path: str
+) -> None:
     """Upload a file to S3 with retry logic.
 
     DEPRECATED: Use S3Storage.upload_file() instead.

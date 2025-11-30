@@ -18,7 +18,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def create_filesystem(uri: "StorageURI", env_config: Optional["EnvironmentConfig"] = None) -> fsspec.AbstractFileSystem:
+def create_filesystem(
+    uri: "StorageURI", env_config: Optional["EnvironmentConfig"] = None
+) -> fsspec.AbstractFileSystem:
     """Create an fsspec filesystem for the given URI.
 
     Args:
@@ -83,14 +85,17 @@ def create_filesystem(uri: "StorageURI", env_config: Optional["EnvironmentConfig
                 "(environment variables, ~/.aws/credentials, IAM roles)."
             )
 
-        logger.debug(f"Creating S3 filesystem with endpoint={s3_config.endpoint_url or 'default AWS'}")
+        logger.debug(
+            f"Creating S3 filesystem with endpoint={s3_config.endpoint_url or 'default AWS'}"
+        )
 
         return fsspec.filesystem("s3", **fs_options)
 
     elif uri.backend == "azure":
         # Future implementation
         raise NotImplementedError(
-            "Azure Blob Storage support is not yet implemented. " "Please use local filesystem or S3 storage."
+            "Azure Blob Storage support is not yet implemented. "
+            "Please use local filesystem or S3 storage."
         )
 
     else:

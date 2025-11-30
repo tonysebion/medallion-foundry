@@ -15,7 +15,9 @@ bronze = (
     / "table=orders"
     / "dt=2025-11-28"
 )
-config = ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
+config = (
+    ROOT / "docs" / "examples" / "configs" / "patterns" / "pattern_current_history.yaml"
+)
 silver_tmp = ROOT / "output" / "silver_tmp_run_test"
 if silver_tmp.exists():
     shutil.rmtree(silver_tmp)

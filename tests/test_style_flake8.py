@@ -33,4 +33,8 @@ def test_flake8_lint_check():
         raise AssertionError("flake8 linting timed out; run flake8 directly to inspect")
 
     if result.returncode != 0:
-        raise AssertionError("flake8 linting failed; fix issues reported by flake8\n" + result.stdout + result.stderr)
+        raise AssertionError(
+            "flake8 linting failed; fix issues reported by flake8\n"
+            + result.stdout
+            + result.stderr
+        )

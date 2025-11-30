@@ -105,7 +105,9 @@ class TestWriteParquetChunk:
 
     def test_write_parquet_with_compression(self, tmp_path):
         """Test writing Parquet with different compression."""
-        records: list[dict[str, Any]] = [{"id": i, "data": f"row_{i}"} for i in range(10)]
+        records: list[dict[str, Any]] = [
+            {"id": i, "data": f"row_{i}"} for i in range(10)
+        ]
 
         parquet_path = tmp_path / "compressed.parquet"
         write_parquet_chunk(records, parquet_path, compression="gzip")
@@ -128,7 +130,9 @@ class TestChecksumManifest:
         data_file = tmp_path / "part-0001.csv"
         data_file.write_text("hello,world", encoding="utf-8")
 
-        write_checksum_manifest(tmp_path, [data_file], "full", extra_metadata={"system": "demo"})
+        write_checksum_manifest(
+            tmp_path, [data_file], "full", extra_metadata={"system": "demo"}
+        )
 
         manifest = verify_checksum_manifest(tmp_path, expected_pattern="full")
         assert manifest["load_pattern"] == "full"

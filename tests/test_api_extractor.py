@@ -24,7 +24,9 @@ class FakeResponse:
 class FakeSession:
     def __init__(self, responses: List[Dict[str, Any]]) -> None:
         self.responses = responses
-        self.calls: List[Tuple[str, Dict[str, str], Dict[str, Any], Optional[Tuple[str, str]]]] = []
+        self.calls: List[
+            Tuple[str, Dict[str, str], Dict[str, Any], Optional[Tuple[str, str]]]
+        ] = []
 
     def get(
         self,
@@ -43,7 +45,9 @@ class FakeSession:
         return None
 
 
-def _build_config(pagination: Dict[str, Any], auth_cfg: Dict[str, Any], cursor_field: str) -> Dict[str, Any]:
+def _build_config(
+    pagination: Dict[str, Any], auth_cfg: Dict[str, Any], cursor_field: str
+) -> Dict[str, Any]:
     return {
         "source": {
             "api": {

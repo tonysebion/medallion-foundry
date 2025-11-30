@@ -16,8 +16,14 @@ def test_silver_model_normalize_invalid() -> None:
 
 
 def test_default_model_for_patterns() -> None:
-    assert SilverModel.default_for_load_pattern(LoadPattern.CDC) == SilverModel.INCREMENTAL_MERGE
-    assert SilverModel.default_for_load_pattern(LoadPattern.FULL) == SilverModel.PERIODIC_SNAPSHOT
+    assert (
+        SilverModel.default_for_load_pattern(LoadPattern.CDC)
+        == SilverModel.INCREMENTAL_MERGE
+    )
+    assert (
+        SilverModel.default_for_load_pattern(LoadPattern.FULL)
+        == SilverModel.PERIODIC_SNAPSHOT
+    )
 
 
 def test_requires_dedupe_flags() -> None:

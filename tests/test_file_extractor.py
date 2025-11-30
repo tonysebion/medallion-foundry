@@ -47,7 +47,9 @@ def test_tsv_without_header_requires_fieldnames(tmp_path: Path) -> None:
     file_path = tmp_path / "sample.tsv"
     file_path.write_text("1\talpha\n2\tbeta\n", encoding="utf-8")
 
-    cfg = _build_config(file_path, format="tsv", has_header=False, fieldnames=["id", "name"])
+    cfg = _build_config(
+        file_path, format="tsv", has_header=False, fieldnames=["id", "name"]
+    )
     extractor = FileExtractor()
     records, _ = extractor.fetch_records(cfg, date.today())
 

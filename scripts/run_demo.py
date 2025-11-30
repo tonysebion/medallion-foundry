@@ -45,8 +45,12 @@ def run_command(cmd, description):
 
 def main():
     parser = argparse.ArgumentParser(description="Run medallion-foundry demo")
-    parser.add_argument("--interactive", action="store_true", help="Run in interactive mode")
-    parser.add_argument("--skip-samples", action="store_true", help="Skip sample data generation")
+    parser.add_argument(
+        "--interactive", action="store_true", help="Run in interactive mode"
+    )
+    parser.add_argument(
+        "--skip-samples", action="store_true", help="Skip sample data generation"
+    )
     args = parser.parse_args()
 
     print("🚀 medallion-foundry Demo Runner")
@@ -54,7 +58,9 @@ def main():
 
     # Check if we're in the right directory
     if not Path("scripts/generate_sample_data.py").exists():
-        print("❌ Error: Please run this script from the medallion-foundry root directory")
+        print(
+            "❌ Error: Please run this script from the medallion-foundry root directory"
+        )
         sys.exit(1)
 
     # Step 1: Generate sample data
@@ -103,17 +109,27 @@ def main():
 
     print("\n📁 Generated files:")
     print("  Bronze data: output/system=retail_demo/table=orders/dt=2025-11-13/")
-    print("  Silver data: silver_output/domain=retail_demo/entity=orders/v1/load_date=2025-11-13/")
+    print(
+        "  Silver data: silver_output/domain=retail_demo/entity=orders/v1/load_date=2025-11-13/"
+    )
 
     print("\n🔍 Key files to examine:")
-    print("  Metadata: output/system=retail_demo/table=orders/dt=2025-11-13/_metadata.json")
-    print("  Sample data: output/system=retail_demo/table=orders/dt=2025-11-13/part-0001.parquet")
+    print(
+        "  Metadata: output/system=retail_demo/table=orders/dt=2025-11-13/_metadata.json"
+    )
+    print(
+        "  Sample data: output/system=retail_demo/table=orders/dt=2025-11-13/part-0001.parquet"
+    )
 
     print("\n📝 Next steps:")
     print("1. Examine the generated files above")
-    print("2. Copy docs/examples/configs/examples/file_example.yaml to config/my_config.yaml")
+    print(
+        "2. Copy docs/examples/configs/examples/file_example.yaml to config/my_config.yaml"
+    )
     print("3. Edit the config for your data source")
-    print("4. Run: python bronze_extract.py --config config/my_config.yaml --date YYYY-MM-DD")
+    print(
+        "4. Run: python bronze_extract.py --config config/my_config.yaml --date YYYY-MM-DD"
+    )
 
     if args.interactive:
         input("\nPress Enter to continue to customization guide...")
@@ -130,7 +146,9 @@ def main():
 
         print("\n2. 📁 Copy to your config directory:")
         print("   mkdir config")
-        print("   copy docs/examples/configs/examples/api_example.yaml config/my_api.yaml")
+        print(
+            "   copy docs/examples/configs/examples/api_example.yaml config/my_api.yaml"
+        )
 
         print("\n3. ✏️  Edit the config:")
         print("   - Change system/entity names")
@@ -142,7 +160,9 @@ def main():
         print("   python bronze_extract.py --config config/my_api.yaml --dry-run")
 
         print("\n5. 🚀 Run extraction:")
-        print("   python bronze_extract.py --config config/my_api.yaml --date 2025-11-13")
+        print(
+            "   python bronze_extract.py --config config/my_api.yaml --date 2025-11-13"
+        )
 
         print("\n📚 For detailed guidance, see:")
         print("   docs/usage/beginner/COPY_AND_CUSTOMIZE.md")

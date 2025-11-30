@@ -24,5 +24,6 @@ def test_pattern_folder_is_set(config_name: str, pattern_folder: str) -> None:
     options = bronze_config.get("options", {})
 
     assert options.get("pattern_folder") == pattern_folder, (
-        f"{config_name} should write Bronze output under pattern={pattern_folder} " "via bronze.options.pattern_folder"
+        f"{config_name} should write Bronze output under pattern={pattern_folder} "
+        "via bronze.options.pattern_folder"
     )
