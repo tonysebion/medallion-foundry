@@ -402,7 +402,7 @@ def main() -> int:
         ):
             return 1
 
-    print("Scanning source_samples in S3 for available pattern dates (this may take a moment)...")
+    print("Scanning source_samples in S3 for available pattern dates (this may take a moment)...", flush=True)
     pattern_runs: list[Dict[str, Any]] = []
     for entry in PATTERN_CONFIGS:
         config_path = entry["config"]
@@ -411,9 +411,9 @@ def main() -> int:
             print(f"Environment config missing for {config_path}")
             return 1
         run_dates = _discover_run_dates(REPO_ROOT / config_path, None, env_config)
-        print(f"Pattern {entry.get('pattern', config_path)} has {len(run_dates)} dates")
+        print(f"Pattern {entry.get('pattern', config_path)} has {len(run_dates)} dates", flush=True)
         for d in run_dates[:3]:
-            print(f"  sample path: {d['sample_path']} (run_date={d['run_date']})")
+            print(f"  sample path: {d['sample_path']} (run_date={d['run_date']})", flush=True)
         pattern_runs.append(
             {
                 "config": config_path,
@@ -453,7 +453,7 @@ def main() -> int:
                     }
                 )
 
-        print(f"Scheduling {len(tasks)} Bronze runs ({total_runs} total) across patterns")
+        print(f"Scheduling {len(tasks)} Bronze runs ({total_runs} total) across patterns", flush=True)
 
         results: list[tuple[str, str, bool]] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
