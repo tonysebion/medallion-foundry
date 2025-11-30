@@ -52,6 +52,15 @@ class FileExtractor(BaseExtractor):
 
         # Parse storage URI (supports local paths and s3:// URIs)
         path_str = file_cfg["path"]
+
+        # CRITICAL SAFETY CHECK: Prevent reading metadata files as data
+        filename = Path(path_str).name
+        if filename.startswith("_"):
+            raise ValueError(
+                f"Cannot read metadata file as data: {path_str}. "
+                f"Files starting with '_' are reserved for metadata."
+            )
+
         uri = StorageURI.parse(path_str)
 
         # Determine file format

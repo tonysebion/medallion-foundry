@@ -167,9 +167,9 @@ class BronzeVerificationResult:
 
         print(f"\n{'=' * 80}")
         if len(self.critical_issues) == 0:
-            print("✓ VERIFICATION PASSED - No critical issues found")
+            print("[PASS] VERIFICATION PASSED - No critical issues found")
         else:
-            print("✗ VERIFICATION FAILED - Critical issues found")
+            print("[FAIL] VERIFICATION FAILED - Critical issues found")
         print(f"{'=' * 80}\n")
 
         return len(self.critical_issues) == 0
@@ -569,9 +569,11 @@ class BronzeS3Verifier:
 
             print(f"\n  Checking partition: dt={partition_date}")
 
+            # Always get files list for later checks
+            files_result = self.verify_partition_files(partition_prefix, pattern_name)
+
             # 1. Verify files exist
             if check_type in ["all", "files"]:
-                files_result = self.verify_partition_files(partition_prefix, pattern_name)
                 if files_result["issues"]:
                     for issue in files_result["issues"]:
                         self.results.add_critical(
@@ -579,7 +581,7 @@ class BronzeS3Verifier:
                         )
                 else:
                     print(
-                        f"    ✓ Files: {len(files_result['parquet_files'])} parquet, metadata, checksums"
+                        f"    [OK] Files: {len(files_result['parquet_files'])} parquet, metadata, checksums"
                     )
 
             # 2. CRITICAL: Check for metadata corruption
@@ -600,9 +602,9 @@ class BronzeS3Verifier:
                             f"Issue: {corruption['issue']}",
                             file=corruption["file"],
                         )
-                        print(f"    ✗ CRITICAL: Metadata corruption detected!")
+                        print(f"    [FAIL] CRITICAL: Metadata corruption detected!")
                     else:
-                        print(f"    ✓ No metadata corruption detected")
+                        print(f"    [OK] No metadata corruption detected")
 
             # 3. Verify metadata.json
             if check_type in ["all", "metadata"]:
@@ -616,7 +618,7 @@ class BronzeS3Verifier:
                                 pattern_name, partition_date, "metadata_invalid", issue
                             )
                     else:
-                        print(f"    ✓ Metadata valid")
+                        print(f"    [OK] Metadata valid")
 
             # 4. Verify checksums (sampled)
             if check_type in ["all", "checksums"]:
@@ -631,7 +633,7 @@ class BronzeS3Verifier:
                             )
                     else:
                         checked = checksum_result.get("files_checked", 0)
-                        print(f"    ✓ Checksums valid (sampled {checked} files)")
+                        print(f"    [OK] Checksums valid (sampled {checked} files)")
 
     def verify_all_patterns(self, check_type: str = "all"):
         """Verify all pattern folders."""

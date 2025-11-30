@@ -137,7 +137,13 @@ def _object_exists(client, bucket: str, key: str) -> bool:
 
 def _resolve_s3_sample_path(client, bucket: str, candidate: str) -> str | None:
     normalized = candidate.rstrip("/")
-    if "." in Path(normalized).name:
+
+    # CRITICAL FIX: Skip metadata files to prevent reading them as data
+    filename = Path(normalized).name
+    if filename.startswith("_"):
+        return None
+
+    if "." in filename:
         return normalized if _object_exists(client, bucket, normalized) else None
 
     for ext in ("parquet", "csv"):
@@ -205,6 +211,14 @@ def _discover_run_dates_s3(
             key = obj["Key"]
             if not key.startswith(base_root):
                 continue
+
+            # CRITICAL FIX: Skip metadata and checksum files
+            if key.endswith("_metadata.json") or key.endswith("_checksums.json"):
+                continue
+            # Skip any files starting with underscore
+            if "/_" in key or key.endswith("/"):
+                continue
+
             remainder = key[len(base_root) :].lstrip("/")
             if not remainder.startswith("dt="):
                 continue
