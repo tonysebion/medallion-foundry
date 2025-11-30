@@ -30,6 +30,9 @@ def test_generate_small_dataset(tmp_path):
             "50",
             "--cdc-row-count",
             "20",
+            "--output-base-dir",
+            str(tmp_path),
+            "--skip-mirror",
         ],
         env=env,
         capture_output=True,
@@ -38,7 +41,7 @@ def test_generate_small_dataset(tmp_path):
     # Validate a couple of metadata files exist
     # pattern1, first day
     sample_md = (
-        BASE_DIR
+        Path(tmp_path)
         / "sample=pattern1_full_events"
         / "system=retail_demo"
         / "table=orders"

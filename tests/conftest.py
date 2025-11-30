@@ -29,34 +29,16 @@ def ensure_sample_data_available(pytestconfig) -> None:
         # We are running style tests only; don't try to generate sample data
         return
     if not root.exists() or not any(root.rglob("*.csv")):
-        # Skip attempting to generate if explicitly disabled using env var
-        if os.getenv("SKIP_SAMPLE_GENERATION"):
-            pytest.exit(
-                "Bronze sample data missing; populate `sampledata/source_samples` "
-                "before running tests (e.g., `python scripts/generate_sample_data.py`)."
-            )
-
-        gen_script = project_root / "scripts" / "generate_sample_data.py"
-        if gen_script.exists():
-            try:
-                print(
-                    "Generating Bronze sample data using scripts/generate_sample_data.py ..."
-                )
-                subprocess.run(
-                    [sys.executable, str(gen_script)], check=True, cwd=project_root
-                )
-            except Exception as exc:  # noqa: BLE001 - we report to user rather than silently swallowing
-                pytest.exit(
-                    "Bronze sample data missing and automatic generation failed; "
-                    "populate `sampledata/source_samples` before running tests.\n"
-                    "(e.g., `python scripts/generate_sample_data.py`).\n"
-                    f"Automatic generation error: {exc}"
-                )
-        else:
-            pytest.exit(
-                "Bronze sample data missing; populate `sampledata/source_samples` "
-                "before running tests (e.g., `python scripts/generate_sample_data.py`)."
-            )
+        # Do not auto-generate sample data from tests to avoid accidental
+        # mutation of repository files. This avoids long-running or environment
+        # specific steps during automated test runs. If you want to execute the
+        # sample generator locally, run `python scripts/generate_sample_data.py`
+        # or set up sample data under `sampledata/source_samples` manually before
+        # running the tests.
+        pytest.exit(
+            "Bronze sample data missing; populate `sampledata/source_samples` "
+            "before running tests (e.g., `python scripts/generate_sample_data.py`)."
+        )
 
 
 # Add the project root to the Python path

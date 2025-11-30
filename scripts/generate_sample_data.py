@@ -860,6 +860,18 @@ def main() -> None:
             "This overrides per-row defaults unless explicitly passed."
         ),
     )
+        parser.add_argument(
+            "--output-base-dir",
+            type=lambda s: Path(s),
+            default=None,
+            help="Base directory for writing generated sample data (defaults to sampledata/source_samples).",
+        )
+        parser.add_argument(
+            "--skip-mirror",
+            action="store_true",
+            default=False,
+            help="Skip creating a 'bronze_samples' mirror under sampledata (default: false).",
+        )
     args = parser.parse_args()
 
     global DAILY_DAYS, SAMPLE_START_DATE, FULL_DATES, CDC_DATES, CURRENT_HISTORY_DATES
@@ -904,6 +916,13 @@ def main() -> None:
     FULL_DATES = _daily_schedule(SAMPLE_START_DATE, DAILY_DAYS)
     CDC_DATES = _daily_schedule(SAMPLE_START_DATE, DAILY_DAYS)
     CURRENT_HISTORY_DATES = _daily_schedule(SAMPLE_START_DATE, DAILY_DAYS)
+    # If the user requested an alternate base dir, apply it. Useful for tests that
+    # want to run the generator under a temp path instead of committing files into
+    # the repo's sampledata tree.
+    if args.output_base_dir is not None:
+        global BASE_DIR, SAMPLE_BRONZE_SAMPLES
+        BASE_DIR = Path(args.output_base_dir).resolve()
+        SAMPLE_BRONZE_SAMPLES = BASE_DIR.parent / "bronze_samples"
 
     print(
         f"Generating samples for {DAILY_DAYS} day(s) starting {SAMPLE_START_DATE}. Large={args.large}"
@@ -921,7 +940,10 @@ def main() -> None:
     generate_hybrid_combinations(seed=123)
     print(f"Sample datasets written under {BASE_DIR}")
     _write_pattern_readmes()
-    _sync_sampledata_bronze()
+    if not args.skip_mirror:
+        _sync_sampledata_bronze()
+    else:
+        print("Skipping creation of bronze samples mirror (--skip-mirror set)")
     print(f"Bronze sample mirror available under {SAMPLE_BRONZE_SAMPLES}")
 
 
