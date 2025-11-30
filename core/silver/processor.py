@@ -487,16 +487,27 @@ def build_intent_silver_partition(
     else:
         base_path = dataset.silver_base_path
     domain = dataset.domain or dataset.system
+
+    # Get path structure keys from config
+    silver_keys = dataset.path_structure.silver if dataset.path_structure else {}
+    domain_key = silver_keys.get("domain_key", "domain")
+    entity_key = silver_keys.get("entity_key", "entity")
+    version_key = silver_keys.get("version_key", "v")
+    pattern_key = silver_keys.get("pattern_key", "pattern")
+    load_date_key = silver_keys.get("load_date_key", "load_date")
+
     partition = (
         base_path
-        / f"domain={domain}"
-        / f"entity={dataset.entity}"
-        / f"v{dataset.silver.version}"
+        / f"{domain_key}={domain}"
+        / f"{entity_key}={dataset.entity}"
+        / f"{version_key}{dataset.silver.version}"
     )
     if dataset.silver.include_pattern_folder:
-        partition = partition / f"pattern={dataset.silver.entity_kind.value}"
+        # Use pattern_folder from bronze.options if available, otherwise fall back to entity_kind enum value
+        pattern_value = dataset.bronze.options.get("pattern_folder") or dataset.silver.entity_kind.value
+        partition = partition / f"{pattern_key}={pattern_value}"
     partition = (
-        partition / f"{dataset.silver.load_partition_name}={run_date.isoformat()}"
+        partition / f"{load_date_key}={run_date.isoformat()}"
     )
     return partition
 

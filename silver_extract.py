@@ -806,6 +806,7 @@ class SilverPromotionService:
             pattern_folder = bronze_options.get("pattern_folder")
 
             # DEBUG
+            print(f"[SILVEREXTRACT-DEBUG] pattern_folder={pattern_folder}, include_pattern_folder={include_pattern_folder}, bronze_options keys={list(bronze_options.keys())}", flush=True)
             logger.info(f"DEBUG: pattern_folder={pattern_folder}, include_pattern_folder={include_pattern_folder}, bronze_options keys={list(bronze_options.keys())}")
 
             partition = build_silver_partition_path(
