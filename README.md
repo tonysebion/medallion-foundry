@@ -78,7 +78,7 @@ Need a concrete intent example before touching Python? Follow `docs/usage/onboar
 
 ### Testing Your API (For Product/API Teams)
 
-**Not familiar with Python?** No problem! [docs/usage/beginner/QUICKSTART.md](docs/usage/beginner/QUICKSTART.md) has a complete step-by-step walkthrough.
+**Not familiar with Python?** No problem! The quick start sections above have complete walkthroughs.
 
 **Quick summary:**
 
@@ -102,7 +102,7 @@ python bronze_extract.py --config config/test.yaml
 # 5. Check ./output/ folder - if you see data, you're done!
 ```
 
-**See [docs/usage/beginner/QUICKSTART.md](docs/usage/beginner/QUICKSTART.md) for detailed instructions with screenshots and troubleshooting.**
+**See the quick start sections above for detailed instructions.**
 
 ### Offline Local Quick Test
 
@@ -126,6 +126,35 @@ tree silver_output/domain=retail_demo
 ```
 
 This workflow uses only local files, so a non-Python user can validate everything end-to-end before wiring real APIs or databases.
+
+---
+
+### Cloud Quick Test (S3)
+
+For cloud-native deployments, use S3-based sample data. Requires AWS credentials and an S3 bucket with sample data uploaded.
+
+**Prerequisites:**
+- AWS credentials configured (via `aws configure` or environment variables)
+- S3 bucket with sample data at `source_samples/`, `bronze_samples/`, and `silver_samples/` prefixes
+- Upload local samples to S3: `aws s3 cp sampledata/ s3://your-bucket/ --recursive`
+
+```bash
+# 0. (Once) prepare the sandbox data locally, then upload to S3
+python scripts/generate_sample_data.py
+aws s3 cp sampledata/source_samples/ s3://your-bucket/source_samples/ --recursive
+
+# 1. Run Bronze with the S3-based config
+python bronze_extract.py --config docs/examples/configs/examples/s3_example.yaml --date 2025-11-13
+
+# 2. Promote the same run into Silver
+python silver_extract.py --config docs/examples/configs/examples/s3_example.yaml --date 2025-11-13
+
+# 3. Inspect the outputs in S3
+aws s3 ls s3://your-bucket/bronze_samples/
+aws s3 ls s3://your-bucket/silver_samples/
+```
+
+This workflow validates the full pipeline using cloud storage, ideal for production-like testing.
 
 ---
 
@@ -256,6 +285,8 @@ python silver_extract.py \
 
 ### Sample Data Sets
 - Regenerate fixtures anytime with `python scripts/generate_sample_data.py`
+- **Local paths**: Full snapshot (500 rows): `sampledata/source_samples/pattern1_full_events/system=retail_demo/table=orders/pattern=full/dt=2025-11-01/`
+- **S3 paths** (after upload): `s3://your-bucket/source_samples/pattern1_full_events/system=retail_demo/table=orders/pattern=full/dt=2025-11-01/`
 - Full snapshot (500 rows): `sampledata/source_samples/pattern1_full_events/system=retail_demo/table=orders/pattern=full/dt=2025-11-01/`
 - CDC stream (400 events): `sampledata/source_samples/pattern2_cdc_events/system=retail_demo/table=orders/pattern=cdc/dt=2025-11-02/`
 - Current + history mix (800 rows): `sampledata/source_samples/pattern3_scd_state/system=retail_demo/table=orders/pattern=current_history/dt=2025-11-03/`
@@ -265,7 +296,7 @@ python silver_extract.py \
   - **Architecture overview**: `docs/ARCHITECTURE.md` sketches Bronze/Silver/storage flows plus the plugin registry and sample references.
   - **Operations & governance**: `docs/framework/operations/OPERATIONS.md` describes validation, sample generation, storage policy, and log/metric practices so different roles know where to look.
 - **Silver Join**: Join two existing Silver assets with `silver_join.py`, including configurable `join_key_pairs`, `join_strategy`, `quality_guards`, spill directories, checkpoints (`progress.json`), and richer metadata (column lineage, chunk metrics) that trace back to the Bronze inputs. Sample outputs in `docs/examples/data/silver_join_samples/v1` exercise every combination of inputs/formats and are generated with `python scripts/generate_silver_join_samples.py --version 1 --formats both`. See `docs/SILVER_JOIN.md` and `docs/examples/configs/advanced/silver_join_example.yaml` for configuration patterns.
-- Matching configs: `file_example.yaml` (full), `file_cdc_example.yaml` (cdc), `file_current_history_example.yaml`
+- Matching configs: `file_example.yaml` (full), `file_cdc_example.yaml` (cdc), `file_current_history_example.yaml`, `s3_example.yaml` (S3)
 
 ### Sample Configs
 - `docs/examples/configs/` contains starter configs in `examples/` plus advanced versions in `advanced/` that showcase options for each extractor type (API, DB, file, custom). Use the examples configs to get Bronze/Silver running quickly and refer to the advanced ones when you need to enable partitioning, normalization, error handling, or chunk-friendly tuning; `SilverProcessor` chunking happens automatically (legacy streaming flags are now documented in `docs/framework/operations/legacy-streaming.md`).
@@ -394,7 +425,6 @@ silver_output/
 
 - [OPS_PLAYBOOK.md](docs/framework/operations/OPS_PLAYBOOK.md) ï¿½ day-two operations, hooks, and monitoring tips.
 - [GOLD_CONTRACTS.md](docs/framework/operations/GOLD_CONTRACTS.md) ï¿½ guidance for documenting downstream contracts and expectations.
-- [docs/QUICKSTART.md](docs/QUICKSTART.md) ï¿½ detailed tutorial with screenshots.
 - [docs/framework/reference/DOCUMENTATION.md](docs/framework/reference/DOCUMENTATION.md) ï¿½ architecture concepts and FAQs.
 - [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) ï¿½ advanced configuration & features.
 - [CONFIG_REFERENCE.md](docs/framework/reference/CONFIG_REFERENCE.md) ï¿½ exhaustive list of config options.

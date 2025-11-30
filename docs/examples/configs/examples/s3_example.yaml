@@ -1,0 +1,86 @@
+environment: dev  # Target environment for S3 sample runs
+domain: retail_demo  # Logical business domain
+system: retail_demo  # Logical system label
+entity: orders  # Dataset/entity name
+
+# ============================================================================
+# STORAGE CONFIGURATION
+# Platform/infrastructure settings - controls where data is read from and written to
+# S3-based storage for cloud-native deployments
+# ============================================================================
+storage:
+  # SOURCE: Where to read source files from
+  source:
+    backend: s3  # S3 storage backend
+    prefix: source_samples/  # Base path prefix within bucket
+
+  # BRONZE: Where to write Bronze chunks
+  bronze:
+    backend: s3  # S3 storage backend
+    prefix: bronze_samples/  # Path prefix within bucket
+
+  # SILVER: Where to read Bronze and write Silver artifacts
+  silver:
+    backend: s3  # S3 storage backend
+    prefix: silver_samples/  # Path prefix within bucket
+
+# To switch back to local filesystem for debugging, change all backends to "local"
+# and update prefixes to local directories (requires sample data generation):
+# storage:
+#   source:
+#     backend: local
+#     prefix: ./sampledata/source_samples/
+#   bronze:
+#     backend: local
+#     prefix: sampledata/bronze_samples/
+#   silver:
+#     backend: local
+#     prefix: sampledata/silver_samples/
+
+path_structure:
+  sample_key: "sample"  # Folder prefix for pattern-specific snapshots
+  system_key: "system"  # Bronze path component for system
+  entity_key: "table"  # Bronze path component for entity
+  date_key: "dt"  # Bronze path component for partition date
+  silver_model_key: "silver_model"  # Silver sample hierarchy
+  domain_key: "domain"
+  load_date_key: "load_date"
+
+bronze:
+  enabled: true  # Bronze writes are required; full snapshots rewrite entire partition
+  source_type: file  # Using file-based sample data from S3
+
+  # Path pattern for source files - relative to storage.source.bucket/prefix
+  # The storage section defines WHERE (s3 bucket)
+  # This defines WHAT (which specific files/pattern within that location)
+  path_pattern: sample=pattern1_full_events/system=retail_demo/table=orders/dt=2025-11-13/full-part-0001.parquet
+
+  partition_column: run_date  # Column Bronze uses for partitioning metadata
+  options:
+    format: parquet  # Source sample format
+    load_pattern: full  # Load pattern label exposed via metadata
+    pattern_folder: pattern1_full_events  # Directory under bronze_samples
+    max_rows_per_file: 250000  # Approximate file size threshold
+    partitioning_strategy: date  # Hints how run dates map to partitions
+    output_formats:
+      # - csv  # Leave CSV commented out so only parquet is emitted
+      - parquet
+
+silver:
+  enabled: true  # Programmatic Silver promotion is enabled
+  entity_kind: event  # This dataset behaves like an event log
+  input_mode: replace_daily  # Each run rewrites the entire partition
+  delete_mode: ignore
+  schema_mode: allow_new_columns  # Silver tolerates new columns arriving over time
+  natural_keys:
+    - order_id
+  event_ts_column: updated_at  # Primary timestamp for events
+  attributes:
+    - status
+    - order_total
+  partition_by:
+    - event_ts_dt  # Derived partition column (e.g., event_date)
+  # V1 Unified temporal configuration: partition by record time, not load time
+  record_time_column: "updated_at"  # Column with event occurrence time
+  record_time_partition: "event_date"  # Partition key name for event date
+  load_batch_id_column: "load_batch_id"  # Standard column for batch tracking

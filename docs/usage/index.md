@@ -4,9 +4,9 @@
 
 ## 🚀 **I'm New - Just Get Started**
 
-1. **[Quick Start](beginner/QUICKSTART.md)** - Run sample data in 10 minutes
+1. **[README Quick Start](../../README.md)** - Run sample data in 10 minutes
 2. **[Copy & Customize](beginner/COPY_AND_CUSTOMIZE.md)** - Adapt configs for your data
-3. **[First Production Run](beginner/FIRST_RUN_CHECKLIST.md)** - Go live safely
+3. **[Intent Owner Guide](onboarding/intent-owner-guide.md)** - Define datasets and ownership
 
 ## 🎯 **I Have Specific Data Source**
 
@@ -20,20 +20,19 @@
 ## ⚙️ **Production Setup**
 
 - **[Intent Owner Guide](onboarding/intent-owner-guide.md)** - Define datasets and ownership
-- **[Pattern Matrix](patterns/pattern_matrix.md)** - Choose the right extraction strategy
-- **[Production Checklist](onboarding/new_dataset_checklist.md)** - Pre-flight validation
+- **[Quick Reference](patterns/QUICK_REFERENCE.md)** - Choose the right extraction strategy
+- **[Config Doctor](../framework/operations/CONFIG_DOCTOR.md)** - Pre-flight validation
 
 ## 🔍 **Find the Right Pattern**
 
 - **[Quick Reference](patterns/QUICK_REFERENCE.md)** - Common scenarios and solutions
-- **[Pattern Matrix](patterns/pattern_matrix.md)** - Detailed pattern selection guide
 - **[Enhanced Features](patterns/ENHANCED_FEATURES.md)** - Advanced configuration options
 
 ## 🆘 **Troubleshooting**
 
 - **[Config Doctor](../framework/operations/CONFIG_DOCTOR.md)** - Automated config validation
 - **[Error Codes](../framework/operations/ERROR_CODES.md)** - Common issues and solutions
-- **[Operations](../framework/operations/OPERATIONS.md)** - Production runbooks
+- **[Operations Playbook](../framework/operations/OPS_PLAYBOOK.md)** - Production runbooks
 
 ## 📚 **Examples Directory**
 

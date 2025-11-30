@@ -872,6 +872,12 @@ def main() -> None:
         default=False,
         help="Skip creating a 'bronze_samples' mirror under sampledata (default: false).",
     )
+    parser.add_argument(
+        "--upload-to-s3",
+        type=str,
+        default=None,
+        help="Upload generated sample data to S3 bucket (e.g., 'my-bucket'). Requires boto3.",
+    )
     args = parser.parse_args()
 
     global DAILY_DAYS, SAMPLE_START_DATE, FULL_DATES, CDC_DATES, CURRENT_HISTORY_DATES
@@ -945,6 +951,35 @@ def main() -> None:
     else:
         print("Skipping creation of bronze samples mirror (--skip-mirror set)")
     print(f"Bronze sample mirror available under {SAMPLE_BRONZE_SAMPLES}")
+
+    if args.upload_to_s3:
+        _upload_to_s3(args.upload_to_s3, BASE_DIR)
+
+
+def _upload_to_s3(bucket_name: str, local_dir: Path) -> None:
+    """Upload generated sample data to S3 bucket."""
+    try:
+        import boto3
+        from botocore.exceptions import NoCredentialsError
+    except ImportError:
+        print("Error: boto3 not installed. Install with: pip install boto3")
+        return
+
+    s3_client = boto3.client('s3')
+    uploaded_count = 0
+
+    try:
+        for file_path in local_dir.rglob('*'):
+            if file_path.is_file():
+                s3_key = f"source_samples/{file_path.relative_to(local_dir)}"
+                s3_client.upload_file(str(file_path), bucket_name, s3_key)
+                uploaded_count += 1
+
+        print(f"Uploaded {uploaded_count} files to s3://{bucket_name}/source_samples/")
+    except NoCredentialsError:
+        print("Error: AWS credentials not found. Configure with 'aws configure'")
+    except Exception as e:
+        print(f"Error uploading to S3: {e}")
 
 
 def _write_pattern_readmes() -> None:

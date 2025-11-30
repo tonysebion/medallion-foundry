@@ -4,7 +4,7 @@ Complete documentation for medallion-foundry - a production-ready, config-driven
 
 > **📚 Documentation Navigation:**
 > - **README.md** - Project overview and key features
-> - **docs/usage/beginner/QUICKSTART.md** - 2-minute quick start for first-time users
+> - **README.md** - Quick start for first-time users
 > - **docs/framework/reference/QUICK_REFERENCE.md** - Command reference and common patterns
 > - **docs/setup/INSTALLATION.md** - Detailed installation instructions
 > - **docs/framework/operations/CONTRIBUTING.md** - Guidelines for contributors

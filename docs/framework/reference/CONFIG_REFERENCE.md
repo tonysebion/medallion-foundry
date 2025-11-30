@@ -1,9 +1,13 @@
 # Config Reference
 
+**Storage Recommendation**: For production deployments, use S3 or cloud storage backends. The `storage` section (with `backend: s3`) provides the most flexible configuration for cloud-native data pipelines. Local storage is ideal for development and testing.
+
 Each config file is a YAML document with two top-level sections:
 
 - `platform` – owned and managed by the data platform / central team.
 - `source` – owned by the domain/product/data team responsible for a given data product.
+
+**Note**: Newer configs use a simplified `storage`/`source`/`silver` structure. See `docs/examples/configs/examples/s3_example.yaml` for the recommended format.
 
 ```yaml
 platform:

@@ -346,6 +346,22 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _resolve_format_flags(config: PatternConfig, format_choice: str) -> tuple[bool, bool]:
+    silver = config.dataset.silver
+    requested_parquet = format_choice in {"parquet", "both"}
+    requested_csv = format_choice in {"csv", "both"}
+    allowed_parquet = bool(silver.write_parquet)
+    allowed_csv = bool(silver.write_csv)
+    effective_parquet = requested_parquet and allowed_parquet
+    effective_csv = requested_csv and allowed_csv
+    if requested_csv and not allowed_csv:
+        print(
+            f"[INFO] Skipping CSV output for pattern={config.pattern_folder}; "
+            "pattern config disables `silver.write_csv`"
+        )
+    return effective_parquet, effective_csv
+
+
 
 def _generate_for_partition(
     partition: BronzePartition,
@@ -430,7 +446,18 @@ def main() -> None:
             if limit is not None and generated >= limit:
                 break
             chunk_tag = None
-            task_list.append((partition, config, enable_parquet, enable_csv, args.artifact_writer, chunk_tag, args.use_locks))
+            eff_parquet, eff_csv = _resolve_format_flags(config, args.formats)
+            task_list.append(
+                (
+                    partition,
+                    config,
+                    eff_parquet,
+                    eff_csv,
+                    args.artifact_writer,
+                    chunk_tag,
+                    args.use_locks,
+                )
+            )
             generated += 1
         if limit is not None and generated >= limit:
             break

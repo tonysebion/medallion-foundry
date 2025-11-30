@@ -40,9 +40,9 @@ python bronze_extract.py --config config/my_api.yaml --date 2025-11-27
 
 ### **I want to...**
 
-- **Learn the basics** → [`Beginner Guide`](usage/beginner/QUICKSTART.md)
+- **Learn the basics** → [README Quick Start](../README.md)
 - **Customize configs** → [`Copy & Customize Guide`](usage/beginner/COPY_AND_CUSTOMIZE.md)
-- **Set up production** → [`Production Setup`](usage/onboarding/intent-owner-guide.md)
+- **Set up production** → [`Intent Owner Guide`](usage/onboarding/intent-owner-guide.md)
 - **Choose the right pattern** → [`Pattern Picker`](usage/patterns/QUICK_REFERENCE.md)
 - **Troubleshoot** → [`Config Doctor`](framework/operations/CONFIG_DOCTOR.md)
 
@@ -51,14 +51,14 @@ python bronze_extract.py --config config/my_api.yaml --date 2025-11-27
 ## 📚 **Learning Paths**
 
 ### **Path 1: Just Get Data Moving (Beginner)**
-1. [Quick Start](usage/beginner/QUICKSTART.md) - Run sample data
+1. [README Quick Start](../README.md) - Run sample data
 2. [Copy & Customize](usage/beginner/COPY_AND_CUSTOMIZE.md) - Adapt for your source
-3. [First Production Run](usage/beginner/FIRST_RUN_CHECKLIST.md) - Go live safely
+3. [Intent Owner Guide](usage/onboarding/intent-owner-guide.md) - Define your dataset
 
 ### **Path 2: Production Data Pipeline (Advanced)**
 1. [Intent Owner Guide](usage/onboarding/intent-owner-guide.md) - Define your dataset
-2. [Pattern Matrix](usage/patterns/pattern_matrix.md) - Choose load strategy
-3. [Production Checklist](usage/onboarding/new_dataset_checklist.md) - Pre-flight checks
+2. [Pattern Picker](usage/patterns/QUICK_REFERENCE.md) - Choose load strategy
+3. [Config Doctor](framework/operations/CONFIG_DOCTOR.md) - Pre-flight checks
 
 ### **Path 3: Extend the Framework (Developer)**
 1. [Architecture](framework/architecture.md) - System design
@@ -83,10 +83,8 @@ python bronze_extract.py --config config/my_api.yaml --date 2025-11-27
 
 - [Configuration Reference](framework/reference/CONFIG_REFERENCE.md) - All config options
 - [API Documentation](api/core.md) - Code reference
-- [Operations](framework/operations/OPERATIONS.md) - Production runbooks
+- [Operations Playbook](framework/operations/OPS_PLAYBOOK.md) - Production runbooks
 - [Troubleshooting](framework/operations/ERROR_CODES.md) - Common issues
-- [Project Review](framework/PROJECT_REVIEW.md) - Comprehensive project audit (architecture, testing, components)
-- [Review Insights](framework/PROJECT_REVIEW_INSIGHTS.md) - Key insights, decisions, roadmap for developers
 
 ---
 
