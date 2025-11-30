@@ -147,6 +147,16 @@ python run_tests.py --ruff
 ruff check core extractors tests bronze_extract.py
 ```
 
+### Linting (flake8)
+
+```bash
+# Run flake8 linting only
+python run_tests.py --flake8
+
+# Or run flake8 directly
+python -m flake8 --max-line-length=120 .
+```
+
 ### Code Formatting (black)
 
 ```bash
