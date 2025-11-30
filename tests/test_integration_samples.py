@@ -43,7 +43,10 @@ GENERATE_SCRIPT = Path("scripts") / "generate_sample_data.py"
 
 @pytest.fixture(scope="module")
 def bronze_samples_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    subprocess.run([sys.executable, str(GENERATE_SCRIPT)], check=True, cwd=REPO_ROOT)
+    # Do not auto-generate sample data within tests. If you need sampledata
+    # generated automatically, set the env var `GENERATE_SAMPLES_FOR_TESTS=1`.
+    if os.getenv("GENERATE_SAMPLES_FOR_TESTS") == "1":
+        subprocess.run([sys.executable, str(GENERATE_SCRIPT)], check=True, cwd=REPO_ROOT)
     if not BRONZE_SAMPLE_ROOT.exists():
         pytest.skip("sample data missing; run scripts/generate_sample_data.py")
 

@@ -859,19 +859,19 @@ def main() -> None:
             "Create a large dataset set (default 250k rows and 60 days). "
             "This overrides per-row defaults unless explicitly passed."
         ),
+        )
+    parser.add_argument(
+        "--output-base-dir",
+        type=lambda s: Path(s),
+        default=None,
+        help="Base directory for writing generated sample data (defaults to sampledata/source_samples).",
     )
-        parser.add_argument(
-            "--output-base-dir",
-            type=lambda s: Path(s),
-            default=None,
-            help="Base directory for writing generated sample data (defaults to sampledata/source_samples).",
-        )
-        parser.add_argument(
-            "--skip-mirror",
-            action="store_true",
-            default=False,
-            help="Skip creating a 'bronze_samples' mirror under sampledata (default: false).",
-        )
+    parser.add_argument(
+        "--skip-mirror",
+        action="store_true",
+        default=False,
+        help="Skip creating a 'bronze_samples' mirror under sampledata (default: false).",
+    )
     args = parser.parse_args()
 
     global DAILY_DAYS, SAMPLE_START_DATE, FULL_DATES, CDC_DATES, CURRENT_HISTORY_DATES

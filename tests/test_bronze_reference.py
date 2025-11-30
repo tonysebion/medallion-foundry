@@ -50,11 +50,13 @@ def _write_metadata_with_reference(
 
 @pytest.fixture(scope="module", autouse=True)
 def ensure_hybrid_samples() -> Iterator[None]:
-    subprocess.run(
-        [sys.executable, "scripts/generate_sample_data.py"],
-        cwd=REPO_ROOT,
-        check=True,
-    )
+    # Do not auto-generate sample data as part of the test suite by default.
+    # If you need to generate the hybrid samples for troubleshooting or manual
+    # test runs, set `GENERATE_SAMPLES_FOR_TESTS=1` in the environment.
+    if os.getenv("GENERATE_SAMPLES_FOR_TESTS") == "1":
+        subprocess.run(
+            [sys.executable, "scripts/generate_sample_data.py"], cwd=REPO_ROOT, check=True
+        )
     yield
 
 

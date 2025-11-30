@@ -3,6 +3,9 @@
 import os
 import subprocess
 import pytest
+from core.config.loader import load_config_with_env
+from core.storage.uri import StorageURI
+from core.storage.filesystem import create_filesystem
 import sys
 from pathlib import Path
 
@@ -12,6 +15,9 @@ def ensure_sample_data_available(pytestconfig) -> None:
     """Fail early if Bronze sample data is missing so tests don't run blind."""
     project_root = Path(__file__).resolve().parents[1]
     root = project_root / "sampledata" / "source_samples"
+
+    if os.environ.get("SKIP_SAMPLE_DATA_CHECK"):
+        return
 
     # If source_samples are missing, attempt to generate them automatically
     # However, skip sample generation when only running style checks to avoid long runs
@@ -28,16 +34,38 @@ def ensure_sample_data_available(pytestconfig) -> None:
     if is_style_only:
         # We are running style tests only; don't try to generate sample data
         return
-    if not root.exists() or not any(root.rglob("*.csv")):
-        # Do not auto-generate sample data from tests to avoid accidental
-        # mutation of repository files. This avoids long-running or environment
-        # specific steps during automated test runs. If you want to execute the
-        # sample generator locally, run `python scripts/generate_sample_data.py`
-        # or set up sample data under `sampledata/source_samples` manually before
-        # running the tests.
+    # Check for either local or S3 sample data presence. For S3, we try to
+    # resolve at least one file via the storage config in the pattern YAMLs.
+    sampledata_found = False
+    # 1) Check local sampledata
+    if root.exists() and (any(root.rglob("*.csv")) or any(root.rglob("*.parquet"))):
+        sampledata_found = True
+
+    # 2) Check S3 sample data configured by pattern configs (opt-in via `environment` in pattern YAML)
+    if not sampledata_found:
+        patterns_dir = project_root / "docs" / "examples" / "configs" / "patterns"
+        for cfg_file in patterns_dir.glob("pattern_*.yaml"):
+            try:
+                dataset, env_cfg = load_config_with_env(cfg_file)
+            except Exception:
+                continue
+            if dataset.bronze.source_type != "file":
+                continue
+            path_pattern = dataset.bronze.path_pattern or ""
+            uri = StorageURI.parse(path_pattern)
+            if uri.backend == "s3" and env_cfg and env_cfg.s3:
+                try:
+                    fs = create_filesystem(uri, env_cfg)
+                    _ = fs.ls(uri.to_fsspec_path(env_cfg), detail=False)
+                    sampledata_found = True
+                    break
+                except Exception:
+                    # Try the next config
+                    continue
+
+    if not sampledata_found:
         pytest.exit(
-            "Bronze sample data missing; populate `sampledata/source_samples` "
-            "before running tests (e.g., `python scripts/generate_sample_data.py`)."
+            "Bronze sample data missing; populate `sampledata/source_samples` or ensure S3 is available"
         )
 
 
