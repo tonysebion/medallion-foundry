@@ -401,6 +401,7 @@ def main() -> int:
         ):
             return 1
 
+    print("Scanning source_samples in S3 for available pattern dates (this may take a moment)...")
     pattern_runs: list[Dict[str, Any]] = []
     for entry in PATTERN_CONFIGS:
         config_path = entry["config"]
@@ -448,8 +449,10 @@ def main() -> int:
                         "pattern": entry["pattern"],
                         "sample_path": run_info.get("sample_path"),
                         "limit_records": limit_records,
-                    }
-                )
+                }
+            )
+
+        print(f"Scheduling {len(tasks)} Bronze runs ({total_runs} total) across patterns")
 
         results: list[tuple[str, str, bool]] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
