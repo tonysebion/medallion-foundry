@@ -544,7 +544,8 @@ def main() -> int:
         )
 
         results: list[tuple[str, str, bool]] = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        # Reduced from 10 to 3 workers to prevent S3 timeout/resource exhaustion
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
             futures = [executor.submit(process_run, task) for task in tasks]
             for future in concurrent.futures.as_completed(futures):
                 results.append(future.result())
