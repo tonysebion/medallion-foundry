@@ -371,6 +371,9 @@ def _upload_directory_to_s3(local_root: Path, bucket: str, prefix: str, env_conf
     for file_path in sorted(local_root.rglob("*")):
         if file_path.is_dir():
             continue
+        # Skip YAML config files - they're temporary and not needed in S3
+        if file_path.suffix.lower() == '.yaml':
+            continue
         relative = file_path.relative_to(local_root).as_posix()
         key = f"{normalized_prefix}/{relative}" if normalized_prefix else relative
         client.upload_file(str(file_path), bucket, key)
