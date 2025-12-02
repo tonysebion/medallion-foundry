@@ -6,13 +6,14 @@ Silver samples mirror the Bronze hierarchy under the configured S3 bucket.
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 import boto3
 import yaml
@@ -592,6 +593,27 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Acquire filesystem locks around each silver_extract run",
     )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from previous run by skipping already-completed partitions",
+    )
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Reset progress tracking and start fresh (clears .silver_progress.json)",
+    )
+    parser.add_argument(
+        "--progress-file",
+        type=str,
+        default=".silver_progress.json",
+        help="Path to progress tracking file (default: .silver_progress.json)",
+    )
+    parser.add_argument(
+        "--interrogate",
+        action="store_true",
+        help="Interrogate S3 to compare Bronze vs Silver and report what's missing (does not generate)",
+    )
     return parser.parse_args()
 
 
@@ -610,6 +632,196 @@ def _resolve_format_flags(config: PatternConfig, format_choice: str) -> tuple[bo
         )
     return effective_parquet, effective_csv
 
+
+def _load_progress(progress_file: Path) -> Set[str]:
+    """Load completed partition keys from progress file."""
+    if not progress_file.exists():
+        return set()
+    try:
+        with open(progress_file, 'r') as f:
+            data = json.load(f)
+            return set(data.get('completed', []))
+    except (json.JSONDecodeError, IOError) as e:
+        print(f"[WARN] Could not load progress file {progress_file}: {e}")
+        return set()
+
+
+def _save_progress(progress_file: Path, completed: Set[str]) -> None:
+    """Save completed partition keys to progress file."""
+    try:
+        with open(progress_file, 'w') as f:
+            json.dump({'completed': sorted(completed)}, f, indent=2)
+    except IOError as e:
+        print(f"[WARN] Could not save progress to {progress_file}: {e}")
+
+
+def _make_partition_key(partition: BronzePartition, config: PatternConfig) -> str:
+    """Generate unique key for a partition + config combination."""
+    return f"{partition.pattern}|{partition.run_date}|{config.domain}|{config.entity}"
+
+
+def _list_silver_partitions_from_s3(pattern_configs: Dict[str, List[PatternConfig]]) -> Set[str]:
+    """List all existing silver partition keys from S3."""
+    print("[INFO] Scanning Silver partitions in S3...")
+    existing_keys = set()
+
+    # Use any config to get S3 settings (they should all point to same bucket)
+    sample_config = None
+    for configs in pattern_configs.values():
+        if configs:
+            sample_config = configs[0]
+            break
+
+    if not sample_config or not sample_config.env_config or not sample_config.env_config.s3:
+        print("[WARN] No valid config found for S3 access")
+        return existing_keys
+
+    client = _build_s3_client(sample_config.env_config)
+    bucket_ref = sample_config.dataset.silver.output_bucket or "silver_data"
+    bucket = sample_config.env_config.s3.get_bucket(bucket_ref)
+    silver_prefix = (sample_config.dataset.silver.output_prefix or "silver_samples/").strip("/")
+
+    if not silver_prefix.endswith('/'):
+        silver_prefix += '/'
+
+    print(f"[INFO] Listing objects from s3://{bucket}/{silver_prefix}...")
+
+    try:
+        # List all objects (not just prefixes) to find actual data files
+        paginator = client.get_paginator('list_objects_v2')
+        pages = paginator.paginate(Bucket=bucket, Prefix=silver_prefix)
+
+        # Track unique partition paths
+        seen_partitions = set()
+        file_count = 0
+        page_count = 0
+
+        for page in pages:
+            page_count += 1
+            contents = page.get('Contents', [])
+
+            if page_count % 10 == 0:
+                print(f"[INFO] Processing page {page_count}, found {len(existing_keys)} unique partitions so far...")
+
+            for obj in contents:
+                key = obj['Key']
+                file_count += 1
+
+                # Only process actual data files
+                if not (key.endswith('.parquet') or key.endswith('.csv')):
+                    continue
+
+                # Parse path: silver_samples/domain=X/entity=Y/v1/pattern=Z/load_date=DATE/...
+                parts = key.split('/')
+
+                # Extract components from path
+                domain = entity = pattern = run_date = None
+                for part in parts:
+                    if part.startswith('domain='):
+                        domain = part.split('=', 1)[1]
+                    elif part.startswith('entity='):
+                        entity = part.split('=', 1)[1]
+                    elif part.startswith('pattern='):
+                        pattern = part.split('=', 1)[1]
+                    elif part.startswith('load_date='):
+                        run_date = part.split('=', 1)[1]
+
+                if pattern and run_date and domain and entity:
+                    # Create partition key matching our format
+                    partition_key = f"{pattern}|{run_date}|{domain}|{entity}"
+                    if partition_key not in seen_partitions:
+                        seen_partitions.add(partition_key)
+                        existing_keys.add(partition_key)
+
+        print(f"[INFO] Scanned {file_count} files across {page_count} pages")
+        print(f"[INFO] Found {len(existing_keys)} unique Silver partitions")
+
+    except Exception as e:
+        print(f"[WARN] Could not list silver partitions: {e}")
+        import traceback
+        traceback.print_exc()
+
+    return existing_keys
+
+
+def _interrogate_bronze_vs_silver(pattern_configs: Dict[str, List[PatternConfig]]) -> None:
+    """Compare Bronze and Silver S3 partitions and report what's missing."""
+    print("\n=== INTERROGATING BRONZE vs SILVER ===\n")
+
+    # Get all bronze partitions
+    print("[INFO] Scanning Bronze partitions in S3...")
+    bronze_partitions = _list_all_s3_partitions(pattern_configs)
+    if not bronze_partitions:
+        print("[ERROR] No Bronze partitions found in S3")
+        return
+
+    print(f"[INFO] Found {len(bronze_partitions)} Bronze partitions\n")
+
+    # Get all silver partitions
+    silver_keys = _list_silver_partitions_from_s3(pattern_configs)
+    print(f"\n[INFO] Found {len(silver_keys)} Silver partitions\n")
+
+    # Build expected silver keys from bronze partitions
+    print("[INFO] Building expected Silver partition list from Bronze...")
+    expected_keys = set()
+    bronze_by_pattern = {}
+
+    for partition in bronze_partitions:
+        configs = pattern_configs.get(partition.pattern)
+        if not configs:
+            continue
+
+        for config in configs:
+            partition_key = _make_partition_key(partition, config)
+            expected_keys.add(partition_key)
+
+            # Track by pattern for reporting
+            if partition.pattern not in bronze_by_pattern:
+                bronze_by_pattern[partition.pattern] = []
+            bronze_by_pattern[partition.pattern].append(partition_key)
+
+    # Find missing partitions
+    missing_keys = expected_keys - silver_keys
+    extra_keys = silver_keys - expected_keys
+
+    print(f"\n[INFO] Expected {len(expected_keys)} Silver partitions based on Bronze")
+    print(f"[INFO] Missing {len(missing_keys)} Silver partitions")
+
+    if extra_keys:
+        print(f"[WARN] Found {len(extra_keys)} extra Silver partitions (no corresponding Bronze)")
+
+    # Report by pattern
+    print("\n--- MISSING PARTITIONS BY PATTERN ---")
+    missing_by_pattern = {}
+    for key in missing_keys:
+        pattern = key.split('|')[0]
+        if pattern not in missing_by_pattern:
+            missing_by_pattern[pattern] = []
+        missing_by_pattern[pattern].append(key)
+
+    for pattern in sorted(missing_by_pattern.keys()):
+        keys = missing_by_pattern[pattern]
+        total_for_pattern = len(bronze_by_pattern.get(pattern, []))
+        print(f"\n  {pattern}:")
+        print(f"    Missing: {len(keys)} / {total_for_pattern} partitions")
+        if len(keys) <= 5:
+            for key in sorted(keys):
+                parts = key.split('|')
+                print(f"      - run_date={parts[1]}, domain={parts[2]}, entity={parts[3]}")
+        else:
+            for key in sorted(keys)[:3]:
+                parts = key.split('|')
+                print(f"      - run_date={parts[1]}, domain={parts[2]}, entity={parts[3]}")
+            print(f"      ... and {len(keys) - 3} more")
+
+    if not missing_keys:
+        print("\n✅ All Bronze partitions have corresponding Silver partitions!")
+    else:
+        print(f"\n⚠️  Total missing: {len(missing_keys)} Silver partitions need to be generated")
+        print(f"\nTo generate missing partitions, run:")
+        print(f"  python scripts/generate_silver_samples.py --workers 4 --formats parquet")
+        print(f"\nOr to resume from progress file:")
+        print(f"  python scripts/generate_silver_samples.py --resume --workers 4 --formats parquet")
 
 
 def _generate_for_partition(
@@ -687,6 +899,27 @@ def _generate_for_partition(
 
 def main() -> None:
     args = parse_args()
+    progress_file = Path(args.progress_file)
+
+    # Handle --interrogate mode (just report, don't generate)
+    if args.interrogate:
+        pattern_configs = _discover_pattern_configs()
+        _interrogate_bronze_vs_silver(pattern_configs)
+        return
+
+    # Handle --reset flag
+    if args.reset:
+        if progress_file.exists():
+            progress_file.unlink()
+            print(f"[INFO] Reset progress file: {progress_file}")
+        else:
+            print(f"[INFO] No progress file to reset: {progress_file}")
+
+    # Load completed partitions for --resume
+    completed = _load_progress(progress_file) if args.resume else set()
+    if args.resume and completed:
+        print(f"[INFO] Resuming from previous run: {len(completed)} partitions already completed")
+
     enable_parquet = args.formats in {"parquet", "both"}
     enable_csv = args.formats in {"csv", "both"}
     pattern_configs = _discover_pattern_configs()
@@ -697,7 +930,9 @@ def main() -> None:
         )
     limit = args.limit if args.limit and args.limit > 0 else None
     task_list: List[tuple] = []
+    task_keys: List[str] = []
     generated = 0
+    skipped = 0
     for partition in partitions:
         configs = pattern_configs.get(partition.pattern)
         if not configs:
@@ -705,6 +940,13 @@ def main() -> None:
         for config in configs:
             if limit is not None and generated >= limit:
                 break
+
+            # Check if already completed (for --resume)
+            partition_key = _make_partition_key(partition, config)
+            if args.resume and partition_key in completed:
+                skipped += 1
+                continue
+
             chunk_tag = None
             eff_parquet, eff_csv = _resolve_format_flags(config, args.formats)
             task_list.append(
@@ -718,35 +960,56 @@ def main() -> None:
                     args.use_locks,
                 )
             )
+            task_keys.append(partition_key)
             generated += 1
         if limit is not None and generated >= limit:
             break
+
+    if skipped > 0:
+        print(f"[INFO] Skipped {skipped} already-completed partitions")
+
     if not task_list:
         print("[WARN] No Silver generation tasks found; nothing to run")
+        if args.resume and completed:
+            print(f"[INFO] All {len(completed)} partitions already completed")
         return
+
+    print(f"[INFO] Processing {len(task_list)} partitions...")
+
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     failures: List[tuple] = []
     upload_locations: List[str] = []
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        futures = [executor.submit(_generate_for_partition, *task) for task in task_list]
+        futures = {executor.submit(_generate_for_partition, *task): i for i, task in enumerate(task_list)}
         for fut in as_completed(futures):
+            task_idx = futures[fut]
+            partition_key = task_keys[task_idx]
             try:
                 bucket, prefix = fut.result()
                 upload_locations.append(f"s3://{bucket}/{prefix}")
+                # Mark as completed and save progress
+                completed.add(partition_key)
+                _save_progress(progress_file, completed)
+                print(f"[PROGRESS] Completed {len(completed)} / {len(completed) + len(task_list) - len(upload_locations)} partitions")
             except Exception as exc:
                 failures.append(exc)
+                print(f"[ERROR] Failed partition {partition_key}: {exc}")
+
     if failures:
-        print(f"[ERROR] {len(failures)} Silver generation tasks failed:")
+        print(f"\n[ERROR] {len(failures)} Silver generation tasks failed:")
         for exc in failures:
             print(f" - {exc}")
+        print(f"\n[INFO] Progress saved to {progress_file}. Use --resume to continue.")
         raise RuntimeError("One or more Silver generation tasks failed")
+
     unique_locations = sorted(set(upload_locations))
     print("\n[OK] Generated Silver samples in S3 to the following prefixes:")
     for loc in unique_locations[:5]:
         print(f"  {loc}")
     if len(unique_locations) > 5:
         print(f"  ...and {len(unique_locations) - 5} more prefixes")
+    print(f"\n[INFO] Total completed: {len(completed)} partitions")
 
 
 if __name__ == "__main__":
