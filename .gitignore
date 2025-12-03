@@ -238,3 +238,4 @@ DATA_CORRECTNESS_REPORT.json
 FINAL_DATA_VALIDATION_SUMMARY.md
 /environments/*.yaml
 environments/dev.yaml
+.silver_progress.json
