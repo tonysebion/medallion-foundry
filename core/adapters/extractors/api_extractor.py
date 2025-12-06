@@ -22,11 +22,12 @@ from core.infrastructure.resilience.retry import RetryPolicy, execute_with_retry
 from core.primitives.catalog.tracing import trace_span
 from .async_http import AsyncApiClient, is_async_enabled
 
-from core.adapters.extractors.base import BaseExtractor
+from core.adapters.extractors.base import BaseExtractor, register_extractor
 
 logger = logging.getLogger(__name__)
 
 
+@register_extractor("api")
 class ApiExtractor(BaseExtractor):
     """Extractor for REST API sources with authentication and pagination.
 

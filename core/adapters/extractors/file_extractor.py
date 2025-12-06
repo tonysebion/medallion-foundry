@@ -13,7 +13,7 @@ from datetime import date
 import pandas as pd
 import fsspec
 
-from core.adapters.extractors.base import BaseExtractor
+from core.adapters.extractors.base import BaseExtractor, register_extractor
 from core.infrastructure.storage.uri import StorageURI
 from core.infrastructure.storage.filesystem import create_filesystem
 
@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@register_extractor("file")
 class FileExtractor(BaseExtractor):
     """Load records from local or remote files using streaming.
 

@@ -22,11 +22,12 @@ from tenacity import (
     retry_if_exception_type,
 )
 
-from core.adapters.extractors.base import BaseExtractor
+from core.adapters.extractors.base import BaseExtractor, register_extractor
 
 logger = logging.getLogger(__name__)
 
 
+@register_extractor("db")
 class DbExtractor(BaseExtractor):
     """Extractor for database sources with incremental loading support.
 

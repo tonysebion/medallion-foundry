@@ -18,12 +18,17 @@ from core.primitives.catalog.hooks import (
     report_schema_snapshot,
 )
 from core.pipeline.runtime.context import RunContext
-from core.adapters.extractors.api_extractor import ApiExtractor
-from core.adapters.extractors.base import BaseExtractor
-from core.adapters.extractors.db_extractor import DbExtractor
-from core.adapters.extractors.db_multi_extractor import DbMultiExtractor
+from core.adapters.extractors.base import (
+    BaseExtractor,
+    EXTRACTOR_REGISTRY,
+    get_extractor_class,
+)
+# Import extractors to ensure they register themselves
+from core.adapters.extractors import api_extractor  # noqa: F401
+from core.adapters.extractors import db_extractor  # noqa: F401
+from core.adapters.extractors import db_multi_extractor  # noqa: F401
+from core.adapters.extractors import file_extractor  # noqa: F401
 from core.infrastructure.config.environment import EnvironmentConfig
-from core.adapters.extractors.file_extractor import FileExtractor
 from core.pipeline.bronze.io import chunk_records
 from core.primitives.foundations.patterns import LoadPattern
 from core.orchestration.runner.chunks import ChunkProcessor, ChunkWriter
@@ -35,32 +40,58 @@ logger = logging.getLogger(__name__)
 def build_extractor(
     cfg: Dict[str, Any], env_config: Optional[EnvironmentConfig] = None
 ) -> BaseExtractor:
+    """Build an extractor instance based on source configuration.
+
+    Uses the EXTRACTOR_REGISTRY to look up registered extractor classes.
+    Custom extractors are loaded dynamically from the configured module.
+
+    Args:
+        cfg: Full pipeline configuration dictionary
+        env_config: Optional environment configuration
+
+    Returns:
+        Configured BaseExtractor instance
+
+    Raises:
+        ValueError: If source type is unknown or custom extractor config is invalid
+    """
     src = cfg["source"]
     src_type = src.get("type", "api")
 
-    if src_type == "api":
-        return ApiExtractor()
-    if src_type == "db":
-        return DbExtractor()
-    if src_type == "db_multi":
-        max_workers = src.get("run", {}).get("parallel_workers", 4)
-        return DbMultiExtractor(max_workers=max_workers)
+    # Handle custom extractor separately (dynamic loading)
     if src_type == "custom":
         custom_cfg = src.get("custom_extractor", {})
-        module_name = custom_cfg["module"]
-        class_name = custom_cfg["class_name"]
+        module_name = custom_cfg.get("module")
+        class_name = custom_cfg.get("class_name")
+        if not module_name or not class_name:
+            raise ValueError(
+                "custom extractor requires both 'module' and 'class_name' in source.custom_extractor"
+            )
 
         import importlib
-
         module = importlib.import_module(module_name)
         cls = getattr(module, class_name)
-        # Assume user-supplied custom extractor classes subclass BaseExtractor; cast for mypy
         cls_typed: Type[BaseExtractor] = cast(Type[BaseExtractor], cls)
         return cls_typed()
-    if src_type == "file":
-        return FileExtractor(env_config=env_config)
 
-    raise ValueError(f"Unknown source.type: {src_type}")
+    # Look up extractor class in registry
+    extractor_cls = get_extractor_class(src_type)
+    if extractor_cls is None:
+        registered = ", ".join(EXTRACTOR_REGISTRY.keys())
+        raise ValueError(
+            f"Unknown source.type: '{src_type}'. "
+            f"Registered types: {registered or 'none'}"
+        )
+
+    # Handle extractors that need special initialization
+    if src_type == "db_multi":
+        max_workers = src.get("run", {}).get("parallel_workers", 4)
+        return extractor_cls(max_workers=max_workers)
+    if src_type == "file":
+        return extractor_cls(env_config=env_config)
+
+    # Default initialization
+    return extractor_cls()
 
 
 class ExtractJob:

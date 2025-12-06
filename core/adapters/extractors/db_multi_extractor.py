@@ -48,7 +48,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from core.adapters.extractors.base import BaseExtractor
+from core.adapters.extractors.base import BaseExtractor, register_extractor
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +125,7 @@ class MultiEntityResult:
             self.total_records += result.row_count
 
 
+@register_extractor("db_multi")
 class DbMultiExtractor(BaseExtractor):
     """Extractor for multiple database entities with parallel support.
 

@@ -18,6 +18,12 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class RunContext:
+    """Context for a single pipeline run.
+
+    Contains all the configuration and state needed to execute
+    a bronze extraction or silver transformation.
+    """
+
     cfg: Dict[str, Any]
     run_date: date
     relative_path: str
@@ -38,6 +44,44 @@ class RunContext:
     @property
     def bronze_output_base(self) -> Path:
         return self.local_output_dir
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization.
+
+        Note: env_config is not serialized as it contains runtime state.
+        """
+        return {
+            "cfg": self.cfg,
+            "run_date": self.run_date.isoformat(),
+            "relative_path": self.relative_path,
+            "local_output_dir": str(self.local_output_dir),
+            "bronze_path": str(self.bronze_path),
+            "source_system": self.source_system,
+            "source_table": self.source_table,
+            "dataset_id": self.dataset_id,
+            "config_name": self.config_name,
+            "load_pattern": self.load_pattern.value,
+            "run_id": self.run_id,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "RunContext":
+        """Create from dictionary."""
+        load_pattern = LoadPattern.normalize(data.get("load_pattern"))
+        return cls(
+            cfg=data["cfg"],
+            run_date=date.fromisoformat(data["run_date"]),
+            relative_path=data["relative_path"],
+            local_output_dir=Path(data["local_output_dir"]),
+            bronze_path=Path(data["bronze_path"]),
+            source_system=data["source_system"],
+            source_table=data["source_table"],
+            dataset_id=data["dataset_id"],
+            config_name=data.get("config_name", data["dataset_id"]),
+            load_pattern=load_pattern,
+            env_config=None,
+            run_id=data.get("run_id", generate_run_id()),
+        )
 
 
 def build_run_context(
@@ -120,45 +164,26 @@ def build_run_context(
 
 
 def run_context_to_dict(ctx: RunContext) -> Dict[str, Any]:
-    return {
-        "cfg": ctx.cfg,
-        "run_date": ctx.run_date.isoformat(),
-        "relative_path": ctx.relative_path,
-        "local_output_dir": str(ctx.local_output_dir),
-        "bronze_path": str(ctx.bronze_path),
-        "source_system": ctx.source_system,
-        "source_table": ctx.source_table,
-        "dataset_id": ctx.dataset_id,
-        "config_name": ctx.config_name,
-        "load_pattern": ctx.load_pattern.value,
-        "run_id": ctx.run_id,
-    }
+    """Convert RunContext to dictionary.
+
+    Deprecated: Use ctx.to_dict() instead.
+    """
+    return ctx.to_dict()
 
 
 def run_context_from_dict(payload: Dict[str, Any]) -> RunContext:
-    cfg = payload["cfg"]
-    run_date = date.fromisoformat(payload["run_date"])
-    load_pattern = LoadPattern.normalize(payload.get("load_pattern"))
-    return RunContext(
-        cfg=cfg,
-        run_date=run_date,
-        relative_path=payload["relative_path"],
-        local_output_dir=Path(payload["local_output_dir"]),
-        bronze_path=Path(payload["bronze_path"]),
-        source_system=payload["source_system"],
-        source_table=payload["source_table"],
-        dataset_id=payload["dataset_id"],
-        config_name=payload.get("config_name", payload["dataset_id"]),
-        load_pattern=load_pattern,
-        env_config=None,
-        run_id=payload.get("run_id", generate_run_id()),
-    )
+    """Create RunContext from dictionary.
+
+    Deprecated: Use RunContext.from_dict(payload) instead.
+    """
+    return RunContext.from_dict(payload)
 
 
 def load_run_context(path: str | Path) -> RunContext:
+    """Load RunContext from a JSON file."""
     ctx_path = Path(path)
     payload = json.loads(ctx_path.read_text(encoding="utf-8"))
-    context = run_context_from_dict(payload)
+    context = RunContext.from_dict(payload)
     logger.info(
         "Loaded RunContext for %s (run_date=%s) from %s",
         context.dataset_id,
@@ -169,7 +194,8 @@ def load_run_context(path: str | Path) -> RunContext:
 
 
 def dump_run_context(ctx: RunContext, path: str | Path) -> Path:
+    """Save RunContext to a JSON file."""
     target = Path(path)
-    target.write_text(json.dumps(run_context_to_dict(ctx), indent=2), encoding="utf-8")
+    target.write_text(json.dumps(ctx.to_dict(), indent=2), encoding="utf-8")
     logger.info("Wrote RunContext for %s to %s", ctx.dataset_id, target)
     return target

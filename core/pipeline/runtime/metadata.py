@@ -35,17 +35,62 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from core.primitives.foundations.base import RichEnumMixin
+
 logger = logging.getLogger(__name__)
 
 
-class Layer(str, Enum):
+# Module-level constants for Layer
+_LAYER_DESCRIPTIONS: Dict[str, str] = {
+    "bronze": "Raw data layer - landed data with minimal transformation",
+    "silver": "Refined data layer - cleansed and transformed data",
+}
+
+
+class Layer(RichEnumMixin, str, Enum):
     """Data layer in the medallion architecture."""
 
     BRONZE = "bronze"
     SILVER = "silver"
 
+    @classmethod
+    def choices(cls) -> List[str]:
+        """Return list of valid enum values."""
+        return [member.value for member in cls]
 
-class RunStatus(str, Enum):
+    @classmethod
+    def normalize(cls, raw: str | None) -> "Layer":
+        """Normalize a layer value."""
+        if isinstance(raw, cls):
+            return raw
+        if raw is None:
+            raise ValueError("Layer value must be provided")
+
+        candidate = raw.strip().lower()
+        for member in cls:
+            if member.value == candidate:
+                return member
+
+        raise ValueError(
+            f"Invalid Layer '{raw}'. Valid options: {', '.join(cls.choices())}"
+        )
+
+    def describe(self) -> str:
+        """Return human-readable description."""
+        return _LAYER_DESCRIPTIONS.get(self.value, self.value)
+
+
+# Module-level constants for RunStatus
+_RUN_STATUS_DESCRIPTIONS: Dict[str, str] = {
+    "pending": "Run is queued but not yet started",
+    "running": "Run is currently in progress",
+    "success": "Run completed successfully",
+    "failed": "Run failed with errors",
+    "partial": "Run completed but some records failed quality rules",
+}
+
+
+class RunStatus(RichEnumMixin, str, Enum):
     """Status of a pipeline run."""
 
     PENDING = "pending"
@@ -54,14 +99,85 @@ class RunStatus(str, Enum):
     FAILED = "failed"
     PARTIAL = "partial"  # Some records failed quality rules
 
+    @classmethod
+    def choices(cls) -> List[str]:
+        """Return list of valid enum values."""
+        return [member.value for member in cls]
 
-class DataClassification(str, Enum):
+    @classmethod
+    def normalize(cls, raw: str | None) -> "RunStatus":
+        """Normalize a run status value."""
+        if isinstance(raw, cls):
+            return raw
+        if raw is None:
+            return cls.PENDING
+
+        candidate = raw.strip().lower()
+        for member in cls:
+            if member.value == candidate:
+                return member
+
+        raise ValueError(
+            f"Invalid RunStatus '{raw}'. Valid options: {', '.join(cls.choices())}"
+        )
+
+    def describe(self) -> str:
+        """Return human-readable description."""
+        return _RUN_STATUS_DESCRIPTIONS.get(self.value, self.value)
+
+    @property
+    def is_terminal(self) -> bool:
+        """Check if this status is terminal (no more transitions expected)."""
+        return self in {self.SUCCESS, self.FAILED, self.PARTIAL}
+
+    @property
+    def is_success(self) -> bool:
+        """Check if this status indicates successful completion."""
+        return self in {self.SUCCESS, self.PARTIAL}
+
+
+# Module-level constants for DataClassification
+_DATA_CLASSIFICATION_DESCRIPTIONS: Dict[str, str] = {
+    "public": "Public data with no access restrictions",
+    "internal": "Internal data accessible within the organization",
+    "confidential": "Confidential data with restricted access",
+    "restricted": "Highly restricted data with strict access controls",
+}
+
+
+class DataClassification(RichEnumMixin, str, Enum):
     """Data classification levels."""
 
     PUBLIC = "public"
     INTERNAL = "internal"
     CONFIDENTIAL = "confidential"
     RESTRICTED = "restricted"
+
+    @classmethod
+    def choices(cls) -> List[str]:
+        """Return list of valid enum values."""
+        return [member.value for member in cls]
+
+    @classmethod
+    def normalize(cls, raw: str | None) -> "DataClassification":
+        """Normalize a classification value."""
+        if isinstance(raw, cls):
+            return raw
+        if raw is None:
+            return cls.INTERNAL
+
+        candidate = raw.strip().lower()
+        for member in cls:
+            if member.value == candidate:
+                return member
+
+        raise ValueError(
+            f"Invalid DataClassification '{raw}'. Valid options: {', '.join(cls.choices())}"
+        )
+
+    def describe(self) -> str:
+        """Return human-readable description."""
+        return _DATA_CLASSIFICATION_DESCRIPTIONS.get(self.value, self.value)
 
 
 @dataclass
