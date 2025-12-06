@@ -74,8 +74,8 @@ class StorageURI:
                 backend="s3", bucket=s3_bucket_match.group(1), key="", original=uri
             )
 
-        # Azure URI: azblob://container/path
-        azure_match = re.match(r"^azblob://([^/]+)/(.+)$", uri)
+        # Azure URI: azblob://container/path or az://container/path
+        azure_match = re.match(r"^(?:azblob|az)://([^/]+)/(.+)$", uri)
         if azure_match:
             return StorageURI(
                 backend="azure",
@@ -85,7 +85,7 @@ class StorageURI:
             )
 
         # Azure URI without trailing path
-        azure_container_match = re.match(r"^azblob://([^/]+)/?$", uri)
+        azure_container_match = re.match(r"^(?:azblob|az)://([^/]+)/?$", uri)
         if azure_container_match:
             return StorageURI(
                 backend="azure",

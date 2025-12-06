@@ -13,28 +13,31 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
-def estimate_record_size(record: Any) -> int:
-    """Estimate the memory size of a single record in bytes."""
-    if record is None:
-        return 0
+class ChunkSizer:
+    """Estimates memory size of records for chunk sizing heuristics."""
 
-    if isinstance(record, bytes):
-        return len(record)
+    @staticmethod
+    def size_of(record: Any) -> int:
+        if record is None:
+            return 0
 
-    if isinstance(record, str):
-        return len(record.encode("utf-8"))
+        if isinstance(record, bytes):
+            return len(record)
 
-    if isinstance(record, dict):
-        try:
-            payload = json.dumps(record, ensure_ascii=False)
-        except TypeError:
-            payload = str(record)
-        return len(payload.encode("utf-8"))
+        if isinstance(record, str):
+            return len(record.encode("utf-8"))
 
-    if isinstance(record, (list, tuple)):
-        return sum(estimate_record_size(item) for item in record) + len(record)
+        if isinstance(record, dict):
+            try:
+                payload = json.dumps(record, ensure_ascii=False)
+            except TypeError:
+                payload = str(record)
+            return len(payload.encode("utf-8"))
 
-    return sys.getsizeof(record)
+        if isinstance(record, (list, tuple)):
+            return sum(ChunkSizer.size_of(item) for item in record) + len(record)
+
+        return sys.getsizeof(record)
 
 
 def chunk_records(
@@ -69,7 +72,7 @@ def chunk_records(
     current_size = 0
 
     for record in records:
-        record_size = estimate_record_size(record)
+        record_size = ChunkSizer.size_of(record)
 
         # Check if adding this record would exceed limits
         would_exceed_size = (current_size + record_size) > max_size_bytes

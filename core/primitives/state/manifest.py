@@ -46,10 +46,11 @@ import fnmatch
 import hashlib
 import json
 import logging
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +195,85 @@ class FileManifest:
         return manifest
 
 
+def _discover_local_files(path_pattern: str) -> List[Tuple[str, int]]:
+    """Discover files from local filesystem."""
+    from pathlib import Path as LocalPath
+    import glob
+
+    files: List[Tuple[str, int]] = []
+    for path_str in glob.glob(path_pattern, recursive=True):
+        path = LocalPath(path_str)
+        if path.is_file() and not path.name.startswith("_"):
+            files.append((str(path), path.stat().st_size))
+
+    return files
+
+
+class DiscoveryStrategy(ABC):
+    """Abstract base for manifest file discovery strategies."""
+
+    @abstractmethod
+    def matches(self, path_pattern: str, protocol: str) -> bool:
+        ...
+
+    @abstractmethod
+    def discover(self, path_pattern: str) -> List[Tuple[str, int]]:
+        ...
+
+
+class LocalDiscoveryStrategy(DiscoveryStrategy):
+    """Discover files from the local filesystem."""
+
+    def matches(self, path_pattern: str, protocol: str) -> bool:
+        return protocol != "s3" and not path_pattern.startswith("s3://")
+
+    def discover(self, path_pattern: str) -> List[Tuple[str, int]]:
+        return _discover_local_files(path_pattern)
+
+
+class S3DiscoveryStrategy(DiscoveryStrategy):
+    """Discover files stored in S3."""
+
+    def matches(self, path_pattern: str, protocol: str) -> bool:
+        return protocol == "s3" or path_pattern.startswith("s3://")
+
+    def discover(self, path_pattern: str) -> List[Tuple[str, int]]:
+        try:
+            import boto3
+        except ImportError:
+            raise ImportError("boto3 required for S3 file discovery")
+
+        clean_pattern = path_pattern.replace("s3://", "")
+        parts = clean_pattern.split("/", 1)
+        bucket = parts[0]
+        prefix_pattern = parts[1] if len(parts) > 1 else ""
+
+        prefix = ""
+        for char in prefix_pattern:
+            if char in "*?[":
+                break
+            prefix += char
+
+        s3 = boto3.client("s3")
+        paginator = s3.get_paginator("list_objects_v2")
+
+        files: List[Tuple[str, int]] = []
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                full_path = f"s3://{bucket}/{key}"
+                if fnmatch.fnmatch(full_path, path_pattern):
+                    if not key.split("/")[-1].startswith("_"):
+                        files.append((full_path, obj["Size"]))
+        return files
+
+
+_DISCOVERY_STRATEGIES: List[DiscoveryStrategy] = [
+    S3DiscoveryStrategy(),
+    LocalDiscoveryStrategy(),
+]
+
+
 class ManifestTracker:
     """Tracker for managing file manifests.
 
@@ -318,10 +398,11 @@ class ManifestTracker:
         """
         manifest = self.load()
 
-        if protocol == "s3" or path_pattern.startswith("s3://"):
-            all_files = self._discover_s3(path_pattern)
-        else:
-            all_files = self._discover_local(path_pattern)
+        strategy = next(
+            (s for s in _DISCOVERY_STRATEGIES if s.matches(path_pattern, protocol)),
+            LocalDiscoveryStrategy(),
+        )
+        all_files = strategy.discover(path_pattern)
 
         # Filter out already processed files
         new_files = []
@@ -333,56 +414,6 @@ class ManifestTracker:
             f"Discovered {len(all_files)} files, {len(new_files)} new"
         )
         return new_files
-
-    def _discover_local(self, path_pattern: str) -> List[tuple]:
-        """Discover files from local filesystem."""
-        from pathlib import Path
-        import glob
-
-        files = []
-        for path_str in glob.glob(path_pattern, recursive=True):
-            path = Path(path_str)
-            if path.is_file() and not path.name.startswith("_"):
-                files.append((str(path), path.stat().st_size))
-
-        return files
-
-    def _discover_s3(self, path_pattern: str) -> List[tuple]:
-        """Discover files from S3."""
-        try:
-            import boto3
-        except ImportError:
-            raise ImportError("boto3 required for S3 file discovery")
-
-        # Parse S3 path pattern
-        clean_pattern = path_pattern.replace("s3://", "")
-        parts = clean_pattern.split("/", 1)
-        bucket = parts[0]
-        prefix_pattern = parts[1] if len(parts) > 1 else ""
-
-        # Extract prefix before any wildcards
-        prefix = ""
-        for char in prefix_pattern:
-            if char in "*?[":
-                break
-            prefix += char
-
-        s3 = boto3.client("s3")
-        paginator = s3.get_paginator("list_objects_v2")
-
-        files = []
-        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
-            for obj in page.get("Contents", []):
-                key = obj["Key"]
-                full_path = f"s3://{bucket}/{key}"
-
-                # Check if matches pattern
-                if fnmatch.fnmatch(full_path, path_pattern):
-                    # Skip metadata files
-                    if not key.split("/")[-1].startswith("_"):
-                        files.append((full_path, obj["Size"]))
-
-        return files
 
     def mark_processed(
         self,

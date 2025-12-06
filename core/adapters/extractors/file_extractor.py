@@ -97,7 +97,15 @@ class FileExtractor(BaseExtractor):
         else:
             raise ValueError(f"Unsupported file format '{file_format}'")
 
-        # Apply filtering
+        records = self._post_process_records(records, file_cfg)
+
+        logger.info(f"Loaded {len(records)} records from {fsspec_path}")
+        return records, None
+
+    def _post_process_records(
+        self, records: List[Dict[str, Any]], file_cfg: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Apply limit/column filters to the raw record list."""
         limit_rows = file_cfg.get("limit_rows")
         if limit_rows:
             records = records[:limit_rows]
@@ -109,8 +117,7 @@ class FileExtractor(BaseExtractor):
                 filtered.append({col: record.get(col) for col in columns})
             records = filtered
 
-        logger.info(f"Loaded {len(records)} records from {fsspec_path}")
-        return records, None
+        return records
 
     def _read_csv_streaming(
         self,

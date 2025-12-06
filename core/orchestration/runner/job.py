@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib
+import pkgutil
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, cast
@@ -23,11 +25,7 @@ from core.adapters.extractors.base import (
     EXTRACTOR_REGISTRY,
     get_extractor_class,
 )
-# Import extractors to ensure they register themselves
-from core.adapters.extractors import api_extractor  # noqa: F401
-from core.adapters.extractors import db_extractor  # noqa: F401
-from core.adapters.extractors import db_multi_extractor  # noqa: F401
-from core.adapters.extractors import file_extractor  # noqa: F401
+from core.adapters import extractors as extractors_pkg
 from core.infrastructure.config.environment import EnvironmentConfig
 from core.pipeline.bronze.io import chunk_records
 from core.primitives.foundations.patterns import LoadPattern
@@ -35,6 +33,19 @@ from core.orchestration.runner.chunks import ChunkProcessor, ChunkWriter
 from core.infrastructure.storage import get_storage_backend
 
 logger = logging.getLogger(__name__)
+
+
+def _load_extractors() -> None:
+    """Dynamically import extractor modules so they can register themselves."""
+    pkg_path = Path(extractors_pkg.__file__).parent
+    for finder, name, _ in pkgutil.iter_modules([str(pkg_path)]):
+        if name.startswith("_"):
+            continue
+        importlib.import_module(f"{extractors_pkg.__name__}.{name}")
+
+
+# Ensure extractor modules are imported and registered before use
+_load_extractors()
 
 
 def build_extractor(
