@@ -263,7 +263,7 @@ class TestAzureStorageRetry:
         }
         storage = AzureStorage(config)
 
-        assert storage._should_retry(AzureError()) is True
+        assert storage._should_retry(AzureError("generic azure error")) is True
 
     @patch("core.infrastructure.storage.azure.BlobServiceClient")
     def test_should_not_retry_on_not_found(self, mock_blob_class, mock_container, monkeypatch):
