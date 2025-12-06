@@ -2,14 +2,32 @@
 
 from __future__ import annotations
 
-from typing import Dict, Any, Union
+from dataclasses import dataclass
+from typing import Dict, Any, Optional, Union
 from core.config.typed_models import PlatformConfig
 
-from .metadata import (
-    VALID_BOUNDARIES,
-    VALID_PROVIDER_TYPES,
-    VALID_CLOUD_PROVIDERS,
-)
+
+# =============================================================================
+# Storage Metadata Constants (merged from metadata.py)
+# =============================================================================
+
+VALID_BOUNDARIES = {"onprem", "cloud"}
+VALID_PROVIDER_TYPES = {
+    "s3_local",
+    "s3_cloud",
+    "azure_blob",
+    "azure_adls",
+    "local_generic",
+}
+VALID_CLOUD_PROVIDERS = {None, "", "azure", "aws", "gcp"}
+
+
+@dataclass
+class StorageMetadata:
+    """Storage metadata for policy enforcement."""
+    boundary: str
+    provider_type: Optional[str] = None
+    cloud_provider: Optional[str] = None
 
 
 def validate_storage_metadata(

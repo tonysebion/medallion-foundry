@@ -48,14 +48,14 @@ from core.silver.artifacts import (
     partition_dataframe,
     SilverModelPlanner,
 )
-from core.silver.defaults import (
+from core.silver.writer import get_silver_writer
+from core.silver.models import (
+    SilverModel,
     DEFAULT_ERROR_HANDLING,
     DEFAULT_NORMALIZATION,
     DEFAULT_SCHEMA,
     default_silver_config,
 )
-from core.silver.writer import get_silver_writer
-from core.silver.models import SilverModel
 from core.silver.processor import (
     SilverProcessor,
     SilverProcessorResult,

@@ -22,8 +22,14 @@ from .backend import (
     get_backend_factory,
     BACKEND_REGISTRY,
 )
-from .metadata import VALID_BOUNDARIES, VALID_CLOUD_PROVIDERS, VALID_PROVIDER_TYPES
-from .policy import enforce_storage_scope, validate_storage_metadata
+from .policy import (
+    enforce_storage_scope,
+    validate_storage_metadata,
+    VALID_BOUNDARIES,
+    VALID_CLOUD_PROVIDERS,
+    VALID_PROVIDER_TYPES,
+    StorageMetadata,
+)
 
 # Re-export concrete backends for direct import
 from .s3 import S3Storage, S3StorageBackend
