@@ -13,34 +13,34 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 import pandas as pd
 
-from core.config import (
+from core.infrastructure.config import (
     DatasetConfig,
     build_relative_path,
     load_configs,
     ensure_root_config,
 )
-from core.config.typed_models import RootConfig
-from core.runtime.context import RunContext, build_run_context, load_run_context
-from core.bronze.io import (
+from core.infrastructure.config.typed_models import RootConfig
+from core.pipeline.runtime.context import RunContext, build_run_context, load_run_context
+from core.pipeline.bronze.io import (
     write_batch_metadata,
     verify_checksum_manifest,
     write_checksum_manifest,
 )
-from core.foundations.logging import setup_logging
-from core.foundations.patterns import LoadPattern
-from core.runtime.paths import build_silver_partition_path, build_bronze_partition
-from core.catalog.hooks import (
+from core.primitives.foundations.logging import setup_logging
+from core.primitives.foundations.patterns import LoadPattern
+from core.pipeline.runtime.paths import build_silver_partition_path, build_bronze_partition
+from core.primitives.catalog.hooks import (
     notify_catalog,
     report_schema_snapshot,
     report_quality_snapshot,
     report_run_metadata,
     report_lineage,
 )
-from core.catalog.webhooks import fire_webhooks
-from core.runtime.options import RunOptions
-from core.storage.policy import enforce_storage_scope
-from core.storage.locks import file_lock
-from core.silver.artifacts import (
+from core.primitives.catalog.webhooks import fire_webhooks
+from core.pipeline.runtime.options import RunOptions
+from core.infrastructure.storage.policy import enforce_storage_scope
+from core.infrastructure.storage.locks import file_lock
+from core.pipeline.silver.artifacts import (
     apply_schema_settings,
     build_current_view,
     handle_error_rows,
@@ -48,15 +48,15 @@ from core.silver.artifacts import (
     partition_dataframe,
     SilverModelPlanner,
 )
-from core.silver.writer import get_silver_writer
-from core.silver.models import (
+from core.pipeline.silver.writer import get_silver_writer
+from core.pipeline.silver.models import (
     SilverModel,
     DEFAULT_ERROR_HANDLING,
     DEFAULT_NORMALIZATION,
     DEFAULT_SCHEMA,
     default_silver_config,
 )
-from core.silver.processor import (
+from core.pipeline.silver.processor import (
     SilverProcessor,
     SilverProcessorResult,
     build_intent_silver_partition,

@@ -3,16 +3,17 @@
 This package contains job execution and orchestration:
 - runner/: Extract job execution, chunking
 - parallel: Parallel extraction support
+
+Import from child packages directly:
+    from core.orchestration.runner import run_extract, build_extractor
+    from core.orchestration.parallel import run_parallel_extracts
 """
 
-from .runner import build_extractor, ExtractJob, run_extract
-from .parallel import run_parallel_extracts
+# Expose child packages for attribute access
+from . import runner
+from . import parallel
 
 __all__ = [
-    # Runner
-    "build_extractor",
-    "ExtractJob",
-    "run_extract",
-    # Parallel
-    "run_parallel_extracts",
+    "runner",
+    "parallel",
 ]

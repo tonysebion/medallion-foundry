@@ -15,7 +15,7 @@ from typing import Any, Dict
 
 import pytest
 
-from core.polybase.polybase_generator import (
+from core.adapters.polybase.polybase_generator import (
     generate_polybase_setup,
     generate_temporal_functions_sql,
     generate_joined_table_ddl,
@@ -25,7 +25,7 @@ from core.polybase.polybase_generator import (
     generate_history_summary_view_ddl,
     generate_event_aggregation_view_ddl,
 )
-from core.config.dataset import DatasetConfig
+from core.infrastructure.config.dataset import DatasetConfig
 
 
 class TestPolyBaseSetupGeneration:

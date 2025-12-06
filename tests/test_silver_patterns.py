@@ -13,15 +13,15 @@ from typing import Any, Dict, List
 import pandas as pd
 import pytest
 
-from core.silver.lookups import LookupConfig, LookupEnricher, LookupResult, LookupJoinKey
-from core.silver.joins import (
+from core.pipeline.silver.lookups import LookupConfig, LookupEnricher, LookupResult, LookupJoinKey
+from core.pipeline.silver.joins import (
     JoinConfig,
     JoinSource,
     JoinKeyPair,
     MultiSourceJoiner,
     JoinResult,
 )
-from core.schema import SchemaValidator, SchemaSpec, validate_schema
+from core.adapters.schema import SchemaValidator, SchemaSpec, validate_schema
 
 
 class TestSingleSourcePattern:

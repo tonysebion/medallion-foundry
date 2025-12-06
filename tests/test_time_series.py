@@ -19,7 +19,7 @@ from tests.synthetic_data import (
     StateChangeGenerator,
     generate_time_series_data,
 )
-from core.resilience.late_data import LateDataHandler, LateDataMode, LateDataConfig
+from core.infrastructure.resilience.late_data import LateDataHandler, LateDataMode, LateDataConfig
 
 
 class TestSyntheticDataGenerators:
@@ -250,7 +250,7 @@ class TestIncrementalMergeScenarios:
 
     def test_t0_to_t1_merge(self, temp_dir):
         """T1 data should merge correctly with T0."""
-        from core.bronze.io import merge_parquet_records
+        from core.pipeline.bronze.io import merge_parquet_records
 
         # T0 data
         t0_data = pd.DataFrame({
@@ -277,7 +277,7 @@ class TestIncrementalMergeScenarios:
 
     def test_late_data_merge(self, temp_dir):
         """Late data (T2) should merge without duplicates."""
-        from core.bronze.io import merge_parquet_records
+        from core.pipeline.bronze.io import merge_parquet_records
 
         # Current state after T0+T1
         current_data = pd.DataFrame({

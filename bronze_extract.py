@@ -19,18 +19,18 @@ import logging
 import datetime as dt
 from typing import Any, Dict, List, Optional, cast
 
-from core.config import load_configs, ensure_root_config
-from core.runner import run_extract
+from core.infrastructure.config import load_configs, ensure_root_config
+from core.orchestration.runner import run_extract
 from core.parallel import run_parallel_extracts
-from core.foundations.logging import setup_logging
-from core.storage import get_storage_backend
-from core.foundations.patterns import LoadPattern
-from core.catalog.hooks import notify_catalog, report_run_metadata
-from core.runtime.context import build_run_context, RunContext
-from core.catalog.webhooks import fire_webhooks
-from core.runtime.options import RunOptions
-from core.config.typed_models import RootConfig
-from core.storage.policy import enforce_storage_scope
+from core.primitives.foundations.logging import setup_logging
+from core.infrastructure.storage import get_storage_backend
+from core.primitives.foundations.patterns import LoadPattern
+from core.primitives.catalog.hooks import notify_catalog, report_run_metadata
+from core.pipeline.runtime.context import build_run_context, RunContext
+from core.primitives.catalog.webhooks import fire_webhooks
+from core.pipeline.runtime.options import RunOptions
+from core.infrastructure.config.typed_models import RootConfig
+from core.infrastructure.storage.policy import enforce_storage_scope
 
 # Version is managed by setuptools_scm and written to core/_version.py
 try:

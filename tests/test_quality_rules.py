@@ -11,9 +11,9 @@ from typing import Any, Dict, List
 
 import pytest
 
-from core.quality.rules import QualityRule, RuleLevel, RuleDefinition, parse_rules
-from core.quality.engine import QualityEngine
-from core.quality.reporter import RuleResult, QualityReport
+from core.adapters.quality.rules import QualityRule, RuleLevel, RuleDefinition, parse_rules
+from core.adapters.quality.engine import QualityEngine
+from core.adapters.quality.reporter import RuleResult, QualityReport
 
 
 class TestQualityRuleDefinition:
@@ -277,7 +277,7 @@ class TestConfigValidationWithQualityRules:
 
     def test_validate_quality_rules_config(self, temp_dir):
         """Quality rules in config should validate."""
-        from core.config.validation import validate_config_dict
+        from core.infrastructure.config.validation import validate_config_dict
 
         config = {
             "platform": {
@@ -304,7 +304,7 @@ class TestConfigValidationWithQualityRules:
 
     def test_invalid_quality_rule_level_rejected(self, temp_dir):
         """Invalid rule level should be rejected."""
-        from core.config.validation import validate_config_dict
+        from core.infrastructure.config.validation import validate_config_dict
 
         config = {
             "platform": {

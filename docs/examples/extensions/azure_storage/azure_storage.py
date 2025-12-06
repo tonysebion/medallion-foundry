@@ -32,7 +32,7 @@ from tenacity import (
 # TYPE_CHECKING so mypy/type-checkers see the real type, but at runtime we
 # provide a fallback implementation in case the file is run in isolation.
 if TYPE_CHECKING:
-    from core.storage import StorageBackend
+    from core.infrastructure.storage import StorageBackend
 else:
     # Fallback for when viewing as example
     from abc import ABC, abstractmethod
