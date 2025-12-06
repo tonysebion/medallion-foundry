@@ -18,6 +18,7 @@ from core.primitives.catalog.hooks import (
     report_schema_snapshot,
 )
 from core.pipeline.runtime.context import RunContext
+from core.adapters.extractors.base import BaseExtractor
 from core.adapters.extractors.factory import (
     ensure_extractors_loaded,
     get_extractor,
@@ -29,6 +30,23 @@ from core.infrastructure.storage import get_storage_backend
 
 logger = logging.getLogger(__name__)
 ensure_extractors_loaded()
+
+
+def _load_extractors() -> None:
+    """Expose extractor loading for tests and legacy callers."""
+    ensure_extractors_loaded()
+
+
+def build_extractor(
+    cfg: Dict[str, Any],
+    env_config: Optional[Any] = None,
+) -> BaseExtractor:
+    """Create an extractor following existing factory semantics."""
+    source_cfg = cfg.setdefault("source", {})
+    api_cfg = source_cfg.get("api")
+    if isinstance(api_cfg, dict):
+        api_cfg.setdefault("endpoint", "/")
+    return get_extractor(cfg, env_config)
 
 
 class ExtractJob:
@@ -60,7 +78,7 @@ class ExtractJob:
             raise
 
     def _run(self) -> int:
-        extractor = get_extractor(self.cfg, self.ctx.env_config)
+        extractor = build_extractor(self.cfg, self.ctx.env_config)
         logger.info(
             "Starting extract for %s.%s on %s",
             self.source_cfg["system"],
