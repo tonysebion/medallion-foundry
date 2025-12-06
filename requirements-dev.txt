@@ -28,3 +28,6 @@ mkdocs-material>=9.0.0
 
 # Async HTTP support - included in dev so all tests run
 httpx>=0.27.0
+
+moto[all]>=4.0.0
+azure.core>=1.26.0
