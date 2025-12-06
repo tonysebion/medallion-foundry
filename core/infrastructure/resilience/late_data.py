@@ -32,15 +32,49 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from core.primitives.foundations.base import RichEnumMixin
+
 logger = logging.getLogger(__name__)
 
 
-class LateDataMode(str, Enum):
+# Module-level descriptions (can't be class attributes due to Enum metaclass)
+_LATE_DATA_MODE_DESCRIPTIONS: Dict[str, str] = {
+    "allow": "Accept late data and write to appropriate partition",
+    "reject": "Reject late data entirely (fail the job)",
+    "quarantine": "Write late data to a separate quarantine location",
+}
+
+
+class LateDataMode(RichEnumMixin, str, Enum):
     """Late data handling modes."""
 
     ALLOW = "allow"
     REJECT = "reject"
     QUARANTINE = "quarantine"
+
+    @classmethod
+    def choices(cls) -> List[str]:
+        """Return list of valid enum values."""
+        return [member.value for member in cls]
+
+    @classmethod
+    def normalize(cls, raw: str | None) -> "LateDataMode":
+        """Normalize a late data mode value."""
+        if isinstance(raw, cls):
+            return raw
+        if raw is None:
+            return cls.ALLOW  # Default to allow
+        candidate = raw.strip().lower()
+        for member in cls:
+            if member.value == candidate:
+                return member
+        raise ValueError(
+            f"Invalid LateDataMode '{raw}'. Valid options: {', '.join(cls.choices())}"
+        )
+
+    def describe(self) -> str:
+        """Return human-readable description."""
+        return _LATE_DATA_MODE_DESCRIPTIONS.get(self.value, self.value)
 
 
 @dataclass

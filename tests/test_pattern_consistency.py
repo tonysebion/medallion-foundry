@@ -28,14 +28,26 @@ class TestRichEnumPattern:
     """Ensure key enums follow the RichEnumMixin pattern."""
 
     REQUIRED_ENUMS = [
+        # Primitives layer
         "core.primitives.foundations.patterns.LoadPattern",
         "core.primitives.foundations.models.SilverModel",
         "core.primitives.state.watermark.WatermarkType",
+        # Infrastructure layer
         "core.infrastructure.config.typed_models.StorageBackend",
         "core.infrastructure.config.typed_models.SourceType",
         "core.infrastructure.config.typed_models.DataClassification",
+        "core.infrastructure.config.dataset.EntityKind",
+        "core.infrastructure.config.dataset.HistoryMode",
+        "core.infrastructure.config.dataset.InputMode",
+        "core.infrastructure.config.dataset.DeleteMode",
+        "core.infrastructure.config.dataset.SchemaMode",
+        "core.infrastructure.resilience.late_data.LateDataMode",
+        # Pipeline layer
         "core.pipeline.runtime.metadata.Layer",
         "core.pipeline.runtime.metadata.RunStatus",
+        # Adapters layer
+        "core.adapters.schema.evolution.SchemaEvolutionMode",
+        "core.adapters.quality.rules.RuleLevel",
     ]
 
     def _import_class(self, dotted_path: str) -> Type:
@@ -102,12 +114,16 @@ class TestSerializableDataclassPattern:
     # Dataclasses that should have to_dict() and from_dict() methods
     # Note: RunMetadata uses load_run_metadata() for specialized file loading
     REQUIRED_DATACLASSES = [
+        # Primitives layer
         "core.primitives.state.watermark.Watermark",
         "core.primitives.state.manifest.FileEntry",
         "core.primitives.state.manifest.FileManifest",
-        "core.pipeline.runtime.context.RunContext",
+        # Infrastructure layer
         "core.infrastructure.resilience.retry.RetryPolicy",
         "core.infrastructure.resilience.retry.CircuitBreaker",
+        "core.infrastructure.resilience.late_data.LateDataConfig",
+        # Pipeline layer
+        "core.pipeline.runtime.context.RunContext",
     ]
 
     def _import_class(self, dotted_path: str) -> Type:
