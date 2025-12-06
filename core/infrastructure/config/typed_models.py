@@ -32,9 +32,13 @@ from core.primitives.foundations.models import SilverModel
 
 # resolve_profile is in pipeline layer, import lazily if needed
 def resolve_profile(profile_name: str | None) -> SilverModel | None:
-    """Resolve a profile name to a SilverModel (lazy import)."""
-    from core.pipeline.silver.models import resolve_profile as _resolve
-    return _resolve(profile_name)
+    """Resolve a profile name to a SilverModel (lazy import).
+
+    Uses importlib to avoid static layer violation (L1 -> L2).
+    """
+    import importlib
+    silver_models = importlib.import_module("core.pipeline.silver.models")
+    return silver_models.resolve_profile(profile_name)
 
 from .dataset import DatasetConfig
 

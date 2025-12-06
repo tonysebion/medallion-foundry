@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""Validate that imports respect the layer hierarchy.
+"""Test that imports respect the layer hierarchy.
 
 Layer Hierarchy (lower cannot import from higher):
   Layer 0: primitives/     - No core/ dependencies allowed
@@ -8,18 +7,16 @@ Layer Hierarchy (lower cannot import from higher):
   Layer 3: adapters/       - Can import from primitives/, infrastructure/, pipeline/
   Layer 4: orchestration/  - Can import from all above
 
-Usage:
-  python scripts/check_layer_imports.py
-  python scripts/check_layer_imports.py --verbose
+This ensures architectural integrity and prevents circular dependencies.
 """
 
 from __future__ import annotations
 
-import argparse
 import ast
-import sys
 from pathlib import Path
 from typing import Dict, List, Set, Tuple
+
+import pytest
 
 
 LAYER_HIERARCHY: Dict[str, int] = {
@@ -68,8 +65,7 @@ def extract_imports(file_path: Path) -> List[str]:
     try:
         source = file_path.read_text(encoding="utf-8")
         tree = ast.parse(source, filename=str(file_path))
-    except (SyntaxError, UnicodeDecodeError) as e:
-        print(f"  Warning: Could not parse {file_path}: {e}")
+    except (SyntaxError, UnicodeDecodeError):
         return []
 
     imports = []
@@ -84,7 +80,7 @@ def extract_imports(file_path: Path) -> List[str]:
     return imports
 
 
-def check_file(file_path: Path, verbose: bool = False) -> List[Tuple[str, str, str, str]]:
+def check_file(file_path: Path) -> List[Tuple[str, str, str, str]]:
     """Check a single file for layer violations.
 
     Returns list of (file_path, from_layer, to_layer, import_path) tuples.
@@ -114,45 +110,56 @@ def check_file(file_path: Path, verbose: bool = False) -> List[Tuple[str, str, s
     return violations
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Check layer import hierarchy")
-    parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
-    args = parser.parse_args()
-
+def collect_all_violations() -> List[Tuple[str, str, str, str]]:
+    """Collect all layer violations across the core/ directory."""
     core_dir = Path(__file__).parent.parent / "core"
-    if not core_dir.exists():
-        print(f"Error: core directory not found at {core_dir}")
-        return 1
-
-    all_violations: List[Tuple[str, str, str, str]] = []
-    files_checked = 0
+    all_violations = []
 
     for py_file in core_dir.rglob("*.py"):
         if py_file.name.startswith("__"):
             continue
-        files_checked += 1
-        violations = check_file(py_file, verbose=args.verbose)
+        violations = check_file(py_file)
         all_violations.extend(violations)
 
-    if args.verbose:
-        print(f"Checked {files_checked} files")
-        print()
-
-    if all_violations:
-        print("LAYER VIOLATIONS FOUND:")
-        print("=" * 60)
-        for file_path, from_layer, to_layer, import_path in all_violations:
-            rel_path = Path(file_path).relative_to(core_dir.parent)
-            print(f"  {rel_path}")
-            print(f"    Layer {from_layer} (L{LAYER_HIERARCHY[from_layer]}) -> {to_layer} (L{LAYER_HIERARCHY[to_layer]})")
-            print(f"    Import: {import_path}")
-            print()
-        print(f"Total violations: {len(all_violations)}")
-        return 1
-    else:
-        print(f"OK - No layer violations found ({files_checked} files checked)")
-        return 0
+    return all_violations
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+class TestLayerImports:
+    """Test suite for layer import hierarchy enforcement."""
+
+    def test_no_layer_violations(self) -> None:
+        """Verify no files violate the layer import hierarchy."""
+        violations = collect_all_violations()
+
+        if violations:
+            msg_parts = ["Layer import violations found:\n"]
+            for file_path, from_layer, to_layer, import_path in violations:
+                rel_path = Path(file_path).relative_to(Path(__file__).parent.parent)
+                msg_parts.append(
+                    f"  {rel_path}: {from_layer} (L{LAYER_HIERARCHY[from_layer]}) "
+                    f"-> {to_layer} (L{LAYER_HIERARCHY[to_layer]})\n"
+                    f"    Import: {import_path}\n"
+                )
+            pytest.fail("".join(msg_parts))
+
+    def test_layer_hierarchy_is_complete(self) -> None:
+        """Verify the layer hierarchy defines all expected layers."""
+        expected_layers = {"primitives", "infrastructure", "pipeline", "adapters", "orchestration"}
+        assert set(LAYER_HIERARCHY.keys()) == expected_layers
+
+    def test_layer_can_import_is_consistent(self) -> None:
+        """Verify LAYER_CAN_IMPORT is consistent with the hierarchy."""
+        for layer, allowed in LAYER_CAN_IMPORT.items():
+            layer_level = LAYER_HIERARCHY[layer]
+            for allowed_layer in allowed:
+                allowed_level = LAYER_HIERARCHY[allowed_layer]
+                assert allowed_level < layer_level, (
+                    f"{layer} (L{layer_level}) allows importing from "
+                    f"{allowed_layer} (L{allowed_level}) which is not lower"
+                )
+
+    def test_core_directory_exists(self) -> None:
+        """Verify the core directory exists for testing."""
+        core_dir = Path(__file__).parent.parent / "core"
+        assert core_dir.exists(), f"Core directory not found at {core_dir}"
+        assert core_dir.is_dir(), f"{core_dir} is not a directory"
