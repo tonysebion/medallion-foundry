@@ -25,6 +25,22 @@ logger = logging.getLogger(__name__)
 _om_client: Optional[Any] = None
 
 
+def _dispatch_catalog_event(
+    event_name: str, payload: Mapping[str, Any], table_fqn: Optional[str] = None
+) -> None:
+    """Centralize catalog logging and optional OM forwarding."""
+    logger.info("Catalog event '%s': %s", event_name, payload)
+
+    if _om_client is None:
+        return
+
+    try:
+        # Future integration hook can live here, utilizing table_fqn as needed
+        pass
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.warning("Failed to dispatch '%s' to catalog: %s", event_name, exc)
+
+
 def set_om_client(client: Any) -> None:
     """Set the OpenMetadata client for integration mode.
 
@@ -65,12 +81,7 @@ def notify_catalog(event_name: str, payload: Mapping[str, Any]) -> None:
         event_name: Name of the event (e.g., "pipeline_started", "pipeline_completed")
         payload: Event payload dictionary
     """
-    logger.info("Catalog event '%s': %s", event_name, payload)
-
-    if _om_client is not None:
-        # Future: Forward to OM API
-        # _om_client.emit_event(event_name, payload)
-        pass
+    _dispatch_catalog_event(event_name, payload)
 
 
 def report_schema_snapshot(
@@ -90,14 +101,11 @@ def report_schema_snapshot(
         table_fqn: Optional fully qualified table name for OM
     """
     schema_list = list(schema)
-    logger.info("Catalog schema snapshot for %s: %s", dataset_id, schema_list)
-
-    if _om_client is not None and table_fqn:
-        # Future: Create/update table in OM
-        # from core.om.client import TableSchema, ColumnSchema
-        # table_schema = TableSchema(...)
-        # _om_client.create_or_update_table(table_schema)
-        pass
+    _dispatch_catalog_event(
+        "schema_snapshot",
+        {"dataset_id": dataset_id, "schema": schema_list},
+        table_fqn,
+    )
 
 
 def report_run_metadata(
@@ -115,12 +123,11 @@ def report_run_metadata(
         metadata: Run metadata dictionary
         table_fqn: Optional fully qualified table name for OM
     """
-    logger.info("Catalog run metadata for %s: %s", dataset_id, metadata)
-
-    if _om_client is not None and table_fqn:
-        # Future: Report pipeline run to OM
-        # _om_client.report_pipeline_run(table_fqn, metadata)
-        pass
+    _dispatch_catalog_event(
+        "run_metadata",
+        {"dataset_id": dataset_id, "metadata": dict(metadata)},
+        table_fqn,
+    )
 
 
 def report_lineage(
@@ -142,14 +149,15 @@ def report_lineage(
         source_fqn: Optional source FQN for OM
         target_fqn: Optional target FQN for OM
     """
-    logger.info(
-        "Catalog lineage: %s -> %s (%s)", source_dataset, target_dataset, metadata
+    _dispatch_catalog_event(
+        "lineage",
+        {
+            "source_dataset": source_dataset,
+            "target_dataset": target_dataset,
+            "metadata": dict(metadata),
+        },
+        source_fqn or target_fqn,
     )
-
-    if _om_client is not None and source_fqn and target_fqn:
-        # Future: Add lineage edge in OM
-        # _om_client.add_lineage(source_fqn, target_fqn)
-        pass
 
 
 def report_quality_snapshot(
@@ -165,12 +173,11 @@ def report_quality_snapshot(
         metrics: Quality metrics dictionary
         table_fqn: Optional fully qualified table name for OM
     """
-    logger.info("Catalog quality snapshot for %s: %s", dataset_id, metrics)
-
-    if _om_client is not None and table_fqn:
-        # Future: Report quality metrics to OM
-        # _om_client.report_quality_metrics(table_fqn, metrics)
-        pass
+    _dispatch_catalog_event(
+        "quality_snapshot",
+        {"dataset_id": dataset_id, "metrics": dict(metrics)},
+        table_fqn,
+    )
 
 
 def report_quality_rule_results(
@@ -188,22 +195,16 @@ def report_quality_rule_results(
     """
     passed = sum(1 for r in rule_results if r.get("passed", False))
     failed = len(rule_results) - passed
-
-    logger.info(
-        "Catalog quality rules for %s: %d passed, %d failed",
-        dataset_id,
-        passed,
-        failed,
+    _dispatch_catalog_event(
+        "quality_rule_results",
+        {
+            "dataset_id": dataset_id,
+            "rules_passed": passed,
+            "rules_failed": failed,
+            "rule_details": [dict(r) for r in rule_results],
+        },
+        table_fqn,
     )
-
-    if _om_client is not None and table_fqn:
-        # Future: Report rule results to OM quality dashboard
-        # _om_client.report_quality_metrics(table_fqn, {
-        #     "rules_passed": passed,
-        #     "rules_failed": failed,
-        #     "rule_details": rule_results,
-        # })
-        pass
 
 
 def report_dataset_registered(
@@ -219,8 +220,8 @@ def report_dataset_registered(
         config: Dataset configuration
         table_fqn: Optional fully qualified table name for OM
     """
-    logger.info("Catalog dataset registered: %s", dataset_id)
-
-    if _om_client is not None and table_fqn:
-        # Future: Create/update dataset entry in OM
-        pass
+    _dispatch_catalog_event(
+        "dataset_registered",
+        {"dataset_id": dataset_id, "config": dict(config)},
+        table_fqn,
+    )

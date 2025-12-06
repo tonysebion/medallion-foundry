@@ -9,10 +9,8 @@ Supports db_table and db_query source types with:
 
 import logging
 import os
-import json
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import date
-from pathlib import Path
 
 import pyodbc
 from tenacity import (
@@ -23,6 +21,10 @@ from tenacity import (
 )
 
 from core.adapters.extractors.base import BaseExtractor, register_extractor
+from core.adapters.extractors.cursor_state import (
+    CursorStateManager,
+    build_incremental_query,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,9 @@ class DbExtractor(BaseExtractor):
     Supports both db_table and db_query source types. Watermark handling
     allows for incremental extraction based on a timestamp or sequence column.
     """
+
+    def __init__(self) -> None:
+        self._state_manager = CursorStateManager()
 
     def get_watermark_config(self, cfg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Get watermark configuration for database extraction.
@@ -56,74 +61,6 @@ class DbExtractor(BaseExtractor):
             "column": cursor_column,
             "type": incremental.get("cursor_type", "timestamp"),
         }
-
-    def _get_state_file_path(self, cfg: Dict[str, Any]) -> Path:
-        """Get the path to the state file for incremental loads."""
-        source_cfg = cfg["source"]
-        system = source_cfg["system"]
-        table = source_cfg["table"]
-
-        # Store state files in a .state directory
-        state_dir = Path(".state")
-        state_dir.mkdir(exist_ok=True)
-
-        return state_dir / f"{system}_{table}_cursor.json"
-
-    def _load_cursor(self, state_file: Path) -> Optional[str]:
-        """Load the last cursor value from state file."""
-        if not state_file.exists():
-            logger.info("No previous cursor state found")
-            return None
-
-        try:
-            with open(state_file, "r") as f:
-                state = json.load(f)
-            cursor: Optional[str] = state.get("cursor")
-            if cursor is not None:
-                cursor = str(cursor)
-            last_run = state.get("last_run")
-            logger.info(f"Loaded cursor state: cursor={cursor}, last_run={last_run}")
-            return cursor
-        except (json.JSONDecodeError, OSError) as e:
-            logger.warning(f"Could not load cursor state from {state_file}: {e}")
-            return None
-
-    def _save_cursor(self, state_file: Path, cursor: str, run_date: date) -> None:
-        """Save the new cursor value to state file."""
-        state = {
-            "cursor": cursor,
-            "last_run": run_date.isoformat(),
-        }
-
-        try:
-            with open(state_file, "w") as f:
-                json.dump(state, f, indent=2)
-            logger.info(f"Saved cursor state: {cursor}")
-        except OSError as e:
-            logger.error(f"Failed to save cursor state to {state_file}: {e}")
-            raise
-
-    def _build_incremental_query(
-        self, base_query: str, cursor_column: Optional[str], last_cursor: Optional[str]
-    ) -> str:
-        """Build query with incremental WHERE clause if applicable."""
-        if not cursor_column or not last_cursor:
-            return base_query
-
-        # Check if query already has WHERE clause
-        query_upper = base_query.upper()
-
-        if "WHERE" in query_upper:
-            # Append to existing WHERE
-            connector = "AND"
-        else:
-            # Add new WHERE clause
-            connector = "WHERE"
-
-        # Build incremental filter
-        incremental_clause = f"\n{connector} {cursor_column} > ?"
-
-        return base_query + incremental_clause
 
     @retry(
         stop=stop_after_attempt(3),
@@ -186,15 +123,13 @@ class DbExtractor(BaseExtractor):
         use_incremental = incremental_cfg.get("enabled", False) and cursor_column
 
         # Load previous cursor if incremental is enabled
-        last_cursor = None
-        state_file = None
-
-        if use_incremental:
-            state_file = self._get_state_file_path(cfg)
-            last_cursor = self._load_cursor(state_file)
+        state_key = f"{source_cfg['system']}_{source_cfg['table']}"
+        last_cursor = (
+            self._state_manager.load_cursor(state_key) if use_incremental else None
+        )
 
         # Build query with incremental filter
-        query = self._build_incremental_query(
+        query = build_incremental_query(
             base_query, cursor_column if use_incremental else None, last_cursor
         )
 
@@ -252,7 +187,7 @@ class DbExtractor(BaseExtractor):
         # Save new cursor if we have one
         new_cursor = max_cursor
 
-        if use_incremental and new_cursor and state_file:
-            self._save_cursor(state_file, new_cursor, run_date)
+        if use_incremental and new_cursor:
+            self._state_manager.save_cursor(state_key, new_cursor, run_date)
 
         return records, new_cursor

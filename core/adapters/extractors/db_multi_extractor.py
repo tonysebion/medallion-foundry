@@ -49,6 +49,10 @@ from tenacity import (
 )
 
 from core.adapters.extractors.base import BaseExtractor, register_extractor
+from core.adapters.extractors.cursor_state import (
+    CursorStateManager,
+    build_incremental_query,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -143,47 +147,7 @@ class DbMultiExtractor(BaseExtractor):
             max_workers: Maximum number of parallel extraction threads
         """
         self.max_workers = max_workers
-
-    def _get_state_dir(self) -> Path:
-        """Get the state directory for cursor persistence."""
-        state_dir = Path(".state")
-        state_dir.mkdir(exist_ok=True)
-        return state_dir
-
-    def _get_entity_state_file(self, system: str, entity_name: str) -> Path:
-        """Get state file path for a specific entity."""
-        return self._get_state_dir() / f"{system}_{entity_name}_cursor.json"
-
-    def _load_cursor(self, state_file: Path) -> Optional[str]:
-        """Load cursor from state file."""
-        if not state_file.exists():
-            return None
-
-        try:
-            with open(state_file, "r") as f:
-                state = json.load(f)
-            cursor: Optional[str] = state.get("cursor")
-            if cursor is not None:
-                cursor = str(cursor)
-            logger.debug(f"Loaded cursor {cursor} from {state_file}")
-            return cursor
-        except (json.JSONDecodeError, OSError) as e:
-            logger.warning(f"Could not load cursor from {state_file}: {e}")
-            return None
-
-    def _save_cursor(self, state_file: Path, cursor: str, run_date: date) -> None:
-        """Save cursor to state file."""
-        state = {
-            "cursor": cursor,
-            "last_run": run_date.isoformat(),
-        }
-        try:
-            with open(state_file, "w") as f:
-                json.dump(state, f, indent=2)
-            logger.debug(f"Saved cursor {cursor} to {state_file}")
-        except OSError as e:
-            logger.error(f"Failed to save cursor to {state_file}: {e}")
-
+        self._state_manager = CursorStateManager()
     def _build_entity_query(
         self,
         entity: EntityConfig,
@@ -201,18 +165,13 @@ class DbMultiExtractor(BaseExtractor):
             # Build SELECT * FROM table
             base_query = f"SELECT * FROM {entity.full_table_name}"
 
-        # Add watermark filter for incremental loads
-        if (
-            entity.load_mode == "incremental_append"
-            and entity.watermark_column
-            and last_cursor
-        ):
-            if "WHERE" in base_query.upper():
-                connector = "AND"
-            else:
-                connector = "WHERE"
-
-            query = f"{base_query} {connector} {entity.watermark_column} > ?"
+        cursor_column = (
+            entity.watermark_column
+            if entity.load_mode == "incremental_append"
+            else None
+        )
+        if cursor_column and last_cursor:
+            query = build_incremental_query(base_query, cursor_column, last_cursor)
             return query, (last_cursor,)
 
         return base_query, None
@@ -236,12 +195,10 @@ class DbMultiExtractor(BaseExtractor):
         """
         logger.info(f"Starting extraction for entity: {entity.name}")
 
-        # Load cursor for incremental loads
+        state_key = f"{system}_{entity.name}"
         last_cursor = None
-        state_file = None
         if entity.load_mode == "incremental_append" and entity.watermark_column:
-            state_file = self._get_entity_state_file(system, entity.name)
-            last_cursor = self._load_cursor(state_file)
+            last_cursor = self._state_manager.load_cursor(state_key)
             if last_cursor:
                 logger.info(f"Entity {entity.name}: resuming from cursor {last_cursor}")
 
@@ -289,8 +246,8 @@ class DbMultiExtractor(BaseExtractor):
             logger.info(f"Entity {entity.name}: extracted {total_rows} records")
 
             # Save new cursor
-            if max_cursor and state_file:
-                self._save_cursor(state_file, max_cursor, run_date)
+            if max_cursor:
+                self._state_manager.save_cursor(state_key, max_cursor, run_date)
 
             return EntityResult(
                 entity_name=entity.name,

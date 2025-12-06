@@ -16,6 +16,35 @@ from core.pipeline.runtime.metadata import generate_run_id
 logger = logging.getLogger(__name__)
 
 
+def _normalize_config(
+    cfg: Dict[str, Any] | RootConfig,
+) -> tuple[Dict[str, Any], Dict[str, Any], RootConfig | None]:
+    if isinstance(cfg, RootConfig):
+        typed = cfg
+        run_cfg = typed.source.run.model_dump()
+        cfg_dict = typed.model_dump()
+    else:
+        typed = None
+        cfg_dict = cfg
+        run_cfg = cfg_dict.get("source", {}).get("run", {})
+    return cfg_dict, run_cfg, typed
+
+
+def _extract_source_fields(
+    cfg_dict: Dict[str, Any], typed: RootConfig | None
+) -> tuple[str, str, str, str]:
+    source_cfg = cfg_dict["source"]
+    if typed:
+        system = typed.source.system
+        table = typed.source.table
+    else:
+        system = source_cfg["system"]
+        table = source_cfg["table"]
+    dataset_id = f"{system}.{table}"
+    config_name = source_cfg.get("config_name", dataset_id)
+    return system, table, dataset_id, config_name
+
+
 @dataclass
 class RunContext:
     """Context for a single pipeline run.
@@ -94,15 +123,7 @@ def build_run_context(
     env_config: Optional[EnvironmentConfig] = None,
     run_id: Optional[str] = None,
 ) -> RunContext:
-    typed: RootConfig | None
-    if isinstance(cfg, RootConfig):
-        typed = cfg
-        run_cfg = typed.source.run.model_dump()  # dict for compatibility
-        cfg_dict = typed.model_dump()
-    else:
-        typed = None
-        cfg_dict = cfg
-        run_cfg = cfg_dict["source"].get("run", {})
+    cfg_dict, run_cfg, typed = _normalize_config(cfg)
 
     if "storage_enabled" not in run_cfg:
         bronze_backend = (
@@ -121,18 +142,9 @@ def build_run_context(
         else (local_output_dir / relative_path).resolve()
     )
 
-    if typed:
-        source_system = typed.source.system
-        source_table = typed.source.table
-    else:
-        source_system = cfg_dict["source"]["system"]
-        source_table = cfg_dict["source"]["table"]
-    dataset_id = f"{source_system}.{source_table}"
-    if typed:
-        config_name = cfg_dict["source"].get("config_name", dataset_id)
-    else:
-        config_name = cfg_dict["source"].get("config_name", dataset_id)
-
+    source_system, source_table, dataset_id, config_name = _extract_source_fields(
+        cfg_dict, typed
+    )
     pattern_value = load_pattern_override or run_cfg.get("load_pattern")
     load_pattern = (
         LoadPattern.normalize(pattern_value) if pattern_value else LoadPattern.SNAPSHOT

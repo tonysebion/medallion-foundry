@@ -16,6 +16,28 @@ from typing import Any, Dict
 from core.primitives.foundations.patterns import LoadPattern
 
 
+def _bronze_config(cfg: Dict[str, Any]) -> tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+    source = cfg["source"]
+    platform = cfg["platform"]
+    bronze = platform.get("bronze", {})
+    run_cfg = source.get("run", {})
+    bronze_options = bronze.get("options", {})
+    path_structure = cfg.get("path_structure", {})
+    bronze_keys = (
+        path_structure.get("bronze", {}) if isinstance(path_structure, dict) else {}
+    )
+    return bronze, run_cfg, bronze_options, bronze_keys
+
+
+def _bronze_key_names(bronze_keys: Dict[str, Any]) -> tuple[str, str, str, str]:
+    return (
+        bronze_keys.get("system_key", "system"),
+        bronze_keys.get("entity_key", "table"),
+        bronze_keys.get("pattern_key", "pattern"),
+        bronze_keys.get("date_key", "dt"),
+    )
+
+
 # =============================================================================
 # Partition Dataclasses
 # =============================================================================
@@ -80,26 +102,13 @@ class SilverPartition:
 def build_bronze_partition(cfg: Dict[str, Any], run_date: date) -> BronzePartition:
     """Build a BronzePartition from configuration."""
     source = cfg["source"]
-    platform = cfg["platform"]
-    bronze_options = platform.get("bronze", {}).get("options", {})
-    pattern_folder = bronze_options.get("pattern_folder")
-    run_cfg = source.get("run", {})
+    bronze, run_cfg, bronze_options, bronze_keys = _bronze_config(cfg)
     pattern = (
-        pattern_folder
+        bronze_options.get("pattern_folder")
         or run_cfg.get("pattern_folder")
         or run_cfg.get("load_pattern", "full")
     )
-
-    # Get path structure keys
-    path_structure = cfg.get("path_structure", {})
-    bronze_keys = (
-        path_structure.get("bronze", {}) if isinstance(path_structure, dict) else {}
-    )
-
-    system_key = bronze_keys.get("system_key", "system")
-    entity_key = bronze_keys.get("entity_key", "table")
-    pattern_key = bronze_keys.get("pattern_key", "pattern")
-    date_key = bronze_keys.get("date_key", "dt")
+    system_key, entity_key, pattern_key, date_key = _bronze_key_names(bronze_keys)
 
     return BronzePartition(
         system=source["system"],
@@ -154,35 +163,20 @@ def build_silver_partition(cfg: Dict[str, Any], run_date: date) -> SilverPartiti
 
 def build_bronze_relative_path(cfg: dict, run_date: date) -> str:
     """Build relative path for Bronze output directory."""
-    platform_cfg = cfg["platform"]
-    source_cfg = cfg["source"]
-
-    bronze = platform_cfg["bronze"]
+    bronze, run_cfg, bronze_options, bronze_keys = _bronze_config(cfg)
     partitioning = bronze.get("partitioning", {})
     use_dt = partitioning.get("use_dt_partition", True)
 
     partition_strategy = partitioning.get("partition_strategy", "date")
+    system_key, entity_key, pattern_key, date_key = _bronze_key_names(bronze_keys)
 
-    # Try to get path structure from config; fallback to defaults
-    path_structure = cfg.get("path_structure", {})
-    bronze_keys = (
-        path_structure.get("bronze", {}) if isinstance(path_structure, dict) else {}
-    )
-
-    system_key = bronze_keys.get("system_key", "system")
-    entity_key = bronze_keys.get("entity_key", "table")
-    pattern_key = bronze_keys.get("pattern_key", "pattern")
-    date_key = bronze_keys.get("date_key", "dt")
-
+    source_cfg = cfg["source"]
     system = source_cfg["system"]
     table = source_cfg["table"]
 
     base_path = f"{system_key}={system}/{entity_key}={table}/"
 
-    run_cfg = source_cfg.get("run", {})
     load_pattern = run_cfg.get("load_pattern", LoadPattern.SNAPSHOT.value)
-    bronze_options = bronze.get("options", {})
-    run_cfg = cfg["source"].get("run", {})
     pattern_folder = (
         bronze_options.get("pattern_folder")
         or run_cfg.get("pattern_folder")
