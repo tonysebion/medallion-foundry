@@ -108,7 +108,7 @@ def write_csv_chunk(chunk: List[Any], out_path: Path) -> None:
         with out_path.open("w", encoding="utf-8") as f:
             for r in chunk:
                 f.write(json.dumps(r) + "\n")
-        logger.info(f"Wrote {len(chunk)} JSON lines to {out_path}")
+        logger.info("Wrote %d JSON lines to %s", len(chunk), out_path)
         return
 
     fieldnames = sorted(first.keys())
@@ -117,7 +117,7 @@ def write_csv_chunk(chunk: List[Any], out_path: Path) -> None:
         writer.writeheader()
         writer.writerows(chunk)
 
-    logger.info(f"Wrote {len(chunk)} rows to CSV at {out_path}")
+    logger.info("Wrote %d rows to CSV at %s", len(chunk), out_path)
 
 
 def write_parquet_chunk(
@@ -136,7 +136,7 @@ def write_parquet_chunk(
     df = pd.DataFrame.from_records(chunk)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(out_path, index=False, compression=compression)
-    logger.info(f"Wrote {len(chunk)} rows to Parquet at {out_path}")
+    logger.info("Wrote %d rows to Parquet at %s", len(chunk), out_path)
 
 
 def write_batch_metadata(
@@ -182,7 +182,7 @@ def write_batch_metadata(
     with metadata_path.open("w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2)
 
-    logger.info(f"Wrote metadata to {metadata_path}")
+    logger.info("Wrote metadata to %s", metadata_path)
     return metadata_path
 
 
@@ -225,7 +225,7 @@ def write_checksum_manifest(
     with manifest_path.open("w", encoding="utf-8") as handle:
         json.dump(manifest, handle, indent=2)
 
-    logger.info(f"Wrote checksum manifest to {manifest_path}")
+    logger.info("Wrote checksum manifest to %s", manifest_path)
     return manifest_path
 
 
@@ -384,7 +384,7 @@ def merge_parquet_records(
         target = out_path or existing_path
         target.parent.mkdir(parents=True, exist_ok=True)
         new_df.to_parquet(target, index=False, compression=compression)
-        logger.info(f"Created new Parquet with {len(new_df)} records at {target}")
+        logger.info("Created new Parquet with %d records at %s", len(new_df), target)
         return len(new_df)
 
     existing_df = pd.read_parquet(existing_path)
@@ -396,8 +396,11 @@ def merge_parquet_records(
     target.parent.mkdir(parents=True, exist_ok=True)
     merged_df.to_parquet(target, index=False, compression=compression)
     logger.info(
-        f"Merged Parquet: {len(merged_df)} total records "
-        f"({updated_count} updated, {inserted_count} inserted) at {target}"
+        "Merged Parquet: %d total records (%d updated, %d inserted) at %s",
+        len(merged_df),
+        updated_count,
+        inserted_count,
+        target,
     )
 
     return len(merged_df)
@@ -436,7 +439,7 @@ def merge_csv_records(
         target = out_path or existing_path
         target.parent.mkdir(parents=True, exist_ok=True)
         new_df.to_csv(target, index=False)
-        logger.info(f"Created new CSV with {len(new_df)} records at {target}")
+        logger.info("Created new CSV with %d records at %s", len(new_df), target)
         return len(new_df)
 
     existing_df = pd.read_csv(existing_path)
@@ -446,5 +449,5 @@ def merge_csv_records(
     target.parent.mkdir(parents=True, exist_ok=True)
     merged_df.to_csv(target, index=False)
 
-    logger.info(f"Merged CSV: {len(merged_df)} total records at {target}")
+    logger.info("Merged CSV: %d total records at %s", len(merged_df), target)
     return len(merged_df)

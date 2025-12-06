@@ -79,7 +79,7 @@ class LateDataConfig:
         try:
             mode = LateDataMode(mode_str)
         except ValueError:
-            logger.warning(f"Invalid late_data.mode '{mode_str}', using 'allow'")
+            logger.warning("Invalid late_data.mode '%s', using 'allow'", mode_str)
             mode = LateDataMode.ALLOW
 
         return cls(
@@ -170,7 +170,7 @@ class LateDataHandler:
         except (ValueError, TypeError, OSError):
             pass
 
-        logger.warning(f"Could not parse timestamp: {value}")
+        logger.warning("Could not parse timestamp: %s", value)
         return None
 
     def is_late(
@@ -362,5 +362,5 @@ def parse_backfill_window(cfg: Dict[str, Any]) -> Optional[BackfillWindow]:
     try:
         return BackfillWindow.from_dict(backfill_cfg)
     except (ValueError, TypeError) as e:
-        logger.warning(f"Invalid backfill config: {e}")
+        logger.warning("Invalid backfill config: %s", e)
         return None

@@ -142,7 +142,7 @@ class DbExtractor(BaseExtractor):
             batch_size=batch_size,
             cursor_column=cursor_column if use_incremental else None,
         )
-        logger.info(f"Successfully extracted {len(records)} records from database")
+        logger.info("Successfully extracted %d records from database", len(records))
         new_cursor = max_cursor
 
         if use_incremental and new_cursor:

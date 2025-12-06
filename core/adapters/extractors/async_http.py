@@ -76,7 +76,7 @@ class AsyncApiClient:
         async def _once() -> Dict[str, Any]:
             async with self._semaphore:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    logger.debug(f"Async request to {url} with params {params}")
+                    logger.debug("Async request to %s with params %s", url, params)
 
                     kwargs: Dict[str, Any] = {
                         "headers": self.headers,

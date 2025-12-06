@@ -508,7 +508,7 @@ def write_run_metadata(
     with metadata_path.open("w", encoding="utf-8") as f:
         json.dump(metadata.to_dict(), f, indent=2)
 
-    logger.info(f"Wrote run metadata to {metadata_path}")
+    logger.info("Wrote run metadata to %s", metadata_path)
     return metadata_path
 
 

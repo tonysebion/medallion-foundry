@@ -80,7 +80,7 @@ class FileExtractor(BaseExtractor):
         fs = create_filesystem(uri, self.env_config)
         fsspec_path = uri.to_fsspec_path(self.env_config)
 
-        logger.info(f"Loading records from {fsspec_path} as {file_format.upper()}")
+        logger.info("Loading records from %s as %s", fsspec_path, file_format.upper())
 
         # Read based on format using streaming
         if file_format in {"csv", "tsv"}:
@@ -99,7 +99,7 @@ class FileExtractor(BaseExtractor):
 
         records = self._post_process_records(records, file_cfg)
 
-        logger.info(f"Loaded {len(records)} records from {fsspec_path}")
+        logger.info("Loaded %d records from %s", len(records), fsspec_path)
         return records, None
 
     def _post_process_records(

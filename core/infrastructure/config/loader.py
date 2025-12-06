@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 def _read_yaml(path: str) -> Dict[str, Any]:
-    logger.info(f"Loading config from {path}")
+    logger.info("Loading config from %s", path)
 
     config_path = Path(path)
     if not config_path.exists():
@@ -208,13 +208,13 @@ def _load_environment_config(
     env_file = env_config_path / f"{env_name}.yaml"
 
     if env_file.exists():
-        logger.info(f"Loading environment config: {env_file}")
+        logger.info("Loading environment config: %s", env_file)
         env_config = EnvironmentConfig.from_yaml(env_file)
         _export_s3_env_vars(env_config.s3)
         return env_config
 
     logger.warning(
-        f"Environment '{env_name}' referenced in config but not found at {env_file}"
+        "Environment '%s' referenced in config but not found at %s", env_name, env_file
     )
     return None
 
@@ -361,11 +361,11 @@ def load_config_with_env(
         env_file = env_config_path / f"{env_name}.yaml"
 
         if env_file.exists():
-            logger.info(f"Loading environment config: {env_file}")
+            logger.info("Loading environment config: %s", env_file)
             env_config = EnvironmentConfig.from_yaml(env_file)
         else:
             logger.warning(
-                f"Environment '{env_name}' referenced in config but not found at {env_file}"
+                "Environment '%s' referenced in config but not found at %s", env_name, env_file
             )
 
     return dataset, env_config
