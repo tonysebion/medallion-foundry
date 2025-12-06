@@ -48,7 +48,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from core.extractors.base import BaseExtractor
+from core.adapters.extractors.base import BaseExtractor
 
 logger = logging.getLogger(__name__)
 

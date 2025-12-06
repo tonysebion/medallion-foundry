@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING, Any, Dict, Optional
 import fsspec
 
 if TYPE_CHECKING:
-    from core.config.environment import EnvironmentConfig
-    from core.storage.uri import StorageURI
+    from core.infrastructure.config.environment import EnvironmentConfig
+    from core.infrastructure.storage.uri import StorageURI
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ def create_filesystem(
         NotImplementedError: If Azure backend is requested (not yet implemented)
 
     Example:
-        >>> from core.storage.uri import StorageURI
+        >>> from core.infrastructure.storage.uri import StorageURI
         >>> uri = StorageURI.parse("./local/file.csv")
         >>> fs = create_filesystem(uri)
         >>> isinstance(fs, fsspec.AbstractFileSystem)
@@ -118,7 +118,7 @@ def get_fs_for_path(
         >>> fs, resolved = get_fs_for_path("./local/file.csv")
         >>> fs, resolved = get_fs_for_path("s3://bucket/file.csv", env_config)
     """
-    from core.storage.uri import StorageURI
+    from core.infrastructure.storage.uri import StorageURI
 
     uri = StorageURI.parse(path)
     fs = create_filesystem(uri, env_config)

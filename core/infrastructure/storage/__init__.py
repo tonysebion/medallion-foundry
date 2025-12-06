@@ -6,7 +6,7 @@ Available backends:
 - LocalStorage: Local filesystem (for testing)
 
 Usage:
-    from core.storage import get_storage_backend, StorageBackend
+    from core.infrastructure.storage import get_storage_backend, StorageBackend
 
     backend = get_storage_backend(config)
     backend.upload_file(local_path, remote_path)

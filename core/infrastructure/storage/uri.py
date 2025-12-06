@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, Optional
 
 if TYPE_CHECKING:
-    from core.config.environment import EnvironmentConfig
+    from core.infrastructure.config.environment import EnvironmentConfig
 
 StorageBackendType = Literal["local", "s3", "azure"]
 

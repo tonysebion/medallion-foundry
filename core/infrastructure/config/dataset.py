@@ -898,7 +898,7 @@ def dataset_to_runtime_config(dataset: DatasetConfig) -> Dict[str, Any]:
         else dataset.silver.event_ts_column
     )
 
-    from core.silver.models import SilverModel
+    from core.pipeline.silver.models import SilverModel
 
     if dataset.silver.entity_kind.is_state_like:
         if dataset.silver.history_mode == HistoryMode.SCD1:

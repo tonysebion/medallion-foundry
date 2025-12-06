@@ -11,7 +11,7 @@ from typing import Any, Dict
 
 import yaml
 
-from core.config.typed_models import RootConfig
+from core.infrastructure.config.typed_models import RootConfig
 
 
 def migrate_dict_to_typed(config_dict: Dict[str, Any]) -> RootConfig:

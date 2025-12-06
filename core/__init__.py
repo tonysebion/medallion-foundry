@@ -44,10 +44,10 @@ from core.primitives.foundations.exceptions import (
 from core.primitives.foundations.logging import setup_logging
 
 # Runtime
-from core.runtime.context import RunContext, build_run_context, run_context_to_dict, load_run_context
-from core.runtime.options import RunOptions
-from core.runtime import default_artifacts
-from core.runtime.paths import (
+from core.pipeline.runtime.context import RunContext, build_run_context, run_context_to_dict, load_run_context
+from core.pipeline.runtime.options import RunOptions
+from core.pipeline.runtime import default_artifacts
+from core.pipeline.runtime.paths import (
     BronzePartition,
     SilverPartition,
     build_bronze_partition,
@@ -55,7 +55,7 @@ from core.runtime.paths import (
     build_bronze_relative_path,
     build_silver_partition_path,
 )
-from core.runtime.metadata import (
+from core.pipeline.runtime.metadata import (
     Layer,
     RunStatus,
     QualityRuleResult,

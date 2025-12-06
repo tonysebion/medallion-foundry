@@ -22,7 +22,7 @@ from tenacity import (
     retry_if_exception_type,
 )
 
-from core.extractors.base import BaseExtractor
+from core.adapters.extractors.base import BaseExtractor
 
 logger = logging.getLogger(__name__)
 

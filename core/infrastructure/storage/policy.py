@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Dict, Any, Optional, Union
-from core.config.typed_models import PlatformConfig
+from core.infrastructure.config.typed_models import PlatformConfig
 
 
 # =============================================================================

@@ -5,7 +5,7 @@ Rules with level='error' cause job failure; level='warn' logs warnings.
 
 Usage:
 ```python
-from core.quality import QualityEngine, evaluate_rules
+from core.adapters.quality import QualityEngine, evaluate_rules
 
 engine = QualityEngine(config)
 report = engine.evaluate(records)

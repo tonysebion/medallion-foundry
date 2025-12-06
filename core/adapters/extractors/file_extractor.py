@@ -13,12 +13,12 @@ from datetime import date
 import pandas as pd
 import fsspec
 
-from core.extractors.base import BaseExtractor
+from core.adapters.extractors.base import BaseExtractor
 from core.infrastructure.storage.uri import StorageURI
 from core.infrastructure.storage.filesystem import create_filesystem
 
 if TYPE_CHECKING:
-    from core.config.environment import EnvironmentConfig
+    from core.infrastructure.config.environment import EnvironmentConfig
 
 logger = logging.getLogger(__name__)
 

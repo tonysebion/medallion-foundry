@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Dict, List
 
-from core.storage.backend import StorageBackend
+from core.infrastructure.storage.backend import StorageBackend
 
 logger = logging.getLogger(__name__)
 

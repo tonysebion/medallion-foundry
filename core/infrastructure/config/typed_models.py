@@ -28,7 +28,7 @@ from pydantic import (
 from enum import Enum
 
 from core.primitives.foundations.patterns import LoadPattern
-from core.silver.models import SilverModel, resolve_profile
+from core.pipeline.silver.models import SilverModel, resolve_profile
 
 from .dataset import DatasetConfig
 
@@ -83,7 +83,7 @@ class SchemaConfig(BaseModel):
         """Convert to SchemaSpec for validation."""
         if not self.expected_columns:
             return None
-        from core.schema.types import SchemaSpec
+        from core.adapters.schema.types import SchemaSpec
         return SchemaSpec.from_dict({
             "expected_columns": [col.model_dump() for col in self.expected_columns],
             "primary_keys": self.primary_keys,

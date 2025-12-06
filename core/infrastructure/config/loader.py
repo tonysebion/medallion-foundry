@@ -18,8 +18,8 @@ from .dataset import (
 from .env_substitution import apply_env_substitution
 from .typed_models import RootConfig, parse_root_config
 from core.primitives.foundations.exceptions import emit_compat
-from core.runtime.paths import build_bronze_relative_path
-from core.config.environment import EnvironmentConfig, S3ConnectionConfig
+from core.pipeline.runtime.paths import build_bronze_relative_path
+from core.infrastructure.config.environment import EnvironmentConfig, S3ConnectionConfig
 from .validation import validate_config_dict
 from .v2_validation import validate_v2_config_dict
 
@@ -329,7 +329,7 @@ def load_config_with_env(
         >>> if env:
         ...     print(f"Using environment: {env.name}")
     """
-    from core.config.environment import EnvironmentConfig
+    from core.infrastructure.config.environment import EnvironmentConfig
 
     # Load the pattern config
     with open(config_path, "r", encoding="utf-8") as f:

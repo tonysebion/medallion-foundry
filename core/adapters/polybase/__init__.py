@@ -8,7 +8,7 @@ Enhanced per spec Section 8 with:
 - Event aggregation views for event entities
 """
 
-from core.polybase.polybase_generator import (
+from core.adapters.polybase.polybase_generator import (
     generate_polybase_setup,
     generate_temporal_functions_sql,
     generate_joined_table_ddl,

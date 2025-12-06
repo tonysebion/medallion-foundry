@@ -22,7 +22,7 @@ from core.infrastructure.resilience.retry import RetryPolicy, execute_with_retry
 from core.primitives.catalog.tracing import trace_span
 from .async_http import AsyncApiClient, is_async_enabled
 
-from core.extractors.base import BaseExtractor
+from core.adapters.extractors.base import BaseExtractor
 
 logger = logging.getLogger(__name__)
 

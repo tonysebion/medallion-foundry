@@ -6,7 +6,7 @@ from typing import Mapping
 from pathlib import Path
 import pandas as pd
 
-from core.silver.artifacts import write_silver_outputs as _artifact_write_silver_outputs
+from core.pipeline.silver.artifacts import write_silver_outputs as _artifact_write_silver_outputs
 
 
 class SilverArtifactWriter(Protocol):

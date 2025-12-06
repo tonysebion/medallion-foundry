@@ -6,8 +6,8 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, cast
 
-from core.bronze.base import emit_bronze_metadata, infer_schema
-from core.bronze.plan import (
+from core.pipeline.bronze.base import emit_bronze_metadata, infer_schema
+from core.pipeline.bronze.plan import (
     build_chunk_writer_config,
     compute_output_formats,
     resolve_load_pattern,
@@ -17,17 +17,17 @@ from core.primitives.catalog.hooks import (
     report_run_metadata,
     report_schema_snapshot,
 )
-from core.runtime.context import RunContext
-from core.extractors.api_extractor import ApiExtractor
-from core.extractors.base import BaseExtractor
-from core.extractors.db_extractor import DbExtractor
-from core.extractors.db_multi_extractor import DbMultiExtractor
-from core.config.environment import EnvironmentConfig
-from core.extractors.file_extractor import FileExtractor
-from core.bronze.io import chunk_records
+from core.pipeline.runtime.context import RunContext
+from core.adapters.extractors.api_extractor import ApiExtractor
+from core.adapters.extractors.base import BaseExtractor
+from core.adapters.extractors.db_extractor import DbExtractor
+from core.adapters.extractors.db_multi_extractor import DbMultiExtractor
+from core.infrastructure.config.environment import EnvironmentConfig
+from core.adapters.extractors.file_extractor import FileExtractor
+from core.pipeline.bronze.io import chunk_records
 from core.primitives.foundations.patterns import LoadPattern
 from core.runner.chunks import ChunkProcessor, ChunkWriter
-from core.storage import get_storage_backend
+from core.infrastructure.storage import get_storage_backend
 
 logger = logging.getLogger(__name__)
 

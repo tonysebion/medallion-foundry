@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, cast, TYPE_CHECKING
 
 import pandas as pd
 
-from core.config.dataset import (
+from core.infrastructure.config.dataset import (
     DatasetConfig,
     DeleteMode,
     EntityKind,
@@ -18,12 +18,12 @@ from core.config.dataset import (
     InputMode,
     SchemaMode,
 )
-from core.silver.artifacts import DatasetWriter
-from core.storage.uri import StorageURI
-from core.storage.filesystem import create_filesystem
+from core.pipeline.silver.artifacts import DatasetWriter
+from core.infrastructure.storage.uri import StorageURI
+from core.infrastructure.storage.filesystem import create_filesystem
 
 if TYPE_CHECKING:
-    from core.config.environment import EnvironmentConfig
+    from core.infrastructure.config.environment import EnvironmentConfig
 
 logger = logging.getLogger(__name__)
 

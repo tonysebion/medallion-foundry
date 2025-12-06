@@ -5,7 +5,7 @@ from typing import Dict, Any, Tuple
 
 from core.primitives.foundations.patterns import LoadPattern
 from core.runner.chunks import ChunkWriterConfig, StoragePlan
-from core.storage.backend import StorageBackend
+from core.infrastructure.storage.backend import StorageBackend
 
 
 def resolve_load_pattern(run_cfg: Dict[str, Any]) -> LoadPattern:
