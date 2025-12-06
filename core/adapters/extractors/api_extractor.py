@@ -28,142 +28,12 @@ from core.primitives.catalog.tracing import trace_span
 from .async_http import AsyncApiClient, is_async_enabled
 
 from core.adapters.extractors.base import BaseExtractor, register_extractor
+from core.adapters.extractors.pagination import (
+    PagePaginationState,
+    build_pagination_state,
+)
 
 logger = logging.getLogger(__name__)
-
-
-class _PaginationState:
-    def __init__(self, pagination_cfg: Dict[str, Any], params: Dict[str, Any]):
-        self.pagination_cfg = pagination_cfg or {}
-        self.base_params = dict(params or {})
-        self.max_records = self.pagination_cfg.get("max_records", 0)
-
-    def should_fetch_more(self) -> bool:
-        return True
-
-    def build_params(self) -> Dict[str, Any]:
-        return dict(self.base_params)
-
-    def on_records(self, records: List[Dict[str, Any]], data: Any) -> bool:
-        return False
-
-    def describe(self) -> str:
-        return "(no pagination)"
-
-
-class _NoPaginationState(_PaginationState):
-    def on_records(self, records: List[Dict[str, Any]], data: Any) -> bool:
-        return False
-
-
-class _OffsetPaginationState(_PaginationState):
-    def __init__(self, pagination_cfg: Dict[str, Any], params: Dict[str, Any]):
-        super().__init__(pagination_cfg, params)
-        self.offset_param = pagination_cfg.get("offset_param", "offset")
-        self.limit_param = pagination_cfg.get("limit_param", "limit")
-        self.page_size = pagination_cfg.get("page_size", 100)
-        self.offset = 0
-        self._last_offset = 0
-
-    def build_params(self) -> Dict[str, Any]:
-        params = super().build_params()
-        params[self.limit_param] = self.page_size
-        params[self.offset_param] = self.offset
-        self._last_offset = self.offset
-        return params
-
-    def on_records(self, records: List[Dict[str, Any]], data: Any) -> bool:
-        if not records or len(records) < self.page_size:
-            return False
-        self.offset += self.page_size
-        return True
-
-    def describe(self) -> str:
-        return f"at offset {self._last_offset}"
-
-
-class _PagePaginationState(_PaginationState):
-    def __init__(self, pagination_cfg: Dict[str, Any], params: Dict[str, Any]):
-        super().__init__(pagination_cfg, params)
-        self.page = 1
-        self._last_page = 1
-        self.page_param = pagination_cfg.get("page_param", "page")
-        self.page_size_param = pagination_cfg.get("page_size_param", "page_size")
-        self.page_size = pagination_cfg.get("page_size", 100)
-        self.max_pages = pagination_cfg.get("max_pages", 0)
-        self._max_pages_reached = False
-
-    def should_fetch_more(self) -> bool:
-        if self.max_pages and self.page > self.max_pages:
-            self._max_pages_reached = True
-            return False
-        return True
-
-    def build_params(self) -> Dict[str, Any]:
-        params = super().build_params()
-        params[self.page_param] = self.page
-        params[self.page_size_param] = self.page_size
-        self._last_page = self.page
-        return params
-
-    def on_records(self, records: List[Dict[str, Any]], data: Any) -> bool:
-        if not records or len(records) < self.page_size:
-            return False
-        self.page += 1
-        return True
-
-    def describe(self) -> str:
-        return f"from page {self._last_page}"
-
-    @property
-    def max_pages_limit_hit(self) -> bool:
-        return self._max_pages_reached
-
-
-class _CursorPaginationState(_PaginationState):
-    def __init__(self, pagination_cfg: Dict[str, Any], params: Dict[str, Any]):
-        super().__init__(pagination_cfg, params)
-        self.cursor_param = pagination_cfg.get("cursor_param", "cursor")
-        self.cursor_path = pagination_cfg.get("cursor_path", "next_cursor")
-        self.cursor: Optional[str] = None
-
-    def build_params(self) -> Dict[str, Any]:
-        params = super().build_params()
-        if self.cursor:
-            params[self.cursor_param] = self.cursor
-        return params
-
-    def on_records(self, records: List[Dict[str, Any]], data: Any) -> bool:
-        if not records:
-            return False
-        self.cursor = self._extract_cursor(data)
-        return bool(self.cursor)
-
-    def describe(self) -> str:
-        return f"(cursor pagination, next_cursor={self.cursor})"
-
-    def _extract_cursor(self, data: Any) -> Optional[str]:
-        obj: Any = data
-        if isinstance(obj, dict):
-            for key in self.cursor_path.split("."):
-                obj = obj.get(key) if isinstance(obj, dict) else None
-                if obj is None:
-                    break
-            return obj
-        return None
-
-
-def _build_pagination_state(
-    pagination_cfg: Dict[str, Any], params: Dict[str, Any]
-) -> _PaginationState:
-    pagination_type = (pagination_cfg or {}).get("type", "none")
-    if pagination_type == "offset":
-        return _OffsetPaginationState(pagination_cfg, params)
-    if pagination_type == "page":
-        return _PagePaginationState(pagination_cfg, params)
-    if pagination_type == "cursor":
-        return _CursorPaginationState(pagination_cfg, params)
-    return _NoPaginationState(pagination_cfg, params)
 
 
 @register_extractor("api")
@@ -398,7 +268,7 @@ class ApiExtractor(BaseExtractor):
         self._limiter = RateLimiter.from_config(api_cfg, run_cfg)
         params = dict(api_cfg.get("params", {}))
         pagination_cfg = api_cfg.get("pagination", {}) or {}
-        state = _build_pagination_state(pagination_cfg, params)
+        state = build_pagination_state(pagination_cfg, params)
 
         all_records: List[Dict[str, Any]] = []
 
@@ -424,7 +294,7 @@ class ApiExtractor(BaseExtractor):
                 break
 
         if (
-            isinstance(state, _PagePaginationState)
+            isinstance(state, PagePaginationState)
             and state.max_pages
             and state.max_pages_limit_hit
         ):
@@ -453,7 +323,7 @@ class ApiExtractor(BaseExtractor):
         limiter = RateLimiter.from_config(api_cfg, run_cfg)
         params = dict(api_cfg.get("params", {}))
         pagination_cfg = api_cfg.get("pagination", {}) or {}
-        state = _build_pagination_state(pagination_cfg, params)
+        state = build_pagination_state(pagination_cfg, params)
 
         async def _get(params_local: Dict[str, Any]) -> Dict[str, Any]:
             if limiter:
@@ -483,7 +353,7 @@ class ApiExtractor(BaseExtractor):
                 break
 
         if (
-            isinstance(state, _PagePaginationState)
+            isinstance(state, PagePaginationState)
             and state.max_pages
             and state.max_pages_limit_hit
         ):
