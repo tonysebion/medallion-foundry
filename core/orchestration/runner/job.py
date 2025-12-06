@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import importlib
-import pkgutil
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Type, cast
+from typing import Any, Dict, List, Optional, cast
 
 from core.pipeline.bronze.base import emit_bronze_metadata, infer_schema
 from core.pipeline.bronze.models import (
@@ -20,89 +18,17 @@ from core.primitives.catalog.hooks import (
     report_schema_snapshot,
 )
 from core.pipeline.runtime.context import RunContext
-from core.adapters.extractors.base import (
-    BaseExtractor,
-    EXTRACTOR_REGISTRY,
-    get_extractor_class,
+from core.adapters.extractors.factory import (
+    ensure_extractors_loaded,
+    get_extractor,
 )
-from core.adapters import extractors as extractors_pkg
-from core.infrastructure.config.environment import EnvironmentConfig
 from core.pipeline.bronze.io import chunk_records
 from core.primitives.foundations.patterns import LoadPattern
 from core.orchestration.runner.chunks import ChunkProcessor, ChunkWriter
 from core.infrastructure.storage import get_storage_backend
 
 logger = logging.getLogger(__name__)
-
-
-def _load_extractors() -> None:
-    """Dynamically import extractor modules so they can register themselves."""
-    pkg_path = Path(extractors_pkg.__file__).parent
-    for finder, name, _ in pkgutil.iter_modules([str(pkg_path)]):
-        if name.startswith("_"):
-            continue
-        importlib.import_module(f"{extractors_pkg.__name__}.{name}")
-
-
-# Ensure extractor modules are imported and registered before use
-_load_extractors()
-
-
-def build_extractor(
-    cfg: Dict[str, Any], env_config: Optional[EnvironmentConfig] = None
-) -> BaseExtractor:
-    """Build an extractor instance based on source configuration.
-
-    Uses the EXTRACTOR_REGISTRY to look up registered extractor classes.
-    Custom extractors are loaded dynamically from the configured module.
-
-    Args:
-        cfg: Full pipeline configuration dictionary
-        env_config: Optional environment configuration
-
-    Returns:
-        Configured BaseExtractor instance
-
-    Raises:
-        ValueError: If source type is unknown or custom extractor config is invalid
-    """
-    src = cfg["source"]
-    src_type = src.get("type", "api")
-
-    # Handle custom extractor separately (dynamic loading)
-    if src_type == "custom":
-        custom_cfg = src.get("custom_extractor", {})
-        module_name = custom_cfg.get("module")
-        class_name = custom_cfg.get("class_name")
-        if not module_name or not class_name:
-            raise ValueError(
-                "custom extractor requires both 'module' and 'class_name' in source.custom_extractor"
-            )
-
-        import importlib
-        module = importlib.import_module(module_name)
-        cls = getattr(module, class_name)
-        cls_typed: Type[BaseExtractor] = cast(Type[BaseExtractor], cls)
-        return cls_typed()
-
-    # Look up extractor class in registry
-    extractor_cls = get_extractor_class(src_type)
-    if extractor_cls is None:
-        registered = ", ".join(EXTRACTOR_REGISTRY.keys())
-        raise ValueError(
-            f"Unknown source.type: '{src_type}'. "
-            f"Registered types: {registered or 'none'}"
-        )
-
-    # Handle extractors that need special initialization
-    if src_type == "db_multi":
-        max_workers = src.get("run", {}).get("parallel_workers", 4)
-        return extractor_cls(max_workers=max_workers)
-    if src_type == "file":
-        return extractor_cls(env_config=env_config)
-
-    # Default initialization
-    return extractor_cls()
+ensure_extractors_loaded()
 
 
 class ExtractJob:
@@ -134,7 +60,7 @@ class ExtractJob:
             raise
 
     def _run(self) -> int:
-        extractor = build_extractor(self.cfg, self.ctx.env_config)
+        extractor = get_extractor(self.cfg, self.ctx.env_config)
         logger.info(
             "Starting extract for %s.%s on %s",
             self.source_cfg["system"],
