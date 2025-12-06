@@ -1,4 +1,10 @@
-"""Generate Polybase external table configurations from DatasetConfig."""
+"""Generate Polybase external table configurations from DatasetConfig.
+
+Enhanced per spec Section 8 to support:
+- Joined Silver assets (multi_source_join pattern)
+- Lookup table external tables
+- CTE views for common query patterns
+"""
 
 from core.config.dataset import (
     DatasetConfig,
@@ -8,7 +14,7 @@ from core.config.dataset import (
     PolybaseExternalTable,
     PolybaseSetup,
 )
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 
 def generate_polybase_setup(
@@ -309,3 +315,358 @@ def generate_temporal_functions_sql(
         functions.append(point_sql)
 
     return "\n".join(functions)
+
+
+def generate_joined_table_ddl(
+    join_config: Dict[str, Any],
+    table_name: str,
+    location: str,
+    data_source_name: str,
+    file_format_name: str = "parquet_format",
+    schema_name: str = "dbo",
+) -> str:
+    """Generate External Table DDL for a joined Silver asset.
+
+    This supports the multi_source_join pattern where multiple Bronze sources
+    are joined into a single Silver output.
+
+    Args:
+        join_config: Join configuration with sources and result_columns
+        table_name: Name for the external table
+        location: Storage location for the joined data
+        data_source_name: Name of the external data source
+        file_format_name: Name of the file format
+        schema_name: SQL schema name
+
+    Returns:
+        DDL string for creating the external table
+    """
+    columns = join_config.get("result_columns", [])
+    if not columns:
+        # Derive columns from sources if not specified
+        for source in join_config.get("sources", []):
+            for col in source.get("columns", []):
+                columns.append({"name": col, "type": "NVARCHAR(4000)"})
+
+    column_defs = []
+    for col in columns:
+        col_name = col.get("name", "unnamed")
+        col_type = _map_type_to_sql(col.get("type", "string"), col)
+        column_defs.append(f"    [{col_name}] {col_type}")
+
+    columns_sql = ",\n".join(column_defs)
+
+    ddl = f"""-- External Table for Joined Silver Asset
+-- Sources: {', '.join(s.get('name', 'unknown') for s in join_config.get('sources', []))}
+
+IF OBJECT_ID('[{schema_name}].[{table_name}]', 'U') IS NOT NULL
+    DROP EXTERNAL TABLE [{schema_name}].[{table_name}];
+
+CREATE EXTERNAL TABLE [{schema_name}].[{table_name}]
+(
+{columns_sql}
+)
+WITH
+(
+    LOCATION = '{location}',
+    DATA_SOURCE = [{data_source_name}],
+    FILE_FORMAT = [{file_format_name}],
+    REJECT_TYPE = VALUE,
+    REJECT_VALUE = 0
+);
+"""
+    return ddl
+
+
+def generate_lookup_table_ddl(
+    lookup_config: Dict[str, Any],
+    table_name: str,
+    location: str,
+    data_source_name: str,
+    file_format_name: str = "parquet_format",
+    schema_name: str = "dbo",
+) -> str:
+    """Generate External Table DDL for a lookup/reference table.
+
+    Lookup tables are typically smaller reference data used for enrichment
+    in the single_source_with_lookups pattern.
+
+    Args:
+        lookup_config: Lookup configuration with columns
+        table_name: Name for the external table (e.g., ext_status_lookup)
+        location: Storage location for the lookup data
+        data_source_name: Name of the external data source
+        file_format_name: Name of the file format
+        schema_name: SQL schema name
+
+    Returns:
+        DDL string for creating the external table
+    """
+    columns = lookup_config.get("columns", [])
+    if not columns:
+        # Default columns for lookup tables
+        columns = [
+            {"name": "code", "type": "string"},
+            {"name": "name", "type": "string"},
+            {"name": "description", "type": "string"},
+        ]
+
+    column_defs = []
+    for col in columns:
+        col_name = col.get("name", "unnamed")
+        col_type = _map_type_to_sql(col.get("type", "string"), col)
+        nullable = " NULL" if col.get("nullable", True) else " NOT NULL"
+        column_defs.append(f"    [{col_name}] {col_type}{nullable}")
+
+    columns_sql = ",\n".join(column_defs)
+
+    lookup_key = lookup_config.get("lookup_key", columns[0].get("name", "code"))
+
+    ddl = f"""-- External Table for Lookup/Reference Data
+-- Lookup Key: {lookup_key}
+
+IF OBJECT_ID('[{schema_name}].[{table_name}]', 'U') IS NOT NULL
+    DROP EXTERNAL TABLE [{schema_name}].[{table_name}];
+
+CREATE EXTERNAL TABLE [{schema_name}].[{table_name}]
+(
+{columns_sql}
+)
+WITH
+(
+    LOCATION = '{location}',
+    DATA_SOURCE = [{data_source_name}],
+    FILE_FORMAT = [{file_format_name}],
+    REJECT_TYPE = VALUE,
+    REJECT_VALUE = 0
+);
+
+-- Suggested index for lookup performance (create after loading to regular table):
+-- CREATE NONCLUSTERED INDEX IX_{table_name}_{lookup_key} ON [{schema_name}].[{table_name}] ([{lookup_key}]);
+"""
+    return ddl
+
+
+def generate_cte_view_ddl(
+    view_name: str,
+    base_table: str,
+    cte_definitions: List[Dict[str, str]],
+    final_select: str,
+    schema_name: str = "dbo",
+    description: str = "",
+) -> str:
+    """Generate a CTE-based view for complex queries.
+
+    Common patterns:
+    - Aggregations with lookups
+    - Multi-table joins
+    - Temporal queries with history
+
+    Args:
+        view_name: Name for the view
+        base_table: Primary table being queried
+        cte_definitions: List of CTEs with 'name' and 'query' keys
+        final_select: The final SELECT statement
+        schema_name: SQL schema name
+        description: View description for documentation
+
+    Returns:
+        DDL string for creating the view
+    """
+    cte_parts = []
+    for cte in cte_definitions:
+        cte_name = cte.get("name", "cte")
+        cte_query = cte.get("query", "SELECT 1")
+        cte_parts.append(f"{cte_name} AS (\n{cte_query}\n)")
+
+    ctes_sql = ",\n".join(cte_parts)
+
+    ddl = f"""-- {description or f'CTE View for {base_table}'}
+CREATE OR ALTER VIEW [{schema_name}].[{view_name}]
+AS
+WITH {ctes_sql}
+{final_select};
+"""
+    return ddl
+
+
+def generate_current_state_view_ddl(
+    dataset: DatasetConfig,
+    external_table_name: str,
+    schema_name: str = "dbo",
+) -> str:
+    """Generate a view for current state (latest version) of entities.
+
+    For state/SCD entities, this view returns only the current version
+    of each entity, filtering out historical records.
+
+    Args:
+        dataset: DatasetConfig with entity configuration
+        external_table_name: Name of the external table
+        schema_name: SQL schema name
+
+    Returns:
+        DDL for the current state view
+    """
+    if not dataset.silver.entity_kind.is_state_like:
+        return ""
+
+    pk_cols = ", ".join([f"[{col}]" for col in dataset.silver.natural_keys])
+    view_name = f"vw_{dataset.entity}_current"
+
+    ddl = f"""-- Current State View for {dataset.entity}
+-- Returns only the latest version of each entity
+
+CREATE OR ALTER VIEW [{schema_name}].[{view_name}]
+AS
+SELECT *
+FROM [{schema_name}].[{external_table_name}]
+WHERE is_current = 1;
+
+-- Alternative using ROW_NUMBER for explicit latest selection:
+/*
+CREATE OR ALTER VIEW [{schema_name}].[{view_name}_v2]
+AS
+WITH ranked AS (
+    SELECT *,
+           ROW_NUMBER() OVER (
+               PARTITION BY {pk_cols}
+               ORDER BY effective_from DESC
+           ) as rn
+    FROM [{schema_name}].[{external_table_name}]
+)
+SELECT *
+FROM ranked
+WHERE rn = 1;
+*/
+"""
+    return ddl
+
+
+def generate_history_summary_view_ddl(
+    dataset: DatasetConfig,
+    external_table_name: str,
+    schema_name: str = "dbo",
+) -> str:
+    """Generate a view summarizing entity history.
+
+    Provides counts and date ranges for historical tracking.
+
+    Args:
+        dataset: DatasetConfig with entity configuration
+        external_table_name: Name of the external table
+        schema_name: SQL schema name
+
+    Returns:
+        DDL for the history summary view
+    """
+    if not dataset.silver.entity_kind.is_state_like:
+        return ""
+
+    pk_cols = ", ".join([f"[{col}]" for col in dataset.silver.natural_keys])
+    view_name = f"vw_{dataset.entity}_history_summary"
+
+    ddl = f"""-- History Summary View for {dataset.entity}
+-- Shows version count and date range for each entity
+
+CREATE OR ALTER VIEW [{schema_name}].[{view_name}]
+AS
+SELECT
+    {pk_cols},
+    COUNT(*) as version_count,
+    MIN(effective_from) as first_version_date,
+    MAX(effective_from) as latest_version_date,
+    DATEDIFF(day, MIN(effective_from), MAX(effective_from)) as history_span_days
+FROM [{schema_name}].[{external_table_name}]
+GROUP BY {pk_cols};
+"""
+    return ddl
+
+
+def generate_event_aggregation_view_ddl(
+    dataset: DatasetConfig,
+    external_table_name: str,
+    aggregation_period: str = "day",
+    schema_name: str = "dbo",
+) -> str:
+    """Generate a view for event aggregations.
+
+    Provides daily/hourly counts and metrics for event entities.
+
+    Args:
+        dataset: DatasetConfig with entity configuration
+        external_table_name: Name of the external table
+        aggregation_period: 'day' or 'hour'
+        schema_name: SQL schema name
+
+    Returns:
+        DDL for the event aggregation view
+    """
+    if not dataset.silver.entity_kind.is_event_like:
+        return ""
+
+    ts_col = dataset.silver.event_ts_column or "event_ts"
+    partition_col = dataset.silver.record_time_partition or f"{ts_col}_dt"
+    view_name = f"vw_{dataset.entity}_daily_summary"
+
+    if aggregation_period == "hour":
+        view_name = f"vw_{dataset.entity}_hourly_summary"
+        date_expr = f"DATEADD(hour, DATEDIFF(hour, 0, [{ts_col}]), 0)"
+    else:
+        date_expr = f"CAST([{ts_col}] AS DATE)"
+
+    ddl = f"""-- Event Aggregation View for {dataset.entity}
+-- Provides {aggregation_period}ly counts and metrics
+
+CREATE OR ALTER VIEW [{schema_name}].[{view_name}]
+AS
+SELECT
+    {date_expr} as period,
+    COUNT(*) as event_count,
+    COUNT(DISTINCT [{dataset.silver.natural_keys[0]}]) as unique_entities
+FROM [{schema_name}].[{external_table_name}]
+GROUP BY {date_expr};
+"""
+    return ddl
+
+
+def _map_type_to_sql(data_type: str, col_spec: Optional[Dict[str, Any]] = None) -> str:
+    """Map data type string to SQL Server type.
+
+    Args:
+        data_type: Type name (string, integer, decimal, etc.)
+        col_spec: Column specification with precision/scale
+
+    Returns:
+        SQL Server type string
+    """
+    col_spec = col_spec or {}
+    type_map = {
+        "string": "NVARCHAR(4000)",
+        "varchar": "NVARCHAR(4000)",
+        "text": "NVARCHAR(MAX)",
+        "integer": "INT",
+        "int": "INT",
+        "bigint": "BIGINT",
+        "long": "BIGINT",
+        "float": "FLOAT",
+        "double": "FLOAT",
+        "decimal": "DECIMAL",
+        "numeric": "DECIMAL",
+        "boolean": "BIT",
+        "bool": "BIT",
+        "date": "DATE",
+        "timestamp": "DATETIME2",
+        "datetime": "DATETIME2",
+        "binary": "VARBINARY(MAX)",
+    }
+
+    sql_type = type_map.get(data_type.lower(), "NVARCHAR(4000)")
+
+    # Handle decimal precision/scale
+    if sql_type == "DECIMAL":
+        precision = col_spec.get("precision", 18)
+        scale = col_spec.get("scale", 2)
+        sql_type = f"DECIMAL({precision},{scale})"
+
+    return sql_type
