@@ -164,11 +164,29 @@ class QualityRule:
         for pattern, replacement in self.SQL_PATTERNS:
             result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
 
+        # If expression was transformed by patterns, return it
+        if "record.get(" in result:
+            return result
+
+        # Handle simple comparison expressions like "column >= value"
+        # These need special handling to avoid bare identifiers
+        simple_comparison = re.match(
+            r'^([a-zA-Z_][a-zA-Z0-9_]*)\s*(>=|<=|>|<|==|!=|=)\s*(-?\d+\.?\d*)$',
+            result.strip()
+        )
+        if simple_comparison:
+            col, op, val = simple_comparison.groups()
+            if op == '=':
+                op = '=='
+            return f"(record.get('{col}', 0) {op} {val})"
+
         # Handle remaining column references (bare identifiers)
         # Convert "column_name" to "record.get('column_name')" if not already converted
+        reserved = {'and', 'or', 'not', 'in', 'is', 'None', 'True', 'False',
+                    'record', 'get', 'len', 'str', 'bool', 'int', 'float'}
         words = re.findall(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b', result)
         for word in words:
-            if word not in ('and', 'or', 'not', 'in', 'is', 'None', 'True', 'False', 'record', 'get', 'len', 'str', 'bool', 'int', 'float'):
+            if word not in reserved:
                 # Check if it's a bare column reference (not already in record.get())
                 if f"record.get('{word}')" not in result:
                     # Only replace if it appears as a standalone identifier

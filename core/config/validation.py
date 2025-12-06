@@ -401,6 +401,25 @@ def validate_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
             f"platform.bronze.partitioning.partition_strategy must be one of {valid_strategies}"
         )
 
+    # Validate quality_rules config per spec Section 7
+    quality_rules = cfg.get("quality_rules", [])
+    if quality_rules:
+        if not isinstance(quality_rules, list):
+            raise ValueError("quality_rules must be a list")
+        valid_rule_levels = ["error", "warn"]
+        for i, rule in enumerate(quality_rules):
+            if not isinstance(rule, dict):
+                raise ValueError(f"quality_rules[{i}] must be a dictionary")
+            if "id" not in rule:
+                raise ValueError(f"quality_rules[{i}] requires 'id'")
+            if "expression" not in rule:
+                raise ValueError(f"quality_rules[{i}] requires 'expression'")
+            rule_level = rule.get("level", "error").lower()
+            if rule_level not in valid_rule_levels:
+                raise ValueError(
+                    f"quality_rules[{i}].level must be one of {valid_rule_levels}, got '{rule_level}'"
+                )
+
     normalized_silver = _normalize_silver_config(cfg.get("silver"), source, pattern)
     run_cfg["silver"] = normalized_silver
     cfg["silver"] = normalized_silver
