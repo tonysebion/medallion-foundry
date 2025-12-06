@@ -206,66 +206,35 @@ class DbMultiExtractor(BaseExtractor):
         query, params = self._build_entity_query(entity, last_cursor)
         logger.debug(f"Entity {entity.name} query: {query}")
 
-        records: List[Dict[str, Any]] = []
-        max_cursor: Optional[str] = None
-        conn = None
-
         try:
-            # Each thread gets its own connection
-            conn = pyodbc.connect(conn_str)
-            cur = conn.cursor()
-
-            if params:
-                cur.execute(query, params)
-            else:
-                cur.execute(query)
-
-            columns = [col[0] for col in cur.description]
-
-            # Fetch in batches
-            total_rows = 0
-            while True:
-                rows = cur.fetchmany(entity.fetch_batch_size)
-                if not rows:
-                    break
-
-                for row in rows:
-                    rec = {col: val for col, val in zip(columns, row)}
-                    records.append(rec)
-
-                    # Track max watermark value
-                    if entity.watermark_column and entity.watermark_column in rec:
-                        cursor_val = rec[entity.watermark_column]
-                        if cursor_val is not None:
-                            cursor_str = str(cursor_val)
-                            if max_cursor is None or cursor_str > max_cursor:
-                                max_cursor = cursor_str
-
-                total_rows += len(rows)
-
-            logger.info(f"Entity {entity.name}: extracted {total_rows} records")
-
-            # Save new cursor
-            if max_cursor:
-                self._state_manager.save_cursor(state_key, max_cursor, run_date)
-
-            return EntityResult(
-                entity_name=entity.name,
-                records=records,
-                cursor=max_cursor,
-                row_count=len(records),
+            records, max_cursor = fetch_records_from_query(
+                driver="pyodbc",
+                conn_str=conn_str,
+                query=query,
+                params=params,
+                batch_size=entity.fetch_batch_size,
+                cursor_column=entity.watermark_column
+                if entity.load_mode == "incremental_append"
+                else None,
             )
-
-        except Exception as e:
-            logger.error(f"Entity {entity.name} extraction failed: {e}")
+        except Exception as exc:
+            logger.error(f"Entity {entity.name} extraction failed: {exc}")
             return EntityResult(
                 entity_name=entity.name,
                 records=[],
-                error=str(e),
+                error=str(exc),
             )
-        finally:
-            if conn:
-                conn.close()
+
+        logger.info(f"Entity {entity.name}: extracted {len(records)} records")
+        if max_cursor:
+            self._state_manager.save_cursor(state_key, max_cursor, run_date)
+
+        return EntityResult(
+            entity_name=entity.name,
+            records=records,
+            cursor=max_cursor,
+            row_count=len(records),
+        )
 
     def fetch_records(
         self,

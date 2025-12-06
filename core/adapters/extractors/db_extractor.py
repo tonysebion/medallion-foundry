@@ -12,7 +12,6 @@ import os
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import date
 
-import pyodbc
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -21,6 +20,7 @@ from tenacity import (
 )
 
 from core.adapters.extractors.base import BaseExtractor, register_extractor
+from core.adapters.extractors.db_runner import fetch_records_from_query
 from core.adapters.extractors.cursor_state import (
     CursorStateManager,
     build_incremental_query,
@@ -69,28 +69,24 @@ class DbExtractor(BaseExtractor):
         reraise=True,
     )
     def _execute_query(
-        self, driver: str, conn_str: str, query: str, params: Optional[Tuple] = None
-    ) -> Any:
+        self,
+        driver: str,
+        conn_str: str,
+        query: str,
+        params: Optional[Tuple] = None,
+        batch_size: int = 10000,
+        cursor_column: Optional[str] = None,
+    ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
         """Execute database query with retry logic for the selected driver."""
         logger.debug("Executing query with driver=%s params=%s", driver, params)
-
-        if driver == "pyodbc":
-            conn = pyodbc.connect(conn_str)
-            cur = conn.cursor()
-            if params:
-                cur.execute(query, params)
-            else:
-                cur.execute(query)
-            return cur
-        elif driver == "pymssql":
-            raise NotImplementedError(
-                "Driver 'pymssql' selected but not implemented in runtime. "
-                "Use 'pyodbc' or open an issue if you need first-class pymssql support."
-            )
-        else:
-            raise ValueError(
-                f"Unsupported db.driver '{driver}'. Use 'pyodbc' (default) or 'pymssql'."
-            )
+        return fetch_records_from_query(
+            driver=driver,
+            conn_str=conn_str,
+            query=query,
+            params=params,
+            batch_size=batch_size,
+            cursor_column=cursor_column,
+        )
 
     def fetch_records(
         self,
@@ -137,54 +133,16 @@ class DbExtractor(BaseExtractor):
             f"Executing database query (incremental={'yes' if use_incremental else 'no'})"
         )
 
-        # Execute query
-        records: List[Dict[str, Any]] = []
-        max_cursor: Optional[str] = None
-        conn = None
-
-        try:
-            if last_cursor:
-                cur = self._execute_query(driver, conn_str, query, (last_cursor,))
-            else:
-                cur = self._execute_query(driver, conn_str, query)
-
-            conn = cur.connection
-            columns = [col[0] for col in cur.description]
-
-            # Fetch in batches
-            batch_size = db_cfg.get("fetch_batch_size", 10000)
-            total_rows = 0
-
-            while True:
-                rows = cur.fetchmany(batch_size)
-                if not rows:
-                    break
-
-                for row in rows:
-                    rec = {col: val for col, val in zip(columns, row)}
-                    records.append(rec)
-
-                    # Track max cursor value
-                    if use_incremental and cursor_column in rec:
-                        cursor_val = rec[cursor_column]
-                        if cursor_val is not None:
-                            cursor_str = str(cursor_val)
-                            if max_cursor is None or cursor_str > max_cursor:
-                                max_cursor = cursor_str
-
-                total_rows += len(rows)
-                logger.info(f"Fetched {len(rows)} rows (total: {total_rows})")
-
-            logger.info(f"Successfully extracted {len(records)} records from database")
-
-        except Exception as e:
-            logger.error(f"Database query failed: {e}")
-            raise
-        finally:
-            if conn:
-                conn.close()
-
-        # Save new cursor if we have one
+        batch_size = db_cfg.get("fetch_batch_size", 10000)
+        records, max_cursor = self._execute_query(
+            driver,
+            conn_str,
+            query,
+            (last_cursor,) if last_cursor else None,
+            batch_size=batch_size,
+            cursor_column=cursor_column if use_incremental else None,
+        )
+        logger.info(f"Successfully extracted {len(records)} records from database")
         new_cursor = max_cursor
 
         if use_incremental and new_cursor:
