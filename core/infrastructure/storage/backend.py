@@ -8,6 +8,8 @@ This module provides:
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from enum import Enum
 from typing import Any, Callable, Dict, List, Union, TYPE_CHECKING
@@ -147,11 +149,12 @@ except ImportError as exc:
 # Backend Factory Function
 # =============================================================================
 
-_STORAGE_BACKEND_CACHE: Dict[int, StorageBackend] = {}
+_STORAGE_BACKEND_CACHE: Dict[str, StorageBackend] = {}
 
 
-def _cache_key(config: Dict[str, Any]) -> int:
-    return id(config)
+def _cache_key(config: Dict[str, Any]) -> str:
+    normalized = json.dumps(config, sort_keys=True, default=str)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
 def get_storage_backend(

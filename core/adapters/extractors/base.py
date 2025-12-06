@@ -190,6 +190,7 @@ class BaseExtractor(ABC):
 
         # Update watermark if we have new data
         if watermark and new_cursor and watermark_store:
+            previous_value = watermark.watermark_value
             watermark.update(
                 new_value=new_cursor,
                 run_id=run_id or "unknown",
@@ -198,6 +199,6 @@ class BaseExtractor(ABC):
             )
             watermark_store.save(watermark)
             result.metadata["watermark_updated"] = True
-            result.metadata["previous_watermark"] = watermark.watermark_value
+            result.metadata["previous_watermark"] = previous_value
 
         return result

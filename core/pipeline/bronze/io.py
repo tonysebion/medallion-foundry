@@ -302,6 +302,50 @@ def verify_checksum_manifest(
     return manifest
 
 
+def _validate_primary_keys(
+    existing_df: pd.DataFrame, new_df: pd.DataFrame, primary_keys: List[str]
+) -> None:
+    missing_in_existing = [k for k in primary_keys if k not in existing_df.columns]
+    missing_in_new = [k for k in primary_keys if k not in new_df.columns]
+
+    if missing_in_existing:
+        raise ValueError(
+            f"Primary keys missing in existing data: {missing_in_existing}"
+        )
+    if missing_in_new:
+        raise ValueError(
+            f"Primary keys missing in new data: {missing_in_new}"
+        )
+
+
+def _build_key_series(df: pd.DataFrame, primary_keys: List[str]) -> pd.Series:
+    if len(primary_keys) == 1:
+        return df[primary_keys[0]].astype(str)
+    return df[primary_keys].astype(str).apply(lambda row: tuple(row), axis=1)
+
+
+def _merge_dataframes(
+    existing_df: pd.DataFrame, new_df: pd.DataFrame, primary_keys: List[str]
+) -> tuple[pd.DataFrame, int, int]:
+    """Return merged DataFrame along with counts of updated and inserted keys."""
+    _validate_primary_keys(existing_df, new_df, primary_keys)
+
+    existing_series = _build_key_series(existing_df, primary_keys)
+    new_series = _build_key_series(new_df, primary_keys)
+
+    existing_keys = set(existing_series)
+    new_keys = set(new_series)
+
+    keep_mask = ~existing_series.isin(new_keys)
+    kept_existing = existing_df[keep_mask]
+
+    merged_df = pd.concat([kept_existing, new_df], ignore_index=True)
+    updated_count = len(existing_keys & new_keys)
+    inserted_count = len(new_keys - existing_keys)
+
+    return merged_df, updated_count, inserted_count
+
+
 def merge_parquet_records(
     existing_path: Path,
     new_records: List[Dict[str, Any]],
@@ -340,53 +384,14 @@ def merge_parquet_records(
         logger.info(f"Created new Parquet with {len(new_df)} records at {target}")
         return len(new_df)
 
-    # Load existing data
     existing_df = pd.read_parquet(existing_path)
+    merged_df, updated_count, inserted_count = _merge_dataframes(
+        existing_df, new_df, primary_keys
+    )
 
-    # Verify primary keys exist in both DataFrames
-    missing_in_existing = [k for k in primary_keys if k not in existing_df.columns]
-    missing_in_new = [k for k in primary_keys if k not in new_df.columns]
-
-    if missing_in_existing:
-        raise ValueError(f"Primary keys missing in existing data: {missing_in_existing}")
-    if missing_in_new:
-        raise ValueError(f"Primary keys missing in new data: {missing_in_new}")
-
-    # Create composite key for matching
-    if len(primary_keys) == 1:
-        pk_col = primary_keys[0]
-        existing_keys = set(existing_df[pk_col].astype(str))
-        new_keys = set(new_df[pk_col].astype(str))
-    else:
-        # Multi-column key: create tuple index
-        existing_keys = set(
-            existing_df[primary_keys].apply(lambda r: tuple(str(v) for v in r), axis=1)
-        )
-        new_keys = set(
-            new_df[primary_keys].apply(lambda r: tuple(str(v) for v in r), axis=1)
-        )
-
-    # Identify records to keep from existing (those not in new)
-    if len(primary_keys) == 1:
-        pk_col = primary_keys[0]
-        keep_mask = ~existing_df[pk_col].astype(str).isin(new_keys)
-    else:
-        keep_mask = ~existing_df[primary_keys].apply(
-            lambda r: tuple(str(v) for v in r), axis=1
-        ).isin(new_keys)
-
-    kept_existing = existing_df[keep_mask]
-
-    # Concatenate kept existing with new records
-    merged_df = pd.concat([kept_existing, new_df], ignore_index=True)
-
-    # Write merged result
     target = out_path or existing_path
     target.parent.mkdir(parents=True, exist_ok=True)
     merged_df.to_parquet(target, index=False, compression=compression)
-
-    updated_count = len(existing_keys & new_keys)
-    inserted_count = len(new_keys - existing_keys)
     logger.info(
         f"Merged Parquet: {len(merged_df)} total records "
         f"({updated_count} updated, {inserted_count} inserted) at {target}"
@@ -431,35 +436,9 @@ def merge_csv_records(
         logger.info(f"Created new CSV with {len(new_df)} records at {target}")
         return len(new_df)
 
-    # Load existing data
     existing_df = pd.read_csv(existing_path)
+    merged_df, _, _ = _merge_dataframes(existing_df, new_df, primary_keys)
 
-    # Verify primary keys exist
-    missing_in_existing = [k for k in primary_keys if k not in existing_df.columns]
-    missing_in_new = [k for k in primary_keys if k not in new_df.columns]
-
-    if missing_in_existing:
-        raise ValueError(f"Primary keys missing in existing data: {missing_in_existing}")
-    if missing_in_new:
-        raise ValueError(f"Primary keys missing in new data: {missing_in_new}")
-
-    # Create key set from new records
-    if len(primary_keys) == 1:
-        pk_col = primary_keys[0]
-        new_keys = set(new_df[pk_col].astype(str))
-        keep_mask = ~existing_df[pk_col].astype(str).isin(new_keys)
-    else:
-        new_keys = set(
-            new_df[primary_keys].apply(lambda r: tuple(str(v) for v in r), axis=1)
-        )
-        keep_mask = ~existing_df[primary_keys].apply(
-            lambda r: tuple(str(v) for v in r), axis=1
-        ).isin(new_keys)
-
-    kept_existing = existing_df[keep_mask]
-
-    # Concatenate and write
-    merged_df = pd.concat([kept_existing, new_df], ignore_index=True)
     target = out_path or existing_path
     target.parent.mkdir(parents=True, exist_ok=True)
     merged_df.to_csv(target, index=False)

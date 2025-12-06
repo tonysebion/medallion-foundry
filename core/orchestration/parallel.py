@@ -14,13 +14,11 @@ def run_parallel_extracts(
     contexts: List[RunContext], max_workers: int = 4
 ) -> List[Tuple[str, int, Optional[Exception]]]:
     """
-    Run multiple extraction configs in parallel.
+    Run multiple extraction contexts in parallel.
 
     Args:
-        configs: List of configuration dictionaries
-        run_date: Date for the extraction run
-        local_output_base: Base directory for local output
-        max_workers: Maximum number of parallel workers
+        contexts: List of RunContext instances to execute.
+        max_workers: Maximum number of parallel workers.
 
     Returns:
         List of tuples containing (config_name, status_code, error)
@@ -52,15 +50,15 @@ def run_parallel_extracts(
 
                 if status_code == 0:
                     logger.info(
-                        f"✓ Successfully completed extraction for {context.config_name}"
+                        f"Successfully completed extraction for {context.config_name}"
                     )
                 else:
                     logger.error(
-                        f"✗ Failed extraction for {context.config_name}: {error}"
+                        f"Failed extraction for {context.config_name}: {error}"
                     )
             except Exception as e:
                 logger.error(
-                    f"✗ Unexpected error for {context.config_name}: {e}", exc_info=True
+                    f"Unexpected error for {context.config_name}: {e}", exc_info=True
                 )
                 results.append((context.config_name, -1, e))
 
