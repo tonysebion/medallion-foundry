@@ -1,6 +1,0 @@
-# Azure Blob Storage / ADLS Gen2 backend support
-# Install with: pip install -r requirements.txt -r requirements-azure.txt
-# Or use: pip install -e .[azure]
-
-azure-storage-blob>=12.19.0
-azure-identity>=1.15.0
