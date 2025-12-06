@@ -12,13 +12,11 @@ from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient, ContainerClient
 
 from core.storage.backend import StorageBackend
-from core.storage.registry import register_backend
 from core.retry import RetryPolicy, execute_with_retry, CircuitBreaker
 
 logger = logging.getLogger(__name__)
 
 
-@register_backend("azure")
 class AzureStorage(StorageBackend):
     """Azure Blob Storage / ADLS Gen2 backend."""
 
