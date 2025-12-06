@@ -13,7 +13,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict
 
-from core.patterns import LoadPattern
+from core.foundations.patterns import LoadPattern
 
 
 # =============================================================================
