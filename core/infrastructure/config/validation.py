@@ -6,9 +6,9 @@ from typing import Any, Dict
 
 from .typed_models import SilverConfig, DataClassification
 from pydantic import ValidationError
-from core.foundations.exceptions import emit_compat, emit_deprecation, DeprecationSpec
-from core.foundations.patterns import LoadPattern
-from core.storage.policy import validate_storage_metadata
+from core.primitives.foundations.exceptions import emit_compat, emit_deprecation, DeprecationSpec
+from core.primitives.foundations.patterns import LoadPattern
+from core.infrastructure.storage.policy import validate_storage_metadata
 
 logger = logging.getLogger(__name__)
 

@@ -24,7 +24,7 @@ from typing import (
     TypeVar,
 )
 
-from core.foundations.exceptions import (
+from core.primitives.foundations.exceptions import (
     AuthenticationError,
     ExtractionError,
     RetryExhaustedError,

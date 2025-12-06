@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import date
 
-from core.state.watermark import Watermark, WatermarkStore, WatermarkType
+from core.primitives.state.watermark import Watermark, WatermarkStore, WatermarkType
 
 
 @dataclass

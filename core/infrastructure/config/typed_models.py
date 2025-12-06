@@ -27,7 +27,7 @@ from pydantic import (
 )
 from enum import Enum
 
-from core.foundations.patterns import LoadPattern
+from core.primitives.foundations.patterns import LoadPattern
 from core.silver.models import SilverModel, resolve_profile
 
 from .dataset import DatasetConfig

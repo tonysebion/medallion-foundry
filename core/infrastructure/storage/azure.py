@@ -11,8 +11,8 @@ from azure.core.exceptions import AzureError, ResourceNotFoundError
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient, ContainerClient
 
-from core.storage.backend import StorageBackend
-from core.resilience.retry import RetryPolicy, execute_with_retry, CircuitBreaker
+from core.infrastructure.storage.backend import StorageBackend
+from core.infrastructure.resilience.retry import RetryPolicy, execute_with_retry, CircuitBreaker
 
 logger = logging.getLogger(__name__)
 

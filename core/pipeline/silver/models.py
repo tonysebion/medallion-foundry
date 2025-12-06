@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Dict, List, Mapping
 
-from core.foundations.patterns import LoadPattern
+from core.primitives.foundations.patterns import LoadPattern
 
 
 class SilverModel(str, Enum):

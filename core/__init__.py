@@ -24,8 +24,8 @@ __version__ = "1.0.0"
 # =============================================================================
 
 # Foundations
-from core.foundations.patterns import LoadPattern
-from core.foundations.exceptions import (
+from core.primitives.foundations.patterns import LoadPattern
+from core.primitives.foundations.exceptions import (
     BronzeFoundryError,
     ConfigValidationError,
     ExtractionError,
@@ -41,7 +41,7 @@ from core.foundations.exceptions import (
     emit_deprecation,
     emit_compat,
 )
-from core.foundations.logging import setup_logging
+from core.primitives.foundations.logging import setup_logging
 
 # Runtime
 from core.runtime.context import RunContext, build_run_context, run_context_to_dict, load_run_context
@@ -65,11 +65,11 @@ from core.runtime.metadata import (
 )
 
 # State
-from core.state.watermark import Watermark, WatermarkStore, WatermarkType
-from core.state.manifest import FileEntry, FileManifest, ManifestTracker
+from core.primitives.state.watermark import Watermark, WatermarkStore, WatermarkType
+from core.primitives.state.manifest import FileEntry, FileManifest, ManifestTracker
 
 # Resilience
-from core.resilience.retry import (
+from core.infrastructure.resilience.retry import (
     RetryPolicy,
     CircuitBreaker,
     CircuitState,
@@ -77,18 +77,18 @@ from core.resilience.retry import (
     execute_with_retry,
     execute_with_retry_async,
 )
-from core.resilience.late_data import LateDataMode, LateDataConfig, LateDataResult
+from core.infrastructure.resilience.late_data import LateDataMode, LateDataConfig, LateDataResult
 
 # Catalog
-from core.catalog.hooks import (
+from core.primitives.catalog.hooks import (
     notify_catalog,
     report_schema_snapshot,
     report_quality_snapshot,
     report_run_metadata,
     report_lineage,
 )
-from core.catalog.webhooks import fire_webhooks
-from core.catalog.tracing import trace_span
+from core.primitives.catalog.webhooks import fire_webhooks
+from core.primitives.catalog.tracing import trace_span
 
 __all__ = [
     # Version

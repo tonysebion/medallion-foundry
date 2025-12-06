@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional
 from core.config import build_relative_path
 from core.config.typed_models import RootConfig
 from core.config.environment import EnvironmentConfig
-from core.foundations.patterns import LoadPattern
+from core.primitives.foundations.patterns import LoadPattern
 from core.runtime.metadata import generate_run_id
 
 logger = logging.getLogger(__name__)

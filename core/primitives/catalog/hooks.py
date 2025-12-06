@@ -7,7 +7,7 @@ Hooks can operate in two modes:
 - Integration mode: Events are forwarded to an external catalog
 
 To enable OpenMetadata integration:
-    from core.catalog import set_om_client
+    from core.primitives.catalog import set_om_client
     from core.om import OpenMetadataClient
 
     client = OpenMetadataClient(base_url="http://om-server:8585/api")

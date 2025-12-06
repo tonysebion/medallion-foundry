@@ -9,7 +9,7 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
 from core.storage.backend import StorageBackend
-from core.resilience.retry import RetryPolicy, execute_with_retry, CircuitBreaker
+from core.infrastructure.resilience.retry import RetryPolicy, execute_with_retry, CircuitBreaker
 
 logger = logging.getLogger(__name__)
 

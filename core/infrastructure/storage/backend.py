@@ -123,13 +123,13 @@ def register_storage_backend(
 
 @register_backend("s3")
 def _s3_factory(config: Dict[str, Any]) -> StorageBackend:
-    from core.storage.s3 import S3Storage
+    from core.infrastructure.storage.s3 import S3Storage
     return S3Storage(config)
 
 
 @register_backend("local")
 def _local_factory(config: Dict[str, Any]) -> StorageBackend:
-    from core.storage.local import LocalStorage
+    from core.infrastructure.storage.local import LocalStorage
     return LocalStorage(config)
 
 
@@ -137,7 +137,7 @@ def _local_factory(config: Dict[str, Any]) -> StorageBackend:
 try:
     @register_backend("azure")
     def _azure_factory(config: Dict[str, Any]) -> StorageBackend:
-        from core.storage.azure import AzureStorage
+        from core.infrastructure.storage.azure import AzureStorage
         return AzureStorage(config)
 except ImportError as exc:
     logger.debug("Azure backend not available: %s", exc)

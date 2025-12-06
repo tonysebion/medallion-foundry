@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from core.bronze.io import write_batch_metadata, write_checksum_manifest
-from core.foundations.patterns import LoadPattern
+from core.primitives.foundations.patterns import LoadPattern
 
 
 def infer_schema(records: List[Dict[str, Any]]) -> List[Dict[str, str]]:

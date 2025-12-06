@@ -11,7 +11,7 @@ import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
-from core.resilience.retry import RetryPolicy, CircuitBreaker, execute_with_retry_async
+from core.infrastructure.resilience.retry import RetryPolicy, CircuitBreaker, execute_with_retry_async
 
 logger = logging.getLogger(__name__)
 

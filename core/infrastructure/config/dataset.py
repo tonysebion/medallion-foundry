@@ -8,8 +8,8 @@ focus on semantic intent so higher-level orchestration can remain simple.
 from __future__ import annotations
 
 import logging
-from core.foundations.exceptions import emit_compat
-from core.foundations.patterns import LoadPattern
+from core.primitives.foundations.exceptions import emit_compat
+from core.primitives.foundations.patterns import LoadPattern
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
