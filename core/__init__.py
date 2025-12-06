@@ -1,20 +1,31 @@
 """Core modules for Bronze extraction framework.
 
-This package contains the core functionality organized into:
-- foundations/: Shared primitives (patterns, exceptions, logging)
-- runtime/: Execution context & configuration
-- state/: State management for incremental patterns
-- resilience/: Failure handling & recovery patterns
-- catalog/: External catalog integrations
-- bronze/: Bronze layer utilities
-- silver/: Silver layer transformation engine
-- config/: Configuration loading & validation
-- extractors/: Data extraction implementations
-- storage/: Storage backends (S3, Azure, Local)
-- quality/: Data quality rules & reporting
-- schema/: Schema validation & evolution
-- runner/: Job execution & chunking
-- polybase/: PolyBase DDL generation
+This package contains the core functionality organized by domain:
+
+primitives/           # Zero-dependency building blocks
+├── foundations/      # patterns, exceptions, logging
+├── state/            # watermark, manifest
+└── catalog/          # hooks, webhooks, tracing
+
+infrastructure/       # Cross-cutting concerns
+├── resilience/       # retry, circuit breaker, late_data
+├── storage/          # S3, Azure, local backends
+└── config/           # configuration loading
+
+pipeline/             # Bronze → Silver data flow (siblings)
+├── bronze/           # extraction I/O, chunking
+├── silver/           # transforms, models, artifacts
+└── runtime/          # RunContext, RunOptions, paths
+
+adapters/             # External system integrations
+├── extractors/       # API, DB, file extractors
+├── polybase/         # DDL generation
+├── schema/           # schema validation (future)
+└── quality/          # quality rules (future)
+
+orchestration/        # Execution coordination
+├── runner/           # job execution
+└── parallel.py       # parallel execution
 """
 
 __version__ = "1.0.0"

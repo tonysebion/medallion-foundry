@@ -5,7 +5,7 @@ from typing import List, Tuple, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from core.pipeline.runtime.context import RunContext
-from core.runner import run_extract
+from core.orchestration.runner import run_extract
 
 logger = logging.getLogger(__name__)
 

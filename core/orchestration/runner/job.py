@@ -26,7 +26,7 @@ from core.infrastructure.config.environment import EnvironmentConfig
 from core.adapters.extractors.file_extractor import FileExtractor
 from core.pipeline.bronze.io import chunk_records
 from core.primitives.foundations.patterns import LoadPattern
-from core.runner.chunks import ChunkProcessor, ChunkWriter
+from core.orchestration.runner.chunks import ChunkProcessor, ChunkWriter
 from core.infrastructure.storage import get_storage_backend
 
 logger = logging.getLogger(__name__)
@@ -73,7 +73,7 @@ class ExtractJob:
         self.created_files: List[Path] = []
         self.load_pattern: Optional[LoadPattern] = context.load_pattern
         self.output_formats: Dict[str, bool] = {}
-        from core.runner.chunks import StoragePlan
+        from core.orchestration.runner.chunks import StoragePlan
 
         self.storage_plan: Optional[StoragePlan] = None
         self.schema_snapshot: List[Dict[str, str]] = []

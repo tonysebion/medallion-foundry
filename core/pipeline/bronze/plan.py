@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Dict, Any, Tuple
 
 from core.primitives.foundations.patterns import LoadPattern
-from core.runner.chunks import ChunkWriterConfig, StoragePlan
+from core.orchestration.runner.chunks import ChunkWriterConfig, StoragePlan
 from core.infrastructure.storage.backend import StorageBackend
 
 
