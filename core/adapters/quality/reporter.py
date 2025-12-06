@@ -10,12 +10,17 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from .rules import RuleLevel
 
 logger = logging.getLogger(__name__)
+
+
+def _utc_isoformat() -> str:
+    """Return UTC-aware ISO timestamp with Z suffix."""
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 @dataclass
@@ -78,7 +83,7 @@ class QualityReport:
 
     def __post_init__(self):
         if self.evaluated_at is None:
-            self.evaluated_at = datetime.utcnow().isoformat() + "Z"
+            self.evaluated_at = _utc_isoformat()
 
     @property
     def rule_count(self) -> int:

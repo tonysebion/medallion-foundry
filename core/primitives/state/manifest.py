@@ -48,11 +48,16 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+def _utc_isoformat() -> str:
+    """Return UTC-aware ISO timestamp with Z suffix."""
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
 
 
 @dataclass
@@ -135,7 +140,7 @@ class FileManifest:
         self.pending_files.append(FileEntry(
             path=path,
             size_bytes=size_bytes,
-            discovered_at=datetime.utcnow().isoformat() + "Z",
+            discovered_at=_utc_isoformat(),
         ))
         return True
 
@@ -157,7 +162,7 @@ class FileManifest:
             # File wasn't in pending, create new entry
             entry = FileEntry(path=path)
 
-        entry.processed_at = datetime.utcnow().isoformat() + "Z"
+        entry.processed_at = _utc_isoformat()
         entry.run_id = run_id
         if checksum:
             entry.checksum = checksum
@@ -172,7 +177,7 @@ class FileManifest:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
-            "last_updated": datetime.utcnow().isoformat() + "Z",
+            "last_updated": _utc_isoformat(),
             "manifest_path": self.manifest_path,
             "processed_files": [f.to_dict() for f in self.processed_files],
             "pending_files": [f.to_dict() for f in self.pending_files],

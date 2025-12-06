@@ -28,7 +28,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -36,6 +36,12 @@ from typing import Any, Dict, List, Optional, Union
 from core.primitives.foundations.base import RichEnumMixin
 
 logger = logging.getLogger(__name__)
+
+
+def _utc_isoformat() -> str:
+    """Return UTC-aware ISO timestamp with Z suffix."""
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
 
 
 # Module-level constants for WatermarkType
@@ -99,7 +105,7 @@ class Watermark:
 
     def __post_init__(self):
         if self.created_at is None:
-            self.created_at = datetime.utcnow().isoformat() + "Z"
+            self.created_at = _utc_isoformat()
 
     def update(
         self,
@@ -113,7 +119,7 @@ class Watermark:
         self.last_run_id = run_id
         self.last_run_date = run_date.isoformat()
         self.record_count = record_count
-        self.updated_at = datetime.utcnow().isoformat() + "Z"
+        self.updated_at = _utc_isoformat()
         return self
 
     def compare(self, value: str) -> int:
