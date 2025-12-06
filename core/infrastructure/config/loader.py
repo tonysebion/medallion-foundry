@@ -10,13 +10,14 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 
 import yaml
 
-from .dataset import (
+from .models import (
     DatasetConfig,
     dataset_to_runtime_config,
     is_new_intent_config,
     legacy_to_dataset,
+    RootConfig,
+    parse_root_config,
 )
-from .typed_models import RootConfig, parse_root_config
 from core.primitives.foundations.exceptions import emit_compat
 from core.infrastructure.config.environment import EnvironmentConfig, S3ConnectionConfig
 from .validation import validate_config_dict
