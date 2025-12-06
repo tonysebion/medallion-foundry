@@ -1,3 +1,13 @@
-"""Bronze helpers are exposed via their concrete modules to avoid circular imports."""
+"""Bronze extraction layer: I/O, chunking, and storage planning.
 
-__all__: list[str] = []
+Primary modules:
+- io: CSV/Parquet file writing utilities
+- plan: Storage and chunk configuration dataclasses
+"""
+
+from .plan import StoragePlan, ChunkWriterConfig
+
+__all__ = [
+    "StoragePlan",
+    "ChunkWriterConfig",
+]

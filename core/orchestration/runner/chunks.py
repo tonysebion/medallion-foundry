@@ -1,38 +1,16 @@
+"""Chunk writing and processing for Bronze extraction."""
+
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from core.pipeline.bronze.io import write_csv_chunk, write_parquet_chunk
-from core.infrastructure.storage.backend import StorageBackend
+from core.pipeline.bronze.plan import StoragePlan, ChunkWriterConfig
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class StoragePlan:
-    enabled: bool
-    backend: Optional[StorageBackend]
-    relative_path: str
-
-    def upload(self, file_path: Path) -> None:
-        if not (self.enabled and self.backend):
-            return
-        remote_path = f"{self.relative_path}{file_path.name}"
-        self.backend.upload_file(str(file_path), remote_path)
-
-
-@dataclass
-class ChunkWriterConfig:
-    out_dir: Path
-    write_csv: bool
-    write_parquet: bool
-    parquet_compression: str
-    storage_plan: StoragePlan
-    chunk_prefix: str
 
 
 class ChunkWriter:
@@ -95,3 +73,12 @@ class ChunkProcessor:
                 created_files.extend(self.writer.write(idx, chunk))
 
         return created_files
+
+
+# Re-export dataclasses for backward compatibility
+__all__ = [
+    "StoragePlan",
+    "ChunkWriterConfig",
+    "ChunkWriter",
+    "ChunkProcessor",
+]

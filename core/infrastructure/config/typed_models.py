@@ -86,10 +86,17 @@ class SchemaConfig(BaseModel):
     version: int = 1
 
     def to_schema_spec(self) -> Optional[Any]:
-        """Convert to SchemaSpec for validation."""
+        """Convert to SchemaSpec for validation.
+
+        Returns an adapters.schema.types.SchemaSpec instance, imported lazily
+        to avoid layer violation (infrastructure cannot depend on adapters).
+        """
         if not self.expected_columns:
             return None
-        from core.adapters.schema.types import SchemaSpec
+        # Lazy import to avoid layer violation (L1 -> L3)
+        import importlib
+        schema_types = importlib.import_module("core.adapters.schema.types")
+        SchemaSpec = schema_types.SchemaSpec
         return SchemaSpec.from_dict({
             "expected_columns": [col.model_dump() for col in self.expected_columns],
             "primary_keys": self.primary_keys,

@@ -1,11 +1,43 @@
+"""Bronze pipeline planning: dataclasses and helpers for storage/chunk config."""
+
 from __future__ import annotations
 
+import logging
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Optional, Tuple
 
 from core.primitives.foundations.patterns import LoadPattern
-from core.orchestration.runner.chunks import ChunkWriterConfig, StoragePlan
 from core.infrastructure.storage.backend import StorageBackend
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class StoragePlan:
+    """Configuration for uploading chunks to remote storage."""
+
+    enabled: bool
+    backend: Optional[StorageBackend]
+    relative_path: str
+
+    def upload(self, file_path: Path) -> None:
+        if not (self.enabled and self.backend):
+            return
+        remote_path = f"{self.relative_path}{file_path.name}"
+        self.backend.upload_file(str(file_path), remote_path)
+
+
+@dataclass
+class ChunkWriterConfig:
+    """Configuration for writing Bronze data chunks."""
+
+    out_dir: Path
+    write_csv: bool
+    write_parquet: bool
+    parquet_compression: str
+    storage_plan: StoragePlan
+    chunk_prefix: str
 
 
 def resolve_load_pattern(run_cfg: Dict[str, Any]) -> LoadPattern:

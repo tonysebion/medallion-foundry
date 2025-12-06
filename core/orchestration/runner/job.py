@@ -73,7 +73,7 @@ class ExtractJob:
         self.created_files: List[Path] = []
         self.load_pattern: Optional[LoadPattern] = context.load_pattern
         self.output_formats: Dict[str, bool] = {}
-        from core.orchestration.runner.chunks import StoragePlan
+        from core.pipeline.bronze.plan import StoragePlan
 
         self.storage_plan: Optional[StoragePlan] = None
         self.schema_snapshot: List[Dict[str, str]] = []
