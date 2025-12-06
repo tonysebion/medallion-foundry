@@ -16,7 +16,7 @@ from core.primitives.foundations import exceptions, logging as bf_logging, model
 from core.primitives.foundations.patterns import LoadPattern
 
 
-class TestEnum(foundations_base.RichEnumMixin, str, Enum):
+class RichEnumExample(foundations_base.RichEnumMixin, str, Enum):
     ALPHA = "alpha"
     BETA = "beta"
 
@@ -31,10 +31,10 @@ class ExampleConfig(foundations_base.SerializableMixin):
 
 
 def test_richenum_alias_and_default() -> None:
-    assert TestEnum.normalize("ALPHA") == TestEnum.ALPHA
-    assert TestEnum.normalize(None) == TestEnum.ALPHA
+    assert RichEnumExample.normalize("ALPHA") == RichEnumExample.ALPHA
+    assert RichEnumExample.normalize(None) == RichEnumExample.ALPHA
     with pytest.raises(ValueError):
-        TestEnum.normalize("unknown")
+        RichEnumExample.normalize("unknown")
 
 
 def test_serializable_mixin_round_trip(tmp_path: Path) -> None:
@@ -99,12 +99,15 @@ def test_setup_logging_creates_file(tmp_path: Path) -> None:
     bf_logging.setup_logging(level=logging.DEBUG, format_type="json", log_file=log_file, include_context=True)
     logger = logging.getLogger("primitives.test")
     logger.debug("hello")
-    for handler in logging.getLogger().handlers:
+    root = logging.getLogger()
+    for handler in list(root.handlers):
         handler.flush()
     assert log_file.exists()
     content = log_file.read_text(encoding="utf-8")
     assert "hello" in content
-    logging.getLogger().handlers.clear()
+    for handler in list(root.handlers):
+        handler.close()
+    root.handlers.clear()
 
 
 def test_log_exception_and_performance(tmp_path: Path) -> None:
