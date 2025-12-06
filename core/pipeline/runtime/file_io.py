@@ -12,13 +12,15 @@ Key classes:
 from __future__ import annotations
 
 import csv
-import hashlib
 import json
 import logging
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
+
+# Re-export compute_file_sha256 from infrastructure for backward compatibility
+from core.infrastructure.storage.checksum import compute_file_sha256
 
 logger = logging.getLogger(__name__)
 
@@ -340,22 +342,6 @@ def write_records_to_parquet(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(out_path, index=False, compression=compression)
     logger.info("Wrote %d rows to Parquet at %s", len(records), out_path)
-
-
-def compute_file_sha256(path: Path) -> str:
-    """Compute SHA256 hash of a file.
-
-    Args:
-        path: File path to hash
-
-    Returns:
-        Hexadecimal digest string
-    """
-    hasher = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            hasher.update(chunk)
-    return hasher.hexdigest()
 
 
 # =============================================================================

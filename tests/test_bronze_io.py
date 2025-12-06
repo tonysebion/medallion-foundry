@@ -34,7 +34,11 @@ def test_write_checksum_manifest_includes_file_entries(tmp_path) -> None:
     file_path = tmp_path / "sample.txt"
     file_path.write_text("payload")
 
-    with patch("core.pipeline.bronze.io._utc_isoformat", return_value=MOCK_TIMESTAMP):
+    # Patch at infrastructure level since write_checksum_manifest delegates there
+    with patch(
+        "core.infrastructure.storage.checksum.utc_isoformat",
+        return_value=MOCK_TIMESTAMP,
+    ):
         manifest_path = write_checksum_manifest(
             out_dir=tmp_path,
             files=[file_path],

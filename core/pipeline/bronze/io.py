@@ -18,7 +18,11 @@ from core.pipeline.runtime.file_io import (
     ChunkSizer,
     chunk_records,
     DataFrameMerger,
+)
+from core.infrastructure.storage.checksum import (
     compute_file_sha256,
+    write_checksum_manifest as _infra_write_checksum_manifest,
+    verify_checksum_manifest as _infra_verify_checksum_manifest,
 )
 
 import pandas as pd
@@ -121,34 +125,9 @@ def write_checksum_manifest(
 ) -> Path:
     """Write a checksum manifest containing hashes of produced files.
 
-    Uses compute_file_sha256() from runtime layer for consistent hashing.
+    Delegates to infrastructure.storage.checksum.write_checksum_manifest().
     """
-    manifest: Dict[str, Any] = {
-        "timestamp": _utc_isoformat(),
-        "load_pattern": load_pattern,
-        "files": [],
-    }
-
-    for file_path in files:
-        if not file_path.exists():
-            continue
-        manifest["files"].append(
-            {
-                "path": file_path.name,
-                "size_bytes": file_path.stat().st_size,
-                "sha256": compute_file_sha256(file_path),
-            }
-        )
-
-    if extra_metadata:
-        manifest.update(extra_metadata)
-
-    manifest_path = out_dir / "_checksums.json"
-    with manifest_path.open("w", encoding="utf-8") as handle:
-        json.dump(manifest, handle, indent=2)
-
-    logger.info("Wrote checksum manifest to %s", manifest_path)
-    return manifest_path
+    return _infra_write_checksum_manifest(out_dir, files, load_pattern, extra_metadata)
 
 
 def verify_checksum_manifest(
@@ -156,72 +135,11 @@ def verify_checksum_manifest(
     manifest_name: str = "_checksums.json",
     expected_pattern: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Validate that the files in a Bronze partition match the recorded checksums.
+    """Validate that files in a Bronze partition match recorded checksums.
 
-    Uses compute_file_sha256() from runtime layer for consistent hashing.
-
-    Args:
-        bronze_dir: The Bronze partition directory to verify.
-        manifest_name: Name of the manifest file (defaults to '_checksums.json').
-        expected_pattern: Optional load pattern that must match the manifest.
-
-    Returns:
-        Parsed manifest dictionary if verification succeeds.
-
-    Raises:
-        FileNotFoundError: If the manifest is missing.
-        ValueError: If the manifest is malformed or verification fails.
+    Delegates to infrastructure.storage.checksum.verify_checksum_manifest().
     """
-    manifest_path = bronze_dir / manifest_name
-    if not manifest_path.exists():
-        raise FileNotFoundError(f"Checksum manifest not found at {manifest_path}")
-
-    with manifest_path.open("r", encoding="utf-8") as handle:
-        manifest: Dict[str, Any] = cast(Dict[str, Any], json.load(handle))
-
-    if expected_pattern and manifest.get("load_pattern") != expected_pattern:
-        raise ValueError(
-            f"Manifest load_pattern {manifest.get('load_pattern')} does not match expected {expected_pattern}"
-        )
-
-    files = manifest.get("files")
-    if not isinstance(files, list) or not files:
-        raise ValueError(
-            f"Checksum manifest at {manifest_path} does not list any files to validate"
-        )
-
-    missing_files = []
-    mismatched_files = []
-
-    for entry in files:
-        rel_name = entry.get("path")
-        if not rel_name:
-            raise ValueError(f"Malformed entry in checksum manifest: {entry}")
-        target = bronze_dir / rel_name
-        if not target.exists():
-            missing_files.append(rel_name)
-            continue
-
-        expected_size = entry.get("size_bytes")
-        expected_hash = entry.get("sha256")
-
-        actual_size = target.stat().st_size
-        actual_hash = compute_file_sha256(target)
-
-        if actual_size != expected_size or actual_hash != expected_hash:
-            mismatched_files.append(rel_name)
-
-    if missing_files or mismatched_files:
-        issues = []
-        if missing_files:
-            issues.append(f"missing files: {missing_files}")
-        if mismatched_files:
-            issues.append(f"checksum mismatches: {mismatched_files}")
-        raise ValueError(
-            f"Checksum verification failed for {manifest_path}: {', '.join(issues)}"
-        )
-
-    return manifest
+    return _infra_verify_checksum_manifest(bronze_dir, manifest_name, expected_pattern)
 
 
 # Backward compatibility aliases for internal merge functions

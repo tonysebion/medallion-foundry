@@ -30,6 +30,11 @@ from .policy import (
     VALID_PROVIDER_TYPES,
     StorageMetadata,
 )
+from .checksum import (
+    compute_file_sha256,
+    write_checksum_manifest,
+    verify_checksum_manifest,
+)
 
 # Re-export concrete backends for direct import
 from .s3 import S3Storage, S3StorageBackend
@@ -58,6 +63,10 @@ __all__ = [
     "VALID_PROVIDER_TYPES",
     "enforce_storage_scope",
     "validate_storage_metadata",
+    # Checksum utilities
+    "compute_file_sha256",
+    "write_checksum_manifest",
+    "verify_checksum_manifest",
     # Concrete backends
     "S3Storage",
     "S3StorageBackend",
