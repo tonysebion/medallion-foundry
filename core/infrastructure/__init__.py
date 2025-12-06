@@ -11,13 +11,25 @@ Import from child packages directly to avoid circular imports:
     from core.infrastructure.config import load_configs
 """
 
-# Expose child packages for attribute access
-from . import resilience
-from . import storage
-from . import config
+# Don't import child packages at module level to avoid circular imports
+# Users should import from child packages directly
 
 __all__ = [
     "resilience",
     "storage",
     "config",
 ]
+
+
+def __getattr__(name):
+    """Lazy loading of child packages."""
+    if name == "resilience":
+        from . import resilience
+        return resilience
+    elif name == "storage":
+        from . import storage
+        return storage
+    elif name == "config":
+        from . import config
+        return config
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
