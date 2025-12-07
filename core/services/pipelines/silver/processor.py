@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -22,6 +23,11 @@ from core.services.pipelines.silver.io import DatasetWriter
 from core.runtime.file_io import DataFrameLoader
 from core.infrastructure.storage.uri import StorageURI
 from core.infrastructure.storage.filesystem import create_filesystem
+from core.io.storage.checksum import (
+    ChecksumVerificationResult,
+    verify_checksum_manifest_with_result,
+)
+from core.io.storage.quarantine import quarantine_corrupted_files, QuarantineConfig
 
 if TYPE_CHECKING:
     from core.runtime.config import EnvironmentConfig
@@ -60,6 +66,10 @@ class SilverProcessor:
         write_csv: bool = False,
         parquet_compression: str = "snappy",
         chunk_tag: str | None = None,
+        verify_checksum: bool | None = None,
+        skip_verification_if_fresh: bool = True,
+        freshness_threshold_seconds: int = 300,
+        quarantine_on_failure: bool = True,
     ) -> None:
         self.dataset = dataset
         self.bronze_path = bronze_path
@@ -71,6 +81,12 @@ class SilverProcessor:
         self.parquet_compression = parquet_compression
         self.chunk_tag = chunk_tag
         self.load_batch_id = f"{dataset.dataset_id}-{run_date.isoformat()}"
+
+        # Checksum verification settings
+        self._verify_checksum = verify_checksum
+        self._skip_verification_if_fresh = skip_verification_if_fresh
+        self._freshness_threshold = freshness_threshold_seconds
+        self._quarantine_on_failure = quarantine_on_failure
 
     def run(self) -> SilverProcessorResult:
         metrics = SilverRunMetrics()
@@ -132,8 +148,100 @@ class SilverProcessor:
 
     # ------------------------------------------------------------------ helpers
 
+    def _should_verify_checksum(self) -> bool:
+        """Determine if checksum verification should run.
+
+        Returns True if:
+        - verify_checksum is explicitly True, OR
+        - verify_checksum is None and dataset.silver.require_checksum is True
+
+        Returns False if:
+        - verify_checksum is explicitly False
+        - Fast path: manifest is fresh (less than freshness_threshold seconds old)
+        """
+        # Explicit override takes precedence
+        if self._verify_checksum is not None:
+            verify = self._verify_checksum
+        else:
+            # Fall back to dataset config
+            verify = getattr(self.dataset.silver, "require_checksum", False)
+
+        if not verify:
+            return False
+
+        # Fast path: skip verification if manifest is very fresh
+        if self._skip_verification_if_fresh:
+            manifest_path = self.bronze_path / "_checksums.json"
+            if manifest_path.exists():
+                try:
+                    mtime = manifest_path.stat().st_mtime
+                    age_seconds = time.time() - mtime
+                    if age_seconds < self._freshness_threshold:
+                        logger.debug(
+                            "Skipping checksum verification - manifest age %.1fs < threshold %ds",
+                            age_seconds,
+                            self._freshness_threshold,
+                        )
+                        return False
+                except OSError:
+                    pass  # Proceed with verification if we can't check freshness
+
+        return True
+
+    def _verify_bronze_checksums(self) -> ChecksumVerificationResult:
+        """Verify Bronze chunk checksums and quarantine corrupted files.
+
+        Returns:
+            ChecksumVerificationResult with verification details
+
+        Raises:
+            ValueError: If verification fails and quarantine was performed
+        """
+        result = verify_checksum_manifest_with_result(self.bronze_path)
+
+        if result.valid:
+            logger.info(
+                "Bronze checksum verification passed: %d files verified in %.1fms",
+                len(result.verified_files),
+                result.verification_time_ms,
+            )
+            return result
+
+        # Verification failed - handle corrupted files
+        corrupted = result.mismatched_files + result.missing_files
+        logger.error(
+            "Bronze checksum verification failed for %s: %d corrupted/missing files",
+            self.bronze_path,
+            len(corrupted),
+        )
+
+        if self._quarantine_on_failure and result.mismatched_files:
+            quarantine_result = quarantine_corrupted_files(
+                self.bronze_path,
+                result.mismatched_files,
+                reason="checksum_verification_failed",
+            )
+            logger.warning(
+                "Quarantined %d corrupted files to %s",
+                quarantine_result.count,
+                quarantine_result.quarantine_path,
+            )
+
+        raise ValueError(
+            f"Bronze checksum verification failed for {self.bronze_path}: "
+            f"{len(result.mismatched_files)} mismatched, {len(result.missing_files)} missing. "
+            f"Corrupted files have been quarantined."
+            if self._quarantine_on_failure
+            else f"Bronze checksum verification failed for {self.bronze_path}: "
+            f"{len(result.mismatched_files)} mismatched, {len(result.missing_files)} missing."
+        )
+
     def _load_bronze_dataframe(self) -> pd.DataFrame:
-        """Load Bronze data from local or S3 storage."""
+        """Load Bronze data from local or S3 storage with optional checksum verification."""
+        # Verify checksums if configured
+        if self._should_verify_checksum():
+            self._verify_bronze_checksums()
+
         # Determine storage backend
         input_storage = self.dataset.silver.input_storage
 

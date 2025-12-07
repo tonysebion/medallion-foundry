@@ -2,6 +2,11 @@
 
 Provides optional async path with bounded concurrency for improved throughput
 on pagination-heavy workloads.
+
+Connection Pooling:
+    The AsyncApiClient now supports connection pooling via HttpPoolConfig.
+    A single httpx.AsyncClient instance is reused across requests, significantly
+    reducing connection overhead for high-volume API extractions.
 """
 
 from __future__ import annotations
@@ -9,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 from core.infrastructure.resilience.retry import RetryPolicy, CircuitBreaker, execute_with_retry_async
@@ -27,8 +33,74 @@ except Exception:
     httpx = None
 
 
+@dataclass
+class HttpPoolConfig:
+    """Configuration for HTTP connection pooling.
+
+    Attributes:
+        max_connections: Maximum total connections in the pool
+        max_keepalive_connections: Maximum idle connections to keep alive
+        keepalive_expiry: Seconds before idle connections expire
+        http2: Enable HTTP/2 support (requires h2 package)
+    """
+
+    max_connections: int = 100
+    max_keepalive_connections: int = 20
+    keepalive_expiry: float = 30.0
+    http2: bool = False
+
+    @classmethod
+    def from_dict(cls, data: Optional[Dict[str, Any]]) -> "HttpPoolConfig":
+        """Create from dictionary configuration."""
+        if data is None:
+            return cls()
+        return cls(
+            max_connections=data.get("max_connections", 100),
+            max_keepalive_connections=data.get("max_keepalive_connections", 20),
+            keepalive_expiry=data.get("keepalive_expiry", 30.0),
+            http2=data.get("http2", False),
+        )
+
+
+@dataclass
+class ConnectionMetrics:
+    """Metrics for connection pool usage.
+
+    Attributes:
+        requests_made: Total number of requests made
+        connections_created: Number of new connections created
+        connections_reused: Number of times existing connections were reused
+    """
+
+    requests_made: int = 0
+    connections_created: int = 0
+    connections_reused: int = 0
+
+    @property
+    def reuse_ratio(self) -> float:
+        """Calculate connection reuse ratio (0.0 to 1.0)."""
+        if self.requests_made == 0:
+            return 0.0
+        return self.connections_reused / self.requests_made
+
+
 class AsyncApiClient:
-    """Async HTTP client with retry and rate limiting support."""
+    """Async HTTP client with retry, rate limiting, and connection pooling support.
+
+    The client maintains a persistent httpx.AsyncClient for connection reuse.
+    Use as a context manager for proper cleanup, or call close() explicitly.
+
+    Example:
+        async with AsyncApiClient(base_url, headers) as client:
+            data = await client.get("/endpoint")
+
+        # Or manual management:
+        client = AsyncApiClient(base_url, headers)
+        try:
+            data = await client.get("/endpoint")
+        finally:
+            await client.close()
+    """
 
     _breaker = CircuitBreaker(
         failure_threshold=5, cooldown_seconds=30.0, half_open_max_calls=1
@@ -41,6 +113,7 @@ class AsyncApiClient:
         auth: Optional[Tuple[str, str]] = None,
         timeout: int = 30,
         max_concurrent: int = 5,
+        pool_config: Optional[HttpPoolConfig] = None,
     ):
         if not HTTPX_AVAILABLE:
             raise ImportError(
@@ -53,6 +126,61 @@ class AsyncApiClient:
         self.timeout = timeout
         self.max_concurrent = max_concurrent
         self._semaphore = asyncio.Semaphore(max_concurrent)
+        self._pool_config = pool_config or HttpPoolConfig()
+        self._client: Optional[Any] = None  # httpx.AsyncClient
+        self._metrics = ConnectionMetrics()
+
+    async def _get_client(self) -> Any:
+        """Get or create the pooled httpx.AsyncClient.
+
+        Creates the client lazily on first use with configured pool limits.
+        """
+        if self._client is None:
+            limits = httpx.Limits(
+                max_connections=self._pool_config.max_connections,
+                max_keepalive_connections=self._pool_config.max_keepalive_connections,
+                keepalive_expiry=self._pool_config.keepalive_expiry,
+            )
+            self._client = httpx.AsyncClient(
+                timeout=self.timeout,
+                limits=limits,
+                http2=self._pool_config.http2,
+            )
+            self._metrics.connections_created += 1
+            logger.debug(
+                "Created pooled httpx client with limits: max=%d, keepalive=%d",
+                self._pool_config.max_connections,
+                self._pool_config.max_keepalive_connections,
+            )
+        else:
+            self._metrics.connections_reused += 1
+        return self._client
+
+    async def close(self) -> None:
+        """Close the underlying HTTP client and release connections."""
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+            logger.debug(
+                "Closed pooled client. Metrics: requests=%d, created=%d, reused=%d, ratio=%.2f",
+                self._metrics.requests_made,
+                self._metrics.connections_created,
+                self._metrics.connections_reused,
+                self._metrics.reuse_ratio,
+            )
+
+    async def __aenter__(self) -> "AsyncApiClient":
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Async context manager exit - closes the client."""
+        await self.close()
+
+    @property
+    def metrics(self) -> ConnectionMetrics:
+        """Get connection pool metrics."""
+        return self._metrics
 
     async def get(
         self,
@@ -75,21 +203,22 @@ class AsyncApiClient:
 
         async def _once() -> Dict[str, Any]:
             async with self._semaphore:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    logger.debug("Async request to %s with params %s", url, params)
+                client = await self._get_client()
+                self._metrics.requests_made += 1
+                logger.debug("Async request to %s with params %s", url, params)
 
-                    kwargs: Dict[str, Any] = {
-                        "headers": self.headers,
-                        "params": params or {},
-                    }
-                    if self.auth:
-                        kwargs["auth"] = self.auth
+                kwargs: Dict[str, Any] = {
+                    "headers": self.headers,
+                    "params": params or {},
+                }
+                if self.auth:
+                    kwargs["auth"] = self.auth
 
-                    response = await client.get(url, **kwargs)
-                    response.raise_for_status()
-                    from typing import cast
+                response = await client.get(url, **kwargs)
+                response.raise_for_status()
+                from typing import cast
 
-                    return cast(Dict[str, Any], response.json())
+                return cast(Dict[str, Any], response.json())
 
         def _retry_if(exc: BaseException) -> bool:
             # Retry timeouts, connection errors, and 5xx/429

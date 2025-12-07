@@ -4,7 +4,8 @@ Supports api source type with:
 - Multiple authentication methods (bearer, api_key, basic, none)
 - Pagination (offset, page, cursor, none)
 - Rate limiting and retry logic
-- Async HTTP support
+- Async HTTP support with connection pooling
+- Sync HTTP with configurable connection pool
 - Watermark-based incremental extraction
 """
 
@@ -12,10 +13,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import date
 
 import requests
+from requests.adapters import HTTPAdapter
 
 from core.infrastructure.resilience.retry import (
     RetryPolicy,
@@ -25,7 +28,7 @@ from core.infrastructure.resilience.retry import (
 )
 from core.primitives.catalog.tracing import trace_span
 from core.io.http.auth import build_api_auth
-from core.io.http.session import AsyncApiClient, is_async_enabled
+from core.io.http.session import AsyncApiClient, HttpPoolConfig, is_async_enabled
 
 from core.io.extractors.base import BaseExtractor, register_extractor
 from core.adapters.extractors.pagination import (
@@ -33,7 +36,68 @@ from core.adapters.extractors.pagination import (
     build_pagination_state,
 )
 
+
+@dataclass
+class SyncPoolConfig:
+    """Configuration for synchronous HTTP connection pooling.
+
+    These settings configure the requests.Session HTTPAdapter for
+    connection reuse across API requests.
+
+    Attributes:
+        pool_connections: Number of urllib3 connection pools to cache
+        pool_maxsize: Maximum connections per pool (per host)
+        pool_block: Block when pool is full (vs raise error)
+        max_retries: Maximum retries for connection-level errors (0 to disable)
+    """
+
+    pool_connections: int = 10
+    pool_maxsize: int = 10
+    pool_block: bool = False
+    max_retries: int = 0
+
+    @classmethod
+    def from_dict(cls, data: Optional[Dict[str, Any]]) -> "SyncPoolConfig":
+        """Create from dictionary configuration."""
+        if data is None:
+            return cls()
+        return cls(
+            pool_connections=data.get("pool_connections", 10),
+            pool_maxsize=data.get("pool_maxsize", 10),
+            pool_block=data.get("pool_block", False),
+            max_retries=data.get("max_retries", 0),
+        )
+
 logger = logging.getLogger(__name__)
+
+
+def _create_pooled_session(pool_config: Optional[SyncPoolConfig] = None) -> requests.Session:
+    """Create a requests.Session with explicit connection pooling configuration.
+
+    Args:
+        pool_config: Pool configuration. Uses defaults if None.
+
+    Returns:
+        Configured requests.Session with HTTPAdapter mounted
+    """
+    config = pool_config or SyncPoolConfig()
+    session = requests.Session()
+
+    adapter = HTTPAdapter(
+        pool_connections=config.pool_connections,
+        pool_maxsize=config.pool_maxsize,
+        pool_block=config.pool_block,
+        max_retries=config.max_retries,
+    )
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+
+    logger.debug(
+        "Created pooled session with connections=%d, maxsize=%d",
+        config.pool_connections,
+        config.pool_maxsize,
+    )
+    return session
 
 
 @register_extractor("api")
@@ -42,6 +106,7 @@ class ApiExtractor(BaseExtractor):
 
     Supports bearer token, API key, and basic authentication. Handles
     various pagination strategies and includes rate limiting support.
+    Connection pooling is configurable for both sync and async paths.
     """
 
     def get_watermark_config(self, cfg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -253,15 +318,18 @@ class ApiExtractor(BaseExtractor):
         run_cfg: Dict[str, Any],
         auth: Optional[Tuple[str, str]] = None,
     ) -> List[Dict[str, Any]]:
-        """Async variant of pagination using httpx client.
+        """Async variant of pagination using httpx client with connection pooling.
 
-        Executes sequentially for correctness; still benefits from async I/O.
+        Uses a single pooled AsyncApiClient for all requests, significantly
+        reducing connection overhead for paginated extractions.
         """
         timeout = run_cfg.get("timeout_seconds", 30)
         max_conc = api_cfg.get("max_concurrency", 5)
-        client = AsyncApiClient(
-            base_url, headers, auth=auth, timeout=timeout, max_concurrent=max_conc
-        )
+
+        # Build pool config from api_cfg if present
+        pool_cfg_dict = api_cfg.get("http_pool", {})
+        pool_config = HttpPoolConfig.from_dict(pool_cfg_dict) if pool_cfg_dict else None
+
         limiter = RateLimiter.from_config(
             api_cfg, run_cfg, component="api_extractor"
         )
@@ -269,42 +337,53 @@ class ApiExtractor(BaseExtractor):
         pagination_cfg = api_cfg.get("pagination", {}) or {}
         state = build_pagination_state(pagination_cfg, params)
 
-        async def _get(params_local: Dict[str, Any]) -> Dict[str, Any]:
-            if limiter:
-                await limiter.async_acquire()
-            with trace_span("api.request"):
-                return await client.get(endpoint, params=params_local)
-
         all_records: List[Dict[str, Any]] = []
 
-        while state.should_fetch_more():
-            data = await _get(state.build_params())
-            records = self._extract_records(data, api_cfg)
-            if not records:
-                break
+        # Use context manager for proper cleanup
+        async with AsyncApiClient(
+            base_url, headers, auth=auth, timeout=timeout,
+            max_concurrent=max_conc, pool_config=pool_config
+        ) as client:
+            async def _get(params_local: Dict[str, Any]) -> Dict[str, Any]:
+                if limiter:
+                    await limiter.async_acquire()
+                with trace_span("api.request"):
+                    return await client.get(endpoint, params=params_local)
 
-            all_records.extend(records)
-            logger.info(
-                "Fetched %d records %s (total: %d)",
-                len(records),
-                state.describe(),
-                len(all_records),
+            while state.should_fetch_more():
+                data = await _get(state.build_params())
+                records = self._extract_records(data, api_cfg)
+                if not records:
+                    break
+
+                all_records.extend(records)
+                logger.info(
+                    "Fetched %d records %s (total: %d)",
+                    len(records),
+                    state.describe(),
+                    len(all_records),
+                )
+
+                if state.max_records > 0 and len(all_records) >= state.max_records:
+                    all_records = all_records[: state.max_records]
+                    logger.info("Reached max_records limit of %d", state.max_records)
+                    break
+
+                if not state.on_records(records, data):
+                    break
+
+            if (
+                isinstance(state, PagePaginationState)
+                and state.max_pages
+                and state.max_pages_limit_hit
+            ):
+                logger.info("Reached max_pages limit of %d", state.max_pages)
+
+            # Log connection metrics
+            logger.debug(
+                "Async pagination complete. Connection reuse ratio: %.2f",
+                client.metrics.reuse_ratio,
             )
-
-            if state.max_records > 0 and len(all_records) >= state.max_records:
-                all_records = all_records[: state.max_records]
-                logger.info("Reached max_records limit of %d", state.max_records)
-                break
-
-            if not state.on_records(records, data):
-                break
-
-        if (
-            isinstance(state, PagePaginationState)
-            and state.max_pages
-            and state.max_pages_limit_hit
-        ):
-            logger.info("Reached max_pages limit of %d", state.max_pages)
 
         return all_records
 
@@ -318,7 +397,11 @@ class ApiExtractor(BaseExtractor):
         api_cfg = source_cfg["api"]
         run_cfg = source_cfg["run"]
 
-        session = requests.Session()
+        # Build sync pool config from api_cfg if present
+        sync_pool_dict = api_cfg.get("sync_pool", {})
+        sync_pool_config = SyncPoolConfig.from_dict(sync_pool_dict) if sync_pool_dict else None
+        session = _create_pooled_session(sync_pool_config)
+
         headers, auth = build_api_auth(api_cfg)
 
         base_url = api_cfg["base_url"]
