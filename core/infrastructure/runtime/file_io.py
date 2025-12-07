@@ -15,7 +15,7 @@ import csv
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import pandas as pd
 
@@ -300,7 +300,7 @@ class DataFrameWriter:
         return files
 
 
-def write_records_to_csv(records: list[dict[str, Any]], out_path: Path) -> None:
+def write_records_to_csv(records: Sequence[Any], out_path: Path) -> None:
     """Write list of records to CSV file.
 
     Handles both dict records (written as CSV with header) and non-dict
@@ -331,7 +331,7 @@ def write_records_to_csv(records: list[dict[str, Any]], out_path: Path) -> None:
 
 
 def write_records_to_parquet(
-    records: list[dict[str, Any]],
+    records: Sequence[Any],
     out_path: Path,
     compression: str = "snappy",
 ) -> None:

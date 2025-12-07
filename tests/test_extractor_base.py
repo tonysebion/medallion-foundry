@@ -1,6 +1,7 @@
 """Tests for extractor registry and BaseExtractor watermark flow."""
 
 from datetime import date
+from pathlib import Path
 
 
 from core.infrastructure.io.extractors.base import (
@@ -11,7 +12,7 @@ from core.infrastructure.io.extractors.base import (
     BaseExtractor,
     ExtractionResult,
 )
-from core.foundation.state.watermark import Watermark
+from core.foundation.state.watermark import Watermark, WatermarkStore, WatermarkType
 
 
 @register_extractor("test-source")
@@ -23,22 +24,29 @@ class TestExtractor(BaseExtractor):
         return {"column": "updated_at", "type": "timestamp", "enabled": True}
 
 
-class DummyWatermarkStore:
+class DummyWatermarkStore(WatermarkStore):
     def __init__(self):
-        self.saved = []
+        super().__init__(storage_backend="local", local_path=Path(".state/test-watermarks"))
+        self.saved: list[Watermark] = []
         self.watermark = Watermark(
             source_key="sys.tbl",
             watermark_column="updated_at",
             watermark_value="cursor-0",
         )
 
-    def get(self, system, table, column, watermark_type):
+    def get(
+        self,
+        system: str,
+        table: str,
+        column: str,
+        watermark_type: WatermarkType,
+    ) -> Watermark:
         assert system == "sys"
         assert table == "tbl"
         assert column == "updated_at"
         return self.watermark
 
-    def save(self, watermark):
+    def save(self, watermark: Watermark) -> None:
         self.saved.append(watermark)
 
 

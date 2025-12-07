@@ -66,6 +66,11 @@ class BaseSyntheticGenerator:
         """Generate a random monetary amount."""
         return round(self.rng.uniform(min_val, max_val), decimals)
 
+    def generate_t0(self, run_date: date) -> pd.DataFrame:
+        """Generate the initial (T0) dataset for tests."""
+
+        raise NotImplementedError("Subclasses must implement generate_t0")
+
 
 class ClaimsGenerator(BaseSyntheticGenerator):
     """Generate healthcare claims data."""

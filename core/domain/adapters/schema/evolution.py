@@ -475,7 +475,7 @@ def apply_evolution_rules(
 
         return result
 
-    return df
+    raise ValueError(f"Unsupported schema evolution mode: {config.mode}")
 
 
 def parse_evolution_config(config: Dict[str, Any]) -> Optional[EvolutionConfig]:

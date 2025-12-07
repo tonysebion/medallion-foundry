@@ -10,7 +10,7 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
-import fsspec
+import fsspec  # type: ignore[import]
 
 if TYPE_CHECKING:
     from core.infrastructure.runtime.config import EnvironmentConfig
