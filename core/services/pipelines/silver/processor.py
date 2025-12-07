@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Tuple, cast, TYPE_CHECKING
 
 import pandas as pd
 
@@ -27,7 +27,11 @@ from core.io.storage.checksum import (
     ChecksumVerificationResult,
     verify_checksum_manifest_with_result,
 )
-from core.io.storage.quarantine import quarantine_corrupted_files, QuarantineConfig
+from core.io.storage.quarantine import (
+    QuarantineConfig,
+    QuarantineResult,
+    quarantine_corrupted_files,
+)
 
 if TYPE_CHECKING:
     from core.runtime.config import EnvironmentConfig
@@ -49,6 +53,8 @@ class SilverProcessorResult:
     outputs: Dict[str, List[Path]] = field(default_factory=dict)
     schema_snapshot: List[Dict[str, str]] = field(default_factory=list)
     metrics: SilverRunMetrics = field(default_factory=SilverRunMetrics)
+    checksum_result: Optional[ChecksumVerificationResult] = None
+    quarantine_result: Optional[QuarantineResult] = None
 
 
 class SilverProcessor:
@@ -95,6 +101,22 @@ class SilverProcessor:
                 "Silver disabled for %s; skipping promotion", self.dataset.dataset_id
             )
             return SilverProcessorResult(metrics=metrics)
+
+        checksum_result: Optional[ChecksumVerificationResult] = None
+        quarantine_result: Optional[QuarantineResult] = None
+        if self._should_verify_checksum():
+            checksum_result, quarantine_result = self._verify_bronze_checksums()
+            if not checksum_result.valid:
+                reason = (
+                    " Corrupted files have been quarantined."
+                    if self._quarantine_on_failure
+                    else ""
+                )
+                raise ValueError(
+                    f"Bronze checksum verification failed for {self.bronze_path}: "
+                    f"{len(checksum_result.mismatched_files)} mismatched, "
+                    f"{len(checksum_result.missing_files)} missing.{reason}"
+                )
 
         df = self._load_bronze_dataframe()
         metrics.rows_read = len(df)
@@ -143,7 +165,11 @@ class SilverProcessor:
             metrics.rows_written += len(enriched)
 
         return SilverProcessorResult(
-            outputs=outputs, schema_snapshot=schema_snapshot, metrics=metrics
+            outputs=outputs,
+            schema_snapshot=schema_snapshot,
+            metrics=metrics,
+            checksum_result=checksum_result,
+            quarantine_result=quarantine_result,
         )
 
     # ------------------------------------------------------------------ helpers
@@ -188,14 +214,13 @@ class SilverProcessor:
 
         return True
 
-    def _verify_bronze_checksums(self) -> ChecksumVerificationResult:
+    def _verify_bronze_checksums(
+        self,
+    ) -> Tuple[ChecksumVerificationResult, Optional[QuarantineResult]]:
         """Verify Bronze chunk checksums and quarantine corrupted files.
 
         Returns:
-            ChecksumVerificationResult with verification details
-
-        Raises:
-            ValueError: If verification fails and quarantine was performed
+            Tuple of verification result and optional quarantine result.
         """
         result = verify_checksum_manifest_with_result(self.bronze_path)
 
@@ -205,9 +230,8 @@ class SilverProcessor:
                 len(result.verified_files),
                 result.verification_time_ms,
             )
-            return result
+            return result, None
 
-        # Verification failed - handle corrupted files
         corrupted = result.mismatched_files + result.missing_files
         logger.error(
             "Bronze checksum verification failed for %s: %d corrupted/missing files",
@@ -215,6 +239,7 @@ class SilverProcessor:
             len(corrupted),
         )
 
+        quarantine_result: Optional[QuarantineResult] = None
         if self._quarantine_on_failure and result.mismatched_files:
             quarantine_result = quarantine_corrupted_files(
                 self.bronze_path,
@@ -227,21 +252,10 @@ class SilverProcessor:
                 quarantine_result.quarantine_path,
             )
 
-        raise ValueError(
-            f"Bronze checksum verification failed for {self.bronze_path}: "
-            f"{len(result.mismatched_files)} mismatched, {len(result.missing_files)} missing. "
-            f"Corrupted files have been quarantined."
-            if self._quarantine_on_failure
-            else f"Bronze checksum verification failed for {self.bronze_path}: "
-            f"{len(result.mismatched_files)} mismatched, {len(result.missing_files)} missing."
-        )
+        return result, quarantine_result
 
     def _load_bronze_dataframe(self) -> pd.DataFrame:
         """Load Bronze data from local or S3 storage with optional checksum verification."""
-        # Verify checksums if configured
-        if self._should_verify_checksum():
-            self._verify_bronze_checksums()
-
         # Determine storage backend
         input_storage = self.dataset.silver.input_storage
 

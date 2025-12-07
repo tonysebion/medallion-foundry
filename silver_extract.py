@@ -9,7 +9,7 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple, TYPE_CHECKING
 
 import pandas as pd
 
@@ -69,6 +69,10 @@ from core.services.pipelines.silver.processor import (
 
 logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from core.io.storage.checksum import ChecksumVerificationResult
+    from core.io.storage.quarantine import QuarantineResult
+
 
 def parse_primary_keys(raw: str | None) -> List[str]:
     if not raw:
@@ -127,6 +131,36 @@ def derive_relative_partition(bronze_path: Path) -> Path:
 
 def _default_silver_cfg() -> Dict[str, Any]:
     return default_silver_config()
+
+
+def _append_checksum_metadata(
+    extra: Dict[str, Any],
+    checksum_result: Optional["ChecksumVerificationResult"],
+    quarantine_result: Optional["QuarantineResult"],
+) -> None:
+    """Augment metadata dictionary with checksum/quarantine details."""
+    extra["checksum_performed"] = checksum_result is not None
+    if checksum_result:
+        extra.update(
+            {
+                "checksum_valid": checksum_result.valid,
+                "checksum_verified_files": len(checksum_result.verified_files),
+                "checksum_mismatched_files": len(checksum_result.mismatched_files),
+                "checksum_missing_files": len(checksum_result.missing_files),
+                "checksum_verification_time_ms": checksum_result.verification_time_ms,
+            }
+        )
+    if quarantine_result:
+        extra.update(
+            {
+                "quarantine_count": quarantine_result.count,
+                "quarantine_failed_count": len(quarantine_result.failed_files),
+                "quarantine_reason": quarantine_result.reason,
+                "quarantine_path": str(quarantine_result.quarantine_path)
+                if quarantine_result.quarantine_path
+                else None,
+            }
+        )
 
 
 def _derive_bronze_path_from_config(cfg: Dict[str, Any], run_date: dt.date) -> Path:
@@ -620,6 +654,11 @@ class SilverPromotionService:
             "bronze_owner": dataset.bronze.owner_team,
             "silver_owner": dataset.silver.semantic_owner,
         }
+        _append_checksum_metadata(
+            extra,
+            result.checksum_result,
+            result.quarantine_result,
+        )
         write_batch_metadata(
             silver_partition,
             record_count,
@@ -1031,6 +1070,11 @@ class SilverPromotionService:
             "bronze_owner": dataset.bronze.owner_team,
             "silver_owner": dataset.silver.semantic_owner,
         }
+        _append_checksum_metadata(
+            extra,
+            result.checksum_result,
+            result.quarantine_result,
+        )
         chunk_meta = {
             "timestamp": utc_isoformat(),
             "chunk_tag": self.args.chunk_tag,
