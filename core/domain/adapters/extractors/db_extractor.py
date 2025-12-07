@@ -12,6 +12,7 @@ import os
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import date
 
+from core.foundation.primitives.exceptions import ExtractionError
 from core.infrastructure.io.extractors.base import BaseExtractor, register_extractor
 from core.domain.adapters.extractors.db_runner import fetch_records_from_query
 from core.domain.adapters.extractors.cursor_state import (
@@ -97,12 +98,16 @@ class DbExtractor(BaseExtractor, RateLimitMixin):
         # Get connection string from environment
         conn_env = db_cfg.get("conn_str_env")
         if not conn_env:
-            raise ValueError("db.conn_str_env is required in config for type=db")
+            raise ExtractionError(
+                "db.conn_str_env is required in config for type=db",
+                extractor_type="db",
+            )
 
         conn_str = os.environ.get(conn_env)
         if not conn_str:
-            raise ValueError(
-                f"Environment variable '{conn_env}' not set for DB connection string"
+            raise ExtractionError(
+                f"Environment variable '{conn_env}' not set for DB connection string",
+                extractor_type="db",
             )
 
         base_query = db_cfg["base_query"]

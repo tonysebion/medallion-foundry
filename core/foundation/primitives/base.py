@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, fields
 from enum import Enum
-from typing import Any, ClassVar, Dict, List, Type, TypeVar
+from typing import Any, ClassVar, Dict, List, Type, TypeVar, cast
 
 T = TypeVar("T", bound="SerializableMixin")
 
@@ -57,14 +57,19 @@ class RichEnumMixin:
     _aliases: ClassVar[Dict[str, str]] = {}
     _descriptions: ClassVar[Dict[str, str]] = {}
     _default: ClassVar[str | None] = None  # Member name for default (e.g., "ALLOW")
+    value: Any
+
+    @classmethod
+    def _member_map(cls) -> Dict[str, "RichEnumMixin"]:
+        return cast(Dict[str, "RichEnumMixin"], getattr(cls, "__members__", {}))
 
     @classmethod
     def choices(cls) -> List[str]:
         """Return list of valid enum values."""
-        return [member.value for member in cls]  # type: ignore[attr-defined]
+        return [member.value for member in cls._member_map().values()]
 
     @classmethod
-    def normalize(cls, raw: str | None) -> "RichEnumMixin":
+    def normalize(cls, raw: RawEnumInput) -> "RichEnumMixin":
         """Parse a string value into this enum, handling aliases and case.
 
         Args:
@@ -82,8 +87,9 @@ class RichEnumMixin:
         # Handle None - return default if defined
         if raw is None:
             default_name = getattr(cls, "_default", None)
-            if default_name is not None:
-                return cls[default_name]  # type: ignore[attr-defined]
+            members = cls._member_map()
+            if default_name is not None and default_name in members:
+                return members[default_name]
             raise ValueError(f"{cls.__name__} value must be provided")
 
         candidate = raw.strip().lower()
@@ -93,7 +99,7 @@ class RichEnumMixin:
         canonical = aliases.get(candidate, candidate)
 
         # Find matching member
-        for member in cls:  # type: ignore[attr-defined]
+        for member in cls._member_map().values():
             if member.value == canonical:
                 return member
 
@@ -103,8 +109,9 @@ class RichEnumMixin:
 
     def describe(self) -> str:
         """Return human-readable description of this enum value."""
-        descriptions = getattr(self.__class__, "_descriptions", {})
-        return descriptions.get(self.value, self.value)  # type: ignore[attr-defined]
+        descriptions = cast(Dict[str, str], getattr(self.__class__, "_descriptions", {}))
+        value_str = str(self.value)
+        return descriptions.get(value_str, value_str)
 
 
 class SerializableMixin:
@@ -129,7 +136,10 @@ class SerializableMixin:
 
         Handles nested dataclasses, enums, and Path objects.
         """
-        return _serialize_value(asdict(self))
+        result = _serialize_value(asdict(cast(Any, self)))
+        if not isinstance(result, dict):
+            raise TypeError("expected dataclass to serialize to a dict")
+        return cast(Dict[str, Any], result)
 
     @classmethod
     def from_dict(cls: Type[T], data: Dict[str, Any]) -> T:
@@ -146,7 +156,8 @@ class SerializableMixin:
             nested types may need to override this method.
         """
         # Get field names for this dataclass
-        field_names = {f.name for f in fields(cls)}
+        dataclass_fields = fields(cast(Type[Any], cls))
+        field_names = {f.name for f in dataclass_fields}
 
         # Filter to only known fields
         filtered = {k: v for k, v in data.items() if k in field_names}

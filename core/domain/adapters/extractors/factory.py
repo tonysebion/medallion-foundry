@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Type, cast
 
 import core.domain.adapters.extractors as extractors_pkg
+from core.foundation.primitives.exceptions import ConfigValidationError
 from core.infrastructure.io.extractors.base import (
     BaseExtractor,
     EXTRACTOR_REGISTRY,
@@ -53,9 +54,10 @@ def get_extractor(
         module_name = custom_cfg.get("module")
         class_name = custom_cfg.get("class_name")
         if not module_name or not class_name:
-            raise ValueError(
+            raise ConfigValidationError(
                 "custom extractor requires both 'module' and 'class_name' "
-                "in source.custom_extractor"
+                "in source.custom_extractor",
+                key="source.custom_extractor",
             )
 
         module = importlib.import_module(module_name)
@@ -66,8 +68,9 @@ def get_extractor(
     extractor_cls = get_extractor_class(src_type)
     if extractor_cls is None:
         registered = ", ".join(EXTRACTOR_REGISTRY.keys())
-        raise ValueError(
-            f"Unknown source.type: '{src_type}'. Registered types: {registered or 'none'}"
+        raise ConfigValidationError(
+            f"Unknown source.type: '{src_type}'. Registered types: {registered or 'none'}",
+            key="source.type",
         )
 
     if src_type == "db_multi":

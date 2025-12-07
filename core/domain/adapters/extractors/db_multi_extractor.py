@@ -45,6 +45,7 @@ from core.domain.adapters.extractors.cursor_state import (
 )
 from core.domain.adapters.extractors.db_runner import fetch_records_from_query
 from core.domain.adapters.extractors.mixins import default_retry
+from core.foundation.primitives.exceptions import ExtractionError
 from core.infrastructure.io.extractors.base import BaseExtractor, register_extractor
 
 logger = logging.getLogger(__name__)
@@ -273,20 +274,28 @@ class DbMultiExtractor(BaseExtractor):
         conn_env = conn_ref or db_cfg.get("conn_str_env")
 
         if not conn_env:
-            raise ValueError(
-                "db_multi source requires connection_ref or db.conn_str_env"
+            raise ExtractionError(
+                "db_multi source requires connection_ref or db.conn_str_env",
+                extractor_type="db_multi",
+                system=system,
             )
 
         conn_str = os.environ.get(conn_env)
         if not conn_str:
-            raise ValueError(
-                f"Environment variable '{conn_env}' not set for DB connection"
+            raise ExtractionError(
+                f"Environment variable '{conn_env}' not set for DB connection",
+                extractor_type="db_multi",
+                system=system,
             )
 
         # Parse entity configs
         entities_raw = source_cfg.get("entities", [])
         if not entities_raw:
-            raise ValueError("db_multi source requires at least one entity in 'entities' list")
+            raise ExtractionError(
+                "db_multi source requires at least one entity in 'entities' list",
+                extractor_type="db_multi",
+                system=system,
+            )
 
         entities = [EntityConfig.from_dict(e) for e in entities_raw]
         logger.info("Extracting %d entities with max_workers=%d", len(entities), self.max_workers)

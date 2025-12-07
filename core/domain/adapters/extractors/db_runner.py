@@ -20,8 +20,9 @@ def fetch_records_from_query(
     """Execute a query and return records plus the max cursor value."""
 
     if driver not in {"pyodbc", "pymssql"}:
-        raise ValueError(
-            f"Unsupported db.driver '{driver}'. Use 'pyodbc' (default) or 'pymssql'."
+        raise ExtractionError(
+            f"Unsupported db.driver '{driver}'. Use 'pyodbc' (default) or 'pymssql'.",
+            extractor_type="db",
         )
 
     conn = pyodbc.connect(conn_str)

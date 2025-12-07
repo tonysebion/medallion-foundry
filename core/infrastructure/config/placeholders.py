@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Any
+from typing import Any, cast
 
 _ENV_VAR_PATTERN = re.compile(r"\$\{([^}:]+)(?::([^}]*))?\}")
 
@@ -61,4 +61,7 @@ def resolve_env_vars(value: Any) -> Any:
 def apply_env_substitution(config: dict[str, Any]) -> dict[str, Any]:
     """Apply strict env substitution for an entire config tree."""
 
-    return substitute_env_vars(config)
+    substituted = substitute_env_vars(config)
+    if not isinstance(substituted, dict):
+        raise TypeError("expected config tree to remain a dict after substitution")
+    return cast(dict[str, Any], substituted)

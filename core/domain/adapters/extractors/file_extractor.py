@@ -13,6 +13,7 @@ from datetime import date
 import pandas as pd
 import fsspec
 
+from core.foundation.primitives.exceptions import ExtractionError
 from core.infrastructure.io.extractors.base import BaseExtractor, register_extractor
 from core.infrastructure.io.storage import StorageURI, create_filesystem
 
@@ -56,9 +57,10 @@ class FileExtractor(BaseExtractor):
         # CRITICAL SAFETY CHECK: Prevent reading metadata files as data
         filename = Path(path_str).name
         if filename.startswith("_"):
-            raise ValueError(
+            raise ExtractionError(
                 f"Cannot read metadata file as data: {path_str}. "
-                f"Files starting with '_' are reserved for metadata."
+                f"Files starting with '_' are reserved for metadata.",
+                extractor_type="file",
             )
 
         uri = StorageURI.parse(path_str)
@@ -70,9 +72,10 @@ class FileExtractor(BaseExtractor):
         file_format = (file_format or "csv").lower()
 
         if file_format not in self.SUPPORTED_FORMATS:
-            raise ValueError(
+            raise ExtractionError(
                 f"Unsupported file format '{file_format}'. "
-                f"Supported formats: {sorted(self.SUPPORTED_FORMATS)}"
+                f"Supported formats: {sorted(self.SUPPORTED_FORMATS)}",
+                extractor_type="file",
             )
 
         # Create filesystem (local or S3)
@@ -94,7 +97,10 @@ class FileExtractor(BaseExtractor):
         elif file_format == "parquet":
             records = self._read_parquet_streaming(fs, fsspec_path, file_cfg)
         else:
-            raise ValueError(f"Unsupported file format '{file_format}'")
+            raise ExtractionError(
+                f"Unsupported file format '{file_format}'",
+                extractor_type="file",
+            )
 
         records = self._post_process_records(records, file_cfg)
 
@@ -131,8 +137,9 @@ class FileExtractor(BaseExtractor):
         fieldnames = file_cfg.get("fieldnames")
 
         if not has_header and not fieldnames:
-            raise ValueError(
-                "CSV/TSV files without headers require 'fieldnames' in source.file config"
+            raise ExtractionError(
+                "CSV/TSV files without headers require 'fieldnames' in source.file config",
+                extractor_type="file",
             )
 
         # Use pandas with fsspec for streaming
@@ -171,8 +178,9 @@ class FileExtractor(BaseExtractor):
                 if isinstance(data, dict):
                     data = data.get(part, [])
                 else:
-                    raise ValueError(
-                        f"Cannot follow json_path '{data_path}' in file {path}"
+                    raise ExtractionError(
+                        f"Cannot follow json_path '{data_path}' in file {path}",
+                        extractor_type="file",
                     )
 
         if isinstance(data, list):
@@ -181,7 +189,10 @@ class FileExtractor(BaseExtractor):
         if isinstance(data, dict):
             return [data]
 
-        raise ValueError(f"JSON file {path} must contain an object or list of objects")
+        raise ExtractionError(
+            f"JSON file {path} must contain an object or list of objects",
+            extractor_type="file",
+        )
 
     def _read_jsonl_streaming(
         self, fs: fsspec.AbstractFileSystem, path: str, file_cfg: Dict[str, Any]

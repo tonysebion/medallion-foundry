@@ -1,6 +1,12 @@
 """Configuration enums for entity processing.
 
 These enums define the semantic intent for Bronze and Silver layer processing.
+
+Note: While these enums represent domain concepts (entity kinds, history modes),
+they are placed in infrastructure/config because they are used primarily for
+configuration validation and the intent models (BronzeIntent, SilverIntent).
+Moving them to domain/ would require also moving intent.py to maintain the
+layer hierarchy (infrastructure cannot import from domain).
 """
 
 from __future__ import annotations
