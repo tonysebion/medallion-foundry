@@ -16,7 +16,7 @@ import pandas as pd
 import pytest
 
 from tests.synthetic_data import generate_time_series_data
-from core.pipeline.bronze.io import (
+from core.services.pipelines.bronze.io import (
     chunk_records,
     write_parquet_chunk,
     write_batch_metadata,

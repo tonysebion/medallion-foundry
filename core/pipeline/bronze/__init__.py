@@ -1,13 +1,8 @@
-"""Bronze extraction layer: I/O, chunking, and storage planning.
-
-Primary modules:
-- io: CSV/Parquet file writing utilities
-- models: Storage and chunk configuration dataclasses
-"""
-
-from .models import StoragePlan, ChunkWriterConfig
+" Legacy bronze pipeline shim redirecting to core.services.pipelines.bronze.
+from core.services.pipelines.bronze import base, io, models
 
 __all__ = [
-    "StoragePlan",
-    "ChunkWriterConfig",
+    "base",
+    "io",
+    "models",
 ]

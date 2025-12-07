@@ -38,7 +38,7 @@ def resolve_profile(profile_name: str | None) -> SilverModel | None:
     Uses importlib to avoid static layer violation (L1 -> L2).
     """
     import importlib
-    silver_models = importlib.import_module("core.pipeline.silver.models")
+    silver_models = importlib.import_module("core.services.pipelines.silver.models")
     return silver_models.resolve_profile(profile_name)
 
 from .dataset import DatasetConfig

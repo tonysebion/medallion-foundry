@@ -26,9 +26,9 @@ from core.primitives.foundations.logging import setup_logging
 from core.infrastructure.storage import get_storage_backend
 from core.primitives.foundations.patterns import LoadPattern
 from core.primitives.catalog.hooks import notify_catalog, report_run_metadata
-from core.pipeline.runtime.context import build_run_context, RunContext
+from core.runtime.context import build_run_context, RunContext
 from core.primitives.catalog.webhooks import fire_webhooks
-from core.pipeline.runtime.options import RunOptions
+from core.runtime.options import RunOptions
 from core.infrastructure.config.typed_models import RootConfig
 from core.infrastructure.storage.policy import enforce_storage_scope
 

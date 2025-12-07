@@ -21,7 +21,7 @@ from typing import Any, Dict
 import pandas as pd
 import pytest
 
-from core.pipeline.bronze.io import (
+from core.services.pipelines.bronze.io import (
     chunk_records,
     write_parquet_chunk,
     write_csv_chunk,

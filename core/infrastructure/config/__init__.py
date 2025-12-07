@@ -13,4 +13,4 @@ __all__ = [
 ]
 
 # NOTE: build_relative_path was removed from this module.
-# Import from core.pipeline.runtime.paths.build_bronze_relative_path instead.
+# Import from core.runtime.paths.build_bronze_relative_path instead.

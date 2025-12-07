@@ -20,15 +20,15 @@ from core.infrastructure.config import (
     ensure_root_config,
 )
 from core.infrastructure.config.typed_models import RootConfig
-from core.pipeline.runtime.context import RunContext, build_run_context, load_run_context
-from core.pipeline.bronze.io import (
+from core.runtime.context import RunContext, build_run_context, load_run_context
+from core.services.pipelines.bronze.io import (
     write_batch_metadata,
     verify_checksum_manifest,
     write_checksum_manifest,
 )
 from core.primitives.foundations.logging import setup_logging
 from core.primitives.foundations.patterns import LoadPattern
-from core.pipeline.runtime.paths import build_silver_partition_path, build_bronze_partition
+from core.runtime.paths import build_silver_partition_path, build_bronze_partition
 from core.primitives.catalog.hooks import (
     notify_catalog,
     report_schema_snapshot,
@@ -38,10 +38,10 @@ from core.primitives.catalog.hooks import (
 )
 from core.primitives.catalog.webhooks import fire_webhooks
 from core.primitives.time_utils import utc_isoformat
-from core.pipeline.runtime.options import RunOptions
+from core.runtime.options import RunOptions
 from core.infrastructure.storage.policy import enforce_storage_scope
 from core.infrastructure.storage.locks import file_lock
-from core.pipeline.silver.io import (
+from core.services.pipelines.silver.io import (
     apply_schema_settings,
     build_current_view,
     handle_error_rows,
@@ -49,15 +49,15 @@ from core.pipeline.silver.io import (
     partition_dataframe,
     SilverModelPlanner,
 )
-from core.pipeline.silver.writer import get_silver_writer
-from core.pipeline.silver.models import (
+from core.services.pipelines.silver.writer import get_silver_writer
+from core.services.pipelines.silver.models import (
     SilverModel,
     DEFAULT_ERROR_HANDLING,
     DEFAULT_NORMALIZATION,
     DEFAULT_SCHEMA,
     default_silver_config,
 )
-from core.pipeline.silver.processor import (
+from core.services.pipelines.silver.processor import (
     SilverProcessor,
     SilverProcessorResult,
     build_intent_silver_partition,

@@ -1,15 +1,11 @@
-from .io import (
-    apply_schema_settings,
-    build_current_view,
-    normalize_dataframe,
-)
-from .models import MODEL_PROFILES, SilverModel, resolve_profile
+" Legacy silver pipeline shim redirecting to core.services.pipelines.silver.
+from core.services.pipelines.silver import io, joins, lookups, writer, models, processor
 
 __all__ = [
-    "apply_schema_settings",
-    "build_current_view",
-    "normalize_dataframe",
-    "MODEL_PROFILES",
-    "SilverModel",
-    "resolve_profile",
+    'io',
+    'joins',
+    'lookups',
+    'writer',
+    'models',
+    'processor',
 ]

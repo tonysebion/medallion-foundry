@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from core.pipeline.runtime import paths
-from core.pipeline.runtime.paths import (
+from core.runtime import paths
+from core.runtime.paths import (
     BronzePartition,
     SilverPartition,
     build_bronze_partition,

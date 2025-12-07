@@ -24,7 +24,7 @@ from core.infrastructure.storage.checksum import compute_file_sha256
 from core.infrastructure.storage.path_utils import sanitize_partition_value
 
 # Re-export chunking utilities for backward compatibility
-from core.pipeline.runtime.chunking import ChunkSizer, chunk_records
+from core.runtime.chunking import ChunkSizer, chunk_records
 
 logger = logging.getLogger(__name__)
 
@@ -515,5 +515,4 @@ def normalize_dataframe(
                     lambda val: None if isinstance(val, str) and val == "" else val
                 )
     return result
-
 

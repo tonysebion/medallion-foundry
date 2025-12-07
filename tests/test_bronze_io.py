@@ -3,13 +3,13 @@
 import json
 from unittest.mock import patch
 
-from core.pipeline.bronze.io import write_batch_metadata, write_checksum_manifest
+from core.services.pipelines.bronze.io import write_batch_metadata, write_checksum_manifest
 
 MOCK_TIMESTAMP = "2025-01-01T00:00:00Z"
 
 
 def test_write_batch_metadata_records_timestamp_and_fields(tmp_path) -> None:
-    with patch("core.pipeline.bronze.io._utc_isoformat", return_value=MOCK_TIMESTAMP):
+    with patch("core.services.pipelines.bronze.io._utc_isoformat", return_value=MOCK_TIMESTAMP):
         metadata_path = write_batch_metadata(
             out_dir=tmp_path,
             record_count=11,

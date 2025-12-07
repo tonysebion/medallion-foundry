@@ -6,7 +6,7 @@ from datetime import date
 from pathlib import Path
 
 from core.orchestration.parallel import run_parallel_extracts, _safe_run_extract
-from core.pipeline.runtime.context import RunContext
+from core.runtime.context import RunContext
 from core.primitives.foundations.patterns import LoadPattern
 
 
@@ -253,7 +253,7 @@ class TestParallelExtractsLogging:
 # =============================================================================
 
 from core.orchestration.runner.chunks import ChunkProcessor, ChunkWriter, ChunkWriterConfig
-from core.pipeline.bronze.models import StoragePlan
+from core.services.pipelines.bronze.models import StoragePlan
 import threading
 import time
 

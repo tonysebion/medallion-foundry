@@ -1,4 +1,4 @@
-from core.pipeline.runtime.metadata import Layer, build_run_metadata
+from core.runtime.metadata import Layer, build_run_metadata
 
 
 def _base_config():

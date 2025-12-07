@@ -8,14 +8,14 @@ import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
-from core.pipeline.bronze.base import emit_bronze_metadata, infer_schema
-from core.pipeline.bronze.models import (
+from core.services.pipelines.bronze.base import emit_bronze_metadata, infer_schema
+from core.services.pipelines.bronze.models import (
     build_chunk_writer_config,
     compute_output_formats,
     resolve_load_pattern,
 )
-from core.pipeline.runtime.context import RunContext
-from core.pipeline.runtime.metadata import (
+from core.runtime.context import RunContext
+from core.runtime.metadata import (
     Layer,
     RunStatus,
     build_run_metadata,
@@ -26,9 +26,9 @@ from core.adapters.extractors.factory import (
     ensure_extractors_loaded,
     get_extractor,
 )
-from core.pipeline.bronze.io import chunk_records, verify_checksum_manifest
+from core.services.pipelines.bronze.io import chunk_records, verify_checksum_manifest
 from core.primitives.foundations.patterns import LoadPattern
-from core.orchestration.runner.chunks import ChunkProcessor, ChunkWriter
+from core.services.processing.chunk_processor import ChunkProcessor, ChunkWriter
 from core.infrastructure.storage import get_storage_backend
 from core.adapters.schema.evolution import (
     EvolutionConfig,
@@ -74,7 +74,7 @@ class ExtractJob:
         self.created_files: List[Path] = []
         self.load_pattern: Optional[LoadPattern] = context.load_pattern
         self.output_formats: Dict[str, bool] = {}
-        from core.pipeline.bronze.models import StoragePlan
+        from core.services.pipelines.bronze.models import StoragePlan
 
         self.storage_plan: Optional[StoragePlan] = None
         self.schema_snapshot: List[Dict[str, str]] = []

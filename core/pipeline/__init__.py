@@ -1,14 +1,14 @@
 """Bronze -> Silver data pipeline for bronze-foundry.
 
 This package contains the medallion pipeline layers (siblings):
-- runtime/: RunContext, RunOptions, paths, metadata
+- runtime/: Legacy shim (now implemented in core.runtime)
 - bronze/: Bronze extraction I/O and chunking
 - silver/: Silver transformation models and artifacts
 
 Import from child packages directly:
-    from core.pipeline.runtime import RunContext, build_run_context
-    from core.pipeline.bronze.io import write_csv_chunk
-    from core.pipeline.silver import SilverModel
+    from core.runtime import RunContext, build_run_context
+    from core.services.pipelines.bronze.io import write_csv_chunk
+    from core.services.pipelines.silver import SilverModel
 """
 
 # Expose child packages for attribute access

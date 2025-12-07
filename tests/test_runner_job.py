@@ -11,11 +11,11 @@ from core.orchestration.runner.job import (
     run_extract,
     _load_extractors,
 )
-from core.pipeline.runtime.context import RunContext
-from core.pipeline.runtime.metadata import Layer, RunStatus
+from core.runtime.context import RunContext
+from core.runtime.metadata import Layer, RunStatus
 from core.primitives.foundations.patterns import LoadPattern
 from core.io.extractors.base import BaseExtractor, EXTRACTOR_REGISTRY
-from core.pipeline.bronze.models import StoragePlan
+from core.services.pipelines.bronze.models import StoragePlan
 
 
 class TestBuildExtractor:
