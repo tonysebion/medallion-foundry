@@ -4,17 +4,16 @@ from pathlib import Path
 
 import pytest
 
-from core.infrastructure.storage import backend as backend_mod
-from core.infrastructure.storage.backend import (
+from core.io.storage import base as backend_mod
+from core.storage import (
     HealthCheckResult,
     StorageBackend,
-    _STORAGE_BACKEND_CACHE,
-    BACKEND_REGISTRY,
     register_backend,
     resolve_backend_type,
     get_storage_backend,
 )
-from core.infrastructure.storage.local import LocalStorage
+from core.io.storage.base import _STORAGE_BACKEND_CACHE, BACKEND_REGISTRY
+from core.storage import LocalStorage
 
 
 class DummyBackend(StorageBackend):

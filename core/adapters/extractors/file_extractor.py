@@ -14,8 +14,7 @@ import pandas as pd
 import fsspec
 
 from core.io.extractors.base import BaseExtractor, register_extractor
-from core.infrastructure.storage.uri import StorageURI
-from core.infrastructure.storage.filesystem import create_filesystem
+from core.storage import StorageURI, create_filesystem
 
 if TYPE_CHECKING:
     from core.runtime.config import EnvironmentConfig

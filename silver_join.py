@@ -22,8 +22,7 @@ from core.runtime.context import RunContext, load_run_context
 from core.primitives.foundations.patterns import LoadPattern
 from core.runtime.options import RunOptions
 from core.services.pipelines.silver.models import SilverModel, resolve_profile
-from core.infrastructure.storage import get_storage_backend
-from core.infrastructure.storage.policy import enforce_storage_scope, validate_storage_metadata
+from core.storage import get_storage_backend, enforce_storage_scope, validate_storage_metadata
 from core.services.pipelines.silver.writer import get_silver_writer
 
 logger = logging.getLogger(__name__)

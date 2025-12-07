@@ -5,8 +5,7 @@ import os
 import pytest
 
 from core.runtime.config import EnvironmentConfig
-from core.infrastructure.storage.filesystem import create_filesystem
-from core.infrastructure.storage.uri import StorageURI
+from core.storage import create_filesystem, StorageURI
 
 
 def test_create_filesystem_requires_azure_config():
@@ -26,7 +25,7 @@ def test_create_filesystem_uses_connection_string(monkeypatch):
         called["options"] = options
         return "azurefs"
 
-    monkeypatch.setattr("core.infrastructure.storage.filesystem.fsspec.filesystem", fake_fs)
+    monkeypatch.setattr("core.io.storage.filesystem.fsspec.filesystem", fake_fs)
 
     uri = StorageURI.parse("az://container/blob")
     fs = create_filesystem(uri, env_config=env)
@@ -54,7 +53,7 @@ def test_create_filesystem_uses_account_key(monkeypatch):
         called["options"] = options
         return "azurefs-key"
 
-    monkeypatch.setattr("core.infrastructure.storage.filesystem.fsspec.filesystem", fake_fs)
+    monkeypatch.setattr("core.io.storage.filesystem.fsspec.filesystem", fake_fs)
 
     fs = create_filesystem(StorageURI.parse("az://container/blob"), env_config=env)
 

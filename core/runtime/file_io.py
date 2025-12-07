@@ -19,9 +19,8 @@ from typing import Any
 
 import pandas as pd
 
-# Re-export from infrastructure for backward compatibility
-from core.infrastructure.storage.checksum import compute_file_sha256
-from core.infrastructure.storage.path_utils import sanitize_partition_value
+# Re-export from storage for backward compatibility
+from core.storage import compute_file_sha256, sanitize_partition_value
 
 # Re-export chunking utilities for backward compatibility
 from core.runtime.chunking import ChunkSizer, chunk_records

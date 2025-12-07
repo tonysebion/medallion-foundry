@@ -34,9 +34,9 @@ def test_write_checksum_manifest_includes_file_entries(tmp_path) -> None:
     file_path = tmp_path / "sample.txt"
     file_path.write_text("payload")
 
-    # Patch at infrastructure level since write_checksum_manifest delegates there
+    # Patch at io.storage level since write_checksum_manifest delegates there
     with patch(
-        "core.infrastructure.storage.checksum.utc_isoformat",
+        "core.io.storage.checksum.utc_isoformat",
         return_value=MOCK_TIMESTAMP,
     ):
         manifest_path = write_checksum_manifest(

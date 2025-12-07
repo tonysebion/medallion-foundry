@@ -7,7 +7,7 @@ import boto3
 import pytest
 from moto import mock_aws
 
-from core.infrastructure.storage.s3 import S3Storage, S3StorageBackend
+from core.storage import S3Storage, S3StorageBackend
 
 
 @pytest.fixture

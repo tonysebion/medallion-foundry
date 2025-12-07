@@ -4,7 +4,7 @@ import copy
 import logging
 from typing import Any, Dict
 
-from .schemas import SilverConfig, DataClassification
+from .models.root import SilverConfig, DataClassification
 from pydantic import ValidationError
 from core.primitives.foundations.exceptions import emit_compat, emit_deprecation, DeprecationSpec
 from core.primitives.foundations.patterns import LoadPattern

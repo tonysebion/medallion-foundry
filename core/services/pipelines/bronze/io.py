@@ -19,7 +19,7 @@ from core.runtime.file_io import (
     chunk_records,
     DataFrameMerger,
 )
-from core.infrastructure.storage.checksum import (
+from core.storage import (
     compute_file_sha256,
     write_checksum_manifest as _infra_write_checksum_manifest,
     verify_checksum_manifest as _infra_verify_checksum_manifest,

@@ -21,13 +21,12 @@ from core.infrastructure.config.dataset import (
 )
 from core.services.pipelines.silver.io import DatasetWriter
 from core.runtime.file_io import DataFrameLoader
-from core.infrastructure.storage.uri import StorageURI
-from core.infrastructure.storage.filesystem import create_filesystem
-from core.io.storage.checksum import (
+from core.storage import StorageURI, create_filesystem
+from core.storage import (
     ChecksumVerificationResult,
     verify_checksum_manifest_with_result,
 )
-from core.io.storage.quarantine import (
+from core.storage import (
     QuarantineConfig,
     QuarantineResult,
     quarantine_corrupted_files,

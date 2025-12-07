@@ -6,6 +6,7 @@ This module provides:
 - Validation utilities
 """
 
+# Models
 from core.config.models.enums import (
     EntityKind,
     HistoryMode,
@@ -33,10 +34,41 @@ from core.config.models.helpers import (
     require_bool,
     ensure_bucket_reference,
 )
+from core.config.models.environment import EnvironmentConfig, S3ConnectionConfig
+from core.config.models.root import (
+    DataClassification,
+    RootConfig,
+    SilverConfig,
+    PlatformConfig,
+    SourceConfig,
+    StorageBackend,
+    SourceType,
+    parse_root_config,
+)
+
+# Loaders
+from core.config.loaders import (
+    ensure_root_config,
+    load_config,
+    load_config_with_env,
+    load_configs,
+)
+
+# Placeholders
+from core.config.placeholders import (
+    apply_env_substitution,
+    resolve_env_vars,
+    substitute_env_vars,
+)
+
+# Migration
 from core.config.migration import (
     dataset_to_runtime_config,
     legacy_to_dataset,
 )
+
+# Validation
+from core.config.validation import validate_config_dict
 
 __all__ = [
     # Enums
@@ -59,6 +91,18 @@ __all__ = [
     "is_new_intent_config",
     "DEFAULT_BRONZE_BASE",
     "DEFAULT_SILVER_BASE",
+    # Environment config
+    "EnvironmentConfig",
+    "S3ConnectionConfig",
+    # Root config (Pydantic)
+    "DataClassification",
+    "RootConfig",
+    "SilverConfig",
+    "PlatformConfig",
+    "SourceConfig",
+    "StorageBackend",
+    "SourceType",
+    "parse_root_config",
     # Helpers
     "require_list_of_strings",
     "require_optional_str",
@@ -67,4 +111,15 @@ __all__ = [
     # Migration
     "dataset_to_runtime_config",
     "legacy_to_dataset",
+    # Loaders
+    "ensure_root_config",
+    "load_config",
+    "load_config_with_env",
+    "load_configs",
+    # Placeholders
+    "apply_env_substitution",
+    "resolve_env_vars",
+    "substitute_env_vars",
+    # Validation
+    "validate_config_dict",
 ]

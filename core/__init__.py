@@ -7,21 +7,28 @@ primitives/           # Zero-dependency building blocks
 ├── state/            # watermark, manifest
 └── catalog/          # hooks, webhooks, tracing
 
-infrastructure/       # Cross-cutting concerns
-├── resilience/       # retry, circuit breaker, late_data
-├── storage/          # S3, Azure, local backends
-└── config/           # configuration loading
+config/               # Configuration loading and validation
+├── models/           # DatasetConfig, RootConfig, enums
+├── loaders.py        # load_config, load_configs
+└── validation.py     # validate_config_dict
 
-pipeline/             # Bronze → Silver data flow (siblings)
-├── bronze/           # extraction I/O, chunking
-├── silver/           # transforms, models, artifacts
-└── runtime/          # RunContext, RunOptions, paths
+resilience/           # Fault tolerance (split from retry.py)
+├── retry.py          # RetryPolicy
+├── circuit_breaker.py # CircuitBreaker
+├── rate_limiter.py   # RateLimiter
+└── late_data.py      # LateDataHandler
+
+storage/              # Storage backends (re-exports from io/storage)
+                      # S3, Azure, local backends
+
+services/             # Pipeline processing
+├── pipelines/        # Bronze → Silver data flow
+└── processing/       # Chunk processing
 
 adapters/             # External system integrations
 ├── extractors/       # API, DB, file extractors
 ├── polybase/         # DDL generation
-├── schema/           # schema validation (future)
-└── quality/          # quality rules (future)
+└── schema/           # schema validation
 
 orchestration/        # Execution coordination
 ├── runner/           # job execution
@@ -80,15 +87,17 @@ from core.primitives.state.watermark import Watermark, WatermarkStore, Watermark
 from core.primitives.state.manifest import FileEntry, FileManifest, ManifestTracker
 
 # Resilience
-from core.infrastructure.resilience.retry import (
+from core.resilience import (
     RetryPolicy,
     CircuitBreaker,
     CircuitState,
     RateLimiter,
     execute_with_retry,
     execute_with_retry_async,
+    LateDataMode,
+    LateDataConfig,
+    LateDataResult,
 )
-from core.infrastructure.resilience.late_data import LateDataMode, LateDataConfig, LateDataResult
 
 # Catalog
 from core.primitives.catalog.hooks import (

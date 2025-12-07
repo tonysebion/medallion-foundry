@@ -1,17 +1,11 @@
-"""Runtime configuration helpers."""
+"""Runtime configuration helpers.
 
-from .loaders import (
-    ensure_root_config,
-    load_config,
-    load_config_with_env,
-    load_configs,
-)
-from .placeholders import (
-    apply_env_substitution,
-    resolve_env_vars,
-    substitute_env_vars,
-)
-from .schemas import (
+DEPRECATED: Use core.config instead. This module redirects to the canonical location.
+"""
+
+# Re-export from canonical core.config location
+from core.config import (
+    # Models
     DataClassification,
     DatasetConfig,
     EnvironmentConfig,
@@ -21,13 +15,26 @@ from .schemas import (
     SilverConfig,
     StorageBackend,
     SourceType,
+    # Loaders
+    ensure_root_config,
+    load_config,
+    load_config_with_env,
+    load_configs,
+    parse_root_config,
+    # Placeholders
+    apply_env_substitution,
+    resolve_env_vars,
+    substitute_env_vars,
+    # Migration
     dataset_to_runtime_config,
     is_new_intent_config,
     legacy_to_dataset,
-    parse_root_config,
+    # Validation
+    validate_config_dict,
 )
-from .validation import validate_config_dict
-from .v2_validation import validate_v2_config_dict
+
+# v2_validation stays in infrastructure for now
+from core.infrastructure.config.v2_validation import validate_v2_config_dict
 
 __all__ = [
     "apply_env_substitution",

@@ -29,7 +29,7 @@ from core.adapters.extractors.factory import (
 from core.services.pipelines.bronze.io import chunk_records, verify_checksum_manifest
 from core.primitives.foundations.patterns import LoadPattern
 from core.services.processing.chunk_processor import ChunkProcessor, ChunkWriter
-from core.infrastructure.storage import get_storage_backend
+from core.storage import get_storage_backend
 from core.adapters.schema.evolution import (
     EvolutionConfig,
     SchemaEvolution,

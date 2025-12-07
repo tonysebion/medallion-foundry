@@ -150,7 +150,7 @@ class BaseCloudStorage(StorageBackend):
 
     def __init__(self) -> None:
         """Initialize circuit breakers for each operation."""
-        from core.infrastructure.resilience.retry import CircuitBreaker
+        from core.resilience import CircuitBreaker
 
         def _emit_state(state: str) -> None:
             logger.info(
@@ -198,7 +198,7 @@ class BaseCloudStorage(StorageBackend):
         Returns:
             Configured RetryPolicy instance
         """
-        from core.infrastructure.resilience.retry import RetryPolicy
+        from core.resilience import RetryPolicy
 
         return RetryPolicy(
             max_attempts=5,
@@ -234,7 +234,7 @@ class BaseCloudStorage(StorageBackend):
         Raises:
             Exception from operation if all retries exhausted
         """
-        from core.infrastructure.resilience.retry import execute_with_retry
+        from core.resilience import execute_with_retry
 
         policy = self._build_retry_policy(retry_if, delay_from_exception)
         return execute_with_retry(
@@ -387,7 +387,7 @@ class BaseCloudStorage(StorageBackend):
 
 # Need to import RetryPolicy and CircuitBreaker for type hints
 if TYPE_CHECKING:
-    from core.infrastructure.resilience.retry import RetryPolicy, CircuitBreaker
+    from core.resilience import RetryPolicy, CircuitBreaker
 
 
 # =============================================================================
