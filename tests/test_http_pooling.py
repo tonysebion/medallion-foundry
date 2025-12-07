@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch, MagicMock
 from unittest.mock import AsyncMock, Mock, patch, MagicMock
 import pytest
 
-from core.io.http.session import (
+from core.infrastructure.io.http.session import (
     HttpPoolConfig,
     ConnectionMetrics,
     AsyncApiClient,

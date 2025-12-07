@@ -5,7 +5,7 @@ from datetime import date
 
 import pytest
 
-from core.io.extractors.base import (
+from core.infrastructure.io.extractors.base import (
     EXTRACTOR_REGISTRY,
     register_extractor,
     list_extractor_types,

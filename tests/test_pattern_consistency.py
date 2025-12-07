@@ -159,7 +159,7 @@ class TestExtractorRegistryPattern:
 
     def test_registry_has_expected_types(self) -> None:
         """The extractor registry should have all expected source types."""
-        from core.io.extractors.base import EXTRACTOR_REGISTRY
+        from core.infrastructure.io.extractors.base import EXTRACTOR_REGISTRY
         # Force import of extractor modules to trigger registration
         from core.domain.adapters.extractors import api_extractor  # noqa: F401
         from core.domain.adapters.extractors import db_extractor  # noqa: F401
@@ -175,7 +175,7 @@ class TestExtractorRegistryPattern:
 
     def test_registered_extractors_subclass_base(self) -> None:
         """All registered extractors should subclass BaseExtractor."""
-        from core.io.extractors.base import BaseExtractor, EXTRACTOR_REGISTRY
+        from core.infrastructure.io.extractors.base import BaseExtractor, EXTRACTOR_REGISTRY
         # Force import of extractor modules
         from core.domain.adapters.extractors import api_extractor  # noqa: F401
         from core.domain.adapters.extractors import db_extractor  # noqa: F401
