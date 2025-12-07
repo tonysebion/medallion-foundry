@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 from core.io.extractors.base import BaseExtractor
-from core.primitives.state.watermark import (
+from core.foundation.state.watermark import (
     Watermark,
     WatermarkStore,
     WatermarkType,

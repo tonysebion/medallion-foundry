@@ -29,9 +29,9 @@ class TestRichEnumPattern:
 
     REQUIRED_ENUMS = [
         # Primitives layer
-        "core.primitives.foundations.patterns.LoadPattern",
-        "core.primitives.foundations.models.SilverModel",
-        "core.primitives.state.watermark.WatermarkType",
+        "core.foundation.primitives.patterns.LoadPattern",
+        "core.foundation.primitives.models.SilverModel",
+        "core.foundation.state.watermark.WatermarkType",
         # Config layer
         "core.config.models.root.StorageBackend",
         "core.config.models.root.SourceType",
@@ -115,9 +115,9 @@ class TestSerializableDataclassPattern:
     # Note: RunMetadata uses load_run_metadata() for specialized file loading
     REQUIRED_DATACLASSES = [
         # Primitives layer
-        "core.primitives.state.watermark.Watermark",
-        "core.primitives.state.manifest.FileEntry",
-        "core.primitives.state.manifest.FileManifest",
+        "core.foundation.state.watermark.Watermark",
+        "core.foundation.state.manifest.FileEntry",
+        "core.foundation.state.manifest.FileManifest",
         # Resilience layer
         "core.resilience.retry.RetryPolicy",
         "core.resilience.circuit_breaker.CircuitBreaker",
@@ -197,10 +197,10 @@ class TestInitExportPattern:
     """Ensure all __init__.py files have explicit __all__ exports."""
 
     CORE_PACKAGES = [
-        "core/primitives",
-        "core/primitives/foundations",
-        "core/primitives/state",
-        "core/primitives/catalog",
+        "core/foundation",
+        "core/foundation/primitives",
+        "core/foundation/state",
+        "core/foundation/catalog",
         "core/infrastructure",
         "core/infrastructure/resilience",
         "core/infrastructure/storage",

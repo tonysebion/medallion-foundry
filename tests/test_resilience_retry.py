@@ -18,7 +18,7 @@ from core.resilience import (
     list_error_mappers,
     register_error_mapper,
 )
-from core.primitives.foundations.exceptions import (
+from core.foundation.primitives.exceptions import (
     AuthenticationError,
     ExtractionError,
     RetryExhaustedError,

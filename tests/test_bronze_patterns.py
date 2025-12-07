@@ -29,9 +29,9 @@ from core.services.pipelines.bronze.io import (
     merge_parquet_records,
     merge_csv_records,
 )
-from core.primitives.foundations.patterns import LoadPattern
+from core.foundation.primitives.patterns import LoadPattern
 from core.runtime.config import validate_config_dict
-from core.primitives.state.manifest import ManifestTracker
+from core.foundation.state.manifest import ManifestTracker
 
 
 class TestLoadPatterns:

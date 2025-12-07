@@ -13,7 +13,7 @@ from core.orchestration.runner.job import (
 )
 from core.runtime.context import RunContext
 from core.runtime.metadata import Layer, RunStatus
-from core.primitives.foundations.patterns import LoadPattern
+from core.foundation.primitives.patterns import LoadPattern
 from core.io.extractors.base import BaseExtractor, EXTRACTOR_REGISTRY
 from core.services.pipelines.bronze.models import StoragePlan
 

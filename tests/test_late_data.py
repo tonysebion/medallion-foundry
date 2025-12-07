@@ -23,7 +23,7 @@ from core.resilience import (
     build_late_data_handler,
     parse_backfill_window,
 )
-from core.primitives.time_utils import utc_now
+from core.foundation.time_utils import utc_now
 
 
 class TestLateDataMode:

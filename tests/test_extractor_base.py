@@ -13,7 +13,7 @@ from core.io.extractors.base import (
     BaseExtractor,
     ExtractionResult,
 )
-from core.primitives.state.watermark import Watermark
+from core.foundation.state.watermark import Watermark
 
 
 @register_extractor("test-source")

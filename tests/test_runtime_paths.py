@@ -13,7 +13,7 @@ from core.runtime.paths import (
     build_bronze_relative_path,
     build_silver_partition_path,
 )
-from core.primitives.foundations.patterns import LoadPattern
+from core.foundation.primitives.patterns import LoadPattern
 
 
 class FixedDatetime:
