@@ -3,6 +3,7 @@
 This module provides:
 - StorageBackend: Abstract base class for all storage backends
 - BaseCloudStorage: Abstract base for cloud backends with resilience patterns
+- HealthCheckResult: Result of a storage backend health check
 - Backend registry: Register and retrieve backend factories
 - get_storage_backend(): Factory function to get configured backend
 """
@@ -12,9 +13,11 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import time
 from abc import abstractmethod
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, TypeVar, Union, TYPE_CHECKING
+from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.infrastructure.config.typed_models import RootConfig
@@ -22,6 +25,60 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+
+# =============================================================================
+# Health Check Result
+# =============================================================================
+
+
+@dataclass
+class HealthCheckResult:
+    """Result of a storage backend health check.
+
+    Attributes:
+        is_healthy: Whether the backend is operational
+        capabilities: Dict of capability flags (e.g., versioning, multipart_upload)
+        errors: List of error messages if any checks failed
+        latency_ms: Round-trip latency in milliseconds (if measured)
+        checked_permissions: Dict of permission checks and their results
+    """
+
+    is_healthy: bool
+    capabilities: Dict[str, bool] = field(default_factory=dict)
+    errors: List[str] = field(default_factory=list)
+    latency_ms: Optional[float] = None
+    checked_permissions: Dict[str, bool] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "is_healthy": self.is_healthy,
+            "capabilities": self.capabilities,
+            "errors": self.errors,
+            "latency_ms": self.latency_ms,
+            "checked_permissions": self.checked_permissions,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "HealthCheckResult":
+        """Create from dictionary."""
+        return cls(
+            is_healthy=data.get("is_healthy", False),
+            capabilities=data.get("capabilities", {}),
+            errors=data.get("errors", []),
+            latency_ms=data.get("latency_ms"),
+            checked_permissions=data.get("checked_permissions", {}),
+        )
+
+    def __str__(self) -> str:
+        status = "HEALTHY" if self.is_healthy else "UNHEALTHY"
+        parts = [f"HealthCheck: {status}"]
+        if self.latency_ms is not None:
+            parts.append(f"latency={self.latency_ms:.1f}ms")
+        if self.errors:
+            parts.append(f"errors={len(self.errors)}")
+        return " ".join(parts)
 
 
 # =============================================================================
@@ -46,6 +103,26 @@ class StorageBackend:
 
     def get_backend_type(self) -> str:
         raise NotImplementedError
+
+    def health_check(self) -> HealthCheckResult:
+        """Verify connectivity and permissions before jobs run.
+
+        Performs a pre-flight check to validate:
+        - Connectivity to the storage backend
+        - Read/write/list/delete permissions
+        - Backend-specific capabilities
+
+        Returns:
+            HealthCheckResult with is_healthy, capabilities, and any errors
+
+        Note:
+            Subclasses should override this method to implement
+            backend-specific health checks.
+        """
+        return HealthCheckResult(
+            is_healthy=False,
+            errors=["health_check() not implemented for this backend"],
+        )
 
 
 # =============================================================================

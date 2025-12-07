@@ -690,3 +690,127 @@ def wrap_azure_exception(
         remote_path=container,
         original_error=exc,
     )
+
+
+# =============================================================================
+# Unified Error Mapper
+# =============================================================================
+
+# Type alias for error mapper functions
+ErrorMapper = Callable[[Exception, str, Optional[str]], Exception]
+
+# Registry of backend-specific error mappers
+_ERROR_MAPPERS: Dict[str, ErrorMapper] = {}
+
+
+def register_error_mapper(backend_type: str) -> Callable[[ErrorMapper], ErrorMapper]:
+    """Decorator to register a backend-specific error mapper.
+
+    Usage:
+        @register_error_mapper("my_backend")
+        def my_mapper(exc, operation, context=None):
+            return MyDomainError(...)
+    """
+    def decorator(mapper: ErrorMapper) -> ErrorMapper:
+        _ERROR_MAPPERS[backend_type.lower()] = mapper
+        return mapper
+    return decorator
+
+
+def _default_error_mapper(
+    exc: Exception, operation: str, context: Optional[str] = None
+) -> Exception:
+    """Default error mapper for unknown backend types.
+
+    Returns the original exception wrapped in a generic error message.
+    """
+    if isinstance(exc, (StorageError, ExtractionError, AuthenticationError)):
+        return exc
+
+    error_type = type(exc).__name__
+    return ExtractionError(
+        f"Operation failed: {error_type}: {exc}",
+        extractor_type="unknown",
+        original_error=exc,
+    )
+
+
+@register_error_mapper("s3")
+def _s3_error_mapper(
+    exc: Exception, operation: str, context: Optional[str] = None
+) -> StorageError:
+    """Map S3/boto3 exceptions to StorageError."""
+    return wrap_boto3_exception(exc, operation, bucket=context)
+
+
+@register_error_mapper("azure")
+def _azure_error_mapper(
+    exc: Exception, operation: str, context: Optional[str] = None
+) -> StorageError:
+    """Map Azure exceptions to StorageError."""
+    return wrap_azure_exception(exc, operation, container=context)
+
+
+@register_error_mapper("api")
+def _api_error_mapper(
+    exc: Exception, operation: str, context: Optional[str] = None
+) -> ExtractionError:
+    """Map API/requests exceptions to ExtractionError."""
+    return wrap_requests_exception(exc, operation)
+
+
+@register_error_mapper("local")
+def _local_error_mapper(
+    exc: Exception, operation: str, context: Optional[str] = None
+) -> StorageError:
+    """Map local filesystem exceptions to StorageError."""
+    if isinstance(exc, StorageError):
+        return exc
+
+    error_type = type(exc).__name__
+    return StorageError(
+        f"Local storage operation failed: {error_type}: {exc}",
+        backend_type="local",
+        operation=operation,
+        file_path=context,
+        original_error=exc,
+    )
+
+
+def exception_to_domain_error(
+    exc: Exception,
+    backend_type: str,
+    operation: str,
+    context: Optional[str] = None,
+) -> Exception:
+    """Unified exception mapper that routes to backend-specific wrappers.
+
+    This is the primary entry point for converting third-party exceptions
+    to domain exceptions (StorageError, ExtractionError, etc.).
+
+    Args:
+        exc: The original exception to wrap
+        backend_type: The backend type (s3, azure, local, api, db, etc.)
+        operation: The operation that failed (upload, download, fetch, etc.)
+        context: Optional context (bucket name, container, file path, etc.)
+
+    Returns:
+        A domain exception (StorageError or ExtractionError)
+
+    Example:
+        try:
+            s3_client.upload_file(...)
+        except Exception as exc:
+            raise exception_to_domain_error(exc, "s3", "upload", bucket_name)
+    """
+    # Already a domain exception - return as-is
+    if isinstance(exc, (StorageError, ExtractionError, AuthenticationError, RetryExhaustedError)):
+        return exc
+
+    mapper = _ERROR_MAPPERS.get(backend_type.lower(), _default_error_mapper)
+    return mapper(exc, operation, context)
+
+
+def list_error_mappers() -> list[str]:
+    """Return all registered error mapper backend types."""
+    return sorted(_ERROR_MAPPERS.keys())

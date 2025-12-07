@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import logging
+import os
 import shutil
+import tempfile
+import time
 from pathlib import Path
 from typing import Any, Dict, List
 
-from core.infrastructure.storage.backend import StorageBackend
+from core.infrastructure.storage.backend import HealthCheckResult, StorageBackend
 
 logger = logging.getLogger(__name__)
 
@@ -65,3 +68,102 @@ class LocalStorage(StorageBackend):
 
     def get_backend_type(self) -> str:
         return "local"
+
+    def health_check(self) -> HealthCheckResult:
+        """Verify local filesystem connectivity and permissions.
+
+        Checks:
+        - Base directory exists or can be created
+        - Write permission (create test file)
+        - Read permission (read test file)
+        - List permission (list directory)
+        - Delete permission (delete test file)
+
+        Returns:
+            HealthCheckResult with permission checks and any errors
+        """
+        errors: List[str] = []
+        permissions: Dict[str, bool] = {
+            "read": False,
+            "write": False,
+            "list": False,
+            "delete": False,
+        }
+        capabilities: Dict[str, bool] = {
+            "versioning": False,
+            "multipart_upload": False,
+        }
+
+        start_time = time.monotonic()
+        test_file = None
+
+        try:
+            # Check/create base directory
+            if not self.base_dir.exists():
+                try:
+                    self.base_dir.mkdir(parents=True, exist_ok=True)
+                except OSError as e:
+                    errors.append(f"Cannot create base directory: {e}")
+                    return HealthCheckResult(
+                        is_healthy=False,
+                        errors=errors,
+                        capabilities=capabilities,
+                        checked_permissions=permissions,
+                    )
+
+            # Create a unique test file name
+            test_file = self.base_dir / f"_health_check_{os.getpid()}_{time.time_ns()}.tmp"
+
+            # Test write permission
+            try:
+                test_file.write_text("health_check_test")
+                permissions["write"] = True
+            except OSError as e:
+                errors.append(f"Write permission failed: {e}")
+
+            # Test read permission
+            if permissions["write"]:
+                try:
+                    content = test_file.read_text()
+                    permissions["read"] = content == "health_check_test"
+                    if not permissions["read"]:
+                        errors.append("Read content mismatch")
+                except OSError as e:
+                    errors.append(f"Read permission failed: {e}")
+
+            # Test list permission
+            try:
+                list(self.base_dir.iterdir())
+                permissions["list"] = True
+            except OSError as e:
+                errors.append(f"List permission failed: {e}")
+
+            # Test delete permission
+            if test_file.exists():
+                try:
+                    test_file.unlink()
+                    permissions["delete"] = True
+                    test_file = None  # Mark as cleaned up
+                except OSError as e:
+                    errors.append(f"Delete permission failed: {e}")
+
+        except Exception as e:
+            errors.append(f"Unexpected error during health check: {e}")
+        finally:
+            # Clean up test file if it still exists
+            if test_file is not None and test_file.exists():
+                try:
+                    test_file.unlink()
+                except OSError:
+                    pass
+
+        latency_ms = (time.monotonic() - start_time) * 1000
+        is_healthy = all(permissions.values()) and len(errors) == 0
+
+        return HealthCheckResult(
+            is_healthy=is_healthy,
+            capabilities=capabilities,
+            errors=errors,
+            latency_ms=latency_ms,
+            checked_permissions=permissions,
+        )

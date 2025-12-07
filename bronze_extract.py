@@ -142,6 +142,11 @@ def main() -> int:
         dest="on_failure_webhook",
         help="URL to POST a JSON payload to when the Bronze run fails (can be specified multiple times)",
     )
+    parser.add_argument(
+        "--health-check",
+        action="store_true",
+        help="Run pre-flight storage backend health check and exit (verifies permissions before job runs)",
+    )
 
     args = parser.parse_args()
 
@@ -196,6 +201,10 @@ class BronzeOrchestrator:
 
     def _run(self) -> int:
         self._require_config()
+
+        if self.args.health_check:
+            logger.info("Running storage backend health check")
+            return self._run_health_check()
 
         if self.args.validate_only:
             logger.info("Running configuration validation (no connection tests)")
@@ -269,6 +278,54 @@ class BronzeOrchestrator:
             self.parser.error(
                 "--config is required (unless using --list-backends or --version)"
             )
+
+    def _run_health_check(self) -> int:
+        """Run storage backend health checks for all configs."""
+        all_healthy = True
+        for config_path in self.config_paths:
+            try:
+                logger.info(f"Loading config: {config_path}")
+                cfgs = load_configs(config_path)
+                for cfg in cfgs:
+                    platform = cfg.model_dump()["platform"]
+                    backend_type = platform.get("bronze", {}).get("storage_backend", "s3")
+                    logger.info(f"  Checking {backend_type} backend...")
+
+                    try:
+                        backend = get_storage_backend(platform)
+                        result = backend.health_check()
+
+                        if result.is_healthy:
+                            logger.info(f"  ✓ Health check PASSED (latency: {result.latency_ms:.1f}ms)")
+                            for perm, status in result.checked_permissions.items():
+                                status_str = "✓" if status else "✗"
+                                logger.info(f"    {status_str} {perm}: {'OK' if status else 'FAILED'}")
+                            for cap, enabled in result.capabilities.items():
+                                logger.info(f"    {cap}: {'enabled' if enabled else 'disabled'}")
+                        else:
+                            logger.error(f"  ✗ Health check FAILED")
+                            for error in result.errors:
+                                logger.error(f"    Error: {error}")
+                            for perm, status in result.checked_permissions.items():
+                                status_str = "✓" if status else "✗"
+                                logger.info(f"    {status_str} {perm}: {'OK' if status else 'FAILED'}")
+                            all_healthy = False
+
+                    except Exception as exc:
+                        logger.error(f"  ✗ Backend initialization failed: {exc}")
+                        all_healthy = False
+
+            except Exception as exc:
+                logger.error(f"  ✗ Config load failed: {config_path}")
+                logger.error(f"    Error: {exc}")
+                all_healthy = False
+
+        if all_healthy:
+            logger.info("All health checks passed!")
+        else:
+            logger.error("Some health checks failed - review errors above")
+
+        return 0 if all_healthy else 1
 
     def _validate_configs(self, dry_run: bool) -> int:
         all_valid = True

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import os
+import time
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -11,7 +13,7 @@ from azure.core.exceptions import AzureError, ResourceNotFoundError
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient, ContainerClient
 
-from core.infrastructure.storage.backend import BaseCloudStorage
+from core.infrastructure.storage.backend import BaseCloudStorage, HealthCheckResult
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +143,107 @@ class AzureStorage(BaseCloudStorage):
         self.container.delete_blob(remote_key)
         logger.info("Deleted azure://%s/%s", self.container_name, remote_key)
         return True
+
+    def health_check(self) -> HealthCheckResult:
+        """Verify Azure Blob Storage connectivity and permissions.
+
+        Checks:
+        - Container exists and is accessible
+        - Write permission (upload test blob)
+        - Read permission (download test blob)
+        - List permission (list blobs)
+        - Delete permission (delete test blob)
+
+        Returns:
+            HealthCheckResult with permission checks, capabilities, and any errors
+        """
+        errors: List[str] = []
+        permissions: Dict[str, bool] = {
+            "read": False,
+            "write": False,
+            "list": False,
+            "delete": False,
+        }
+        capabilities: Dict[str, bool] = {
+            "versioning": False,
+            "multipart_upload": True,  # Azure always supports block blobs
+        }
+
+        start_time = time.monotonic()
+        test_blob_name = self._build_remote_path(f"_health_check_{uuid.uuid4().hex}.tmp")
+        test_content = b"health_check_test"
+
+        try:
+            # Check container exists
+            try:
+                self.container.get_container_properties()
+            except ResourceNotFoundError:
+                errors.append(f"Container '{self.container_name}' not found")
+                return HealthCheckResult(
+                    is_healthy=False,
+                    errors=errors,
+                    capabilities=capabilities,
+                    checked_permissions=permissions,
+                    latency_ms=(time.monotonic() - start_time) * 1000,
+                )
+            except AzureError as e:
+                errors.append(f"Container access failed: {type(e).__name__}")
+                return HealthCheckResult(
+                    is_healthy=False,
+                    errors=errors,
+                    capabilities=capabilities,
+                    checked_permissions=permissions,
+                    latency_ms=(time.monotonic() - start_time) * 1000,
+                )
+
+            # Test write permission
+            try:
+                self.container.upload_blob(test_blob_name, test_content, overwrite=True)
+                permissions["write"] = True
+            except AzureError as e:
+                errors.append(f"Write permission failed: {type(e).__name__}")
+
+            # Test read permission
+            if permissions["write"]:
+                try:
+                    blob = self.container.get_blob_client(test_blob_name)
+                    content = blob.download_blob().readall()
+                    permissions["read"] = content == test_content
+                    if not permissions["read"]:
+                        errors.append("Read content mismatch")
+                except AzureError as e:
+                    errors.append(f"Read permission failed: {type(e).__name__}")
+
+            # Test list permission
+            try:
+                list(self.container.list_blobs(name_starts_with=self._build_remote_path("_health_check_")))
+                permissions["list"] = True
+            except AzureError as e:
+                errors.append(f"List permission failed: {type(e).__name__}")
+
+            # Test delete permission
+            if permissions["write"]:
+                try:
+                    self.container.delete_blob(test_blob_name)
+                    permissions["delete"] = True
+                except AzureError as e:
+                    errors.append(f"Delete permission failed: {type(e).__name__}")
+
+        except AzureError as e:
+            errors.append(f"Azure connection error: {type(e).__name__}")
+        except Exception as e:
+            errors.append(f"Unexpected error during health check: {e}")
+
+        latency_ms = (time.monotonic() - start_time) * 1000
+        is_healthy = all(permissions.values()) and len(errors) == 0
+
+        return HealthCheckResult(
+            is_healthy=is_healthy,
+            capabilities=capabilities,
+            errors=errors,
+            latency_ms=latency_ms,
+            checked_permissions=permissions,
+        )
 
     def upload_file(self, local_path: str, remote_path: str) -> bool:
         """Upload a file to Azure Blob Storage.

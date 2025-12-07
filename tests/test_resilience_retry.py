@@ -3,6 +3,7 @@
 These tests verify the resilience patterns used across the framework:
 - RetryPolicy: Exponential backoff with jitter
 - CircuitBreaker: Failure detection and recovery
+- Unified error mapper: Backend-specific exception wrapping
 """
 
 from __future__ import annotations
@@ -13,6 +14,15 @@ from core.infrastructure.resilience.retry import (
     CircuitBreaker,
     CircuitState,
     RetryPolicy,
+    exception_to_domain_error,
+    list_error_mappers,
+    register_error_mapper,
+)
+from core.primitives.foundations.exceptions import (
+    AuthenticationError,
+    ExtractionError,
+    RetryExhaustedError,
+    StorageError,
 )
 
 
@@ -202,3 +212,110 @@ class TestCircuitBreaker:
         assert restored.cooldown_seconds == original.cooldown_seconds
         assert restored.state == original.state
         assert restored._failures == original._failures
+
+
+class TestUnifiedErrorMapper:
+    """Tests for the unified exception_to_domain_error function."""
+
+    def test_list_error_mappers_includes_builtin(self) -> None:
+        """list_error_mappers should include built-in backends."""
+        mappers = list_error_mappers()
+        assert "s3" in mappers
+        assert "azure" in mappers
+        assert "api" in mappers
+        assert "local" in mappers
+
+    def test_passthrough_storage_error(self) -> None:
+        """StorageError should pass through unchanged."""
+        original = StorageError("test error", backend_type="s3", operation="upload")
+        result = exception_to_domain_error(original, "s3", "upload")
+        assert result is original
+
+    def test_passthrough_extraction_error(self) -> None:
+        """ExtractionError should pass through unchanged."""
+        original = ExtractionError("test error", extractor_type="api")
+        result = exception_to_domain_error(original, "api", "fetch")
+        assert result is original
+
+    def test_passthrough_authentication_error(self) -> None:
+        """AuthenticationError should pass through unchanged."""
+        original = AuthenticationError("auth failed", auth_type="api")
+        result = exception_to_domain_error(original, "api", "fetch")
+        assert result is original
+
+    def test_passthrough_retry_exhausted_error(self) -> None:
+        """RetryExhaustedError should pass through unchanged."""
+        original = RetryExhaustedError("retries exhausted", attempts=5, operation="upload")
+        result = exception_to_domain_error(original, "s3", "upload")
+        assert result is original
+
+    def test_s3_mapper_wraps_generic_exception(self) -> None:
+        """S3 mapper should wrap generic exceptions as StorageError."""
+        exc = ValueError("some boto error")
+        result = exception_to_domain_error(exc, "s3", "upload", "my-bucket")
+        assert isinstance(result, StorageError)
+        assert result.details.get("backend_type") == "s3"
+        assert result.details.get("operation") == "upload"
+        assert result.original_error is exc
+
+    def test_azure_mapper_wraps_generic_exception(self) -> None:
+        """Azure mapper should wrap generic exceptions as StorageError."""
+        exc = RuntimeError("azure connection failed")
+        result = exception_to_domain_error(exc, "azure", "download", "my-container")
+        assert isinstance(result, StorageError)
+        assert result.details.get("backend_type") == "azure"
+        assert result.details.get("operation") == "download"
+        assert result.original_error is exc
+
+    def test_api_mapper_wraps_generic_exception(self) -> None:
+        """API mapper should wrap generic exceptions as ExtractionError."""
+        exc = ConnectionError("network error")
+        result = exception_to_domain_error(exc, "api", "fetch")
+        assert isinstance(result, ExtractionError)
+        assert result.details.get("extractor_type") == "api"
+        assert result.original_error is exc
+
+    def test_local_mapper_wraps_generic_exception(self) -> None:
+        """Local mapper should wrap generic exceptions as StorageError."""
+        exc = FileNotFoundError("file not found")
+        result = exception_to_domain_error(exc, "local", "read", "/path/to/file")
+        assert isinstance(result, StorageError)
+        assert result.details.get("backend_type") == "local"
+        assert result.details.get("operation") == "read"
+        assert result.original_error is exc
+
+    def test_unknown_backend_uses_default_mapper(self) -> None:
+        """Unknown backend type should use default mapper."""
+        exc = ValueError("unknown error")
+        result = exception_to_domain_error(exc, "unknown_backend", "operation")
+        assert isinstance(result, ExtractionError)
+        assert result.original_error is exc
+
+    def test_case_insensitive_backend_type(self) -> None:
+        """Backend type matching should be case-insensitive."""
+        exc = ValueError("test")
+        result_lower = exception_to_domain_error(exc, "s3", "upload")
+        result_upper = exception_to_domain_error(exc, "S3", "upload")
+        result_mixed = exception_to_domain_error(exc, "Azure", "upload")
+
+        assert isinstance(result_lower, StorageError)
+        assert isinstance(result_upper, StorageError)
+        assert isinstance(result_mixed, StorageError)
+
+    def test_register_custom_error_mapper(self) -> None:
+        """Custom error mappers can be registered."""
+        @register_error_mapper("custom_backend")
+        def custom_mapper(exc, operation, context=None):
+            return StorageError(
+                f"Custom error: {exc}",
+                backend_type="custom",
+                operation=operation,
+            )
+
+        assert "custom_backend" in list_error_mappers()
+
+        exc = RuntimeError("custom error")
+        result = exception_to_domain_error(exc, "custom_backend", "custom_op")
+        assert isinstance(result, StorageError)
+        assert result.details.get("backend_type") == "custom"
+        assert "Custom error" in str(result)

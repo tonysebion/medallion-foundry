@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import logging
 import os
+import time
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
-from core.infrastructure.storage.backend import BaseCloudStorage
+from core.infrastructure.storage.backend import BaseCloudStorage, HealthCheckResult
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +156,120 @@ class S3Storage(BaseCloudStorage):
         self.client.delete_object(Bucket=self.bucket, Key=remote_key)
         logger.info("Deleted s3://%s/%s", self.bucket, remote_key)
         return True
+
+    def health_check(self) -> HealthCheckResult:
+        """Verify S3 connectivity and permissions.
+
+        Checks:
+        - Bucket exists and is accessible (HEAD bucket)
+        - Write permission (put test object)
+        - Read permission (get test object)
+        - List permission (list objects)
+        - Delete permission (delete test object)
+        - Versioning capability
+
+        Returns:
+            HealthCheckResult with permission checks, capabilities, and any errors
+        """
+        errors: List[str] = []
+        permissions: Dict[str, bool] = {
+            "read": False,
+            "write": False,
+            "list": False,
+            "delete": False,
+        }
+        capabilities: Dict[str, bool] = {
+            "versioning": False,
+            "multipart_upload": True,  # S3 always supports multipart
+        }
+
+        start_time = time.monotonic()
+        test_key = self._build_remote_path(f"_health_check_{uuid.uuid4().hex}.tmp")
+        test_content = b"health_check_test"
+
+        try:
+            # Check bucket exists
+            try:
+                self.client.head_bucket(Bucket=self.bucket)
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code", "Unknown")
+                errors.append(f"Bucket access failed: {error_code}")
+                return HealthCheckResult(
+                    is_healthy=False,
+                    errors=errors,
+                    capabilities=capabilities,
+                    checked_permissions=permissions,
+                    latency_ms=(time.monotonic() - start_time) * 1000,
+                )
+
+            # Test write permission
+            try:
+                self.client.put_object(
+                    Bucket=self.bucket,
+                    Key=test_key,
+                    Body=test_content,
+                )
+                permissions["write"] = True
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code", "Unknown")
+                errors.append(f"Write permission failed: {error_code}")
+
+            # Test read permission
+            if permissions["write"]:
+                try:
+                    response = self.client.get_object(Bucket=self.bucket, Key=test_key)
+                    content = response["Body"].read()
+                    permissions["read"] = content == test_content
+                    if not permissions["read"]:
+                        errors.append("Read content mismatch")
+                except ClientError as e:
+                    error_code = e.response.get("Error", {}).get("Code", "Unknown")
+                    errors.append(f"Read permission failed: {error_code}")
+
+            # Test list permission
+            try:
+                self.client.list_objects_v2(
+                    Bucket=self.bucket,
+                    Prefix=self._build_remote_path("_health_check_"),
+                    MaxKeys=1,
+                )
+                permissions["list"] = True
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code", "Unknown")
+                errors.append(f"List permission failed: {error_code}")
+
+            # Test delete permission
+            if permissions["write"]:
+                try:
+                    self.client.delete_object(Bucket=self.bucket, Key=test_key)
+                    permissions["delete"] = True
+                except ClientError as e:
+                    error_code = e.response.get("Error", {}).get("Code", "Unknown")
+                    errors.append(f"Delete permission failed: {error_code}")
+
+            # Check versioning capability
+            try:
+                versioning = self.client.get_bucket_versioning(Bucket=self.bucket)
+                capabilities["versioning"] = versioning.get("Status") == "Enabled"
+            except ClientError:
+                # Not an error - versioning check is optional
+                pass
+
+        except BotoCoreError as e:
+            errors.append(f"S3 connection error: {e}")
+        except Exception as e:
+            errors.append(f"Unexpected error during health check: {e}")
+
+        latency_ms = (time.monotonic() - start_time) * 1000
+        is_healthy = all(permissions.values()) and len(errors) == 0
+
+        return HealthCheckResult(
+            is_healthy=is_healthy,
+            capabilities=capabilities,
+            errors=errors,
+            latency_ms=latency_ms,
+            checked_permissions=permissions,
+        )
 
     def upload_file(self, local_path: str, remote_path: str) -> bool:
         """Upload a file to S3.
