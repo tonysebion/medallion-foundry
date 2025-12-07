@@ -56,13 +56,18 @@ def file_lock(
                 try:
                     text = lock_path.read_text(encoding="utf-8")
                     pid = int(text.strip())
-                except Exception:
+                except Exception as e:
                     # Lock file has invalid contents -> treat as stale and remove
+                    logging.getLogger(__name__).debug(
+                        "Lock file %s has invalid contents, treating as stale: %s", lock_path, e
+                    )
                     pid = None
                     try:
                         lock_path.unlink()
-                    except Exception:
-                        pass
+                    except Exception as unlink_err:
+                        logging.getLogger(__name__).debug(
+                            "Failed to remove stale lock file %s: %s", lock_path, unlink_err
+                        )
                     continue
                 if pid is not None:
                     try:
@@ -77,8 +82,11 @@ def file_lock(
                         if getattr(exc, "errno", None) == errno.ESRCH:
                             try:
                                 lock_path.unlink()
-                            except Exception:
-                                pass
+                            except Exception as unlink_err:
+                                logging.getLogger(__name__).debug(
+                                    "Failed to remove stale lock file %s (PID %s no longer exists): %s",
+                                    lock_path, pid, unlink_err
+                                )
                             continue
                         # otherwise, don't remove lock; just wait for the poll interval
                         logging.getLogger(__name__).debug(
@@ -97,14 +105,20 @@ def file_lock(
         if fd is not None:
             try:
                 os.close(fd)
-            except Exception:
-                pass
+            except Exception as e:
+                logging.getLogger(__name__).debug(
+                    "Failed to close file descriptor for lock %s: %s", lock_path, e
+                )
         try:
             lock_path.unlink()
             logging.getLogger(__name__).debug(
                 "Released lock %s by pid %s", lock_path, os.getpid()
             )
         except FileNotFoundError:
-            pass
-        except Exception:
-            pass
+            logging.getLogger(__name__).debug(
+                "Lock file %s already removed during cleanup", lock_path
+            )
+        except Exception as e:
+            logging.getLogger(__name__).debug(
+                "Failed to remove lock file %s during cleanup: %s", lock_path, e
+            )

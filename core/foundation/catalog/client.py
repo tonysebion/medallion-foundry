@@ -88,7 +88,14 @@ class OpenMetadataClient:
             api_key="your-api-key",
         )
         schema = client.get_table_schema("database.schema.table")
+
+        # Check if running in stub mode:
+        if client.STUB_MODE:
+            logger.warning("OpenMetadata client is in stub mode")
     """
+
+    # Set to False when implementing real API integration
+    STUB_MODE: bool = True
 
     def __init__(
         self,

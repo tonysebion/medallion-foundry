@@ -164,7 +164,8 @@ class TestCircuitBreaker:
         breaker.record_failure()
         assert breaker.state == CircuitState.CLOSED
         breaker.record_failure()
-        assert breaker.state == CircuitState.OPEN
+        # mypy incorrectly narrows breaker.state after the first assert
+        assert breaker.state == CircuitState.OPEN  # type: ignore[comparison-overlap]
 
     def test_record_success_resets_failures(self) -> None:
         """Recording success should reset failure count."""

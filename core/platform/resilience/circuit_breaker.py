@@ -7,8 +7,10 @@ This module provides:
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Callable, Dict, Optional
 
 from core.platform.resilience.constants import (
@@ -17,8 +19,10 @@ from core.platform.resilience.constants import (
     DEFAULT_HALF_OPEN_MAX_CALLS,
 )
 
+logger = logging.getLogger(__name__)
 
-class CircuitState:
+
+class CircuitState(str, Enum):
     """Circuit breaker states."""
 
     CLOSED = "closed"
@@ -35,7 +39,7 @@ class CircuitBreaker:
     half_open_max_calls: int = DEFAULT_HALF_OPEN_MAX_CALLS
     on_state_change: Optional[Callable[[str], None]] = None
 
-    _state: str = field(default=CircuitState.CLOSED, init=False)
+    _state: CircuitState = field(default=CircuitState.CLOSED, init=False)
     _failures: int = field(default=0, init=False)
     _opened_at: float = field(default=0.0, init=False)
     _half_open_calls: int = field(default=0, init=False)
@@ -49,8 +53,8 @@ class CircuitBreaker:
                 if self.on_state_change:
                     try:
                         self.on_state_change(self._state)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("Callback failed during state change to %s: %s", self._state, e)
                 self._half_open_calls = 0
             else:
                 return False
@@ -69,8 +73,8 @@ class CircuitBreaker:
         if prev != self._state and self.on_state_change:
             try:
                 self.on_state_change(self._state)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Callback failed during state change to %s: %s", self._state, e)
 
     def record_failure(self) -> None:
         """Record a failed call."""
@@ -85,11 +89,11 @@ class CircuitBreaker:
             if self.on_state_change:
                 try:
                     self.on_state_change(self._state)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Callback failed during state change to %s: %s", self._state, e)
 
     @property
-    def state(self) -> str:
+    def state(self) -> CircuitState:
         """Get the current circuit state."""
         return self._state
 
@@ -117,7 +121,8 @@ class CircuitBreaker:
             cooldown_seconds=data.get("cooldown_seconds", DEFAULT_COOLDOWN_SECONDS),
             half_open_max_calls=data.get("half_open_max_calls", DEFAULT_HALF_OPEN_MAX_CALLS),
         )
-        breaker._state = data.get("state", CircuitState.CLOSED)
+        state_value = data.get("state", CircuitState.CLOSED)
+        breaker._state = CircuitState(state_value) if isinstance(state_value, str) else state_value
         breaker._failures = data.get("failures", 0)
         return breaker
 

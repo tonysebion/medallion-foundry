@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import warnings
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -179,6 +180,11 @@ def run_context_to_dict(ctx: RunContext) -> Dict[str, Any]:
 
     Deprecated: Use ctx.to_dict() instead.
     """
+    warnings.warn(
+        "run_context_to_dict is deprecated, use ctx.to_dict() instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return ctx.to_dict()
 
 
@@ -187,6 +193,11 @@ def run_context_from_dict(payload: Dict[str, Any]) -> RunContext:
 
     Deprecated: Use RunContext.from_dict(payload) instead.
     """
+    warnings.warn(
+        "run_context_from_dict is deprecated, use RunContext.from_dict(payload) instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return RunContext.from_dict(payload)
 
 
