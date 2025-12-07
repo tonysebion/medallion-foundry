@@ -62,7 +62,7 @@ class TestAzureStorageInit:
         """Test that azure_container is required."""
         monkeypatch.setenv("AZURE_STORAGE_CONNECTION_STRING", "DefaultEndpointsProtocol=https;AccountName=test;AccountKey=key;EndpointSuffix=core.windows.net")
 
-        from core.storage import AzureStorage
+        from core.infrastructure.io.storage import AzureStorage
 
         config = {"bronze": {}, "azure_connection": {"connection_string_env": "AZURE_STORAGE_CONNECTION_STRING"}}
         with pytest.raises(ValueError, match="azure_container is required"):
@@ -75,7 +75,7 @@ class TestAzureStorageInit:
 
         mock_blob_class.from_connection_string.return_value.get_container_client.return_value = mock_container
 
-        from core.storage import AzureStorage
+        from core.infrastructure.io.storage import AzureStorage
 
         config = {
             "bronze": {"azure_container": "test-container", "azure_prefix": "my-prefix/"},
@@ -93,7 +93,7 @@ class TestAzureStorageInit:
 
         mock_blob_class.from_connection_string.return_value.get_container_client.return_value = mock_container
 
-        from core.storage import AzureStorage
+        from core.infrastructure.io.storage import AzureStorage
 
         config = {
             "bronze": {"azure_container": "test-container"},
@@ -111,7 +111,7 @@ class TestAzureStorageInit:
 
         mock_blob_class.from_connection_string.return_value.get_container_client.return_value = mock_container
 
-        from core.storage import AzureStorage
+        from core.infrastructure.io.storage import AzureStorage
 
         config = {
             "bronze": {"azure_container": "test-container"},
@@ -133,7 +133,7 @@ class TestAzureStorageUpload:
 
         mock_blob_class.from_connection_string.return_value.get_container_client.return_value = mock_container
 
-        from core.storage import AzureStorage
+        from core.infrastructure.io.storage import AzureStorage
 
         config = {
             "bronze": {"azure_container": "test-container", "azure_prefix": "data"},
@@ -169,7 +169,7 @@ class TestAzureStorageDownload:
         blob_client = mock_container.get_blob_client.return_value
         blob_client.download_blob.return_value = mock_stream
 
-        from core.storage import AzureStorage
+        from core.infrastructure.io.storage import AzureStorage
 
         config = {
             "bronze": {"azure_container": "test-container"},
@@ -202,7 +202,7 @@ class TestAzureStorageList:
         mock_blob2.name = "prefix/file2.txt"
         mock_container.list_blobs.return_value = [mock_blob1, mock_blob2]
 
-        from core.storage import AzureStorage
+        from core.infrastructure.io.storage import AzureStorage
 
         config = {
             "bronze": {"azure_container": "test-container"},
@@ -229,7 +229,7 @@ class TestAzureStorageDelete:
 
         mock_blob_class.from_connection_string.return_value.get_container_client.return_value = mock_container
 
-        from core.storage import AzureStorage
+        from core.infrastructure.io.storage import AzureStorage
 
         config = {
             "bronze": {"azure_container": "test-container"},
@@ -254,7 +254,7 @@ class TestAzureStorageRetry:
 
         mock_blob_class.from_connection_string.return_value.get_container_client.return_value = mock_container
 
-        from core.storage import AzureStorage
+        from core.infrastructure.io.storage import AzureStorage
         from azure.core.exceptions import AzureError
 
         config = {
@@ -272,7 +272,7 @@ class TestAzureStorageRetry:
 
         mock_blob_class.from_connection_string.return_value.get_container_client.return_value = mock_container
 
-        from core.storage import AzureStorage
+        from core.infrastructure.io.storage import AzureStorage
         from azure.core.exceptions import ResourceNotFoundError
 
         config = {
@@ -295,7 +295,7 @@ class TestAzureStorageBackendWrapper:
 
         mock_blob_class.from_connection_string.return_value.get_container_client.return_value = mock_container
 
-        from core.storage import AzureStorageBackend
+        from core.infrastructure.io.storage import AzureStorageBackend
 
         config = {
             "bronze": {"azure_container": "test-container"},
@@ -322,7 +322,7 @@ class TestAzureStorageBackendWrapper:
         blob_client = mock_container.get_blob_client.return_value
         blob_client.download_blob.return_value = mock_stream
 
-        from core.storage import AzureStorageBackend
+        from core.infrastructure.io.storage import AzureStorageBackend
 
         config = {
             "bronze": {"azure_container": "test-container"},
@@ -342,7 +342,7 @@ class TestAzureStorageBackendWrapper:
 
         mock_blob_class.from_connection_string.return_value.get_container_client.return_value = mock_container
 
-        from core.storage import AzureStorageBackend
+        from core.infrastructure.io.storage import AzureStorageBackend
 
         config = {
             "bronze": {"azure_container": "test-container"},

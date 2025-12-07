@@ -23,13 +23,12 @@ from core.runtime.config import ensure_root_config, load_configs, RootConfig
 from core.orchestration.runner import run_extract
 from core.orchestration.parallel import run_parallel_extracts
 from core.foundation.primitives.logging import setup_logging
-from core.storage import get_storage_backend
+from core.infrastructure.io.storage import get_storage_backend, enforce_storage_scope
 from core.foundation.primitives.patterns import LoadPattern
 from core.foundation.catalog.hooks import notify_catalog, report_run_metadata
 from core.runtime.context import build_run_context, RunContext
 from core.foundation.catalog.webhooks import fire_webhooks
 from core.runtime.options import RunOptions
-from core.storage import enforce_storage_scope
 
 # Version is managed by setuptools_scm and written to core/_version.py
 try:

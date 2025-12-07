@@ -42,7 +42,7 @@ from core.foundation.catalog.hooks import (
 from core.foundation.catalog.webhooks import fire_webhooks
 from core.foundation.time_utils import utc_isoformat
 from core.runtime.options import RunOptions
-from core.storage import enforce_storage_scope, file_lock
+from core.infrastructure.io.storage import enforce_storage_scope, file_lock
 from core.services.pipelines.silver.io import (
     apply_schema_settings,
     build_current_view,

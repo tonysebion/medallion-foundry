@@ -5,7 +5,7 @@ import os
 import pytest
 
 from core.runtime.config import EnvironmentConfig
-from core.storage import create_filesystem, StorageURI
+from core.infrastructure.io.storage import create_filesystem, StorageURI
 
 
 def test_create_filesystem_requires_azure_config():

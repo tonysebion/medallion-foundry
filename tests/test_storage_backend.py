@@ -5,15 +5,15 @@ from pathlib import Path
 import pytest
 
 from core.infrastructure.io.storage import base as backend_mod
-from core.storage import (
+from core.infrastructure.io.storage import (
     HealthCheckResult,
     StorageBackend,
     register_backend,
     resolve_backend_type,
     get_storage_backend,
+    LocalStorage,
 )
 from core.infrastructure.io.storage.base import _STORAGE_BACKEND_CACHE, BACKEND_REGISTRY
-from core.storage import LocalStorage
 
 
 class DummyBackend(StorageBackend):
