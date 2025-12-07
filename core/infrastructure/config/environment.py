@@ -7,36 +7,15 @@ that can be shared across multiple pattern configurations.
 from __future__ import annotations
 
 import logging
-import os
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import yaml
 
+from core.runtime.config.placeholders import resolve_env_vars
+
 logger = logging.getLogger(__name__)
-_ENV_VAR_PATTERN = re.compile(r"\$\{([^}]+)\}")
-
-
-def resolve_env_vars(value: Any) -> Any:
-    """Resolve ${VAR} placeholders in config values."""
-    if isinstance(value, str):
-        def replacer(match: re.Match[str]) -> str:
-            var_name = match.group(1)
-            env_value = os.environ.get(var_name)
-            if env_value is None:
-                logger.warning(
-                    "Environment variable %s not found, keeping placeholder", var_name
-                )
-                return match.group(0)
-            return env_value
-        return _ENV_VAR_PATTERN.sub(replacer, value)
-    if isinstance(value, dict):
-        return {k: resolve_env_vars(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [resolve_env_vars(item) for item in value]
-    return value
 
 
 @dataclass
