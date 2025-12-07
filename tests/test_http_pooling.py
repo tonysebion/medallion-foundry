@@ -277,7 +277,7 @@ class TestAsyncApiClientPooling:
         close_mock: AsyncMock | None = None
         client: AsyncApiClient | None = None
         with patch(
-            "core.infrastructure.io.http.session.httpx.AsyncClient", new_callable=AsyncMock
+            "core.infrastructure.io.http.session.httpx.AsyncClient", new_callable=MagicMock
         ) as mock_async_client:
             async with AsyncApiClient(
                 base_url="https://api.example.com",
