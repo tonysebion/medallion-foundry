@@ -6,10 +6,12 @@ from typing import Dict
 
 import pandas as pd
 
-from core.infrastructure.config import InputMode
+from core.infrastructure.config import InputMode, EntityKind
 from core.domain.services.pipelines.silver.handlers.base import BasePatternHandler
+from core.domain.services.pipelines.silver.handlers.registry import register_handler
 
 
+@register_handler(EntityKind.EVENT)
 class EventHandler(BasePatternHandler):
     """Handler for EVENT entity type.
 

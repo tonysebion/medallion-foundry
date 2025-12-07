@@ -18,15 +18,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, TYPE_CHECKING
 
+from core.platform.resilience import ResilienceMixin
 from core.platform.resilience.constants import (
     DEFAULT_FAILURE_THRESHOLD,
     DEFAULT_COOLDOWN_SECONDS,
     DEFAULT_HALF_OPEN_MAX_CALLS,
-    DEFAULT_MAX_ATTEMPTS,
-    DEFAULT_BASE_DELAY,
-    DEFAULT_MAX_DELAY,
-    DEFAULT_BACKOFF_MULTIPLIER,
-    DEFAULT_JITTER,
 )
 
 if TYPE_CHECKING:
@@ -140,10 +136,10 @@ class StorageBackend:
 # =============================================================================
 
 
-class BaseCloudStorage(StorageBackend):
+class BaseCloudStorage(StorageBackend, ResilienceMixin):
     """Abstract base class for cloud storage backends with resilience patterns.
 
-    Provides:
+    Extends ResilienceMixin to provide:
     - Circuit breakers per operation (upload, download, list, delete)
     - Retry policy with exponential backoff
     - Common execute_with_resilience wrapper
@@ -154,105 +150,24 @@ class BaseCloudStorage(StorageBackend):
     - _do_list(prefix) -> List[str]
     - _do_delete(remote_key) -> bool
     - _build_remote_path(remote_path) -> str
-    - _should_retry(exc) -> bool
+    - _should_retry(exc) -> bool (or use _default_retry_if from mixin)
     - get_backend_type() -> str
     """
 
     def __init__(self) -> None:
         """Initialize circuit breakers for each operation."""
-        from core.platform.resilience import CircuitBreaker
-
-        def _emit_state(state: str) -> None:
-            logger.info(
-                "metric=breaker_state component=%s state=%s",
-                self.get_backend_type(),
-                state,
-            )
-
-        self._breaker_upload = CircuitBreaker(
+        self._init_resilience_multi(
+            operations=["upload", "download", "list", "delete"],
+            component_name=self.get_backend_type(),
             failure_threshold=DEFAULT_FAILURE_THRESHOLD,
             cooldown_seconds=DEFAULT_COOLDOWN_SECONDS,
             half_open_max_calls=DEFAULT_HALF_OPEN_MAX_CALLS,
-            on_state_change=_emit_state,
         )
-        self._breaker_download = CircuitBreaker(
-            failure_threshold=DEFAULT_FAILURE_THRESHOLD,
-            cooldown_seconds=DEFAULT_COOLDOWN_SECONDS,
-            half_open_max_calls=DEFAULT_HALF_OPEN_MAX_CALLS,
-            on_state_change=_emit_state,
-        )
-        self._breaker_list = CircuitBreaker(
-            failure_threshold=DEFAULT_FAILURE_THRESHOLD,
-            cooldown_seconds=DEFAULT_COOLDOWN_SECONDS,
-            half_open_max_calls=DEFAULT_HALF_OPEN_MAX_CALLS,
-            on_state_change=_emit_state,
-        )
-        self._breaker_delete = CircuitBreaker(
-            failure_threshold=DEFAULT_FAILURE_THRESHOLD,
-            cooldown_seconds=DEFAULT_COOLDOWN_SECONDS,
-            half_open_max_calls=DEFAULT_HALF_OPEN_MAX_CALLS,
-            on_state_change=_emit_state,
-        )
-
-    def _build_retry_policy(
-        self,
-        retry_if: Callable[[BaseException], bool] | None = None,
-        delay_from_exception: Callable[[BaseException, int, float], float | None] | None = None,
-    ) -> "RetryPolicy":
-        """Build a standard retry policy for cloud operations.
-
-        Args:
-            retry_if: Custom predicate to determine if exception is retryable
-            delay_from_exception: Optional callback to extract delay from exception
-
-        Returns:
-            Configured RetryPolicy instance
-        """
-        from core.platform.resilience import RetryPolicy
-
-        return RetryPolicy(
-            max_attempts=DEFAULT_MAX_ATTEMPTS,
-            base_delay=DEFAULT_BASE_DELAY,
-            max_delay=DEFAULT_MAX_DELAY,
-            backoff_multiplier=DEFAULT_BACKOFF_MULTIPLIER,
-            jitter=DEFAULT_JITTER,
-            retry_on_exceptions=(),
-            retry_if=retry_if or self._should_retry,
-            delay_from_exception=delay_from_exception,
-        )
-
-    def _execute_with_resilience(
-        self,
-        operation: Callable[[], T],
-        breaker: "CircuitBreaker",
-        operation_name: str,
-        retry_if: Callable[[BaseException], bool] | None = None,
-        delay_from_exception: Callable[[BaseException, int, float], float | None] | None = None,
-    ) -> T:
-        """Execute an operation with circuit breaker and retry logic.
-
-        Args:
-            operation: The operation to execute
-            breaker: Circuit breaker for this operation type
-            operation_name: Name for logging
-            retry_if: Optional custom retry predicate
-            delay_from_exception: Optional delay extraction callback
-
-        Returns:
-            Result of the operation
-
-        Raises:
-            Exception from operation if all retries exhausted
-        """
-        from core.platform.resilience import execute_with_retry
-
-        policy = self._build_retry_policy(retry_if, delay_from_exception)
-        return execute_with_retry(
-            operation,
-            policy=policy,
-            breaker=breaker,
-            operation_name=operation_name,
-        )
+        # Maintain backward-compatible attribute names
+        self._breaker_upload = self._breakers["upload"]
+        self._breaker_download = self._breakers["download"]
+        self._breaker_list = self._breakers["list"]
+        self._breaker_delete = self._breakers["delete"]
 
     @abstractmethod
     def _should_retry(self, exc: BaseException) -> bool:
@@ -341,8 +256,9 @@ class BaseCloudStorage(StorageBackend):
         remote_key = self._build_remote_path(remote_path)
         return self._execute_with_resilience(
             lambda: self._do_upload(local_path, remote_key),
-            self._breaker_upload,
             f"{self.get_backend_type()}_upload",
+            breaker_key="upload",
+            retry_if=self._should_retry,
         )
 
     def download_file(self, remote_path: str, local_path: str) -> bool:
@@ -358,8 +274,9 @@ class BaseCloudStorage(StorageBackend):
         remote_key = self._build_remote_path(remote_path)
         return self._execute_with_resilience(
             lambda: self._do_download(remote_key, local_path),
-            self._breaker_download,
             f"{self.get_backend_type()}_download",
+            breaker_key="download",
+            retry_if=self._should_retry,
         )
 
     def list_files(self, prefix: str) -> List[str]:
@@ -374,8 +291,9 @@ class BaseCloudStorage(StorageBackend):
         full_prefix = self._build_remote_path(prefix)
         return self._execute_with_resilience(
             lambda: self._do_list(full_prefix),
-            self._breaker_list,
             f"{self.get_backend_type()}_list",
+            breaker_key="list",
+            retry_if=self._should_retry,
         )
 
     def delete_file(self, remote_path: str) -> bool:
@@ -390,14 +308,10 @@ class BaseCloudStorage(StorageBackend):
         remote_key = self._build_remote_path(remote_path)
         return self._execute_with_resilience(
             lambda: self._do_delete(remote_key),
-            self._breaker_delete,
             f"{self.get_backend_type()}_delete",
+            breaker_key="delete",
+            retry_if=self._should_retry,
         )
-
-
-# Need to import RetryPolicy and CircuitBreaker for type hints
-if TYPE_CHECKING:
-    from core.platform.resilience import RetryPolicy, CircuitBreaker
 
 
 # =============================================================================

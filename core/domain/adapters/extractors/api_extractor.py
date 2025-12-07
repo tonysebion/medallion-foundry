@@ -43,13 +43,68 @@ from core.domain.adapters.extractors.resilience import ResilientExtractorMixin
 logger = logging.getLogger(__name__)
 
 
+def _process_page_result(
+    state: PaginationState,
+    data: Any,
+    extract_records: Any,
+    api_cfg: Dict[str, Any],
+    all_records: List[Dict[str, Any]],
+) -> Tuple[bool, List[Dict[str, Any]]]:
+    """Process a single page result from pagination.
+
+    This function contains all shared logic between sync and async pagination loops:
+    extracting records, extending the collection, logging progress, and checking limits.
+
+    Args:
+        state: Pagination state machine
+        data: Raw response data from fetch
+        extract_records: Callable that extracts records from response data
+        api_cfg: API configuration dict
+        all_records: Accumulated records so far (will be extended)
+
+    Returns:
+        Tuple of (should_continue, updated_all_records)
+    """
+    records = extract_records(data, api_cfg)
+    if not records:
+        return False, all_records
+
+    all_records.extend(records)
+    logger.info(
+        "Fetched %d records %s (total: %d)",
+        len(records),
+        state.describe(),
+        len(all_records),
+    )
+
+    if state.max_records > 0 and len(all_records) >= state.max_records:
+        all_records = all_records[: state.max_records]
+        logger.info("Reached max_records limit of %d", state.max_records)
+        return False, all_records
+
+    if not state.on_records(records, data):
+        return False, all_records
+
+    return True, all_records
+
+
+def _log_max_pages_if_reached(state: PaginationState) -> None:
+    """Log if max_pages limit was reached (for PagePaginationState)."""
+    if (
+        isinstance(state, PagePaginationState)
+        and state.max_pages
+        and state.max_pages_limit_hit
+    ):
+        logger.info("Reached max_pages limit of %d", state.max_pages)
+
+
 def _run_pagination_loop(
     state: PaginationState,
     fetch_page: Any,
     extract_records: Any,
     api_cfg: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
-    """Common pagination loop logic shared between sync and async paths.
+    """Sync pagination loop.
 
     Args:
         state: Pagination state machine
@@ -63,35 +118,14 @@ def _run_pagination_loop(
     all_records: List[Dict[str, Any]] = []
 
     while state.should_fetch_more():
-        current_params = state.build_params()
-        data = fetch_page(current_params)
-        records = extract_records(data, api_cfg)
-        if not records:
-            break
-
-        all_records.extend(records)
-        logger.info(
-            "Fetched %d records %s (total: %d)",
-            len(records),
-            state.describe(),
-            len(all_records),
+        data = fetch_page(state.build_params())
+        should_continue, all_records = _process_page_result(
+            state, data, extract_records, api_cfg, all_records
         )
-
-        if state.max_records > 0 and len(all_records) >= state.max_records:
-            all_records = all_records[: state.max_records]
-            logger.info("Reached max_records limit of %d", state.max_records)
+        if not should_continue:
             break
 
-        if not state.on_records(records, data):
-            break
-
-    if (
-        isinstance(state, PagePaginationState)
-        and state.max_pages
-        and state.max_pages_limit_hit
-    ):
-        logger.info("Reached max_pages limit of %d", state.max_pages)
-
+    _log_max_pages_if_reached(state)
     return all_records
 
 
@@ -101,7 +135,7 @@ async def _run_pagination_loop_async(
     extract_records: Any,
     api_cfg: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
-    """Async variant of pagination loop.
+    """Async pagination loop.
 
     Args:
         state: Pagination state machine
@@ -115,35 +149,14 @@ async def _run_pagination_loop_async(
     all_records: List[Dict[str, Any]] = []
 
     while state.should_fetch_more():
-        current_params = state.build_params()
-        data = await fetch_page(current_params)
-        records = extract_records(data, api_cfg)
-        if not records:
-            break
-
-        all_records.extend(records)
-        logger.info(
-            "Fetched %d records %s (total: %d)",
-            len(records),
-            state.describe(),
-            len(all_records),
+        data = await fetch_page(state.build_params())
+        should_continue, all_records = _process_page_result(
+            state, data, extract_records, api_cfg, all_records
         )
-
-        if state.max_records > 0 and len(all_records) >= state.max_records:
-            all_records = all_records[: state.max_records]
-            logger.info("Reached max_records limit of %d", state.max_records)
+        if not should_continue:
             break
 
-        if not state.on_records(records, data):
-            break
-
-    if (
-        isinstance(state, PagePaginationState)
-        and state.max_pages
-        and state.max_pages_limit_hit
-    ):
-        logger.info("Reached max_pages limit of %d", state.max_pages)
-
+    _log_max_pages_if_reached(state)
     return all_records
 
 

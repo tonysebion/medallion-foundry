@@ -51,6 +51,7 @@ from core.platform.resilience.late_data import (
     build_late_data_handler,
     parse_backfill_window,
 )
+from core.platform.resilience.mixins import ResilienceMixin
 
 __all__ = [
     # Constants
@@ -92,4 +93,6 @@ __all__ = [
     "BackfillWindow",
     "build_late_data_handler",
     "parse_backfill_window",
+    # Mixins
+    "ResilienceMixin",
 ]

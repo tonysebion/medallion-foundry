@@ -30,9 +30,7 @@ from core.domain.services.pipelines.silver.verification import (
 from core.domain.services.pipelines.silver.preparation import DataFramePreparer
 from core.domain.services.pipelines.silver.handlers import (
     BasePatternHandler,
-    EventHandler,
-    StateHandler,
-    DerivedEventHandler,
+    create_handler,
 )
 from core.domain.services.pipelines.silver.partition_resolver import PartitionColumnResolver
 
@@ -116,13 +114,19 @@ class SilverProcessor:
         self._handlers = self._create_handlers()
 
     def _create_handlers(self) -> Dict[EntityKind, BasePatternHandler]:
-        """Create pattern handlers for each entity kind."""
-        return {
-            EntityKind.EVENT: EventHandler(self.dataset),
-            EntityKind.STATE: StateHandler(self.dataset),
-            EntityKind.DERIVED_STATE: StateHandler(self.dataset, derived=True),
-            EntityKind.DERIVED_EVENT: DerivedEventHandler(self.dataset),
-        }
+        """Create pattern handlers for each entity kind using the registry.
+
+        Uses the handler registry pattern (matching extractors and storage backends)
+        to dynamically create handlers based on registered decorators.
+        """
+        handlers: Dict[EntityKind, BasePatternHandler] = {}
+        for kind in EntityKind:
+            try:
+                handlers[kind] = create_handler(kind, self.dataset)
+            except ValueError:
+                # Handler not registered for this kind (this is expected for some kinds)
+                logger.debug("No handler registered for entity kind: %s", kind.value)
+        return handlers
 
     def run(self) -> SilverProcessorResult:
         """Execute the Silver processing pipeline."""

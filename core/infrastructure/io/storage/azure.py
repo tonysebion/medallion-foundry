@@ -262,8 +262,9 @@ class AzureStorage(BaseCloudStorage):
         try:
             return self._execute_with_resilience(
                 lambda: self._do_upload(local_path, remote_key),
-                self._breaker_upload,
                 "azure_upload",
+                breaker_key="upload",
+                retry_if=self._should_retry,
             )
         except AzureError as exc:
             logger.error("Azure upload failed [%s]: %s", remote_key, exc)
@@ -286,8 +287,9 @@ class AzureStorage(BaseCloudStorage):
         try:
             return self._execute_with_resilience(
                 lambda: self._do_download(remote_key, local_path),
-                self._breaker_download,
                 "azure_download",
+                breaker_key="download",
+                retry_if=self._should_retry,
             )
         except AzureError as exc:
             logger.error("Azure download failed [%s]: %s", remote_key, exc)
@@ -309,8 +311,9 @@ class AzureStorage(BaseCloudStorage):
         try:
             return self._execute_with_resilience(
                 lambda: self._do_list(full_prefix),
-                self._breaker_list,
                 "azure_list",
+                breaker_key="list",
+                retry_if=self._should_retry,
             )
         except AzureError as exc:
             logger.error("Azure list failed [%s]: %s", full_prefix, exc)
@@ -332,8 +335,9 @@ class AzureStorage(BaseCloudStorage):
         try:
             return self._execute_with_resilience(
                 lambda: self._do_delete(remote_key),
-                self._breaker_delete,
                 "azure_delete",
+                breaker_key="delete",
+                retry_if=self._should_retry,
             )
         except AzureError as exc:
             logger.error("Azure delete failed [%s]: %s", remote_key, exc)

@@ -288,8 +288,9 @@ class S3Storage(BaseCloudStorage):
         try:
             return self._execute_with_resilience(
                 lambda: self._do_upload(local_path, remote_key),
-                self._breaker_upload,
                 "s3_upload",
+                breaker_key="upload",
+                retry_if=self._should_retry,
                 delay_from_exception=self._get_delay_from_s3_exception,
             )
         except (BotoCoreError, ClientError) as e:
@@ -316,8 +317,9 @@ class S3Storage(BaseCloudStorage):
         try:
             return self._execute_with_resilience(
                 lambda: self._do_download(remote_key, local_path),
-                self._breaker_download,
                 "s3_download",
+                breaker_key="download",
+                retry_if=self._should_retry,
                 delay_from_exception=self._get_delay_from_s3_exception,
             )
         except (BotoCoreError, ClientError) as e:
@@ -343,8 +345,9 @@ class S3Storage(BaseCloudStorage):
         try:
             return self._execute_with_resilience(
                 lambda: self._do_list(full_prefix),
-                self._breaker_list,
                 "s3_list",
+                breaker_key="list",
+                retry_if=self._should_retry,
                 delay_from_exception=self._get_delay_from_s3_exception,
             )
         except (BotoCoreError, ClientError) as e:
@@ -370,8 +373,9 @@ class S3Storage(BaseCloudStorage):
         try:
             return self._execute_with_resilience(
                 lambda: self._do_delete(remote_key),
-                self._breaker_delete,
                 "s3_delete",
+                breaker_key="delete",
+                retry_if=self._should_retry,
                 delay_from_exception=self._get_delay_from_s3_exception,
             )
         except (BotoCoreError, ClientError) as e:

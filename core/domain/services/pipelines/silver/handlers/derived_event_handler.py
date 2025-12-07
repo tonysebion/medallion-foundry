@@ -6,10 +6,12 @@ from typing import Any, Dict, List, Optional, cast
 
 import pandas as pd
 
-from core.infrastructure.config import DeleteMode
+from core.infrastructure.config import DeleteMode, EntityKind
 from core.domain.services.pipelines.silver.handlers.base import BasePatternHandler
+from core.domain.services.pipelines.silver.handlers.registry import register_handler
 
 
+@register_handler(EntityKind.DERIVED_EVENT)
 class DerivedEventHandler(BasePatternHandler):
     """Handler for DERIVED_EVENT entity type.
 

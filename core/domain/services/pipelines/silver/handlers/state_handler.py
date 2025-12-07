@@ -6,13 +6,17 @@ from typing import Dict, TYPE_CHECKING
 
 import pandas as pd
 
-from core.infrastructure.config import HistoryMode
+from core.infrastructure.config import HistoryMode, EntityKind
 from core.domain.services.pipelines.silver.handlers.base import BasePatternHandler
+from core.domain.services.pipelines.silver.handlers.registry import register_handler
 
 if TYPE_CHECKING:
     from core.infrastructure.config import DatasetConfig
 
 
+# StateHandler handles both STATE and DERIVED_STATE; register both
+@register_handler(EntityKind.STATE)
+@register_handler(EntityKind.DERIVED_STATE, derived=True)
 class StateHandler(BasePatternHandler):
     """Handler for STATE and DERIVED_STATE entity types.
 
