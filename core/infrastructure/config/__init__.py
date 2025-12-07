@@ -6,8 +6,8 @@ This module provides:
 - Validation utilities
 """
 
-# Models
-from core.infrastructure.config.models.enums import (
+# Models - Entity enums from foundation
+from core.foundation.primitives.entity_kinds import (
     EntityKind,
     HistoryMode,
     InputMode,

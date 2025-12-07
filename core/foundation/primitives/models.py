@@ -7,7 +7,7 @@ These are pure data structures with minimal dependencies.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict, List, cast
+from typing import Dict, List
 
 from core.foundation.primitives.base import RichEnumMixin
 from core.foundation.primitives.patterns import LoadPattern
@@ -76,7 +76,7 @@ class SilverModel(RichEnumMixin, str, Enum):
             ValueError: If raw is None or doesn't match any member/alias
         """
         if isinstance(raw, cls):
-            return cast("SilverModel", raw)
+            return raw
         if raw is None:
             raise ValueError("SilverModel value must be provided")
 

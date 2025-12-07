@@ -11,6 +11,13 @@ This package contains shared primitives with no internal dependencies:
 from .base import RichEnumMixin, SerializableMixin
 from .patterns import LoadPattern
 from .models import SilverModel, SILVER_MODEL_ALIASES
+from .entity_kinds import (
+    EntityKind,
+    HistoryMode,
+    InputMode,
+    DeleteMode,
+    SchemaMode,
+)
 from .exceptions import (
     BronzeFoundryError,
     ConfigValidationError,
@@ -38,6 +45,12 @@ __all__ = [
     # Models
     "SilverModel",
     "SILVER_MODEL_ALIASES",
+    # Entity kinds
+    "EntityKind",
+    "HistoryMode",
+    "InputMode",
+    "DeleteMode",
+    "SchemaMode",
     # Exceptions
     "BronzeFoundryError",
     "ConfigValidationError",

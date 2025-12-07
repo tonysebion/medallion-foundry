@@ -1,15 +1,17 @@
 """Configuration models.
 
 This package contains:
-- enums.py: EntityKind, HistoryMode, InputMode, DeleteMode, SchemaMode
 - intent.py: BronzeIntent, SilverIntent
 - polybase.py: Polybase configuration classes
 - dataset.py: DatasetConfig, PathStructure
 - root.py: RootConfig, PydanticModels (RootConfig, SilverConfig, etc.)
 - environment.py: EnvironmentConfig, S3ConnectionConfig
+
+Entity enums (EntityKind, HistoryMode, etc.) are defined in foundation/primitives/entity_kinds.py
+and re-exported here for backward compatibility.
 """
 
-from core.infrastructure.config.models.enums import (
+from core.foundation.primitives.entity_kinds import (
     EntityKind,
     HistoryMode,
     InputMode,

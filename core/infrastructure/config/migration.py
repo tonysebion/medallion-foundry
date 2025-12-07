@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 
 from core.foundation.primitives.exceptions import emit_compat
 from core.foundation.primitives.patterns import LoadPattern
-from core.infrastructure.config.models.enums import (
+from core.foundation.primitives.entity_kinds import (
     EntityKind,
     HistoryMode,
     InputMode,

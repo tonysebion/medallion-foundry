@@ -29,16 +29,16 @@ class TestRichEnumPattern:
         # Primitives layer
         "core.foundation.primitives.patterns.LoadPattern",
         "core.foundation.primitives.models.SilverModel",
+        "core.foundation.primitives.entity_kinds.EntityKind",
+        "core.foundation.primitives.entity_kinds.HistoryMode",
+        "core.foundation.primitives.entity_kinds.InputMode",
+        "core.foundation.primitives.entity_kinds.DeleteMode",
+        "core.foundation.primitives.entity_kinds.SchemaMode",
         "core.foundation.state.watermark.WatermarkType",
         # Config layer
         "core.infrastructure.config.models.root.StorageBackend",
         "core.infrastructure.config.models.root.SourceType",
         "core.infrastructure.config.models.root.DataClassification",
-        "core.infrastructure.config.models.enums.EntityKind",
-        "core.infrastructure.config.models.enums.HistoryMode",
-        "core.infrastructure.config.models.enums.InputMode",
-        "core.infrastructure.config.models.enums.DeleteMode",
-        "core.infrastructure.config.models.enums.SchemaMode",
         "core.platform.resilience.late_data.LateDataMode",
         # Pipeline layer
         "core.infrastructure.runtime.metadata.Layer",

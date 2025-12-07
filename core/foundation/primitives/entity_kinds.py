@@ -1,12 +1,16 @@
-"""Configuration enums for entity processing.
+"""Entity kind enums for Bronze and Silver layer processing.
 
-These enums define the semantic intent for Bronze and Silver layer processing.
+These enums define the semantic intent for entity processing:
+- EntityKind: Classification of entities (event, state, derived)
+- HistoryMode: History tracking strategy for state entities
+- InputMode: Input processing mode for event entities
+- DeleteMode: Delete handling behavior
+- SchemaMode: Schema evolution policy
 
-Note: While these enums represent domain concepts (entity kinds, history modes),
-they are placed in infrastructure/config because they are used primarily for
-configuration validation and the intent models (BronzeIntent, SilverIntent).
-Moving them to domain/ would require also moving intent.py to maintain the
-layer hierarchy (infrastructure cannot import from domain).
+These are placed in Foundation (L0) because:
+1. They only depend on RichEnumMixin (also in foundation)
+2. They need to be imported by all layers (infrastructure, domain, orchestration)
+3. This matches the pattern used by LoadPattern and SilverModel
 """
 
 from __future__ import annotations
