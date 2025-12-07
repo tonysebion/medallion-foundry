@@ -46,7 +46,7 @@ fix:  ## Fix linting issues automatically
 	$(PYTHON) -m ruff format .
 
 type-check:  ## Run type checker (mypy)
-	$(PYTHON) -m mypy --config-file=mypy.ini core/ bronze_extract.py silver_extract.py
+	$(PYTEST) --mypy --mypy-config-file=mypy.ini -k mypy
 
 docs:  ## Build documentation
 	$(PYTHON) -m mkdocs build --strict
