@@ -41,7 +41,8 @@ def test_verify_bronze_checksums_returns_result(tmp_path: Path) -> None:
     good_file.write_bytes(b"good data")
     write_checksum_manifest(tmp_path, [good_file], "snapshot")
 
-    result, quarantine_result = processor._verify_bronze_checksums()
+    # Access verifier through the processor's internal component
+    result, quarantine_result = processor._verifier.verify()
 
     assert result.valid
     assert "chunk_0001.parquet" in result.verified_files
@@ -63,7 +64,8 @@ def test_should_verify_checksum_skips_fresh_manifest(tmp_path: Path) -> None:
     manifest_path = tmp_path / "_checksums.json"
     manifest_path.write_text("{}")
 
-    assert not processor._should_verify_checksum()
+    # Access verifier through the processor's internal component
+    assert not processor._verifier.should_verify()
 
 
 def test_should_verify_checksum_when_manifest_old(tmp_path: Path) -> None:
@@ -82,4 +84,5 @@ def test_should_verify_checksum_when_manifest_old(tmp_path: Path) -> None:
     old_time = time.time() - 10
     os.utime(manifest_path, (old_time, old_time))
 
-    assert processor._should_verify_checksum()
+    # Access verifier through the processor's internal component
+    assert processor._verifier.should_verify()

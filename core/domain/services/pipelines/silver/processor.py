@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional, TYPE_CHECKING
 
 import pandas as pd
 
@@ -29,6 +29,7 @@ from core.domain.services.pipelines.silver.verification import (
 )
 from core.domain.services.pipelines.silver.preparation import DataFramePreparer
 from core.domain.services.pipelines.silver.handlers import (
+    BasePatternHandler,
     EventHandler,
     StateHandler,
     DerivedEventHandler,
@@ -113,7 +114,7 @@ class SilverProcessor:
         self._preparer = DataFramePreparer(dataset)
         self._handlers = self._create_handlers()
 
-    def _create_handlers(self) -> Dict[EntityKind, Any]:
+    def _create_handlers(self) -> Dict[EntityKind, BasePatternHandler]:
         """Create pattern handlers for each entity kind."""
         return {
             EntityKind.EVENT: EventHandler(self.dataset),
