@@ -69,8 +69,8 @@ from core.services.pipelines.silver.processor import (
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from core.io.storage.checksum import ChecksumVerificationResult
-    from core.io.storage.quarantine import QuarantineResult
+    from core.infrastructure.io.storage.checksum import ChecksumVerificationResult
+    from core.infrastructure.io.storage.quarantine import QuarantineResult
 
 
 def parse_primary_keys(raw: str | None) -> List[str]:

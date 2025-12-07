@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from core.io.storage import base as backend_mod
+from core.infrastructure.io.storage import base as backend_mod
 from core.storage import (
     HealthCheckResult,
     StorageBackend,
@@ -12,7 +12,7 @@ from core.storage import (
     resolve_backend_type,
     get_storage_backend,
 )
-from core.io.storage.base import _STORAGE_BACKEND_CACHE, BACKEND_REGISTRY
+from core.infrastructure.io.storage.base import _STORAGE_BACKEND_CACHE, BACKEND_REGISTRY
 from core.storage import LocalStorage
 
 

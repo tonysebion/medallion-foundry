@@ -1,7 +1,3 @@
-﻿"""OpenMetadata shim package for Bronze Foundry."""
-
-from __future__ import annotations
-
-from core.primitives.catalog.client import OpenMetadataClient
-
-__all__ = ["OpenMetadataClient"]
+"""Backward compatibility shim for core.om."""
+from core.platform.om import *
+from core.platform.om import client

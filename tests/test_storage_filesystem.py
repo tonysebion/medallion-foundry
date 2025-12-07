@@ -25,7 +25,7 @@ def test_create_filesystem_uses_connection_string(monkeypatch):
         called["options"] = options
         return "azurefs"
 
-    monkeypatch.setattr("core.io.storage.filesystem.fsspec.filesystem", fake_fs)
+    monkeypatch.setattr("core.infrastructure.io.storage.filesystem.fsspec.filesystem", fake_fs)
 
     uri = StorageURI.parse("az://container/blob")
     fs = create_filesystem(uri, env_config=env)
@@ -53,7 +53,7 @@ def test_create_filesystem_uses_account_key(monkeypatch):
         called["options"] = options
         return "azurefs-key"
 
-    monkeypatch.setattr("core.io.storage.filesystem.fsspec.filesystem", fake_fs)
+    monkeypatch.setattr("core.infrastructure.io.storage.filesystem.fsspec.filesystem", fake_fs)
 
     fs = create_filesystem(StorageURI.parse("az://container/blob"), env_config=env)
 

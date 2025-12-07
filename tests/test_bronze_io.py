@@ -9,7 +9,7 @@ MOCK_TIMESTAMP = "2025-01-01T00:00:00Z"
 
 
 def test_write_batch_metadata_records_timestamp_and_fields(tmp_path) -> None:
-    with patch("core.services.pipelines.bronze.io._utc_isoformat", return_value=MOCK_TIMESTAMP):
+    with patch("core.domain.services.pipelines.bronze.io._utc_isoformat", return_value=MOCK_TIMESTAMP):
         metadata_path = write_batch_metadata(
             out_dir=tmp_path,
             record_count=11,
@@ -36,7 +36,7 @@ def test_write_checksum_manifest_includes_file_entries(tmp_path) -> None:
 
     # Patch at io.storage level since write_checksum_manifest delegates there
     with patch(
-        "core.io.storage.checksum.utc_isoformat",
+        "core.infrastructure.io.storage.checksum.utc_isoformat",
         return_value=MOCK_TIMESTAMP,
     ):
         manifest_path = write_checksum_manifest(

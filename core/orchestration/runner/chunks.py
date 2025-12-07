@@ -1,6 +1,6 @@
 """Backward compatibility shim for chunk processing helpers."""
 
-from core.services.processing.chunk_processor import (
+from core.domain.services.processing.chunk_processor import (
     ChunkProcessor,
     ChunkWriter,
     ChunkWriterConfig,

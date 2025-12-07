@@ -1,32 +1,3 @@
-"""State management for incremental patterns in bronze-foundry.
-
-This package contains state tracking for incremental extraction:
-- watermark: Watermark tracking for incremental loads (timestamps, cursors)
-- manifest: File manifest tracking for file_batch sources
-"""
-
-from .watermark import (
-    Watermark,
-    WatermarkStore,
-    WatermarkType,
-    build_watermark_store,
-    compute_max_watermark,
-)
-from .manifest import (
-    FileEntry,
-    FileManifest,
-    ManifestTracker,
-)
-
-__all__ = [
-    # Watermark
-    "Watermark",
-    "WatermarkStore",
-    "WatermarkType",
-    "build_watermark_store",
-    "compute_max_watermark",
-    # Manifest
-    "FileEntry",
-    "FileManifest",
-    "ManifestTracker",
-]
+"""Backward compatibility shim."""
+from core.foundation.state import *
+from core.foundation.state import manifest, watermark

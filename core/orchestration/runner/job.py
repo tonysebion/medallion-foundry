@@ -8,34 +8,34 @@ import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
-from core.services.pipelines.bronze.base import emit_bronze_metadata, infer_schema
-from core.services.pipelines.bronze.models import (
+from core.domain.services.pipelines.bronze.base import emit_bronze_metadata, infer_schema
+from core.domain.services.pipelines.bronze.models import (
     build_chunk_writer_config,
     compute_output_formats,
     resolve_load_pattern,
 )
-from core.runtime.context import RunContext
-from core.runtime.metadata import (
+from core.infrastructure.runtime.context import RunContext
+from core.infrastructure.runtime.metadata import (
     Layer,
     RunStatus,
     build_run_metadata,
     write_run_metadata,
 )
-from core.io.extractors.base import BaseExtractor
-from core.adapters.extractors.factory import (
+from core.infrastructure.io.extractors.base import BaseExtractor
+from core.domain.adapters.extractors.factory import (
     ensure_extractors_loaded,
     get_extractor,
 )
-from core.services.pipelines.bronze.io import chunk_records, verify_checksum_manifest
-from core.primitives.foundations.patterns import LoadPattern
-from core.services.processing.chunk_processor import ChunkProcessor, ChunkWriter
-from core.storage import get_storage_backend
-from core.adapters.schema.evolution import (
+from core.domain.services.pipelines.bronze.io import chunk_records, verify_checksum_manifest
+from core.foundation.primitives.patterns import LoadPattern
+from core.domain.services.processing.chunk_processor import ChunkProcessor, ChunkWriter
+from core.infrastructure.io.storage import get_storage_backend
+from core.domain.adapters.schema.evolution import (
     EvolutionConfig,
     SchemaEvolution,
     SchemaEvolutionMode,
 )
-from core.adapters.schema.types import ColumnSpec, DataType, SchemaSpec
+from core.domain.adapters.schema.types import ColumnSpec, DataType, SchemaSpec
 from core.primitives.catalog.hooks import (
     report_quality_snapshot,
     report_run_metadata,
@@ -74,7 +74,7 @@ class ExtractJob:
         self.created_files: List[Path] = []
         self.load_pattern: Optional[LoadPattern] = context.load_pattern
         self.output_formats: Dict[str, bool] = {}
-        from core.services.pipelines.bronze.models import StoragePlan
+        from core.domain.services.pipelines.bronze.models import StoragePlan
 
         self.storage_plan: Optional[StoragePlan] = None
         self.schema_snapshot: List[Dict[str, str]] = []

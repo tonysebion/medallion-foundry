@@ -1,49 +1,53 @@
 """Core modules for Bronze extraction framework.
 
-This package contains the core functionality organized by domain:
+Layer Structure:
+    core.foundation      - L0: Zero-dependency building blocks
+    core.platform        - L1: Cross-cutting platform services
+    core.infrastructure  - L2: Config, I/O, runtime
+    core.domain          - L3: Adapters, services, pipelines
+    core.orchestration   - L4: Job execution
 
-primitives/           # Zero-dependency building blocks
-├── foundations/      # patterns, exceptions, logging
-├── state/            # watermark, manifest
-└── catalog/          # hooks, webhooks, tracing
+Package Map:
+    foundation/          # L0: Zero-dependency building blocks
+    ├── primitives/      # patterns, exceptions, logging, base models
+    ├── state/           # watermark, manifest
+    └── catalog/         # hooks, webhooks, tracing
 
-config/               # Configuration loading and validation
-├── models/           # DatasetConfig, RootConfig, enums
-├── loaders.py        # load_config, load_configs
-└── validation.py     # validate_config_dict
+    platform/            # L1: Cross-cutting platform services
+    ├── resilience/      # retry, circuit breaker, rate limiter
+    ├── observability/   # errors, logging, tracing helpers
+    └── om/              # OpenMetadata client
 
-resilience/           # Fault tolerance (split from retry.py)
-├── retry.py          # RetryPolicy
-├── circuit_breaker.py # CircuitBreaker
-├── rate_limiter.py   # RateLimiter
-└── late_data.py      # LateDataHandler
+    infrastructure/      # L2: Core infrastructure services
+    ├── config/          # configuration loading, validation, models
+    ├── io/              # storage backends, HTTP, extractor base
+    └── runtime/         # execution context, paths, metadata
 
-storage/              # Storage backends (re-exports from io/storage)
-                      # S3, Azure, local backends
+    domain/              # L3: Business domain logic
+    ├── adapters/        # extractors (API, DB, file), quality, schema
+    ├── services/        # pipeline processing (bronze, silver)
+    └── catalog/         # yaml_generator
 
-services/             # Pipeline processing
-├── pipelines/        # Bronze → Silver data flow
-└── processing/       # Chunk processing
+    orchestration/       # L4: Job execution and coordination
+    ├── runner/          # job execution
+    └── parallel.py      # parallel execution
 
-adapters/             # External system integrations
-├── extractors/       # API, DB, file extractors
-├── polybase/         # DDL generation
-└── schema/           # schema validation
-
-orchestration/        # Execution coordination
-├── runner/           # job execution
-└── parallel.py       # parallel execution
+Recommended imports:
+    from core import LoadPattern, RunContext, RetryPolicy
+    from core.foundation.primitives import LoadPattern
+    from core.platform.resilience import CircuitBreaker
+    from core.infrastructure.config import load_config
 """
 
 __version__ = "1.0.0"
 
 # =============================================================================
-# Backward Compatibility Re-exports
+# Public API Re-exports (from canonical layer locations)
 # =============================================================================
 
-# Foundations
-from core.primitives.foundations.patterns import LoadPattern
-from core.primitives.foundations.exceptions import (
+# Foundations (L0)
+from core.foundation.primitives.patterns import LoadPattern
+from core.foundation.primitives.exceptions import (
     BronzeFoundryError,
     ConfigValidationError,
     ExtractionError,
@@ -59,35 +63,25 @@ from core.primitives.foundations.exceptions import (
     emit_deprecation,
     emit_compat,
 )
-from core.primitives.foundations.logging import setup_logging
+from core.foundation.primitives.logging import setup_logging
 
-# Runtime
-from core.runtime.context import RunContext, build_run_context, run_context_to_dict, load_run_context
-from core.runtime.options import RunOptions
-from core.runtime import default_artifacts
-from core.runtime.paths import (
-    BronzePartition,
-    SilverPartition,
-    build_bronze_partition,
-    build_silver_partition,
-    build_bronze_relative_path,
-    build_silver_partition_path,
+# State (L0)
+from core.foundation.state.watermark import Watermark, WatermarkStore, WatermarkType
+from core.foundation.state.manifest import FileEntry, FileManifest, ManifestTracker
+
+# Catalog (L0)
+from core.foundation.catalog.hooks import (
+    notify_catalog,
+    report_schema_snapshot,
+    report_quality_snapshot,
+    report_run_metadata,
+    report_lineage,
 )
-from core.runtime.metadata import (
-    Layer,
-    RunStatus,
-    QualityRuleResult,
-    RunMetadata,
-    generate_run_id,
-    build_run_metadata,
-)
+from core.foundation.catalog.webhooks import fire_webhooks
+from core.foundation.catalog.tracing import trace_span
 
-# State
-from core.primitives.state.watermark import Watermark, WatermarkStore, WatermarkType
-from core.primitives.state.manifest import FileEntry, FileManifest, ManifestTracker
-
-# Resilience
-from core.resilience import (
+# Resilience (L1)
+from core.platform.resilience import (
     RetryPolicy,
     CircuitBreaker,
     CircuitState,
@@ -99,21 +93,31 @@ from core.resilience import (
     LateDataResult,
 )
 
-# Catalog
-from core.primitives.catalog.hooks import (
-    notify_catalog,
-    report_schema_snapshot,
-    report_quality_snapshot,
-    report_run_metadata,
-    report_lineage,
+# Runtime (L2)
+from core.infrastructure.runtime.context import RunContext, build_run_context, run_context_to_dict, load_run_context
+from core.infrastructure.runtime.options import RunOptions
+from core.infrastructure.runtime import default_artifacts
+from core.infrastructure.runtime.paths import (
+    BronzePartition,
+    SilverPartition,
+    build_bronze_partition,
+    build_silver_partition,
+    build_bronze_relative_path,
+    build_silver_partition_path,
 )
-from core.primitives.catalog.webhooks import fire_webhooks
-from core.primitives.catalog.tracing import trace_span
+from core.infrastructure.runtime.metadata import (
+    Layer,
+    RunStatus,
+    QualityRuleResult,
+    RunMetadata,
+    generate_run_id,
+    build_run_metadata,
+)
 
 __all__ = [
     # Version
     "__version__",
-    # Foundations
+    # Foundations (L0)
     "LoadPattern",
     "BronzeFoundryError",
     "ConfigValidationError",
@@ -130,7 +134,32 @@ __all__ = [
     "emit_deprecation",
     "emit_compat",
     "setup_logging",
-    # Runtime
+    # State (L0)
+    "Watermark",
+    "WatermarkStore",
+    "WatermarkType",
+    "FileEntry",
+    "FileManifest",
+    "ManifestTracker",
+    # Catalog (L0)
+    "notify_catalog",
+    "report_schema_snapshot",
+    "report_quality_snapshot",
+    "report_run_metadata",
+    "report_lineage",
+    "fire_webhooks",
+    "trace_span",
+    # Resilience (L1)
+    "RetryPolicy",
+    "CircuitBreaker",
+    "CircuitState",
+    "RateLimiter",
+    "execute_with_retry",
+    "execute_with_retry_async",
+    "LateDataMode",
+    "LateDataConfig",
+    "LateDataResult",
+    # Runtime (L2)
     "RunContext",
     "build_run_context",
     "run_context_to_dict",
@@ -149,29 +178,4 @@ __all__ = [
     "RunMetadata",
     "generate_run_id",
     "build_run_metadata",
-    # State
-    "Watermark",
-    "WatermarkStore",
-    "WatermarkType",
-    "FileEntry",
-    "FileManifest",
-    "ManifestTracker",
-    # Resilience
-    "RetryPolicy",
-    "CircuitBreaker",
-    "CircuitState",
-    "RateLimiter",
-    "execute_with_retry",
-    "execute_with_retry_async",
-    "LateDataMode",
-    "LateDataConfig",
-    "LateDataResult",
-    # Catalog
-    "notify_catalog",
-    "report_schema_snapshot",
-    "report_quality_snapshot",
-    "report_run_metadata",
-    "report_lineage",
-    "fire_webhooks",
-    "trace_span",
 ]

@@ -1,13 +1,4 @@
-"""Bronze extraction layer: I/O, chunking, and storage planning.
-
-Primary modules:
-- io: CSV/Parquet file writing utilities
-- models: Storage and chunk configuration dataclasses
-"""
-
-from .models import StoragePlan, ChunkWriterConfig
-
-__all__ = [
-    "StoragePlan",
-    "ChunkWriterConfig",
-]
+"""Backward compatibility shim for core.services.pipelines.bronze."""
+from core.domain.services.pipelines.bronze import *
+from core.domain.services.pipelines.bronze import __all__
+from core.domain.services.pipelines.bronze import io, models, base

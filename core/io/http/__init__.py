@@ -1,5 +1,3 @@
-"""HTTP helpers for extractors and other IO consumers."""
-
-from .session import AsyncApiClient, is_async_enabled
-
-__all__ = ["AsyncApiClient", "is_async_enabled"]
+"""Backward compatibility shim for core.io.http."""
+from core.infrastructure.io.http import *
+from core.infrastructure.io.http import session, auth
