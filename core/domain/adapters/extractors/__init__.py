@@ -5,6 +5,7 @@ from core.domain.adapters.extractors.factory import (
     ensure_extractors_loaded,
     EXTRACTOR_REGISTRY,
 )
+from core.domain.adapters.extractors.resilience import ResilientExtractorMixin
 
 # base comes from infrastructure layer
 from core.infrastructure.io.extractors import base
@@ -18,4 +19,5 @@ __all__ = [
     "get_extractor_class",
     "ensure_extractors_loaded",
     "EXTRACTOR_REGISTRY",
+    "ResilientExtractorMixin",
 ]

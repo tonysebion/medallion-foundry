@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, TYPE_CHECKING
 
 import pandas as pd
 
-from core.infrastructure.runtime.config import (
+from core.infrastructure.config import (
     DatasetConfig,
     RootConfig,
     ensure_root_config,

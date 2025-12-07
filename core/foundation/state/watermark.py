@@ -25,7 +25,6 @@ Watermark file structure:
 
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass, field
 from datetime import date
@@ -34,8 +33,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from core.foundation.time_utils import utc_isoformat as _utc_isoformat
-
 from core.foundation.primitives.base import RichEnumMixin
+from core.foundation.state.storage import StateStorageBackend
 
 logger = logging.getLogger(__name__)
 
@@ -187,10 +186,11 @@ class Watermark:
         )
 
 
-class WatermarkStore:
+class WatermarkStore(StateStorageBackend):
     """Centralized watermark storage.
 
-    Supports local filesystem and S3 storage backends.
+    Supports local filesystem and S3 storage backends. Inherits common
+    storage operations from StateStorageBackend.
     """
 
     def __init__(
@@ -252,10 +252,11 @@ class WatermarkStore:
         source_key = self._get_source_key(system, table)
 
         try:
-            if self.storage_backend == "s3":
-                return self._load_s3(source_key, watermark_column, watermark_type)
-            else:
-                return self._load_local(source_key, watermark_column, watermark_type)
+            data = self._dispatch_storage_operation(
+                local_op=lambda: self._load_json_local(self._get_local_path(source_key)),
+                s3_op=lambda: self._load_json_s3(self.s3_bucket or "", self._get_s3_key(source_key)),
+            )
+            return Watermark.from_dict(data)
         except FileNotFoundError:
             logger.info("No existing watermark for %s, creating new", source_key)
             return Watermark(
@@ -271,79 +272,13 @@ class WatermarkStore:
                 watermark_type=watermark_type,
             )
 
-    def _load_local(
-        self,
-        source_key: str,
-        watermark_column: str,
-        watermark_type: WatermarkType,
-    ) -> Watermark:
-        """Load watermark from local file."""
-        path = self._get_local_path(source_key)
-        if not path.exists():
-            raise FileNotFoundError(f"Watermark not found: {path}")
-
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        return Watermark.from_dict(data)
-
-    def _load_s3(
-        self,
-        source_key: str,
-        watermark_column: str,
-        watermark_type: WatermarkType,
-    ) -> Watermark:
-        """Load watermark from S3."""
-        try:
-            import boto3
-        except ImportError:
-            raise ImportError("boto3 required for S3 watermark storage")
-
-        s3 = boto3.client("s3")
-        key = self._get_s3_key(source_key)
-
-        try:
-            response = s3.get_object(Bucket=self.s3_bucket, Key=key)
-            data = json.loads(response["Body"].read().decode("utf-8"))
-            return Watermark.from_dict(data)
-        except s3.exceptions.NoSuchKey:
-            raise FileNotFoundError(f"Watermark not found in S3: {key}")
-
     def save(self, watermark: Watermark) -> None:
         """Save watermark to storage."""
-        if self.storage_backend == "s3":
-            self._save_s3(watermark)
-        else:
-            self._save_local(watermark)
-
-    def _save_local(self, watermark: Watermark) -> None:
-        """Save watermark to local file."""
-        path = self._get_local_path(watermark.source_key)
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(watermark.to_dict(), f, indent=2)
-
-        logger.info("Saved watermark to %s", path)
-
-    def _save_s3(self, watermark: Watermark) -> None:
-        """Save watermark to S3."""
-        try:
-            import boto3
-        except ImportError:
-            raise ImportError("boto3 required for S3 watermark storage")
-
-        s3 = boto3.client("s3")
-        key = self._get_s3_key(watermark.source_key)
-        body = json.dumps(watermark.to_dict(), indent=2)
-
-        s3.put_object(
-            Bucket=self.s3_bucket,
-            Key=key,
-            Body=body.encode("utf-8"),
+        data = watermark.to_dict()
+        self._dispatch_storage_operation(
+            local_op=lambda: self._save_json_local(self._get_local_path(watermark.source_key), data),
+            s3_op=lambda: self._save_json_s3(self.s3_bucket or "", self._get_s3_key(watermark.source_key), data),
         )
-
-        logger.info("Saved watermark to s3://%s/%s", self.s3_bucket, key)
 
     def delete(self, system: str, table: str) -> bool:
         """Delete watermark for a source.
@@ -354,80 +289,40 @@ class WatermarkStore:
         source_key = self._get_source_key(system, table)
 
         try:
-            if self.storage_backend == "s3":
-                return self._delete_s3(source_key)
-            else:
-                return self._delete_local(source_key)
+            return self._dispatch_storage_operation(
+                local_op=lambda: self._delete_local(self._get_local_path(source_key)),
+                s3_op=lambda: self._delete_s3(self.s3_bucket or "", self._get_s3_key(source_key)),
+            )
         except Exception as e:
             logger.warning("Error deleting watermark for %s: %s", source_key, e)
             return False
 
-    def _delete_local(self, source_key: str) -> bool:
-        """Delete watermark from local file."""
-        path = self._get_local_path(source_key)
-        if path.exists():
-            path.unlink()
-            logger.info("Deleted watermark at %s", path)
-            return True
-        return False
-
-    def _delete_s3(self, source_key: str) -> bool:
-        """Delete watermark from S3."""
-        try:
-            import boto3
-        except ImportError:
-            raise ImportError("boto3 required for S3 watermark storage")
-
-        s3 = boto3.client("s3")
-        key = self._get_s3_key(source_key)
-
-        try:
-            s3.delete_object(Bucket=self.s3_bucket, Key=key)
-            logger.info("Deleted watermark from s3://%s/%s", self.s3_bucket, key)
-            return True
-        except Exception:
-            return False
-
     def list_watermarks(self) -> list[Watermark]:
         """List all watermarks in storage."""
-        if self.storage_backend == "s3":
-            return self._list_s3()
-        else:
-            return self._list_local()
+        return self._dispatch_storage_operation(
+            local_op=self._list_watermarks_local,
+            s3_op=self._list_watermarks_s3,
+        )
 
-    def _list_local(self) -> list[Watermark]:
+    def _list_watermarks_local(self) -> list[Watermark]:
         """List all watermarks from local files."""
         watermarks = []
-        for path in self.local_path.glob("*_watermark.json"):
+        for path in self._list_json_local(self.local_path, "*_watermark.json"):
             try:
-                with open(path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
+                data = self._load_json_local(path)
                 watermarks.append(Watermark.from_dict(data))
             except Exception as e:
                 logger.warning("Could not load watermark from %s: %s", path, e)
         return watermarks
 
-    def _list_s3(self) -> list[Watermark]:
+    def _list_watermarks_s3(self) -> list[Watermark]:
         """List all watermarks from S3."""
-        try:
-            import boto3
-        except ImportError:
-            raise ImportError("boto3 required for S3 watermark storage")
-
-        s3 = boto3.client("s3")
         watermarks = []
-
-        paginator = s3.get_paginator("list_objects_v2")
-        for page in paginator.paginate(Bucket=self.s3_bucket, Prefix=self.s3_prefix):
-            for obj in page.get("Contents", []):
-                if obj["Key"].endswith("_watermark.json"):
-                    try:
-                        response = s3.get_object(Bucket=self.s3_bucket, Key=obj["Key"])
-                        data = json.loads(response["Body"].read().decode("utf-8"))
-                        watermarks.append(Watermark.from_dict(data))
-                    except Exception as e:
-                        logger.warning("Could not load watermark from %s: %s", obj['Key'], e)
-
+        keys = self._list_json_s3(self.s3_bucket or "", self.s3_prefix, "_watermark.json")
+        for key in keys:
+            data = self._load_json_s3_by_key(self.s3_bucket or "", key)
+            if data:
+                watermarks.append(Watermark.from_dict(data))
         return watermarks
 
 

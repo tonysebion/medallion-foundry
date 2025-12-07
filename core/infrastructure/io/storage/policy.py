@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Any, Optional, Union
 
 if TYPE_CHECKING:
-    from core.infrastructure.runtime.config import PlatformConfig
+    from core.infrastructure.config import PlatformConfig
 
 
 # =============================================================================

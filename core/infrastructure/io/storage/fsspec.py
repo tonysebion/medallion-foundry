@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional
 import fsspec  # type: ignore[import-untyped]
 
 if TYPE_CHECKING:
-    from core.infrastructure.runtime.config import EnvironmentConfig
+    from core.infrastructure.config import EnvironmentConfig
     from core.infrastructure.io.storage.uri import StorageURI
 
 logger = logging.getLogger(__name__)

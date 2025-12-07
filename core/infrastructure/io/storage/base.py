@@ -30,7 +30,7 @@ from core.platform.resilience.constants import (
 )
 
 if TYPE_CHECKING:
-    from core.infrastructure.runtime.config import RootConfig
+    from core.infrastructure.config import RootConfig
 
 logger = logging.getLogger(__name__)
 

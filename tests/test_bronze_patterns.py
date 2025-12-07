@@ -26,7 +26,7 @@ from core.domain.services.pipelines.bronze.io import (
     merge_csv_records,
 )
 from core.foundation.primitives.patterns import LoadPattern
-from core.infrastructure.runtime.config import validate_config_dict
+from core.infrastructure.config import validate_config_dict
 from core.foundation.state.manifest import ManifestTracker
 
 

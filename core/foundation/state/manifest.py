@@ -44,7 +44,6 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
-import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -52,6 +51,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from core.foundation.time_utils import utc_isoformat as _utc_isoformat
+from core.foundation.state.storage import StateStorageBackend
 
 logger = logging.getLogger(__name__)
 
@@ -275,10 +275,11 @@ _DISCOVERY_STRATEGIES: List[DiscoveryStrategy] = [
 ]
 
 
-class ManifestTracker:
+class ManifestTracker(StateStorageBackend):
     """Tracker for managing file manifests.
 
-    Supports local filesystem and S3 storage for manifests.
+    Supports local filesystem and S3 storage for manifests. Inherits common
+    storage operations from StateStorageBackend.
     """
 
     def __init__(self, manifest_path: str):
@@ -289,6 +290,8 @@ class ManifestTracker:
         """
         self.manifest_path = manifest_path
         self._manifest: Optional[FileManifest] = None
+        # Set storage_backend based on path for dispatch operations
+        self.storage_backend = "s3" if manifest_path.startswith("s3://") else "local"
 
     @property
     def is_s3(self) -> bool:
@@ -302,9 +305,11 @@ class ManifestTracker:
 
         try:
             if self.is_s3:
-                self._manifest = self._load_s3()
+                bucket, key = self._parse_s3_path(self.manifest_path)
+                data = self._load_json_s3(bucket, key)
             else:
-                self._manifest = self._load_local()
+                data = self._load_json_local(Path(self.manifest_path))
+            self._manifest = FileManifest.from_dict(data)
         except FileNotFoundError:
             logger.info("Manifest not found at %s, creating new", self.manifest_path)
             self._manifest = FileManifest(manifest_path=self.manifest_path)
@@ -314,80 +319,17 @@ class ManifestTracker:
 
         return self._manifest
 
-    def _load_local(self) -> FileManifest:
-        """Load manifest from local filesystem."""
-        path = Path(self.manifest_path)
-        if not path.exists():
-            raise FileNotFoundError(f"Manifest not found: {path}")
-
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        return FileManifest.from_dict(data)
-
-    def _load_s3(self) -> FileManifest:
-        """Load manifest from S3."""
-        try:
-            import boto3
-        except ImportError:
-            raise ImportError("boto3 required for S3 manifest storage")
-
-        # Parse S3 path
-        parts = self.manifest_path.replace("s3://", "").split("/", 1)
-        bucket = parts[0]
-        key = parts[1] if len(parts) > 1 else ""
-
-        s3 = boto3.client("s3")
-        try:
-            response = s3.get_object(Bucket=bucket, Key=key)
-            data = json.loads(response["Body"].read().decode("utf-8"))
-            return FileManifest.from_dict(data)
-        except s3.exceptions.NoSuchKey:
-            raise FileNotFoundError(f"Manifest not found in S3: {self.manifest_path}")
-
     def save(self) -> None:
         """Save manifest to storage."""
         if self._manifest is None:
             return
 
+        data = self._manifest.to_dict()
         if self.is_s3:
-            self._save_s3()
+            bucket, key = self._parse_s3_path(self.manifest_path)
+            self._save_json_s3(bucket, key, data)
         else:
-            self._save_local()
-
-    def _save_local(self) -> None:
-        """Save manifest to local filesystem."""
-        path = Path(self.manifest_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-        manifest = self._manifest
-        if manifest is None:
-            return
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(manifest.to_dict(), f, indent=2)
-
-        logger.info("Saved manifest to %s", path)
-
-    def _save_s3(self) -> None:
-        """Save manifest to S3."""
-        try:
-            import boto3
-        except ImportError:
-            raise ImportError("boto3 required for S3 manifest storage")
-
-        # Parse S3 path
-        parts = self.manifest_path.replace("s3://", "").split("/", 1)
-        bucket = parts[0]
-        key = parts[1] if len(parts) > 1 else ""
-
-        s3 = boto3.client("s3")
-        manifest = self._manifest
-        if manifest is None:
-            return
-        body = json.dumps(manifest.to_dict(), indent=2)
-        s3.put_object(Bucket=bucket, Key=key, Body=body.encode("utf-8"))
-
-        logger.info("Saved manifest to s3://%s/%s", bucket, key)
+            self._save_json_local(Path(self.manifest_path), data)
 
     def discover_files(
         self,

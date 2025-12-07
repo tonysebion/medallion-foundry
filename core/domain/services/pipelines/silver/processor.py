@@ -36,7 +36,7 @@ from core.domain.services.pipelines.silver.handlers import (
 )
 
 if TYPE_CHECKING:
-    from core.infrastructure.runtime.config import EnvironmentConfig
+    from core.infrastructure.config import EnvironmentConfig
 
 logger = logging.getLogger(__name__)
 

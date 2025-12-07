@@ -1,7 +1,7 @@
 """Tests for shared environment variable resolution helpers."""
 
 
-from core.infrastructure.runtime.config import resolve_env_vars
+from core.infrastructure.config import resolve_env_vars
 
 
 def test_resolve_simple_string(tmp_path, monkeypatch):

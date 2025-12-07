@@ -1,10 +1,12 @@
 """State management for incremental patterns in bronze-foundry.
 
 This package contains state tracking for incremental extraction:
+- storage: Base class for state storage backends (local, S3)
 - watermark: Watermark tracking for incremental loads (timestamps, cursors)
 - manifest: File manifest tracking for file_batch sources
 """
 
+from .storage import StateStorageBackend
 from .watermark import (
     Watermark,
     WatermarkStore,
@@ -19,6 +21,8 @@ from .manifest import (
 )
 
 __all__ = [
+    # Storage base
+    "StateStorageBackend",
     # Watermark
     "Watermark",
     "WatermarkStore",

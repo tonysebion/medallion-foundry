@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import date
 
@@ -21,52 +20,24 @@ import requests
 from requests.adapters import HTTPAdapter
 
 from core.platform.resilience import (
-    RetryPolicy,
     execute_with_retry,
-    CircuitBreaker,
     RateLimiter,
 )
 from core.foundation.catalog.tracing import trace_span
 from core.infrastructure.io.http.auth import build_api_auth
-from core.infrastructure.io.http.session import AsyncApiClient, HttpPoolConfig, is_async_enabled
+from core.infrastructure.io.http.session import (
+    AsyncApiClient,
+    HttpPoolConfig,
+    SyncPoolConfig,
+    is_async_enabled,
+)
 
 from core.infrastructure.io.extractors.base import BaseExtractor, register_extractor
 from core.domain.adapters.extractors.pagination import (
     PagePaginationState,
     build_pagination_state,
 )
-
-
-@dataclass
-class SyncPoolConfig:
-    """Configuration for synchronous HTTP connection pooling.
-
-    These settings configure the requests.Session HTTPAdapter for
-    connection reuse across API requests.
-
-    Attributes:
-        pool_connections: Number of urllib3 connection pools to cache
-        pool_maxsize: Maximum connections per pool (per host)
-        pool_block: Block when pool is full (vs raise error)
-        max_retries: Maximum retries for connection-level errors (0 to disable)
-    """
-
-    pool_connections: int = 10
-    pool_maxsize: int = 10
-    pool_block: bool = False
-    max_retries: int = 0
-
-    @classmethod
-    def from_dict(cls, data: Optional[Dict[str, Any]]) -> "SyncPoolConfig":
-        """Create from dictionary configuration."""
-        if data is None:
-            return cls()
-        return cls(
-            pool_connections=data.get("pool_connections", 10),
-            pool_maxsize=data.get("pool_maxsize", 10),
-            pool_block=data.get("pool_block", False),
-            max_retries=data.get("max_retries", 0),
-        )
+from core.domain.adapters.extractors.resilience import ResilientExtractorMixin
 
 logger = logging.getLogger(__name__)
 
@@ -101,13 +72,25 @@ def _create_pooled_session(pool_config: Optional[SyncPoolConfig] = None) -> requ
 
 
 @register_extractor("api")
-class ApiExtractor(BaseExtractor):
+class ApiExtractor(BaseExtractor, ResilientExtractorMixin):
     """Extractor for REST API sources with authentication and pagination.
 
     Supports bearer token, API key, and basic authentication. Handles
     various pagination strategies and includes rate limiting support.
     Connection pooling is configurable for both sync and async paths.
+
+    Uses ResilientExtractorMixin for circuit breaker and retry capabilities.
     """
+
+    _limiter: Optional[RateLimiter] = None
+
+    def __init__(self) -> None:
+        """Initialize ApiExtractor with resilience patterns."""
+        self._init_resilience(
+            failure_threshold=5,
+            cooldown_seconds=30.0,
+            half_open_max_calls=1,
+        )
 
     def get_watermark_config(self, cfg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Get watermark configuration for API extraction.
@@ -127,10 +110,57 @@ class ApiExtractor(BaseExtractor):
             "type": api_cfg.get("cursor_type", "timestamp"),
         }
 
-    _breaker = CircuitBreaker(
-        failure_threshold=5, cooldown_seconds=30.0, half_open_max_calls=1
-    )
-    _limiter: Optional[RateLimiter] = None
+    def _should_retry_api(self, exc: BaseException) -> bool:
+        """Determine if an API exception should trigger a retry.
+
+        Args:
+            exc: The exception that was raised
+
+        Returns:
+            True if the operation should be retried
+        """
+        # Retry for timeouts/connection errors
+        if isinstance(
+            exc, (requests.exceptions.Timeout, requests.exceptions.ConnectionError)
+        ):
+            return True
+        # Retry 5xx HTTP errors and 429 rate limit
+        if isinstance(exc, requests.exceptions.HTTPError):
+            resp = getattr(exc, "response", None)
+            status_code = getattr(resp, "status_code", None)
+            if status_code is None:
+                return False
+            status = int(status_code)
+            return status == 429 or 500 <= status < 600
+        return False
+
+    def _delay_from_api_exc(
+        self, exc: BaseException, attempt: int, default_delay: float
+    ) -> Optional[float]:
+        """Extract retry delay from API exception (e.g., Retry-After header).
+
+        Args:
+            exc: The exception that was raised
+            attempt: Current attempt number
+            default_delay: Default delay to use if no header found
+
+        Returns:
+            Delay in seconds from Retry-After header, or None for default
+        """
+        if isinstance(exc, requests.exceptions.HTTPError):
+            resp = getattr(exc, "response", None)
+            if resp is not None:
+                retry_after = (
+                    resp.headers.get("Retry-After")
+                    if hasattr(resp, "headers")
+                    else None
+                )
+                if retry_after:
+                    try:
+                        return float(retry_after)
+                    except Exception:
+                        return None
+        return None
 
     def _make_request(
         self,
@@ -143,8 +173,6 @@ class ApiExtractor(BaseExtractor):
     ) -> requests.Response:
         """Make HTTP request with retry logic (exponential backoff + jitter)."""
         logger.debug("Making request to %s with params %s", url, params)
-        # Rate limiter is derived from config per call site; fallback to none
-        # The limiter is injected via closure when called from paginate
 
         def _once() -> requests.Response:
             limiter = getattr(self, "_limiter", None)
@@ -157,67 +185,25 @@ class ApiExtractor(BaseExtractor):
             # Only retry on 5xx; 4xx should raise immediately
             try:
                 resp.raise_for_status()
-            except (
-                requests.exceptions.HTTPError
-            ) as http_err:  # decide retryability via predicate
+            except requests.exceptions.HTTPError as http_err:
                 raise http_err
             return resp
 
-        def _retry_if(exc: BaseException) -> bool:
-            # Retry for timeouts/connection errors
-            if isinstance(
-                exc, (requests.exceptions.Timeout, requests.exceptions.ConnectionError)
-            ):
-                return True
-            # Retry 5xx HTTP errors
-            if isinstance(exc, requests.exceptions.HTTPError):
-                resp = getattr(exc, "response", None)
-                status_code = getattr(resp, "status_code", None)
-                if status_code is None:
-                    return False
-                status = int(status_code)
-                return status == 429 or 500 <= status < 600
-            return False
-
-        def _delay_from_exc(
-            exc: BaseException, attempt: int, default_delay: float
-        ) -> float | None:
-            if isinstance(exc, requests.exceptions.HTTPError):
-                resp = getattr(exc, "response", None)
-                if resp is not None:
-                    retry_after = (
-                        resp.headers.get("Retry-After")
-                        if hasattr(resp, "headers")
-                        else None
-                    )
-                    if retry_after:
-                        try:
-                            return float(retry_after)
-                        except Exception:
-                            return None
-            return None
-
-        policy = RetryPolicy(
+        # Build retry policy with API-specific handlers
+        policy = self._build_retry_policy(
+            retry_if=self._should_retry_api,
+            delay_from_exception=self._delay_from_api_exc,
             max_attempts=5,
             base_delay=0.5,
             max_delay=8.0,
             backoff_multiplier=2.0,
             jitter=0.2,
-            retry_on_exceptions=(),  # use custom predicate
-            retry_if=_retry_if,
-            delay_from_exception=_delay_from_exc,
         )
-
-        # emit simple metrics on breaker transitions
-        def _on_state_change(state: str) -> None:
-            logger.info("metric=breaker_state component=api_extractor state=%s", state)
-
-        ApiExtractor._breaker.on_state_change = _on_state_change
 
         return execute_with_retry(
             _once,
             policy=policy,
-            breaker=ApiExtractor._breaker,
+            breaker=self._breaker,
             operation_name="api_get",
         )
 

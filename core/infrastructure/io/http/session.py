@@ -35,7 +35,7 @@ except Exception:
 
 @dataclass
 class HttpPoolConfig:
-    """Configuration for HTTP connection pooling.
+    """Configuration for HTTP connection pooling (async httpx).
 
     Attributes:
         max_connections: Maximum total connections in the pool
@@ -59,6 +59,38 @@ class HttpPoolConfig:
             max_keepalive_connections=data.get("max_keepalive_connections", 20),
             keepalive_expiry=data.get("keepalive_expiry", 30.0),
             http2=data.get("http2", False),
+        )
+
+
+@dataclass
+class SyncPoolConfig:
+    """Configuration for synchronous HTTP connection pooling (requests).
+
+    These settings configure the requests.Session HTTPAdapter for
+    connection reuse across API requests.
+
+    Attributes:
+        pool_connections: Number of urllib3 connection pools to cache
+        pool_maxsize: Maximum connections per pool (per host)
+        pool_block: Block when pool is full (vs raise error)
+        max_retries: Maximum retries for connection-level errors (0 to disable)
+    """
+
+    pool_connections: int = 10
+    pool_maxsize: int = 10
+    pool_block: bool = False
+    max_retries: int = 0
+
+    @classmethod
+    def from_dict(cls, data: Optional[Dict[str, Any]]) -> "SyncPoolConfig":
+        """Create from dictionary configuration."""
+        if data is None:
+            return cls()
+        return cls(
+            pool_connections=data.get("pool_connections", 10),
+            pool_maxsize=data.get("pool_maxsize", 10),
+            pool_block=data.get("pool_block", False),
+            max_retries=data.get("max_retries", 0),
         )
 
 

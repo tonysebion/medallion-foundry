@@ -19,7 +19,7 @@ import logging
 import datetime as dt
 from typing import Any, Dict, List, Optional, cast
 
-from core.infrastructure.runtime.config import ensure_root_config, load_configs, RootConfig
+from core.infrastructure.config import ensure_root_config, load_configs, RootConfig
 from core.orchestration.runner import run_extract
 from core.orchestration.parallel import run_parallel_extracts
 from core.foundation.primitives.logging import setup_logging

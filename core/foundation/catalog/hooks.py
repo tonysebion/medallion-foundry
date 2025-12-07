@@ -6,12 +6,18 @@ Hooks can operate in two modes:
 - Logging mode (default): Events are logged for debugging
 - Integration mode: Events are forwarded to an external catalog
 
-To enable OpenMetadata integration:
-    from core.foundation.catalog import set_om_client
+To enable OpenMetadata integration, configure the client at the orchestration
+or domain layer (NOT in foundation code):
+
+    # In your orchestration/application code:
     from core.platform.om import OpenMetadataClient
+    from core.foundation.catalog import set_om_client
 
     client = OpenMetadataClient(base_url="http://om-server:8585/api")
     set_om_client(client)
+
+Note: The foundation layer (L0) should not import from platform (L1).
+The set_om_client() function accepts Any type to maintain layer boundaries.
 """
 
 from __future__ import annotations

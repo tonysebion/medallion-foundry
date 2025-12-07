@@ -18,7 +18,7 @@ from core.infrastructure.io.extractors.base import BaseExtractor, register_extra
 from core.infrastructure.io.storage import StorageURI, create_filesystem
 
 if TYPE_CHECKING:
-    from core.infrastructure.runtime.config import EnvironmentConfig
+    from core.infrastructure.config import EnvironmentConfig
 
 logger = logging.getLogger(__name__)
 
