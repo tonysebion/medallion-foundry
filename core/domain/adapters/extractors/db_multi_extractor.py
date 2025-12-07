@@ -37,17 +37,15 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import date
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import pyodbc
-
-from core.infrastructure.io.extractors.base import BaseExtractor, register_extractor
 from core.domain.adapters.extractors.cursor_state import (
     CursorStateManager,
     build_incremental_query,
 )
-from core.domain.adapters.extractors.mixins import RateLimitMixin, default_retry
+from core.domain.adapters.extractors.db_runner import fetch_records_from_query
+from core.domain.adapters.extractors.mixins import default_retry
+from core.infrastructure.io.extractors.base import BaseExtractor, register_extractor
 
 logger = logging.getLogger(__name__)
 

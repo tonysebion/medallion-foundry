@@ -11,21 +11,25 @@ import csv
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional
 
 from core.foundation.time_utils import utc_isoformat as _utc_isoformat
 from core.infrastructure.runtime.file_io import (
-    ChunkSizer,
-    chunk_records,
+    ChunkSizer as _RuntimeChunkSizer,
+    chunk_records as _runtime_chunk_records,
     DataFrameMerger,
 )
 from core.infrastructure.io.storage import (
-    compute_file_sha256,
+    compute_file_sha256 as _runtime_compute_file_sha256,
     write_checksum_manifest as _infra_write_checksum_manifest,
     verify_checksum_manifest as _infra_verify_checksum_manifest,
 )
 
 import pandas as pd
+
+ChunkSizer = _RuntimeChunkSizer
+chunk_records = _runtime_chunk_records
+compute_file_sha256 = _runtime_compute_file_sha256
 
 logger = logging.getLogger(__name__)
 

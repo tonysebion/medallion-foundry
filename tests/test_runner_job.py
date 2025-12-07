@@ -9,12 +9,11 @@ from core.orchestration.runner.job import (
     build_extractor,
     ExtractJob,
     run_extract,
-    _load_extractors,
 )
 from core.infrastructure.runtime.context import RunContext
 from core.infrastructure.runtime.metadata import Layer, RunStatus
 from core.foundation.primitives.patterns import LoadPattern
-from core.infrastructure.io.extractors.base import BaseExtractor, EXTRACTOR_REGISTRY
+from core.infrastructure.io.extractors.base import EXTRACTOR_REGISTRY
 from core.domain.services.pipelines.bronze.models import StoragePlan
 
 

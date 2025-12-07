@@ -5,7 +5,6 @@
 import io
 import json
 import logging
-import os
 import sys
 from dataclasses import dataclass
 from enum import Enum

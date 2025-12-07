@@ -126,7 +126,7 @@ class TestChecksumIdempotency:
         write_parquet_chunk(records, data_path)
 
         # Create manifest
-        manifest_path = write_checksum_manifest(
+        write_checksum_manifest(
             out_dir=temp_dir,
             files=[data_path],
             load_pattern="snapshot",

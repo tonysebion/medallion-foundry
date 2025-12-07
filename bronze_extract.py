@@ -301,7 +301,7 @@ class BronzeOrchestrator:
                             for cap, enabled in result.capabilities.items():
                                 logger.info(f"    {cap}: {'enabled' if enabled else 'disabled'}")
                         else:
-                            logger.error(f"  ✗ Health check FAILED")
+                            logger.error("  ✗ Health check FAILED")
                             for error in result.errors:
                                 logger.error(f"    Error: {error}")
                             for perm, status in result.checked_permissions.items():

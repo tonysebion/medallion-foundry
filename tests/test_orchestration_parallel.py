@@ -1,10 +1,14 @@
 """Tests for parallel orchestration module."""
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
+import threading
+import time
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
+import pytest
+
+from core.domain.services.processing.chunk_processor import ChunkProcessor
 from core.orchestration.parallel import run_parallel_extracts, _safe_run_extract
 from core.infrastructure.runtime.context import RunContext
 from core.foundation.primitives.patterns import LoadPattern
@@ -252,15 +256,6 @@ class TestParallelExtractsLogging:
 # Concurrent Chunk Processing Tests (#4)
 # =============================================================================
 
-from core.domain.services.processing.chunk_processor import (
-    ChunkProcessor,
-    ChunkWriter,
-    ChunkWriterConfig,
-)
-from core.domain.services.pipelines.bronze.models import StoragePlan
-import threading
-import time
-
 
 class TestChunkProcessorConcurrency:
     """Tests for ChunkProcessor with parallel_workers > 1."""
@@ -322,7 +317,7 @@ class TestChunkProcessorConcurrency:
         processor = ChunkProcessor(writer, parallel_workers=4)
 
         chunks = [[{"id": i}] for i in range(10)]
-        result = processor.process(chunks)
+        processor.process(chunks)
 
         # Each chunk should be written exactly once
         indices = [idx for idx, _, _ in written_chunks]

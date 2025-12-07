@@ -82,7 +82,6 @@ class ExtractJob:
 
     @property
     def source_cfg(self) -> Dict[str, Any]:
-        from typing import cast
 
         return cast(Dict[str, Any], self.cfg["source"])
 

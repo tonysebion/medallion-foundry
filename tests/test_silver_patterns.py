@@ -6,22 +6,18 @@ Tests Silver transformation patterns:
 - single_source_with_lookups: Enrich with lookup tables
 """
 
-from datetime import date, datetime
-from pathlib import Path
-from typing import Any, Dict, List
 
 import pandas as pd
 import pytest
 
-from core.domain.services.pipelines.silver.lookups import LookupConfig, LookupEnricher, LookupResult, LookupJoinKey
+from core.domain.services.pipelines.silver.lookups import LookupConfig, LookupEnricher, LookupJoinKey
 from core.domain.services.pipelines.silver.joins import (
     JoinConfig,
     JoinSource,
     JoinKeyPair,
     MultiSourceJoiner,
-    JoinResult,
 )
-from core.domain.adapters.schema import SchemaValidator, SchemaSpec, validate_schema
+from core.domain.adapters.schema import SchemaValidator, SchemaSpec
 
 
 class TestSingleSourcePattern:

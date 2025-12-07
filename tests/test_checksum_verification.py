@@ -11,13 +11,11 @@ import pytest
 
 from core.infrastructure.io.storage.checksum import (
     ChecksumVerificationResult,
-    compute_file_sha256,
     verify_checksum_manifest_with_result,
     write_checksum_manifest,
 )
 from core.infrastructure.io.storage.quarantine import (
     QuarantineConfig,
-    QuarantineResult,
     quarantine_corrupted_files,
 )
 

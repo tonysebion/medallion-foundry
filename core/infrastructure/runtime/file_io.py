@@ -20,10 +20,21 @@ from typing import Any
 import pandas as pd
 
 # Re-export from storage for backward compatibility
-from core.infrastructure.io.storage import compute_file_sha256, sanitize_partition_value
+from core.infrastructure.io.storage import (
+    compute_file_sha256 as _compute_file_sha256,
+    sanitize_partition_value as _sanitize_partition_value,
+)
 
 # Re-export chunking utilities for backward compatibility
-from core.infrastructure.runtime.chunking import ChunkSizer, chunk_records
+from core.infrastructure.runtime.chunking import (
+    ChunkSizer as _ChunkSizer,
+    chunk_records as _chunk_records,
+)
+
+compute_file_sha256 = _compute_file_sha256
+sanitize_partition_value = _sanitize_partition_value
+ChunkSizer = _ChunkSizer
+chunk_records = _chunk_records
 
 logger = logging.getLogger(__name__)
 
@@ -514,4 +525,3 @@ def normalize_dataframe(
                     lambda val: None if isinstance(val, str) and val == "" else val
                 )
     return result
-

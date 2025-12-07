@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from core.foundation.time_utils import utc_isoformat as _utc_isoformat
 

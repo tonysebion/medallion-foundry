@@ -301,7 +301,11 @@ class MultiSourceJoiner:
             raise ValueError(f"Right join keys missing for '{source.name}': {missing_right}")
 
         # Rename right keys to match left
-        right_key_rename = {r: l for l, r in zip(left_keys, right_keys) if l != r}
+        right_key_rename = {
+            r: left_key
+            for left_key, r in zip(left_keys, right_keys)
+            if left_key != r
+        }
         if right_key_rename:
             right_df = right_df.rename(columns=right_key_rename)
 

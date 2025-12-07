@@ -18,7 +18,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, ClassVar, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional
 
 from core.foundation.primitives.base import RichEnumMixin
 

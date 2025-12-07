@@ -9,7 +9,7 @@ These tests verify the late data handling patterns used across the framework:
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest

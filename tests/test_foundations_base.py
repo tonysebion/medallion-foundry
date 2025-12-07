@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import ClassVar, Dict
 
 import pytest
 

@@ -6,8 +6,6 @@ T2: Late data / backfill scenarios
 """
 
 from datetime import date, datetime, timedelta
-from pathlib import Path
-from typing import Any, Dict
 
 import pandas as pd
 import pytest

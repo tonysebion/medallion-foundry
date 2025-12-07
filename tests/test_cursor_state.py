@@ -3,7 +3,6 @@
 import json
 from datetime import date
 
-import pytest
 
 from core.domain.adapters.extractors.cursor_state import (
     CursorStateManager,

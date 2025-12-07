@@ -1,9 +1,7 @@
 """Tests for extractor registry and BaseExtractor watermark flow."""
 
-from dataclasses import dataclass
 from datetime import date
 
-import pytest
 
 from core.infrastructure.io.extractors.base import (
     EXTRACTOR_REGISTRY,

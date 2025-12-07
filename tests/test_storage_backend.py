@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-import pytest
 
 from core.infrastructure.io.storage import base as backend_mod
 from core.infrastructure.io.storage import (

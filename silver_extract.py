@@ -1043,7 +1043,6 @@ class SilverPromotionService:
         if not hasattr(self.args, "chunk_tag") or not self.args.chunk_tag:
             return
         import json
-        from datetime import datetime
 
         files = [path for paths in result.outputs.values() for path in paths]
         record_count = result.metrics.rows_written

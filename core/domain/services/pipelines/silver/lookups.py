@@ -273,7 +273,10 @@ class LookupEnricher:
         lookup_subset = lookup_subset.rename(columns=rename_map)
 
         # Create join condition (rename right keys to match left)
-        right_key_rename = {r: l for l, r in zip(left_keys, right_keys)}
+        right_key_rename = {
+            r: left_key
+            for left_key, r in zip(left_keys, right_keys)
+        }
         lookup_subset = lookup_subset.rename(columns=right_key_rename)
 
         # Perform join

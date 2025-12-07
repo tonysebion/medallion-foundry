@@ -1,6 +1,5 @@
 """Tests for shared environment variable resolution helpers."""
 
-import os
 
 from core.infrastructure.runtime.config import resolve_env_vars
 

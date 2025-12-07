@@ -24,13 +24,17 @@ from datetime import date
 from core.foundation.state.watermark import Watermark, WatermarkStore, WatermarkType
 
 from .registry import (
-    EXTRACTOR_REGISTRY,
-    get_extractor_class,
-    list_extractor_types,
-    register_extractor,
+    EXTRACTOR_REGISTRY as _EXTRACTOR_REGISTRY,
+    get_extractor_class as _get_extractor_class,
+    list_extractor_types as _list_extractor_types,
+    register_extractor as _register_extractor,
 )
 
 
+EXTRACTOR_REGISTRY = _EXTRACTOR_REGISTRY
+get_extractor_class = _get_extractor_class
+list_extractor_types = _list_extractor_types
+register_extractor = _register_extractor
 
 
 @dataclass

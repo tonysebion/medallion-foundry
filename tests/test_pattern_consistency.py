@@ -11,10 +11,8 @@ These tests ensure architectural consistency is maintained as the codebase evolv
 from __future__ import annotations
 
 import ast
-import inspect
-from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Set, Type
+from typing import Type
 
 import pytest
 

@@ -1,6 +1,5 @@
 """Unit tests for pagination helpers used by API extractors."""
 
-import pytest
 
 from core.domain.adapters.extractors.pagination import (
     PaginationState,

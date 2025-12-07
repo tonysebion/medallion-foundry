@@ -3,6 +3,8 @@
 This module provides specific exception types for better error handling and debugging.
 """
 
+import warnings
+from dataclasses import dataclass
 from typing import Optional, Dict, Any
 
 
@@ -371,10 +373,6 @@ class RetryExhaustedError(BronzeFoundryError):
 # =============================================================================
 # Deprecation Warnings and Utilities
 # =============================================================================
-
-import warnings
-from dataclasses import dataclass
-
 
 class BronzeFoundryDeprecationWarning(DeprecationWarning):
     """Base category for deprecation notices."""

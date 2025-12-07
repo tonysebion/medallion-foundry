@@ -14,12 +14,8 @@ Tests all load patterns per spec Section 4:
 """
 
 import json
-from datetime import date, datetime
-from pathlib import Path
-from typing import Any, Dict
 
 import pandas as pd
-import pytest
 
 from core.domain.services.pipelines.bronze.io import (
     chunk_records,
@@ -173,7 +169,7 @@ class TestMergeRecords:
 
         # Merge with updates
         new_records = [{"id": 2, "name": "B Updated"}]
-        count = merge_csv_records(out_path, new_records, primary_keys=["id"])
+        merge_csv_records(out_path, new_records, primary_keys=["id"])
 
         df = pd.read_csv(out_path)
         assert len(df) == 2

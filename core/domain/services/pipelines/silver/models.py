@@ -5,11 +5,20 @@ from __future__ import annotations
 from typing import Any, Dict
 
 # Import SilverModel and SILVER_MODEL_ALIASES from primitives and re-export
-from core.foundation.primitives.models import SilverModel, SILVER_MODEL_ALIASES
+from core.foundation.primitives.models import (
+    SilverModel,
+    SILVER_MODEL_ALIASES as _SILVER_MODEL_ALIASES,
+)
 
 # Re-export from infrastructure for backward compatibility
-from core.infrastructure.config.profiles import MODEL_PROFILES, resolve_profile
+from core.infrastructure.config.profiles import (
+    MODEL_PROFILES as _MODEL_PROFILES,
+    resolve_profile as _resolve_profile,
+)
 
+SILVER_MODEL_ALIASES = _SILVER_MODEL_ALIASES
+MODEL_PROFILES = _MODEL_PROFILES
+resolve_profile = _resolve_profile
 
 # =============================================================================
 # Default Configuration Values

@@ -606,7 +606,6 @@ def generate_event_aggregation_view_ddl(
         return ""
 
     ts_col = dataset.silver.event_ts_column or "event_ts"
-    partition_col = dataset.silver.record_time_partition or f"{ts_col}_dt"
     view_name = f"vw_{dataset.entity}_daily_summary"
 
     if aggregation_period == "hour":

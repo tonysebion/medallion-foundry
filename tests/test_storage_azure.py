@@ -1,7 +1,6 @@
 """Unit tests for Azure storage backend with mocks."""
 
-from unittest.mock import Mock, MagicMock, patch
-from pathlib import Path
+from unittest.mock import Mock, patch
 
 import pytest
 

@@ -10,7 +10,6 @@ Tests PolyBase DDL generation:
 - CTE view DDL for complex queries
 """
 
-from pathlib import Path
 from typing import Any, Dict
 
 import pytest

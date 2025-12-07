@@ -3,8 +3,8 @@
 Story #9: Connection Pooling for HTTP Extractors
 """
 
-from unittest.mock import Mock, patch, MagicMock
-from unittest.mock import AsyncMock, Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
+from unittest.mock import AsyncMock
 import pytest
 
 from core.infrastructure.io.http.session import (
@@ -319,7 +319,6 @@ class TestAsyncApiClientPooling:
         )
 
         # Mock httpx to verify limits are passed
-        import httpx as real_httpx
         with patch("core.infrastructure.io.http.session.httpx") as mock_httpx:
             mock_limits = MagicMock()
             mock_httpx.Limits = MagicMock(return_value=mock_limits)

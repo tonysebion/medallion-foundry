@@ -11,9 +11,8 @@ from typing import Any, Dict, List
 
 import pytest
 
-from core.domain.adapters.quality.rules import QualityRule, RuleLevel, RuleDefinition, parse_rules
+from core.domain.adapters.quality.rules import QualityRule, RuleLevel, RuleDefinition
 from core.domain.adapters.quality.engine import QualityEngine
-from core.domain.adapters.quality.reporter import RuleResult, QualityReport
 
 
 class TestQualityRuleDefinition:

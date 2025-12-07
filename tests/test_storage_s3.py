@@ -1,7 +1,5 @@
 """Unit tests for S3 storage backend with moto mocking."""
 
-import os
-from pathlib import Path
 
 import boto3
 import pytest

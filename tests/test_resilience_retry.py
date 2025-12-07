@@ -8,7 +8,6 @@ These tests verify the resilience patterns used across the framework:
 
 from __future__ import annotations
 
-import pytest
 
 from core.platform.resilience import (
     CircuitBreaker,

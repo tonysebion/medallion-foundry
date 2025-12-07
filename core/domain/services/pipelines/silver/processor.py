@@ -27,7 +27,6 @@ from core.infrastructure.io.storage import (
     verify_checksum_manifest_with_result,
 )
 from core.infrastructure.io.storage import (
-    QuarantineConfig,
     QuarantineResult,
     quarantine_corrupted_files,
 )

@@ -402,7 +402,7 @@ def build_run_metadata(
     """
     source = config.get("source", {})
     silver = config.get("silver", {})
-    platform = config.get("platform", {})
+    config.get("platform", {})
 
     # Extract pipeline_id from config (pattern_id or generate from system.table)
     pipeline_id = source.get("pattern_id") or config.get("pipeline_id")
