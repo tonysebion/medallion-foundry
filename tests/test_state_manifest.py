@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from core.primitives.state.manifest import FileEntry, FileManifest
+from core.foundation.state.manifest import FileEntry, FileManifest
 
 
 MOCK_TIMESTAMP = "2025-01-01T00:00:00Z"

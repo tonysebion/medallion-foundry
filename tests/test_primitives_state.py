@@ -7,14 +7,14 @@ import hashlib
 import pytest
 
 from core.foundation.state import manifest as manifest_module
-from core.primitives.state.manifest import (
+from core.foundation.state.manifest import (
     FileEntry,
     FileManifest,
     ManifestTracker,
     compute_file_checksum,
     _discover_local_files,
 )
-from core.primitives.state.watermark import (
+from core.foundation.state.watermark import (
     Watermark,
     WatermarkStore,
     WatermarkType,

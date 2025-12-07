@@ -26,7 +26,7 @@ from core.platform.resilience import (
     CircuitBreaker,
     RateLimiter,
 )
-from core.primitives.catalog.tracing import trace_span
+from core.foundation.catalog.tracing import trace_span
 from core.infrastructure.io.http.auth import build_api_auth
 from core.infrastructure.io.http.session import AsyncApiClient, HttpPoolConfig, is_async_enabled
 

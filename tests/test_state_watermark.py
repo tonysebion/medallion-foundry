@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from core.primitives.state.watermark import Watermark, WatermarkType
+from core.foundation.state.watermark import Watermark, WatermarkType
 
 MOCK_TIMESTAMP = "2025-01-01T00:00:00Z"
 

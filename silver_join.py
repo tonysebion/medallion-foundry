@@ -19,7 +19,7 @@ from pandas.api.types import is_datetime64_any_dtype
 
 from core.services.pipelines.bronze.io import write_batch_metadata
 from core.runtime.context import RunContext, load_run_context
-from core.primitives.foundations.patterns import LoadPattern
+from core.foundation.primitives.patterns import LoadPattern
 from core.runtime.options import RunOptions
 from core.services.pipelines.silver.models import SilverModel, resolve_profile
 from core.storage import get_storage_backend, enforce_storage_scope, validate_storage_metadata

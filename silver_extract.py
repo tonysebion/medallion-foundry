@@ -25,22 +25,22 @@ from core.services.pipelines.bronze.io import (
     verify_checksum_manifest,
     write_checksum_manifest,
 )
-from core.primitives.foundations.logging import setup_logging
-from core.primitives.foundations.patterns import LoadPattern
+from core.foundation.primitives.logging import setup_logging
+from core.foundation.primitives.patterns import LoadPattern
 from core.runtime.paths import (
     build_bronze_partition,
     build_bronze_relative_path,
     build_silver_partition_path,
 )
-from core.primitives.catalog.hooks import (
+from core.foundation.catalog.hooks import (
     notify_catalog,
     report_schema_snapshot,
     report_quality_snapshot,
     report_run_metadata,
     report_lineage,
 )
-from core.primitives.catalog.webhooks import fire_webhooks
-from core.primitives.time_utils import utc_isoformat
+from core.foundation.catalog.webhooks import fire_webhooks
+from core.foundation.time_utils import utc_isoformat
 from core.runtime.options import RunOptions
 from core.storage import enforce_storage_scope, file_lock
 from core.services.pipelines.silver.io import (

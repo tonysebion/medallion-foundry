@@ -36,7 +36,7 @@ from core.domain.adapters.schema.evolution import (
     SchemaEvolutionMode,
 )
 from core.domain.adapters.schema.types import ColumnSpec, DataType, SchemaSpec
-from core.primitives.catalog.hooks import (
+from core.foundation.catalog.hooks import (
     report_quality_snapshot,
     report_run_metadata,
     report_schema_snapshot,

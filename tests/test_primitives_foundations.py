@@ -14,9 +14,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from core.primitives.foundations import base as foundations_base
-from core.primitives.foundations import exceptions, logging as bf_logging, models, patterns
-from core.primitives.foundations.patterns import LoadPattern
+from core.foundation.primitives import base as foundations_base
+from core.foundation.primitives import exceptions, logging as bf_logging, models, patterns
+from core.foundation.primitives.patterns import LoadPattern
 class RichEnumExample(foundations_base.RichEnumMixin, str, Enum):
     ALPHA = "alpha"
     BETA = "beta"

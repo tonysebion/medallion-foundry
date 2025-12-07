@@ -7,7 +7,7 @@ from urllib import error
 import pytest
 
 from core.om.client import ColumnSchema, OpenMetadataClient, TableSchema
-from core.primitives.catalog import hooks, tracing, webhooks, yaml_generator
+from core.foundation.catalog import hooks, tracing, webhooks, yaml_generator
 
 
 class StubOpenMetadataClient:

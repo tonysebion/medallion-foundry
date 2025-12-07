@@ -7,7 +7,7 @@ from pathlib import Path
 
 from core.orchestration.parallel import run_parallel_extracts, _safe_run_extract
 from core.runtime.context import RunContext
-from core.primitives.foundations.patterns import LoadPattern
+from core.foundation.primitives.patterns import LoadPattern
 
 
 class TestRunParallelExtracts:

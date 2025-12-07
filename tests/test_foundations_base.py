@@ -7,7 +7,7 @@ from typing import ClassVar, Dict
 
 import pytest
 
-from core.primitives.foundations.base import RichEnumMixin, SerializableMixin, _serialize_value
+from core.foundation.primitives.base import RichEnumMixin, SerializableMixin, _serialize_value
 
 
 class SampleEnum(RichEnumMixin, str, Enum):
