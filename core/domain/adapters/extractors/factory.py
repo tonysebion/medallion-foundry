@@ -8,7 +8,7 @@ import pkgutil
 from pathlib import Path
 from typing import Any, Dict, Optional, Type, cast
 
-import core.adapters.extractors as extractors_pkg
+import core.domain.adapters.extractors as extractors_pkg
 from core.infrastructure.io.extractors.base import (
     BaseExtractor,
     EXTRACTOR_REGISTRY,

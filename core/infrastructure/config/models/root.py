@@ -135,7 +135,7 @@ class SchemaConfig(BaseModel):
             return None
         # Lazy import to avoid layer violation (L1 -> L3)
         import importlib
-        schema_types = importlib.import_module("core.adapters.schema.types")
+        schema_types = importlib.import_module("core.domain.adapters.schema.types")
         SchemaSpec = schema_types.SchemaSpec
         return SchemaSpec.from_dict({
             "expected_columns": [col.model_dump() for col in self.expected_columns],
