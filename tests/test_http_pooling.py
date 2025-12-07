@@ -3,8 +3,8 @@
 Story #9: Connection Pooling for HTTP Extractors
 """
 
-import asyncio
 from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import AsyncMock, Mock, patch, MagicMock
 import pytest
 
 from core.io.http.session import (
@@ -249,14 +249,18 @@ class TestAsyncApiClientPooling:
             headers={},
         )
 
-        # Mock the get method to avoid actual HTTP calls
-        with patch.object(client, "_get_client") as mock_get_client:
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"data": "test"}
+        mock_response.raise_for_status = MagicMock()
+
+        # Mock httpx AsyncClient to avoid real HTTP calls while still running _get_client
+        with patch(
+            "core.io.http.session.httpx.AsyncClient", new_callable=AsyncMock
+        ) as mock_async_client:
             mock_httpx_client = MagicMock()
-            mock_response = MagicMock()
-            mock_response.json.return_value = {"data": "test"}
-            mock_response.raise_for_status = MagicMock()
-            mock_httpx_client.get = MagicMock(return_value=asyncio.coroutine(lambda: mock_response)())
-            mock_get_client.return_value = asyncio.coroutine(lambda: mock_httpx_client)()
+            mock_httpx_client.get = AsyncMock(return_value=mock_response)
+            mock_httpx_client.aclose = AsyncMock()
+            mock_async_client.return_value = mock_httpx_client
 
             # Note: We're testing the _get_client method behavior
             # In a real scenario, making 3 requests would reuse the client
@@ -276,14 +280,18 @@ class TestAsyncApiClientPooling:
             headers={},
         ) as client:
             # Create client
-            with patch.object(client, "_get_client") as mock_get_client:
+            with patch(
+                "core.io.http.session.httpx.AsyncClient", new_callable=AsyncMock
+            ) as mock_async_client:
                 mock_httpx_client = MagicMock()
-                mock_get_client.return_value = asyncio.coroutine(lambda: mock_httpx_client)()
+                mock_httpx_client.aclose = AsyncMock()
+                mock_async_client.return_value = mock_httpx_client
                 await client._get_client()
                 client._client = mock_httpx_client
 
         # After context, client should be None
         assert client._client is None
+        mock_httpx_client.aclose.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_close_without_client(self) -> None:
