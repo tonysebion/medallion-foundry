@@ -407,13 +407,14 @@ def bronze_pipeline_config(
                 "path": str(synthetic_input_path),
                 "format": "parquet",
             },
-            "run": {
-                "load_pattern": "snapshot",
-                "local_output_dir": str(bronze_output_path),
-                "storage_enabled": False,
-                "max_rows_per_file": 0,
-                "cleanup_on_failure": True,
-            },
+        "run": {
+            "load_pattern": "snapshot",
+            "local_output_dir": str(bronze_output_path),
+            "storage_enabled": False,
+            "max_rows_per_file": 0,
+            "checkpoint_enabled": False,
+            "cleanup_on_failure": True,
+        },
         },
     }
 

@@ -246,9 +246,13 @@ class ExtractJob:
     def run(self) -> int:
         try:
             return self._run()
-        except CheckpointConflictError:
-            # Checkpoint conflicts are not failures - partition already processed
-            raise
+        except CheckpointConflictError as exc:
+            logger.info(
+                "Skipping Bronze run for %s due to checkpoint conflict: %s",
+                self.relative_path,
+                exc,
+            )
+            return 0
         except Exception as e:
             self._release_checkpoint(
                 success=False,

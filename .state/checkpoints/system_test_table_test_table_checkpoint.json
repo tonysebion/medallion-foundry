@@ -1,5 +1,5 @@
 {
-  "checkpoint_id": "7ca371cb-e902-407f-884c-3e56a7d99b9a",
+  "checkpoint_id": "79f43375-faf4-4181-87ae-05b659be9a10",
   "source_key": "test.test_table",
   "run_id": "test-run-123",
   "run_date": "2024-01-15",
@@ -15,6 +15,6 @@
     "chunk_count": 0,
     "artifact_count": 0
   },
-  "started_at": "2025-12-08T11:01:06.156171Z",
-  "completed_at": "2025-12-08T11:01:06.169480Z"
+  "started_at": "2025-12-08T11:11:19.375700Z",
+  "completed_at": "2025-12-08T11:11:19.387456Z"
 }

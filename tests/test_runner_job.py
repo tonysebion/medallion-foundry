@@ -145,6 +145,7 @@ class TestExtractJob:
                     "run": {
                         "load_pattern": "snapshot",
                         "max_rows_per_file": 0,
+                        "checkpoint_enabled": False,
                     },
                 },
                 "platform": {

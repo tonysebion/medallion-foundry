@@ -220,3 +220,5 @@ coverage.xml
 site/
 CLAUDE.md 
 _version.py
+.state/
+.state/checkpoints/

@@ -302,7 +302,7 @@ class TestCheckpointStore:
             storage_backend="local",
             local_path=tmp_path / "checkpoints",
         )
-        store.acquire_lock(
+        checkpoint = store.acquire_lock(
             partition_path="system=sys/table=tbl/dt=2025-01-15",
             source_key="system.table",
             run_id="run-123",
@@ -433,7 +433,7 @@ class TestCheckpointStore:
             storage_backend="local",
             local_path=tmp_path / "checkpoints",
         )
-        checkpoint = store.acquire_lock(
+        store.acquire_lock(
             partition_path="system=sys/table=tbl/dt=2025-01-15",
             source_key="system.table",
             run_id="run-123",

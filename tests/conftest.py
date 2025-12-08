@@ -8,6 +8,7 @@ Provides common fixtures for:
 """
 
 import os
+import shutil
 import tempfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -24,6 +25,20 @@ TEST_SCALE_FACTOR = float(os.environ.get("TEST_SCALE_FACTOR", "1.0"))
 def scale_rows(base_count: int) -> int:
     """Scale row count by TEST_SCALE_FACTOR."""
     return max(1, int(base_count * TEST_SCALE_FACTOR))
+
+
+@pytest.fixture(scope="session", autouse=True)
+def clean_checkpoint_state() -> None:
+    """Ensure local checkpoint store starts empty for each test session."""
+    checkpoint_dir = Path(".state/checkpoints")
+    if checkpoint_dir.exists():
+        for child in checkpoint_dir.iterdir():
+            if child.is_dir():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+    else:
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
 
 @pytest.fixture
