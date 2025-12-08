@@ -381,38 +381,3 @@ class S3Storage(BaseCloudStorage):
             logger.error("Unexpected error deleting from S3: %s", e)
             raise
 
-
-class S3StorageBackend(S3Storage):
-    """Legacy-friendly wrapper that exposes upload/download hooks."""
-
-    def upload(self, local_path: Path | str, remote_path: str) -> bool:
-        return self.upload_file(str(local_path), remote_path)
-
-    def download(self, remote_path: str, local_path: Path | str) -> bool:
-        return self.download_file(remote_path, str(local_path))
-
-    def delete(self, remote_path: str) -> bool:
-        return self.delete_file(remote_path)
-
-
-# Backward compatibility functions (deprecated)
-def build_s3_client(platform_cfg: Dict[str, Any]) -> boto3.client:
-    """Build an S3 client from platform configuration.
-
-    DEPRECATED: Use S3Storage class instead.
-    """
-    storage = S3Storage(platform_cfg)
-    return storage.client
-
-
-def upload_to_s3(
-    local_path: Path, platform_cfg: Dict[str, Any], relative_path: str
-) -> None:
-    """Upload a file to S3 with retry logic.
-
-    DEPRECATED: Use S3Storage.upload_file() instead.
-    """
-    storage = S3Storage(platform_cfg)
-    # Build remote path from relative_path and filename
-    remote_path = f"{relative_path}{local_path.name}"
-    storage.upload_file(str(local_path), remote_path)

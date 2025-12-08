@@ -135,7 +135,7 @@ platform:
 For backward compatibility with existing configs:
 - If `storage_backend` is not specified, defaults to `"s3"`
 - `s3_enabled: true` is supported, but `storage_enabled: true` is preferred
-- Old S3 helper functions (`upload_to_s3()`) are deprecated but still work
+- Legacy helpers such as `S3StorageBackend` and `upload_to_s3()` have been removed; call the standard storage backend API directly
 
 ## Implementation Guide
 
@@ -271,15 +271,11 @@ platform:
 
 ### Updating Code
 
-If you have custom extractors using the old S3 helpers:
+Use the configured storage backend directly:
 
 ```python
-# Before (deprecated)
-from core.s3 import upload_to_s3
-upload_to_s3(local_path, platform_cfg, relative_path)
-
-# After (recommended)
 from core.storage import get_storage_backend
+
 storage = get_storage_backend(platform_cfg)
 storage.upload_file(str(local_path), f"{relative_path}{local_path.name}")
 ```

@@ -342,15 +342,3 @@ class AzureStorage(BaseCloudStorage):
             logger.error("Azure delete failed [%s]: %s", remote_key, exc)
             raise
 
-
-class AzureStorageBackend(AzureStorage):
-    """Backward-compatible wrapper expected by integration tests."""
-
-    def upload(self, local_path: Path | str, remote_path: str) -> bool:
-        return self.upload_file(str(local_path), remote_path)
-
-    def download(self, remote_path: str, local_path: Path | str) -> bool:
-        return self.download_file(remote_path, str(local_path))
-
-    def delete(self, remote_path: str) -> bool:
-        return self.delete_file(remote_path)

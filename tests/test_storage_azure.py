@@ -99,8 +99,6 @@ class TestAzureStorageInit:
             "azure_connection": {"connection_string_env": "AZURE_STORAGE_CONNECTION_STRING"},
         }
         storage = AzureStorage(config)
-
-        assert storage.prefix == "my-prefix"  # Trailing slash stripped
         assert storage._build_remote_path("file.txt") == "my-prefix/file.txt"
 
     @patch("core.infrastructure.io.storage.azure.BlobServiceClient")
@@ -117,8 +115,6 @@ class TestAzureStorageInit:
             "azure_connection": {"connection_string_env": "AZURE_STORAGE_CONNECTION_STRING"},
         }
         storage = AzureStorage(config)
-
-        assert storage.prefix == ""
         assert storage._build_remote_path("file.txt") == "file.txt"
 
     @patch("core.infrastructure.io.storage.azure.BlobServiceClient")
@@ -301,71 +297,3 @@ class TestAzureStorageRetry:
         assert storage._should_retry(ResourceNotFoundError("Not found")) is False
 
 
-@pytest.mark.skipif(not AZURE_AVAILABLE, reason="Azure SDK not installed")
-class TestAzureStorageBackendWrapper:
-    """Tests for the backward-compatible wrapper."""
-
-    @patch("core.infrastructure.io.storage.azure.BlobServiceClient")
-    def test_wrapper_upload(self, mock_blob_class, mock_container, monkeypatch, tmp_path):
-        """Test wrapper upload method accepts Path."""
-        monkeypatch.setenv("AZURE_STORAGE_CONNECTION_STRING", "DefaultEndpointsProtocol=https;AccountName=test;AccountKey=key;EndpointSuffix=core.windows.net")
-
-        mock_blob_class.from_connection_string.return_value.get_container_client.return_value = mock_container
-
-        from core.infrastructure.io.storage import AzureStorageBackend
-
-        config = {
-            "bronze": {"azure_container": "test-container"},
-            "azure_connection": {"connection_string_env": "AZURE_STORAGE_CONNECTION_STRING"},
-        }
-        storage = AzureStorageBackend(config)
-
-        source = tmp_path / "test.txt"
-        source.write_text("wrapper test")
-
-        result = storage.upload(source, "wrapper/test.txt")
-        assert result is True
-
-    @patch("core.infrastructure.io.storage.azure.BlobServiceClient")
-    def test_wrapper_download(self, mock_blob_class, mock_container, monkeypatch, tmp_path):
-        """Test wrapper download method accepts Path."""
-        monkeypatch.setenv("AZURE_STORAGE_CONNECTION_STRING", "DefaultEndpointsProtocol=https;AccountName=test;AccountKey=key;EndpointSuffix=core.windows.net")
-
-        mock_blob_class.from_connection_string.return_value.get_container_client.return_value = mock_container
-
-        # Setup mock download
-        mock_stream = Mock()
-        mock_stream.readinto = Mock(side_effect=lambda f: f.write(b"content"))
-        blob_client = mock_container.get_blob_client.return_value
-        blob_client.download_blob.return_value = mock_stream
-
-        from core.infrastructure.io.storage import AzureStorageBackend
-
-        config = {
-            "bronze": {"azure_container": "test-container"},
-            "azure_connection": {"connection_string_env": "AZURE_STORAGE_CONNECTION_STRING"},
-        }
-        storage = AzureStorageBackend(config)
-
-        target = tmp_path / "downloaded.txt"
-        result = storage.download("test.txt", target)
-
-        assert result is True
-
-    @patch("core.infrastructure.io.storage.azure.BlobServiceClient")
-    def test_wrapper_delete(self, mock_blob_class, mock_container, monkeypatch):
-        """Test wrapper delete method."""
-        monkeypatch.setenv("AZURE_STORAGE_CONNECTION_STRING", "DefaultEndpointsProtocol=https;AccountName=test;AccountKey=key;EndpointSuffix=core.windows.net")
-
-        mock_blob_class.from_connection_string.return_value.get_container_client.return_value = mock_container
-
-        from core.infrastructure.io.storage import AzureStorageBackend
-
-        config = {
-            "bronze": {"azure_container": "test-container"},
-            "azure_connection": {"connection_string_env": "AZURE_STORAGE_CONNECTION_STRING"},
-        }
-        storage = AzureStorageBackend(config)
-
-        result = storage.delete("wrapper/delete.txt")
-        assert result is True

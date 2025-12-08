@@ -14,7 +14,6 @@ from .base import (
     register_storage_backend,
     resolve_backend_type,
 )
-from .azure import AzureStorage, AzureStorageBackend
 from .checksum import (
     ChecksumVerificationResult,
     compute_file_sha256,
@@ -39,7 +38,8 @@ from .policy import (
     validate_storage_metadata,
 )
 from .path_utils import build_partition_path, sanitize_partition_value
-from .s3 import S3Storage, S3StorageBackend
+from .azure import AzureStorage
+from .s3 import S3Storage
 from .uri import StorageURI
 
 __all__ = [
@@ -55,9 +55,7 @@ __all__ = [
     "register_storage_backend",
     "resolve_backend_type",
     "AzureStorage",
-    "AzureStorageBackend",
     "S3Storage",
-    "S3StorageBackend",
     "LocalStorage",
     "StorageMetadata",
     "VALID_BOUNDARIES",

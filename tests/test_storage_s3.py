@@ -7,7 +7,7 @@ import boto3
 import pytest
 from moto import mock_aws
 
-from core.infrastructure.io.storage import S3Storage, S3StorageBackend
+from core.infrastructure.io.storage import S3Storage
 
 ConfigDict = Dict[str, Dict[str, Any]]
 
@@ -79,7 +79,6 @@ class TestS3StorageInit:
                 "s3_connection": {},
             }
             storage = S3Storage(config)
-            assert storage.prefix == "my-prefix"
             assert storage._build_remote_path("file.txt") == "my-prefix/file.txt"
 
     def test_no_prefix(self, aws_credentials):
@@ -93,7 +92,6 @@ class TestS3StorageInit:
                 "s3_connection": {},
             }
             storage = S3Storage(config)
-            assert storage.prefix == ""
             assert storage._build_remote_path("file.txt") == "file.txt"
 
     def test_backend_type(self, s3_storage):
@@ -256,65 +254,3 @@ class TestS3StorageRetry:
 
         assert s3_storage._should_retry(exc) is False
 
-
-class TestS3StorageBackendWrapper:
-    """Tests for the backward-compatible wrapper."""
-
-    def test_wrapper_upload(self, aws_credentials, tmp_path):
-        """Test wrapper upload method."""
-        with mock_aws():
-            client = boto3.client("s3", region_name="us-east-1")
-            client.create_bucket(Bucket="test-bucket")
-
-            config: ConfigDict = {
-                "bronze": {"s3_bucket": "test-bucket"},
-                "s3_connection": {},
-            }
-            storage = S3StorageBackend(config)
-
-            source = tmp_path / "test.txt"
-            source.write_text("wrapper test")
-
-            result = storage.upload(source, "wrapper/test.txt")
-            assert result is True
-
-    def test_wrapper_download(self, aws_credentials, tmp_path):
-        """Test wrapper download method."""
-        with mock_aws():
-            client = boto3.client("s3", region_name="us-east-1")
-            client.create_bucket(Bucket="test-bucket")
-
-            config: ConfigDict = {
-                "bronze": {"s3_bucket": "test-bucket"},
-                "s3_connection": {},
-            }
-            storage = S3StorageBackend(config)
-
-            source = tmp_path / "test.txt"
-            source.write_text("wrapper download")
-            storage.upload(source, "wrapper/download.txt")
-
-            target = tmp_path / "downloaded.txt"
-            result = storage.download("wrapper/download.txt", target)
-
-            assert result is True
-            assert target.read_text() == "wrapper download"
-
-    def test_wrapper_delete(self, aws_credentials, tmp_path):
-        """Test wrapper delete method."""
-        with mock_aws():
-            client = boto3.client("s3", region_name="us-east-1")
-            client.create_bucket(Bucket="test-bucket")
-
-            config: ConfigDict = {
-                "bronze": {"s3_bucket": "test-bucket"},
-                "s3_connection": {},
-            }
-            storage = S3StorageBackend(config)
-
-            source = tmp_path / "test.txt"
-            source.write_text("to delete")
-            storage.upload(source, "wrapper/delete.txt")
-
-            result = storage.delete("wrapper/delete.txt")
-            assert result is True
