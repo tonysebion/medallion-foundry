@@ -393,6 +393,7 @@ def bronze_pipeline_config(
         "platform": {
             "bronze": {
                 "storage_backend": "local",
+                "local_path": str(bronze_output_path.parent / "_checkpoints"),
                 "output_defaults": {
                     "parquet": True,
                     "csv": False,

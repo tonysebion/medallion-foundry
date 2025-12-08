@@ -248,7 +248,8 @@ class ExtractJob:
             return self._run()
         except CheckpointConflictError as exc:
             logger.info(
-                "Skipping Bronze run for %s due to checkpoint conflict: %s",
+                "Skipping Bronze run for %s (%s) due to checkpoint conflict: %s",
+                self.ctx.dataset_id,
                 self.relative_path,
                 exc,
             )

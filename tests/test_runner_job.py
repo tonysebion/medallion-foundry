@@ -154,7 +154,8 @@ class TestExtractJob:
                             "allow_csv": True,
                             "allow_parquet": True,
                             "parquet_compression": "snappy",
-                        }
+                        },
+                        "local_path": str(Path("/tmp/bronze/checkpoints")),
                     },
                     "s3_connection": {},
                 },
