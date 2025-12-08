@@ -15,10 +15,14 @@ system, including:
 """
 
 import copy
+import warnings
 
 import pytest
 
-from core.foundation.primitives.exceptions import BronzeFoundryCompatibilityWarning
+from core.foundation.primitives.exceptions import (
+    BronzeFoundryCompatibilityWarning,
+    BronzeFoundryDeprecationWarning,
+ )
 from core.infrastructure.config import validate_config_dict
 
 
@@ -240,12 +244,33 @@ class TestStorageBackendValidation:
         cfg["platform"]["bronze"]["storage_backend"] = "local"
         cfg["platform"]["bronze"].pop("local_path")
         cfg["platform"]["bronze"]["output_dir"] = "./legacy_output"
-        # Should not raise, but should emit deprecation warning
-        with pytest.warns(
-            BronzeFoundryCompatibilityWarning,
-            match=r"\[CFG001\] Using platform\.bronze\.output_dir as local_path; add explicit local_path to silence warning",
-        ):
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always")
             result = validate_config_dict(cfg)
+
+        compat_messages = [
+            str(warning.message)
+            for warning in recorded
+            if issubclass(warning.category, BronzeFoundryCompatibilityWarning)
+        ]
+        assert compat_messages
+        assert any(
+            "[CFG001] Using platform.bronze.output_dir as local_path; add explicit local_path to silence warning"
+            in message
+            for message in compat_messages
+        )
+
+        deprecation_messages = [
+            str(warning.message)
+            for warning in recorded
+            if issubclass(warning.category, BronzeFoundryDeprecationWarning)
+        ]
+        assert deprecation_messages
+        assert any(
+            "[CFG001] Implicit local_path fallback will be removed; define platform.bronze.local_path"
+            in message
+            for message in deprecation_messages
+        )
         assert result["platform"]["bronze"]["local_path"] == "./legacy_output"
 
 
@@ -314,11 +339,31 @@ class TestSourceTypeValidation:
         """API source with legacy 'url' field should work with deprecation warning."""
         cfg = copy.deepcopy(base_config)
         cfg["source"]["api"] = {"url": "https://example.com", "endpoint": "/data"}
-        with pytest.warns(
-            BronzeFoundryCompatibilityWarning,
-            match=r"\[CFG002\] source\.api\.url key is deprecated; use base_url",
-        ):
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always")
             result = validate_config_dict(cfg)
+
+        compat_messages = [
+            str(warning.message)
+            for warning in recorded
+            if issubclass(warning.category, BronzeFoundryCompatibilityWarning)
+        ]
+        assert compat_messages
+        assert any(
+            "[CFG002] source.api.url key is deprecated; use base_url" in message
+            for message in compat_messages
+        )
+
+        deprecation_messages = [
+            str(warning.message)
+            for warning in recorded
+            if issubclass(warning.category, BronzeFoundryDeprecationWarning)
+        ]
+        assert deprecation_messages
+        assert any(
+            "[CFG002] Legacy 'url' field will be removed; rename to base_url" in message
+            for message in deprecation_messages
+        )
         assert result["source"]["api"]["base_url"] == "https://example.com"
 
     @pytest.mark.parametrize("db_type", ["db", "db_table", "db_query"])

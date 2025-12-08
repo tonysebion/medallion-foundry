@@ -254,7 +254,7 @@ class TestAsyncApiClientPooling:
 
         # Mock httpx AsyncClient to avoid real HTTP calls while still running _get_client
         with patch(
-            "core.infrastructure.io.http.session.httpx.AsyncClient", new_callable=AsyncMock
+            "core.infrastructure.io.http.session.httpx.AsyncClient", new_callable=MagicMock
         ) as mock_async_client:
             mock_httpx_client = MagicMock()
             mock_httpx_client.get = AsyncMock(return_value=mock_response)
