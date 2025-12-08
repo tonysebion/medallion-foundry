@@ -21,7 +21,7 @@ import json
 import random
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Type, TypedDict, Union
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -75,6 +75,16 @@ class BaseSyntheticGenerator:
         """Generate the initial (T0) dataset for tests."""
 
         raise NotImplementedError("Subclasses must implement generate_t0")
+
+
+class LineItem(TypedDict):
+    """Typed line item entry for nested JSON generators."""
+
+    product_id: str
+    name: str
+    quantity: int
+    price: float
+    discount_pct: float
 
 
 class ClaimsGenerator(BaseSyntheticGenerator):
@@ -411,18 +421,18 @@ class NestedJsonGenerator(BaseSyntheticGenerator):
 
             # Nested array: tags (variable length)
             num_tags = self.rng.randint(0, 4)
-            tags = self.rng.sample(self.TAGS, num_tags) if num_tags > 0 else []
+            tags: List[str] = self.rng.sample(self.TAGS, num_tags) if num_tags > 0 else []
 
             # Nested array of objects: line_items
             num_items = self.rng.randint(1, 5)
-            line_items = []
+            line_items: List[LineItem] = []
             for j in range(num_items):
                 line_items.append({
                     "product_id": self._generate_id("PROD", self.rng.randint(1, 500), 5),
                     "name": f"Product {self.rng.randint(1, 100)}",
                     "quantity": self.rng.randint(1, 10),
                     "price": self._random_amount(5, 500),
-                    "discount_pct": self._random_amount(0, 30) if self.rng.random() > 0.7 else 0,
+                    "discount_pct": self._random_amount(0, 30) if self.rng.random() > 0.7 else 0.0,
                 })
 
             # Nested object: metadata with mixed types
@@ -450,7 +460,9 @@ class NestedJsonGenerator(BaseSyntheticGenerator):
                 "customer_id": self._generate_id("CUST", (i % 100) + 1, 5),
                 "category": self._random_choice(self.CATEGORIES),
                 "region": self._random_choice(self.REGIONS),
-                "total_amount": sum(item["price"] * item["quantity"] for item in line_items),
+                "total_amount": sum(
+                    item["price"] * item["quantity"] for item in line_items
+                ),
                 "address": json.dumps(address),  # JSON string column
                 "tags": tags,  # Native array
                 "line_items": line_items,  # Native array of objects
@@ -514,7 +526,7 @@ class WideSchemaGenerator(BaseSyntheticGenerator):
         self.null_rate = null_rate  # Probability of null for nullable columns
         self.sparse_rate = sparse_rate  # Probability of sparse columns being null
 
-    def _maybe_null(self, value: Any, rate: float = None) -> Optional[Any]:
+    def _maybe_null(self, value: Any, rate: Optional[float] = None) -> Optional[Any]:
         """Return value or None based on null rate."""
         rate = rate if rate is not None else self.null_rate
         return None if self.rng.random() < rate else value
@@ -544,53 +556,54 @@ class WideSchemaGenerator(BaseSyntheticGenerator):
             # Integer columns (10 columns)
             for j in range(1, 11):
                 col_name = f"int_col_{j:02d}"
-                value = self.rng.randint(0, 10000)
-                record[col_name] = self._maybe_null(value)
+                int_value = self.rng.randint(0, 10000)
+                record[col_name] = self._maybe_null(int_value)
 
             # Float columns (10 columns)
             for j in range(1, 11):
                 col_name = f"float_col_{j:02d}"
-                value = self._random_amount(0, 100000, decimals=4)
-                record[col_name] = self._maybe_null(value)
+                float_value = self._random_amount(0, 100000, decimals=4)
+                record[col_name] = self._maybe_null(float_value)
 
             # String columns (10 columns)
             for j in range(1, 11):
                 col_name = f"str_col_{j:02d}"
-                value = f"value_{self.rng.randint(1, 1000)}"
-                record[col_name] = self._maybe_null(value)
+                str_value = f"value_{self.rng.randint(1, 1000)}"
+                record[col_name] = self._maybe_null(str_value)
 
             # Boolean columns (5 columns)
             for j in range(1, 6):
                 col_name = f"bool_col_{j:02d}"
-                value = self.rng.random() > 0.5
-                record[col_name] = self._maybe_null(value)
+                bool_value = self.rng.random() > 0.5
+                record[col_name] = self._maybe_null(bool_value)
 
             # Date columns (5 columns)
             for j in range(1, 6):
                 col_name = f"date_col_{j:02d}"
-                value = self._random_date(run_date - timedelta(days=365), run_date)
-                record[col_name] = self._maybe_null(value)
+                date_value = self._random_date(run_date - timedelta(days=365), run_date)
+                record[col_name] = self._maybe_null(date_value)
 
             # Timestamp columns (5 columns)
             for j in range(1, 6):
                 col_name = f"ts_col_{j:02d}"
-                value = self._random_datetime(
+                ts_value = self._random_datetime(
                     datetime.combine(run_date - timedelta(days=30), datetime.min.time()),
                     datetime.combine(run_date, datetime.min.time()),
                 )
-                record[col_name] = self._maybe_null(value)
+                record[col_name] = self._maybe_null(ts_value)
 
             # Sparse columns (high null rate) - 10 columns
             for j in range(1, 11):
                 col_name = f"sparse_col_{j:02d}"
-                value = f"sparse_value_{self.rng.randint(1, 100)}"
-                record[col_name] = self._maybe_null(value, rate=self.sparse_rate)
+                sparse_value = f"sparse_value_{self.rng.randint(1, 100)}"
+                record[col_name] = self._maybe_null(sparse_value, rate=self.sparse_rate)
 
             # Extra columns to reach column_count (if needed)
             current_cols = len(record)
             for j in range(current_cols, self.column_count):
                 col_name = f"extra_col_{j:02d}"
-                record[col_name] = self._maybe_null(f"extra_{self.rng.randint(1, 100)}")
+                extra_value = f"extra_{self.rng.randint(1, 100)}"
+                record[col_name] = self._maybe_null(extra_value)
 
             records.append(record)
 
@@ -1046,7 +1059,7 @@ def create_generator(domain: str, seed: int = 42, row_count: int = 100) -> BaseS
     - product_dim: Product dimension table (Story 1.6)
     - sales_fact: Sales fact table (Story 1.6)
     """
-    generators = {
+    generators: Dict[str, Type[BaseSyntheticGenerator]] = {
         "claims": ClaimsGenerator,
         "orders": OrdersGenerator,
         "transactions": TransactionsGenerator,
@@ -1061,7 +1074,7 @@ def create_generator(domain: str, seed: int = 42, row_count: int = 100) -> BaseS
         "product_dim": ProductDimensionGenerator,
         "sales_fact": SalesFactGenerator,
     }
-    generator_class = generators.get(domain, BaseSyntheticGenerator)
+    generator_class: Type[BaseSyntheticGenerator] = generators.get(domain, BaseSyntheticGenerator)
     return generator_class(seed=seed, row_count=row_count)
 
 
