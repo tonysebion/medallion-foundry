@@ -154,7 +154,7 @@ class BaseCloudStorage(StorageBackend, ResilienceMixin):
     - get_backend_type() -> str
     """
 
-    def __init__(self, *, retry_config: Optional[Mapping[str, Any]] = None) -> None:
+    def __init__(self, config: Dict[str, Any], *, prefix_key: Optional[str] = None) -> None:
         """Initialize circuit breakers for each operation."""
         self._init_resilience_multi(
             operations=["upload", "download", "list", "delete"],
@@ -163,7 +163,26 @@ class BaseCloudStorage(StorageBackend, ResilienceMixin):
             cooldown_seconds=DEFAULT_COOLDOWN_SECONDS,
             half_open_max_calls=DEFAULT_HALF_OPEN_MAX_CALLS,
         )
-        self._retry_config = retry_config
+        self._storage_config = config
+        self._bronze_cfg = config.get("bronze", {})
+        self._retry_config = self._bronze_cfg.get("retry")
+        self._prefix_key = prefix_key
+        self._prefix = self._normalize_prefix(
+            self._bronze_cfg.get(prefix_key, "") if prefix_key else ""
+        )
+
+    def _normalize_prefix(self, prefix: Optional[str]) -> str:
+        """Normalize prefix strings (strip slashes)."""
+        if not prefix:
+            return ""
+        return str(prefix).strip("/ ")
+
+    def _apply_prefix(self, remote_path: str) -> str:
+        """Apply the normalized prefix to a remote path."""
+        if not self._prefix:
+            return remote_path
+        candidate = f"{self._prefix}/{remote_path}".strip("/")
+        return candidate
         # Maintain backward-compatible attribute names
         self._breaker_upload = self._breakers["upload"]
         self._breaker_download = self._breakers["download"]

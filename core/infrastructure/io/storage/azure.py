@@ -40,7 +40,6 @@ class AzureStorage(BaseCloudStorage):
         if not self.container_name:
             raise ValueError("bronze.azure_container is required for Azure storage")
 
-        self.prefix = bronze_cfg.get("azure_prefix", "").strip("/")
         self._client = self._build_client(azure_cfg)
         self.container: ContainerClient = self._client.get_container_client(
             self.container_name
@@ -57,7 +56,7 @@ class AzureStorage(BaseCloudStorage):
             )
 
         # Initialize circuit breakers from base class
-        super().__init__(retry_config=bronze_cfg.get("retry"))
+        super().__init__(config, prefix_key="azure_prefix")
 
     def _build_client(self, azure_cfg: Dict[str, Any]) -> BlobServiceClient:
         """Build the BlobServiceClient using the first available credential."""
@@ -98,7 +97,7 @@ class AzureStorage(BaseCloudStorage):
     def _build_remote_path(self, remote_path: str) -> str:
         """Build full blob path from remote path and prefix."""
         clean = remote_path.lstrip("/")
-        return f"{self.prefix}/{clean}" if self.prefix else clean
+        return self._apply_prefix(clean)
 
     def _should_retry(self, exc: BaseException) -> bool:
         """Determine if an Azure exception should trigger a retry."""

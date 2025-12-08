@@ -43,8 +43,6 @@ class S3Storage(BaseCloudStorage):
         if not self.bucket:
             raise ValueError("s3_bucket is required in bronze configuration")
 
-        self.prefix = bronze_cfg.get("s3_prefix", "").rstrip("/")
-
         # Get credentials from environment
         endpoint_env = s3_cfg.get("endpoint_url_env")
         access_key_env = s3_cfg.get("access_key_env", "AWS_ACCESS_KEY_ID")
@@ -74,7 +72,7 @@ class S3Storage(BaseCloudStorage):
             raise
 
         # Initialize circuit breakers from base class
-        super().__init__(retry_config=bronze_cfg.get("retry"))
+        super().__init__(config, prefix_key="s3_prefix")
 
     def get_backend_type(self) -> str:
         """Get backend type identifier."""
@@ -82,9 +80,7 @@ class S3Storage(BaseCloudStorage):
 
     def _build_remote_path(self, remote_path: str) -> str:
         """Build full S3 key from remote path and prefix."""
-        if self.prefix:
-            return f"{self.prefix}/{remote_path}"
-        return remote_path
+        return self._apply_prefix(remote_path)
 
     def _should_retry(self, exc: BaseException) -> bool:
         """Determine if an S3 exception should trigger a retry."""
