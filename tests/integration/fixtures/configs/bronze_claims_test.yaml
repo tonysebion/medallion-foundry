@@ -1,0 +1,26 @@
+# Bronze Claims Test Configuration
+# Used for full pipeline integration tests with MinIO storage
+
+environment: test
+domain: healthcare
+system: synthetic
+entity: claims
+
+platform:
+  bronze:
+    storage_backend: local  # Use local storage for tests
+    output_defaults:
+      parquet: true
+      csv: false
+
+source:
+  system: synthetic
+  table: claims
+  type: file
+  file:
+    format: parquet
+  run:
+    load_pattern: snapshot
+    storage_enabled: false
+    max_rows_per_file: 0
+    cleanup_on_failure: true

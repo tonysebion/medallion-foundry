@@ -32,6 +32,10 @@ from core.platform.resilience.circuit_breaker import (
     CircuitState,
 )
 from core.platform.resilience.rate_limiter import RateLimiter
+from core.platform.resilience.config import (
+    parse_retry_config,
+    resolve_rate_limit_config,
+)
 from core.platform.resilience.error_mapping import (
     wrap_storage_error,
     wrap_extraction_error,
@@ -71,6 +75,8 @@ __all__ = [
     "RetryPolicy",
     "execute_with_retry",
     "execute_with_retry_async",
+    "parse_retry_config",
+    "resolve_rate_limit_config",
     # Circuit Breaker
     "CircuitBreaker",
     "CircuitState",

@@ -1,0 +1,24 @@
+{
+  "description": "Expected values for first row of Claims T0 data (seed=42, row_count=100)",
+  "seed": 42,
+  "row_count": 100,
+  "run_date": "2024-01-15",
+  "first_row": {
+    "claim_id": "CLM00000001",
+    "patient_id": "PAT00002",
+    "provider_id": "PRV0002",
+    "claim_type": "vision",
+    "service_date": "2024-01-05",
+    "billed_amount": 645.52,
+    "paid_amount": 442.64,
+    "diagnosis_code": "ICD108",
+    "procedure_code": "CPT10094",
+    "status": "submitted"
+  },
+  "id_patterns": {
+    "claim_id_prefix": "CLM",
+    "claim_id_width": 8,
+    "patient_id_prefix": "PAT",
+    "provider_id_prefix": "PRV"
+  }
+}

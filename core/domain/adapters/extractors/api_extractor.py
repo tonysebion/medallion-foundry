@@ -311,11 +311,7 @@ class ApiExtractor(BaseExtractor, ResilientExtractorMixin):
         policy = self._build_retry_policy(
             retry_if=self._should_retry_api,
             delay_from_exception=self._delay_from_api_exc,
-            max_attempts=5,
-            base_delay=0.5,
-            max_delay=8.0,
-            backoff_multiplier=2.0,
-            jitter=0.2,
+            retry_config=api_cfg.get("retry"),
         )
 
         return execute_with_retry(

@@ -9,9 +9,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
-import os
 import time
 from typing import Any, Dict, Optional
+
+from core.platform.resilience.config import resolve_rate_limit_config
 
 logger = logging.getLogger(__name__)
 
@@ -104,34 +105,15 @@ class RateLimiter:
     ) -> Optional["RateLimiter"]:
         """Create RateLimiter from per-extractor or run configuration."""
 
-        rps_value = None
-        burst_value = None
-
-        if isinstance(extractor_cfg, dict):
-            rl_cfg = extractor_cfg.get("rate_limit")
-            if isinstance(rl_cfg, dict):
-                rps_value = rl_cfg.get("rps")
-                burst_value = rl_cfg.get("burst")
-
-        if rps_value is None and isinstance(run_cfg, dict):
-            rps_value = run_cfg.get("rate_limit_rps")
-
-        if rps_value is None and env_var:
-            env_val = os.environ.get(env_var)
-            if env_val:
-                rps_value = env_val
-
-        if not rps_value:
+        resolved = resolve_rate_limit_config(extractor_cfg, run_cfg, env_var=env_var)
+        if resolved is None:
             return None
 
-        try:
-            burst = int(burst_value) if burst_value is not None else None
-        except (TypeError, ValueError):
-            burst = None
+        rps, burst = resolved
 
         try:
             return RateLimiter(
-                float(rps_value), burst=burst, component=component, emit_metrics=bool(component)
+                rps, burst=burst, component=component, emit_metrics=bool(component)
             )
         except Exception:
             return None

@@ -1,0 +1,21 @@
+# Silver Claims Test Configuration
+# Used for Silver processing integration tests
+
+environment: test
+domain: healthcare
+system: synthetic
+entity: claims
+
+bronze:
+  enabled: true
+  output_bucket: bronze_data
+
+silver:
+  enabled: true
+  entity_kind: event
+  version: 1
+  natural_keys:
+    - claim_id
+  order_column: updated_at
+  input_storage: local
+  include_pattern_folder: false

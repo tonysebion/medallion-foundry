@@ -1,0 +1,25 @@
+{
+  "description": "Expected schema for Claims T0 data",
+  "columns": [
+    {"name": "claim_id", "dtype": "object", "nullable": false},
+    {"name": "patient_id", "dtype": "object", "nullable": false},
+    {"name": "provider_id", "dtype": "object", "nullable": false},
+    {"name": "claim_type", "dtype": "object", "nullable": false},
+    {"name": "service_date", "dtype": "object", "nullable": false},
+    {"name": "billed_amount", "dtype": "float64", "nullable": false},
+    {"name": "paid_amount", "dtype": "float64", "nullable": false},
+    {"name": "diagnosis_code", "dtype": "object", "nullable": false},
+    {"name": "procedure_code", "dtype": "object", "nullable": false},
+    {"name": "status", "dtype": "object", "nullable": false},
+    {"name": "created_at", "dtype": "datetime64[ns]", "nullable": false},
+    {"name": "updated_at", "dtype": "datetime64[ns]", "nullable": false}
+  ],
+  "column_names": [
+    "claim_id", "patient_id", "provider_id", "claim_type",
+    "service_date", "billed_amount", "paid_amount",
+    "diagnosis_code", "procedure_code", "status",
+    "created_at", "updated_at"
+  ],
+  "column_count": 12,
+  "primary_key": "claim_id"
+}

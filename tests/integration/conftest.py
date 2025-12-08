@@ -348,3 +348,178 @@ def download_parquet_from_minio(client, bucket: str, key: str) -> pd.DataFrame:
 def temp_dir(tmp_path: Path) -> Path:
     """Temporary directory for integration test files."""
     return tmp_path
+
+
+# =============================================================================
+# Full Pipeline Testing Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+def synthetic_input_path(temp_dir: Path, claims_t0_df: pd.DataFrame) -> Path:
+    """Write synthetic claims data to temp directory as parquet.
+
+    Returns path to the parquet file (not directory).
+    """
+    input_dir = temp_dir / "input"
+    input_dir.mkdir(parents=True, exist_ok=True)
+    parquet_file = input_dir / "claims_t0.parquet"
+    claims_t0_df.to_parquet(parquet_file, index=False)
+    return parquet_file
+
+
+@pytest.fixture
+def bronze_output_path(temp_dir: Path) -> Path:
+    """Path for Bronze extraction output."""
+    output_dir = temp_dir / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return output_dir
+
+
+@pytest.fixture
+def bronze_pipeline_config(
+    synthetic_input_path: Path,
+    bronze_output_path: Path,
+) -> Dict[str, Any]:
+    """Complete Bronze pipeline configuration for testing.
+
+    Uses local file source and local output (no S3 required).
+    """
+    return {
+        "environment": "test",
+        "domain": "healthcare",
+        "system": "synthetic",
+        "entity": "claims",
+        "platform": {
+            "bronze": {
+                "storage_backend": "local",
+                "output_defaults": {
+                    "parquet": True,
+                    "csv": False,
+                },
+            },
+        },
+        "source": {
+            "system": "synthetic",
+            "table": "claims",
+            "type": "file",
+            "file": {
+                "path": str(synthetic_input_path),
+                "format": "parquet",
+            },
+            "run": {
+                "load_pattern": "snapshot",
+                "local_output_dir": str(bronze_output_path),
+                "storage_enabled": False,
+                "max_rows_per_file": 0,
+                "cleanup_on_failure": True,
+            },
+        },
+    }
+
+
+@pytest.fixture
+def minio_synthetic_input(
+    minio_client,
+    minio_bucket: str,
+    cleanup_prefix: str,
+    claims_t0_df: pd.DataFrame,
+) -> str:
+    """Upload synthetic data to MinIO and return S3 path.
+
+    Returns the S3 key prefix where data was uploaded.
+    """
+    input_key = f"{cleanup_prefix}/synthetic/claims/claims_t0.parquet"
+    upload_dataframe_to_minio(
+        minio_client,
+        minio_bucket,
+        input_key,
+        claims_t0_df,
+        format="parquet",
+    )
+    return f"{cleanup_prefix}/synthetic/claims"
+
+
+@pytest.fixture
+def bronze_s3_pipeline_config(
+    minio_bucket: str,
+    cleanup_prefix: str,
+    minio_synthetic_input: str,
+    temp_dir: Path,
+) -> Dict[str, Any]:
+    """Bronze pipeline configuration with S3/MinIO storage backend.
+
+    Uses MinIO for source data and Bronze output.
+    """
+    # Set environment variables for S3 access
+    os.environ["MINIO_ENDPOINT_URL"] = MINIO_ENDPOINT
+    os.environ["MINIO_ACCESS_KEY"] = MINIO_ACCESS_KEY
+    os.environ["MINIO_SECRET_KEY"] = MINIO_SECRET_KEY
+
+    return {
+        "environment": "test",
+        "domain": "healthcare",
+        "system": "synthetic",
+        "entity": "claims",
+        "platform": {
+            "bronze": {
+                "storage_backend": "s3",
+                "s3_bucket": minio_bucket,
+                "s3_prefix": f"{cleanup_prefix}/bronze",
+                "output_defaults": {
+                    "parquet": True,
+                    "csv": False,
+                },
+            },
+            "s3_connection": {
+                "endpoint_url": MINIO_ENDPOINT,
+                "access_key": MINIO_ACCESS_KEY,
+                "secret_key": MINIO_SECRET_KEY,
+                "region": MINIO_REGION,
+            },
+        },
+        "source": {
+            "system": "synthetic",
+            "table": "claims",
+            "type": "file",
+            "file": {
+                "path": str(temp_dir / "input"),
+                "format": "parquet",
+            },
+            "run": {
+                "load_pattern": "snapshot",
+                "local_output_dir": str(temp_dir / "output"),
+                "storage_enabled": True,
+                "max_rows_per_file": 0,
+                "cleanup_on_failure": True,
+            },
+        },
+    }
+
+
+@pytest.fixture
+def run_bronze_extraction(bronze_pipeline_config: Dict[str, Any], t0_date: date):
+    """Fixture that runs Bronze extraction and returns result info.
+
+    Returns a function that can be called to run extraction and get results.
+    """
+    from core.infrastructure.runtime.context import build_run_context
+    from core.orchestration.runner import ExtractJob
+
+    def _run_extraction() -> Dict[str, Any]:
+        context = build_run_context(
+            cfg=bronze_pipeline_config,
+            run_date=t0_date,
+        )
+        job = ExtractJob(context)
+        exit_code = job.run()
+
+        return {
+            "exit_code": exit_code,
+            "bronze_path": context.bronze_path,
+            "created_files": job.created_files,
+            "schema_snapshot": job.schema_snapshot,
+            "context": context,
+        }
+
+    return _run_extraction

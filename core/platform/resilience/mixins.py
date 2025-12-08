@@ -11,17 +11,13 @@ between ResilientExtractorMixin and BaseCloudStorage.
 from __future__ import annotations
 
 import logging
-from typing import Callable, Dict, List, Optional, TypeVar, TYPE_CHECKING
+from typing import Any, Callable, Dict, List, Mapping, Optional, TypeVar, TYPE_CHECKING
 
+from core.platform.resilience.config import parse_retry_config
 from core.platform.resilience.constants import (
     DEFAULT_FAILURE_THRESHOLD,
     DEFAULT_COOLDOWN_SECONDS,
     DEFAULT_HALF_OPEN_MAX_CALLS,
-    DEFAULT_MAX_ATTEMPTS,
-    DEFAULT_BASE_DELAY,
-    DEFAULT_MAX_DELAY,
-    DEFAULT_BACKOFF_MULTIPLIER,
-    DEFAULT_JITTER,
 )
 
 if TYPE_CHECKING:
@@ -182,11 +178,12 @@ class ResilienceMixin:
         delay_from_exception: Optional[
             Callable[[BaseException, int, float], Optional[float]]
         ] = None,
-        max_attempts: int = DEFAULT_MAX_ATTEMPTS,
-        base_delay: float = DEFAULT_BASE_DELAY,
-        max_delay: float = DEFAULT_MAX_DELAY,
-        backoff_multiplier: float = DEFAULT_BACKOFF_MULTIPLIER,
-        jitter: float = DEFAULT_JITTER,
+        max_attempts: Optional[int] = None,
+        base_delay: Optional[float] = None,
+        max_delay: Optional[float] = None,
+        backoff_multiplier: Optional[float] = None,
+        jitter: Optional[float] = None,
+        retry_config: Optional[Mapping[str, Any]] = None,
     ) -> "RetryPolicy":
         """Build a retry policy for operations.
 
@@ -212,16 +209,26 @@ class ResilienceMixin:
             if callable(default_method):
                 actual_retry_if = default_method
 
-        return RetryPolicy(
-            max_attempts=max_attempts,
-            base_delay=base_delay,
-            max_delay=max_delay,
-            backoff_multiplier=backoff_multiplier,
-            jitter=jitter,
-            retry_on_exceptions=(),
-            retry_if=actual_retry_if,
-            delay_from_exception=delay_from_exception,
+        policy_kwargs: Dict[str, Any] = parse_retry_config(retry_config)
+        if max_attempts is not None:
+            policy_kwargs["max_attempts"] = max_attempts
+        if base_delay is not None:
+            policy_kwargs["base_delay"] = base_delay
+        if max_delay is not None:
+            policy_kwargs["max_delay"] = max_delay
+        if backoff_multiplier is not None:
+            policy_kwargs["backoff_multiplier"] = backoff_multiplier
+        if jitter is not None:
+            policy_kwargs["jitter"] = jitter
+
+        policy_kwargs.update(
+            {
+                "retry_on_exceptions": (),
+                "retry_if": actual_retry_if,
+                "delay_from_exception": delay_from_exception,
+            }
         )
+        return RetryPolicy(**policy_kwargs)
 
     def _execute_with_resilience(
         self,
@@ -237,6 +244,7 @@ class ResilienceMixin:
         max_delay: Optional[float] = None,
         backoff_multiplier: Optional[float] = None,
         jitter: Optional[float] = None,
+        retry_config: Optional[Mapping[str, Any]] = None,
     ) -> T:
         """Execute an operation with circuit breaker and retry logic.
 
@@ -245,12 +253,13 @@ class ResilienceMixin:
             operation_name: Name for logging/metrics
             breaker_key: For multi-breaker mode, the operation type key
             retry_if: Optional custom retry predicate
-            delay_from_exception: Optional delay extraction callback
+        delay_from_exception: Optional delay extraction callback
             max_attempts: Override default max attempts
             base_delay: Override default base delay
             max_delay: Override default max delay
             backoff_multiplier: Override default backoff multiplier
             jitter: Override default jitter
+            retry_config: Optional mapping containing `retry` block values
 
         Returns:
             Result of the operation
@@ -260,8 +269,7 @@ class ResilienceMixin:
         """
         from core.platform.resilience import execute_with_retry
 
-        # Build policy kwargs, only including non-None overrides
-        policy_kwargs: Dict[str, float] = {}
+        policy_kwargs: Dict[str, Any] = parse_retry_config(retry_config)
         if max_attempts is not None:
             policy_kwargs["max_attempts"] = max_attempts
         if base_delay is not None:
@@ -276,6 +284,7 @@ class ResilienceMixin:
         policy = self._build_retry_policy(
             retry_if=retry_if,
             delay_from_exception=delay_from_exception,
+            retry_config=retry_config,
             **policy_kwargs,  # type: ignore[arg-type]
         )
 
