@@ -10,12 +10,12 @@ Key components:
 - AssertionValidator: Validates data against assertions
 """
 
-from tests.integration.pattern_data.generators import (
+from tests.pattern_verification.pattern_data.generators import (
     PatternTestDataGenerator,
     PatternScenario,
     generate_all_pattern_scenarios,
 )
-from tests.integration.pattern_data.assertions import (
+from tests.pattern_verification.pattern_data.assertions import (
     AssertionResult,
     AssertionReport,
     AssertionValidator,

@@ -8,7 +8,7 @@ Tests cover:
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from core.foundation.state.checkpoint import (
@@ -39,7 +39,7 @@ class TestCheckpointLock:
 
     def test_lock_expired(self):
         """Test lock is expired when past TTL."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         expired = now - timedelta(minutes=30)
         lock = CheckpointLock(
             holder_id="run-123",
@@ -182,7 +182,10 @@ class TestCheckpoint:
         assert restored.source_key == checkpoint.source_key
         assert restored.status == checkpoint.status
         assert restored.lock is not None
-        assert restored.lock.holder_id == checkpoint.lock.holder_id
+        assert checkpoint.lock is not None
+        restored_lock = restored.lock
+        original_lock = checkpoint.lock
+        assert restored_lock.holder_id == original_lock.holder_id
 
     def test_is_completed(self):
         """Test is_completed helper."""
@@ -222,7 +225,7 @@ class TestCheckpoint:
         )
         checkpoint.status = CheckpointStatus.IN_PROGRESS
         # Create expired lock
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         expired = now - timedelta(minutes=30)
         checkpoint.lock = CheckpointLock(
             holder_id="run-456",
@@ -380,7 +383,7 @@ class TestCheckpointStore:
             partition_path="system=sys/table=tbl/dt=2025-01-15",
             status=CheckpointStatus.IN_PROGRESS,
         )
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         expired = now - timedelta(minutes=30)
         checkpoint.lock = CheckpointLock(
             holder_id="run-456",
@@ -397,6 +400,7 @@ class TestCheckpointStore:
             run_date="2025-01-15",
         )
         assert new_checkpoint.run_id == "run-789"
+        assert new_checkpoint.lock is not None
         assert new_checkpoint.lock.holder_id == "run-789"
 
     def test_release_lock_success(self, tmp_path):

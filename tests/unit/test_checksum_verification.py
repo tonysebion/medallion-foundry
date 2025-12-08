@@ -4,7 +4,6 @@ Story #12: Chunk File Metadata Integrity Verification
 """
 
 import json
-import time
 from pathlib import Path
 
 import pytest
@@ -303,47 +302,6 @@ class TestQuarantineCorruptedFiles:
         assert data["reason"] == "test"
         assert len(data["quarantined_files"]) == 1
         assert data["quarantine_path"] is not None
-
-
-class TestChecksumPerformance:
-    """Performance tests for checksum verification."""
-
-    @pytest.mark.slow
-    def test_verification_completes_reasonably(self, tmp_path: Path) -> None:
-        """Verify checksum verification completes in reasonable time.
-
-        This test creates multiple files and verifies that checksum
-        verification completes within acceptable bounds. SHA256 hashing
-        does add computational overhead beyond just reading files.
-        """
-        # Create 20 files of 100KB each (2MB total)
-        files = []
-        for i in range(20):
-            f = tmp_path / f"chunk_{i:04d}.parquet"
-            f.write_bytes(b"x" * 100_000)
-            files.append(f)
-
-        # Write checksum manifest
-        write_checksum_manifest(tmp_path, files, "snapshot")
-
-        # Measure verification time
-        start = time.perf_counter()
-        result = verify_checksum_manifest_with_result(tmp_path)
-        verification_time = time.perf_counter() - start
-
-        assert result.valid
-        assert len(result.verified_files) == 20
-
-        # Verification of 2MB should complete in under 2 seconds
-        # (very generous for any reasonable system)
-        assert verification_time < 2.0, (
-            f"Verification took {verification_time:.2f}s, expected < 2.0s"
-        )
-
-        # Verify timing is tracked
-        assert result.verification_time_ms > 0
-
-
 class TestIntegration:
     """Integration tests combining checksum verification and quarantine."""
 

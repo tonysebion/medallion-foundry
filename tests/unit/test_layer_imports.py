@@ -112,7 +112,8 @@ def check_file(file_path: Path) -> List[Tuple[str, str, str, str]]:
 
 def collect_all_violations() -> List[Tuple[str, str, str, str]]:
     """Collect all layer violations across the core/ directory."""
-    core_dir = Path(__file__).parent.parent / "core"
+    repo_root = Path(__file__).resolve().parents[2]
+    core_dir = repo_root / "core"
     all_violations = []
 
     for py_file in core_dir.rglob("*.py"):
@@ -160,6 +161,7 @@ class TestLayerImports:
 
     def test_core_directory_exists(self) -> None:
         """Verify the core directory exists for testing."""
-        core_dir = Path(__file__).parent.parent / "core"
+        repo_root = Path(__file__).resolve().parents[2]
+        core_dir = repo_root / "core"
         assert core_dir.exists(), f"Core directory not found at {core_dir}"
         assert core_dir.is_dir(), f"{core_dir} is not a directory"

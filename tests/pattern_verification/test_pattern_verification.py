@@ -13,13 +13,13 @@ Patterns tested:
 - CURRENT_HISTORY: SCD Type 2 with current/history split
 
 Run specific patterns:
-    pytest tests/integration/test_pattern_verification.py -k "snapshot"
-    pytest tests/integration/test_pattern_verification.py -k "incremental_append"
-    pytest tests/integration/test_pattern_verification.py -k "incremental_merge"
-    pytest tests/integration/test_pattern_verification.py -k "current_history"
+    pytest tests/pattern_verification/test_pattern_verification.py -k "snapshot"
+    pytest tests/pattern_verification/test_pattern_verification.py -k "incremental_append"
+    pytest tests/pattern_verification/test_pattern_verification.py -k "incremental_merge"
+    pytest tests/pattern_verification/test_pattern_verification.py -k "current_history"
 
 Run all pattern tests:
-    pytest tests/integration/test_pattern_verification.py -v
+    pytest tests/pattern_verification/test_pattern_verification.py -v
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from tests.integration.pattern_data import (
+from tests.pattern_verification.pattern_data import (
     PatternTestDataGenerator,
     AssertionValidator,
     PatternAssertions,

@@ -49,7 +49,7 @@ __all__ = [
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -127,12 +127,14 @@ class CheckpointLock:
     @classmethod
     def create(cls, holder_id: str, ttl_minutes: int = 15) -> "CheckpointLock":
         """Create a new lock with TTL."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         expires = now + timedelta(minutes=ttl_minutes)
+        acquired_iso = now.isoformat().replace("+00:00", "Z")
+        expires_iso = expires.isoformat().replace("+00:00", "Z")
         return cls(
             holder_id=holder_id,
-            acquired_at=now.isoformat() + "Z",
-            expires_at=expires.isoformat() + "Z",
+            acquired_at=acquired_iso,
+            expires_at=expires_iso,
         )
 
 

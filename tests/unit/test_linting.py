@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_ruff_check() -> None:
@@ -19,7 +19,8 @@ def test_ruff_check() -> None:
         "ruff",
         "check",
         "core",
-        "tests",
+        "tests/unit",
+        "tests/pattern_verification",
         "bronze_extract.py",
         "silver_extract.py",
         "silver_join.py",
