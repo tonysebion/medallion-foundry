@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 import uuid
 
 import pandas as pd
@@ -147,10 +147,10 @@ def create_silver_dataset_config(
     system: str = "synthetic",
     entity: str = "pattern_test",
     entity_kind: str = "event",
-    natural_keys: List[str] = None,
+    natural_keys: Optional[List[str]] = None,
     order_column: str = "updated_at",
     event_ts_column: str = "created_at",
-    change_ts_column: str = None,
+    change_ts_column: Optional[str] = None,
 ) -> DatasetConfig:
     """Create DatasetConfig for Silver processing.
 

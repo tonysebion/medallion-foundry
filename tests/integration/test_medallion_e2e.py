@@ -243,7 +243,8 @@ def verify_bronze_metadata(bronze_path: Path) -> Dict[str, Any]:
     """Read and return Bronze metadata."""
     metadata_path = bronze_path / "_metadata.json"
     if metadata_path.exists():
-        return json.loads(metadata_path.read_text())
+        result: Dict[str, Any] = json.loads(metadata_path.read_text())
+        return result
     return {}
 
 
@@ -536,7 +537,7 @@ class TestPatternMedallionFlow:
         )
 
         total_rows = 0
-        all_ids = set()
+        all_ids: set[str] = set()
 
         for i, batch_name in enumerate(["t0", "t1", "t2"]):
             batch_df = scenario.batches.get(batch_name)

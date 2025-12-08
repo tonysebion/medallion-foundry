@@ -75,15 +75,15 @@ class PerformanceTimer:
 
     def __init__(self, name: str):
         self.name = name
-        self.start_time = None
-        self.end_time = None
-        self.elapsed_seconds = None
+        self.start_time: float = 0.0
+        self.end_time: float = 0.0
+        self.elapsed_seconds: float = 0.0
 
-    def __enter__(self):
+    def __enter__(self) -> "PerformanceTimer":
         self.start_time = time.perf_counter()
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: Any) -> None:
         self.end_time = time.perf_counter()
         self.elapsed_seconds = self.end_time - self.start_time
 

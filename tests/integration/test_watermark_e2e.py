@@ -425,7 +425,7 @@ class TestOutOfOrderEvents:
 
     def test_watermark_skips_null_values(self):
         """Test watermark computation correctly skips null timestamps."""
-        records = [
+        records: List[Dict[str, Any]] = [
             {"id": 1, "ts": "2025-01-15T01:00:00"},
             {"id": 2, "ts": None},
             {"id": 3, "ts": "2025-01-15T03:00:00"},
@@ -764,6 +764,8 @@ class TestWatermarkWithRealData:
         # T1 should have newer transactions
         t1_max = compute_max_watermark(t1_records, "transaction_ts", t0_max)
         # T1 max should be >= T0 max (could be equal if only status updates)
+        assert t1_max is not None
+        assert t0_max is not None
         assert t1_max >= t0_max
 
     def test_late_data_with_transactions(

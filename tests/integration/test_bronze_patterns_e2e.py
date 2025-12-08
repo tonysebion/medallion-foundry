@@ -188,7 +188,8 @@ def verify_pattern_metadata(
         f"Expected record_count {expected_row_count}, got {actual_count}"
     )
 
-    return metadata
+    result: Dict[str, Any] = metadata
+    return result
 
 
 # =============================================================================
