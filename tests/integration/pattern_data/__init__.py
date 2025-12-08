@@ -7,14 +7,37 @@ INCREMENTAL_MERGE, CURRENT_HISTORY).
 Key components:
 - PatternTestDataGenerator: Generates multi-batch time series data
 - PatternAssertions: Configuration-driven assertion validation
+- AssertionValidator: Validates data against assertions
 """
 
 from tests.integration.pattern_data.generators import (
     PatternTestDataGenerator,
     PatternScenario,
+    generate_all_pattern_scenarios,
+)
+from tests.integration.pattern_data.assertions import (
+    AssertionResult,
+    AssertionReport,
+    AssertionValidator,
+    PatternAssertions,
+    create_snapshot_assertions,
+    create_incremental_append_assertions,
+    create_incremental_merge_assertions,
+    create_scd2_assertions,
 )
 
 __all__ = [
+    # Generators
     "PatternTestDataGenerator",
     "PatternScenario",
+    "generate_all_pattern_scenarios",
+    # Assertions
+    "AssertionResult",
+    "AssertionReport",
+    "AssertionValidator",
+    "PatternAssertions",
+    "create_snapshot_assertions",
+    "create_incremental_append_assertions",
+    "create_incremental_merge_assertions",
+    "create_scd2_assertions",
 ]
