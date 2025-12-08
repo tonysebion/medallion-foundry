@@ -222,3 +222,4 @@ CLAUDE.md
 _version.py
 .state/
 .state/checkpoints/
+.vscode/
