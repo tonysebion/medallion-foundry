@@ -13,6 +13,7 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
 from .base import BaseCloudStorage, HealthCheckResult
+from .helpers import get_env_value
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +49,9 @@ class S3Storage(BaseCloudStorage):
         access_key_env = s3_cfg.get("access_key_env", "AWS_ACCESS_KEY_ID")
         secret_key_env = s3_cfg.get("secret_key_env", "AWS_SECRET_ACCESS_KEY")
 
-        endpoint_url = os.environ.get(endpoint_env) if endpoint_env else None
-        access_key = os.environ.get(access_key_env)
-        secret_key = os.environ.get(secret_key_env)
+        endpoint_url = get_env_value(endpoint_env)
+        access_key = get_env_value(access_key_env)
+        secret_key = get_env_value(secret_key_env)
 
         # Build boto3 client
         session_kwargs: Dict[str, Any] = {}
@@ -380,4 +381,3 @@ class S3Storage(BaseCloudStorage):
         except Exception as e:
             logger.error("Unexpected error deleting from S3: %s", e)
             raise
-

@@ -24,6 +24,7 @@ from core.platform.resilience.constants import (
     DEFAULT_COOLDOWN_SECONDS,
     DEFAULT_HALF_OPEN_MAX_CALLS,
 )
+from .helpers import normalize_prefix
 
 if TYPE_CHECKING:
     from core.infrastructure.config import RootConfig
@@ -167,15 +168,9 @@ class BaseCloudStorage(StorageBackend, ResilienceMixin):
         self._bronze_cfg = config.get("bronze", {})
         self._retry_config = self._bronze_cfg.get("retry")
         self._prefix_key = prefix_key
-        self._prefix = self._normalize_prefix(
+        self._prefix = normalize_prefix(
             self._bronze_cfg.get(prefix_key, "") if prefix_key else ""
         )
-
-    def _normalize_prefix(self, prefix: Optional[str]) -> str:
-        """Normalize prefix strings (strip slashes)."""
-        if not prefix:
-            return ""
-        return str(prefix).strip("/ ")
 
     def _apply_prefix(self, remote_path: str) -> str:
         """Apply the normalized prefix to a remote path."""

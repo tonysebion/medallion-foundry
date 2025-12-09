@@ -14,6 +14,7 @@ from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient, ContainerClient
 
 from .base import BaseCloudStorage, HealthCheckResult
+from .helpers import get_env_value
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ class AzureStorage(BaseCloudStorage):
         """Build the BlobServiceClient using the first available credential."""
         conn_env = azure_cfg.get("connection_string_env")
         if conn_env:
-            conn = os.environ.get(conn_env)
+            conn = get_env_value(conn_env)
             if conn:
                 logger.debug("Azure storage using connection string from %s", conn_env)
                 return BlobServiceClient.from_connection_string(conn)
@@ -71,8 +72,8 @@ class AzureStorage(BaseCloudStorage):
         key_env = azure_cfg.get("account_key_env")
         account_url: str | None = None
         if account_env and key_env:
-            account = os.environ.get(account_env)
-            key = os.environ.get(key_env)
+            account = get_env_value(account_env)
+            key = get_env_value(key_env)
             if account and key:
                 account_url = f"https://{account}.blob.core.windows.net"
                 logger.debug("Azure storage using account key for %s", account_url)
@@ -341,4 +342,3 @@ class AzureStorage(BaseCloudStorage):
         except AzureError as exc:
             logger.error("Azure delete failed [%s]: %s", remote_key, exc)
             raise
-
