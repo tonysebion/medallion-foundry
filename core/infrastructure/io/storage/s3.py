@@ -174,6 +174,7 @@ class S3Storage(BaseCloudStorage):
                 "multipart_upload": True,  # S3 always supports multipart
             },
         )
+        permissions = tracker.permissions
 
         test_key = self._build_remote_path(f"_health_check_{uuid.uuid4().hex}.tmp")
         test_content = b"health_check_test"
@@ -194,7 +195,7 @@ class S3Storage(BaseCloudStorage):
                     Key=test_key,
                     Body=test_content,
                 )
-                tracker.permissions["write"] = True
+                permissions["write"] = True
             except ClientError as e:
                 error_code = e.response.get("Error", {}).get("Code", "Unknown")
                 tracker.add_error(f"Write permission failed: {error_code}")
@@ -204,8 +205,8 @@ class S3Storage(BaseCloudStorage):
                 try:
                     response = self.client.get_object(Bucket=self.bucket, Key=test_key)
                     content = response["Body"].read()
-                    tracker.permissions["read"] = content == test_content
-                    if not tracker.permissions["read"]:
+                    permissions["read"] = content == test_content
+                    if not permissions["read"]:
                         tracker.add_error("Read content mismatch")
                 except ClientError as e:
                     error_code = e.response.get("Error", {}).get("Code", "Unknown")
@@ -218,7 +219,7 @@ class S3Storage(BaseCloudStorage):
                     Prefix=self._build_remote_path("_health_check_"),
                     MaxKeys=1,
                 )
-                tracker.permissions["list"] = True
+                permissions["list"] = True
             except ClientError as e:
                 error_code = e.response.get("Error", {}).get("Code", "Unknown")
                 tracker.add_error(f"List permission failed: {error_code}")
@@ -227,7 +228,7 @@ class S3Storage(BaseCloudStorage):
             if permissions["write"]:
                 try:
                     self.client.delete_object(Bucket=self.bucket, Key=test_key)
-                    tracker.permissions["delete"] = True
+                    permissions["delete"] = True
                 except ClientError as e:
                     error_code = e.response.get("Error", {}).get("Code", "Unknown")
                     tracker.add_error(f"Delete permission failed: {error_code}")
