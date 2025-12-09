@@ -51,13 +51,14 @@ class DataFramePreparer:
             and self.dataset.silver.change_ts_column
         ):
             expected.add(self.dataset.silver.change_ts_column)
-
         expected.update(self.dataset.silver.attributes)
         return expected
 
     def get_allowed_columns(self, expected: Set[str]) -> Set[str]:
         """Get the set of allowed columns (expected + special columns)."""
         allowed = set(expected)
+        if self.dataset.silver.order_column:
+            allowed.add(self.dataset.silver.order_column)
         allowed.update({"is_deleted", "deleted_flag"})
         allowed.update(COMMON_METADATA_COLUMNS)
         return allowed
@@ -136,6 +137,10 @@ class DataFramePreparer:
                     df[self.dataset.silver.change_ts_column], errors="coerce"
                 )
 
+        order_column = self.dataset.silver.order_column
+        if order_column and order_column in df.columns:
+            df[order_column] = pd.to_datetime(df[order_column], errors="coerce")
+
         return df
 
     def deduplicate(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -147,18 +152,27 @@ class DataFramePreparer:
         Returns:
             Deduplicated DataFrame.
         """
-        drop_subset = list(self.dataset.silver.natural_keys)
-
-        if (
+        sort_columns = list(self.dataset.silver.natural_keys)
+        order_column = self.dataset.silver.order_column
+        if order_column and order_column in df.columns:
+            if order_column not in sort_columns:
+                sort_columns.append(order_column)
+        elif (
             self.dataset.silver.entity_kind.is_event_like
             and self.dataset.silver.event_ts_column
+            and self.dataset.silver.event_ts_column in df.columns
         ):
-            drop_subset.append(self.dataset.silver.event_ts_column)
-        elif self.dataset.silver.change_ts_column:
-            drop_subset.append(self.dataset.silver.change_ts_column)
+            if self.dataset.silver.event_ts_column not in sort_columns:
+                sort_columns.append(self.dataset.silver.event_ts_column)
+        elif (
+            self.dataset.silver.change_ts_column
+            and self.dataset.silver.change_ts_column in df.columns
+        ):
+            if self.dataset.silver.change_ts_column not in sort_columns:
+                sort_columns.append(self.dataset.silver.change_ts_column)
 
-        df = df.sort_values(drop_subset).drop_duplicates(
-            subset=drop_subset, keep="last"
+        df = df.sort_values(sort_columns).drop_duplicates(
+            subset=list(self.dataset.silver.natural_keys), keep="last"
         )
         return df.reset_index(drop=True)
 

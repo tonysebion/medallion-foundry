@@ -309,6 +309,7 @@ def legacy_to_dataset(cfg: Dict[str, Any]) -> Optional[DatasetConfig]:
         delete_mode=DeleteMode.IGNORE,
         schema_mode=SchemaMode.STRICT,
         natural_keys=primary_keys,
+        order_column=order_column,
         event_ts_column=order_column if entity_kind.is_event_like else None,
         change_ts_column=order_column if entity_kind.is_state_like else None,
         attributes=attributes,

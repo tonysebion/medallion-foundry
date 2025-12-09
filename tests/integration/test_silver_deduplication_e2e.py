@@ -440,6 +440,54 @@ class TestNearDuplicateLastTimestampWins:
             f"Expected timestamp {later_timestamp}, got {result_timestamp}"
         )
 
+    def test_event_duplicates_use_order_column_for_latest(
+        self,
+        orders_generator: OrdersGenerator,
+        tmp_path: Path,
+        t0_date: date,
+    ):
+        """Order column should drive deduplication even when event_ts is constant."""
+        original_df = orders_generator.generate_t0(t0_date)
+        target_row = original_df.iloc[0].copy()
+        duplicate_row = target_row.copy()
+        duplicate_row["order_ts"] = target_row["order_ts"]  # same event timestamp
+        duplicate_row["updated_at"] = target_row["updated_at"] + timedelta(hours=2)
+
+        reordered_df = pd.concat(
+            [
+                pd.DataFrame([duplicate_row]),
+                original_df.iloc[1:].reset_index(drop=True),
+                original_df.iloc[[0]],
+            ],
+            ignore_index=True,
+        )
+
+        bronze_path = create_bronze_output(
+            df=reordered_df,
+            output_path=tmp_path / "bronze",
+            load_pattern="incremental_merge",
+            run_date=t0_date,
+        )
+
+        dataset_config = create_silver_dataset_config(
+            entity_kind="event",
+            natural_keys=["order_id"],
+            event_ts_column="order_ts",
+            order_column="updated_at",
+        )
+
+        run_silver_processing(
+            bronze_path=bronze_path,
+            silver_path=tmp_path / "silver",
+            dataset_config=dataset_config,
+            run_date=t0_date,
+        )
+
+        silver_df = read_silver_parquet(tmp_path / "silver")
+        final_row = silver_df[silver_df["order_id"] == target_row["order_id"]]
+        assert len(final_row) == 1, "Expected a single row after deduplication"
+        assert final_row.iloc[0]["updated_at"] == duplicate_row["updated_at"]
+
 
 # =============================================================================
 # Out-of-Order Duplicate Tests

@@ -116,6 +116,7 @@ class SilverIntent:
     delete_mode: DeleteMode
     schema_mode: SchemaMode
     natural_keys: List[str]
+    order_column: Optional[str]
     event_ts_column: Optional[str]
     change_ts_column: Optional[str]
     attributes: List[str]
@@ -221,6 +222,9 @@ class SilverIntent:
         if not natural_keys:
             raise ValueError("silver.natural_keys must include at least one column")
 
+        order_column = require_optional_str(
+            data.get("order_column"), "silver.order_column"
+        )
         event_ts_column = require_optional_str(
             data.get("event_ts_column"), "silver.event_ts_column"
         )
@@ -236,6 +240,12 @@ class SilverIntent:
             raise ValueError(
                 "silver.change_ts_column is required for state or derived_state entities"
             )
+
+        if not order_column:
+            if entity_kind.is_event_like:
+                order_column = event_ts_column
+            elif entity_kind.is_state_like:
+                order_column = change_ts_column
 
         attributes = require_list_of_strings(
             data.get("attributes"), "silver.attributes"
@@ -303,6 +313,7 @@ class SilverIntent:
             delete_mode=delete_mode,
             schema_mode=schema_mode,
             natural_keys=natural_keys,
+            order_column=order_column,
             event_ts_column=event_ts_column,
             change_ts_column=change_ts_column,
             attributes=attributes,
