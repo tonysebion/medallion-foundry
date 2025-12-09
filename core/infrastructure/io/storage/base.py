@@ -35,6 +35,26 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+def attempt_health_check_action(
+    tracker: HealthCheckTracker,
+    action: Callable[[], T],
+    *,
+    error_message: str,
+    error_formatter: Callable[[BaseException], str] | None = None,
+) -> T | None:
+    """Run a health-check action with uniform error reporting."""
+    try:
+        return action()
+    except BaseException as exc:
+        fmt = (
+            error_formatter(exc)
+            if error_formatter
+            else f"{type(exc).__name__}: {exc}"
+        )
+        tracker.add_error(f"{error_message}: {fmt}")
+        return None
+
+
 # =============================================================================
 # Health Check Result
 # =============================================================================

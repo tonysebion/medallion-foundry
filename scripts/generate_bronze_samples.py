@@ -37,11 +37,8 @@ from typing import Any, Dict, List, Optional
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-import pandas as pd
-
 from tests.pattern_verification.pattern_data.generators import (
     PatternTestDataGenerator,
-    PatternScenario,
 )
 
 # Output directory structure:

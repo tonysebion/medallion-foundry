@@ -12,10 +12,21 @@ from typing import Any, Dict, List
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
-from .base import BaseCloudStorage, HealthCheckResult, HealthCheckTracker
+from .base import (
+    BaseCloudStorage,
+    HealthCheckResult,
+    HealthCheckTracker,
+    attempt_health_check_action,
+)
 from .helpers import get_env_value
 
 logger = logging.getLogger(__name__)
+
+
+def _format_s3_error(exc: BaseException) -> str:
+    if isinstance(exc, ClientError):
+        return exc.response.get("Error", {}).get("Code", "Unknown")
+    return str(exc)
 
 
 class S3Storage(BaseCloudStorage):
@@ -175,7 +186,6 @@ class S3Storage(BaseCloudStorage):
             },
         )
         permissions = tracker.permissions
-
         test_key = self._build_remote_path(f"_health_check_{uuid.uuid4().hex}.tmp")
         test_content = b"health_check_test"
 
@@ -188,50 +198,57 @@ class S3Storage(BaseCloudStorage):
                 tracker.add_error(f"Bucket access failed: {error_code}")
                 return tracker.finalize()
 
-            # Test write permission
-            try:
-                self.client.put_object(
+            write_success = attempt_health_check_action(
+                tracker,
+                lambda: self.client.put_object(
                     Bucket=self.bucket,
                     Key=test_key,
                     Body=test_content,
-                )
+                ),
+                error_message="Write permission failed",
+                error_formatter=_format_s3_error,
+            )
+            if write_success is not None:
                 permissions["write"] = True
-            except ClientError as e:
-                error_code = e.response.get("Error", {}).get("Code", "Unknown")
-                tracker.add_error(f"Write permission failed: {error_code}")
 
-            # Test read permission
             if permissions["write"]:
-                try:
-                    response = self.client.get_object(Bucket=self.bucket, Key=test_key)
-                    content = response["Body"].read()
-                    permissions["read"] = content == test_content
+                read_content = attempt_health_check_action(
+                    tracker,
+                    lambda: self.client.get_object(
+                        Bucket=self.bucket, Key=test_key
+                    )["Body"].read(),
+                    error_message="Read permission failed",
+                    error_formatter=_format_s3_error,
+                )
+                if read_content is not None:
+                    permissions["read"] = read_content == test_content
                     if not permissions["read"]:
                         tracker.add_error("Read content mismatch")
-                except ClientError as e:
-                    error_code = e.response.get("Error", {}).get("Code", "Unknown")
-                    tracker.add_error(f"Read permission failed: {error_code}")
 
-            # Test list permission
-            try:
-                self.client.list_objects_v2(
+            list_result = attempt_health_check_action(
+                tracker,
+                lambda: self.client.list_objects_v2(
                     Bucket=self.bucket,
                     Prefix=self._build_remote_path("_health_check_"),
                     MaxKeys=1,
-                )
+                ),
+                error_message="List permission failed",
+                error_formatter=_format_s3_error,
+            )
+            if list_result is not None:
                 permissions["list"] = True
-            except ClientError as e:
-                error_code = e.response.get("Error", {}).get("Code", "Unknown")
-                tracker.add_error(f"List permission failed: {error_code}")
 
-            # Test delete permission
             if permissions["write"]:
-                try:
-                    self.client.delete_object(Bucket=self.bucket, Key=test_key)
+                delete_result = attempt_health_check_action(
+                    tracker,
+                    lambda: self.client.delete_object(
+                        Bucket=self.bucket, Key=test_key
+                    ),
+                    error_message="Delete permission failed",
+                    error_formatter=_format_s3_error,
+                )
+                if delete_result is not None:
                     permissions["delete"] = True
-                except ClientError as e:
-                    error_code = e.response.get("Error", {}).get("Code", "Unknown")
-                    tracker.add_error(f"Delete permission failed: {error_code}")
 
             # Check versioning capability
             try:

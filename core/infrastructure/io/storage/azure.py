@@ -13,7 +13,12 @@ from azure.core.exceptions import AzureError, ResourceNotFoundError
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient, ContainerClient
 
-from .base import BaseCloudStorage, HealthCheckResult, HealthCheckTracker
+from .base import (
+    BaseCloudStorage,
+    HealthCheckResult,
+    HealthCheckTracker,
+    attempt_health_check_action,
+)
 from .helpers import get_env_value
 
 logger = logging.getLogger(__name__)
@@ -176,38 +181,49 @@ class AzureStorage(BaseCloudStorage):
                 tracker.add_error(f"Container access failed: {type(exc).__name__}")
                 return tracker.finalize()
 
-            try:
-                self.container.upload_blob(test_blob_name, test_content, overwrite=True)
+            write_result = attempt_health_check_action(
+                tracker,
+                lambda: self.container.upload_blob(
+                    test_blob_name, test_content, overwrite=True
+                ),
+                error_message="Write permission failed",
+            )
+            if write_result is not None:
                 tracker.permissions["write"] = True
-            except AzureError as exc:
-                tracker.add_error(f"Write permission failed: {type(exc).__name__}")
 
             if tracker.permissions["write"]:
-                try:
-                    blob = self.container.get_blob_client(test_blob_name)
-                    content = blob.download_blob().readall()
-                    tracker.permissions["read"] = content == test_content
+                read_content = attempt_health_check_action(
+                    tracker,
+                    lambda: self.container.get_blob_client(test_blob_name)
+                    .download_blob()
+                    .readall(),
+                    error_message="Read permission failed",
+                )
+                if read_content is not None:
+                    tracker.permissions["read"] = read_content == test_content
                     if not tracker.permissions["read"]:
                         tracker.add_error("Read content mismatch")
-                except AzureError as exc:
-                    tracker.add_error(f"Read permission failed: {type(exc).__name__}")
 
-            try:
-                list(
+            list_result = attempt_health_check_action(
+                tracker,
+                lambda: list(
                     self.container.list_blobs(
                         name_starts_with=self._build_remote_path("_health_check_")
                     )
-                )
+                ),
+                error_message="List permission failed",
+            )
+            if list_result is not None:
                 tracker.permissions["list"] = True
-            except AzureError as exc:
-                tracker.add_error(f"List permission failed: {type(exc).__name__}")
 
             if tracker.permissions["write"]:
-                try:
-                    self.container.delete_blob(test_blob_name)
+                delete_result = attempt_health_check_action(
+                    tracker,
+                    lambda: self.container.delete_blob(test_blob_name),
+                    error_message="Delete permission failed",
+                )
+                if delete_result is not None:
                     tracker.permissions["delete"] = True
-                except AzureError as exc:
-                    tracker.add_error(f"Delete permission failed: {type(exc).__name__}")
 
         except AzureError as exc:
             tracker.add_error(f"Azure connection error: {type(exc).__name__}")

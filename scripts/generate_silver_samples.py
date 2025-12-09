@@ -222,7 +222,6 @@ def process_event_pattern(
 
     Events are immutable facts - either replace daily or append to log.
     """
-    natural_keys = config["natural_keys"]
     event_ts = config.get("event_ts_column", "created_at")
 
     if input_mode == "replace_daily":
@@ -741,7 +740,7 @@ def main() -> int:
         if "total_rows" in summary:
             print(f"  Generated: {summary['total_rows']} total rows")
         else:
-            print(f"  WARNING: No data generated")
+            print("  WARNING: No data generated")
 
     # Write overall manifest
     overall_manifest_path = args.output / "_manifest.json"
