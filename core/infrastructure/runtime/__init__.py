@@ -20,13 +20,22 @@ from .file_io import (
     write_records_to_csv,
     write_records_to_parquet,
 )
-from .metadata import (
+from .metadata_models import (
+    DataClassification,
     Layer,
+    OwnerInfo,
     QualityRuleResult,
     RunMetadata,
     RunStatus,
+)
+from .metadata_builder import (
     build_run_metadata,
+    compute_config_hash,
+    get_code_version,
     generate_run_id,
+    get_metadata_path,
+    load_run_metadata,
+    write_run_metadata,
 )
 from .options import RunOptions
 from .paths import (
@@ -66,6 +75,7 @@ __all__ = [
     "RunMetadata",
     "generate_run_id",
     "build_run_metadata",
+    "write_run_metadata",
     # File I/O
     "DataFrameLoader",
     "DataFrameWriter",

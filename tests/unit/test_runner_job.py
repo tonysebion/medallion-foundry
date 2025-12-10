@@ -12,7 +12,7 @@ from core.orchestration.runner.job import (
     run_extract,
 )
 from core.infrastructure.runtime.context import RunContext
-from core.infrastructure.runtime.metadata import Layer, RunStatus
+from core.infrastructure.runtime import Layer, RunStatus
 from core.foundation.primitives.patterns import LoadPattern
 from core.foundation.primitives.exceptions import ConfigValidationError
 from core.infrastructure.io.extractors.base import EXTRACTOR_REGISTRY

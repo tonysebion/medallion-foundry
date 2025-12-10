@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional
 from core.infrastructure.runtime.paths import build_bronze_relative_path
 from core.infrastructure.config import EnvironmentConfig, RootConfig
 from core.foundation.primitives.patterns import LoadPattern
-from core.infrastructure.runtime.metadata import generate_run_id
+from .metadata_builder import generate_run_id
 
 logger = logging.getLogger(__name__)
 

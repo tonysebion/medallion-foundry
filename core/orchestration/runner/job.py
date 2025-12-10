@@ -13,7 +13,7 @@ from core.domain.services.processing.chunk_config import (
     resolve_load_pattern,
 )
 from core.infrastructure.runtime.context import RunContext
-from core.infrastructure.runtime.metadata import (
+from core.infrastructure.runtime import (
     Layer,
     RunStatus,
     build_run_metadata,

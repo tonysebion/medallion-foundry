@@ -105,7 +105,7 @@ from core.infrastructure.runtime.paths import (
     build_bronze_relative_path,
     build_silver_partition_path,
 )
-from core.infrastructure.runtime.metadata import (
+from core.infrastructure.runtime import (
     Layer,
     RunStatus,
     QualityRuleResult,

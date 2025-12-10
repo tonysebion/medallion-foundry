@@ -44,8 +44,8 @@ class TestRichEnumPattern:
         "core.infrastructure.config.models.root.DataClassification",
         "core.platform.resilience.late_data.LateDataMode",
         # Pipeline layer
-        "core.infrastructure.runtime.metadata.Layer",
-        "core.infrastructure.runtime.metadata.RunStatus",
+        "core.infrastructure.runtime.metadata_models.Layer",
+        "core.infrastructure.runtime.metadata_models.RunStatus",
         # Adapters layer
         "core.domain.adapters.schema.evolution.SchemaEvolutionMode",
         "core.domain.adapters.quality.rules.RuleLevel",

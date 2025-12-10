@@ -37,7 +37,7 @@ from typing import Any, Dict, List, Optional
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from tests.pattern_verification.pattern_data.generators import (
+from tests.pattern_verification.pattern_data.generators import (  # noqa: E402
     PatternTestDataGenerator,
 )
 
