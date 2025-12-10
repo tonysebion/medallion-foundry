@@ -46,6 +46,7 @@ class TestRichEnumPattern:
         # Pipeline layer
         "core.infrastructure.runtime.metadata_models.Layer",
         "core.infrastructure.runtime.metadata_models.RunStatus",
+        "core.infrastructure.runtime.metadata_models.ArchitectureLayer",
         # Adapters layer
         "core.domain.adapters.schema.evolution.SchemaEvolutionMode",
         "core.domain.adapters.quality.rules.RuleLevel",

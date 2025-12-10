@@ -26,6 +26,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+StateChangeHook = Callable[[str, Optional[str], str], None]
+
 T = TypeVar("T")
 
 
@@ -77,6 +79,7 @@ class ResilienceMixin:
         cooldown_seconds: float = DEFAULT_COOLDOWN_SECONDS,
         half_open_max_calls: int = DEFAULT_HALF_OPEN_MAX_CALLS,
         on_state_change: Optional[Callable[[str], None]] = None,
+        observability_hook: Optional[StateChangeHook] = None,
     ) -> None:
         """Initialize a single circuit breaker for this component.
 
@@ -88,11 +91,14 @@ class ResilienceMixin:
             cooldown_seconds: Seconds to wait before trying again
             half_open_max_calls: Max calls in half-open state
             on_state_change: Optional callback when state changes
+            observability_hook: Optional hook to emit resilience state via
+                `core.platform.observability` (component, breaker_key, state)
         """
         from core.platform.resilience import CircuitBreaker
 
         self._component_name = component_name
         self._breakers = {}
+        self._observability_hook = observability_hook
 
         def _emit_state(state: str) -> None:
             logger.info(
@@ -102,6 +108,7 @@ class ResilienceMixin:
             )
             if on_state_change:
                 on_state_change(state)
+            self._notify_observability(None, state)
 
         self._breaker = CircuitBreaker(
             failure_threshold=failure_threshold,
@@ -118,6 +125,7 @@ class ResilienceMixin:
         cooldown_seconds: float = DEFAULT_COOLDOWN_SECONDS,
         half_open_max_calls: int = DEFAULT_HALF_OPEN_MAX_CALLS,
         on_state_change: Optional[Callable[[str], None]] = None,
+        observability_hook: Optional[StateChangeHook] = None,
     ) -> None:
         """Initialize multiple circuit breakers for different operation types.
 
@@ -135,15 +143,21 @@ class ResilienceMixin:
         from core.platform.resilience import CircuitBreaker
 
         self._component_name = component_name
+        self._observability_hook = observability_hook
 
-        def _emit_state(state: str) -> None:
-            logger.info(
-                "metric=breaker_state component=%s state=%s",
-                component_name,
-                state,
-            )
-            if on_state_change:
-                on_state_change(state)
+        def _make_emit_state(op_name: str) -> Callable[[str], None]:
+            def _emit_state(state: str) -> None:
+                logger.info(
+                    "metric=breaker_state component=%s operation=%s state=%s",
+                    component_name,
+                    op_name,
+                    state,
+                )
+                if on_state_change:
+                    on_state_change(state)
+                self._notify_observability(op_name, state)
+
+            return _emit_state
 
         self._breakers = {}
         for op in operations:
@@ -151,8 +165,19 @@ class ResilienceMixin:
                 failure_threshold=failure_threshold,
                 cooldown_seconds=cooldown_seconds,
                 half_open_max_calls=half_open_max_calls,
-                on_state_change=_emit_state,
+                on_state_change=_make_emit_state(op),
             )
+
+    def _notify_observability(
+        self, breaker_key: Optional[str], state: str
+    ) -> None:
+        hook = getattr(self, "_observability_hook", None)
+        if not hook:
+            return
+        try:
+            hook(self._component_name, breaker_key, state)
+        except Exception as exc:  # pragma: no cover - best effort
+            logger.debug("Observability hook failed: %s", exc)
 
     def _get_breaker(self, breaker_key: Optional[str] = None) -> "CircuitBreaker":
         """Get the appropriate circuit breaker.

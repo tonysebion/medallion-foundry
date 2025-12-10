@@ -17,7 +17,8 @@ or domain layer (NOT in foundation code):
     set_om_client(client)
 
 Note: The foundation layer (L0) should not import from platform (L1).
-The set_om_client() function accepts Any type to maintain layer boundaries.
+The set_om_client() function accepts an OpenMetadata client protocol so it can
+stay L0 while allowing L1 implementations (e.g., `core.platform.om.client.OpenMetadataClient`).
 """
 
 from __future__ import annotations
@@ -33,15 +34,34 @@ __all__ = [
     "report_quality_snapshot",
     "report_quality_rule_results",
     "report_dataset_registered",
+    "OpenMetadataClientProtocol",
 ]
 
 import logging
-from typing import Any, Iterable, List, Mapping, Optional
+from typing import Any, Iterable, List, Mapping, Optional, Protocol
 
 logger = logging.getLogger(__name__)
 
 # Global OpenMetadata client (None = logging mode)
 _om_client: Optional[Any] = None
+
+
+class OpenMetadataClientProtocol(Protocol):
+    """Minimal interface required to drive catalog integration."""
+
+    def connect(self) -> bool:
+        """Test connectivity to OpenMetadata."""
+        ...
+
+    def get_table_schema(self, fully_qualified_name: str) -> Optional[Any]:
+        """Fetch a table schema from OpenMetadata."""
+        ...
+
+    def report_quality_metrics(
+        self, fully_qualified_name: str, metrics: Mapping[str, Any]
+    ) -> bool:
+        """Report quality metrics (optional, stubbed)."""
+        ...
 
 
 def _dispatch_catalog_event(
@@ -60,18 +80,18 @@ def _dispatch_catalog_event(
         logger.warning("Failed to dispatch '%s' to catalog: %s", event_name, exc)
 
 
-def set_om_client(client: Any) -> None:
+def set_om_client(client: OpenMetadataClientProtocol) -> None:
     """Set the OpenMetadata client for integration mode.
 
     Args:
-        client: OpenMetadataClient instance
+        client: OpenMetadata client instance that implements OpenMetadataClientProtocol
     """
     global _om_client
     _om_client = client
     logger.info("OpenMetadata client configured for catalog integration")
 
 
-def get_om_client() -> Optional[Any]:
+def get_om_client() -> Optional[OpenMetadataClientProtocol]:
     """Get the current OpenMetadata client.
 
     Returns:

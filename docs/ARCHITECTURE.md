@@ -95,7 +95,7 @@ If a type is needed by multiple layers, consider moving it to a lower layer:
 
 - `SilverModel` enum lives in `primitives/foundations/models.py` (not pipeline)
 - `LoadPattern` enum lives in `primitives/foundations/patterns.py`
-- Dataclasses like `StoragePlan` live in `pipeline/bronze/plan.py` (not orchestration)
+- Dataclasses like `StoragePlan` now live in `core.infrastructure.io.storage.plan` so storage policies stay in L2
 
 ## Layer Responsibilities
 

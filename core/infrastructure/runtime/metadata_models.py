@@ -61,6 +61,51 @@ class Layer(RichEnumMixin, str, Enum):
         return _LAYER_DESCRIPTIONS.get(value_str, value_str)
 
 
+_ARCHITECTURE_LAYER_DESCRIPTIONS: Dict[str, str] = {
+    "foundation": "L0 Foundation - Zero-dependency primitives",
+    "platform": "L1 Platform - Cross-cutting services",
+    "infrastructure": "L2 Infrastructure - Core I/O/config/runtime",
+    "domain": "L3 Domain - Business logic and pipelines",
+    "orchestration": "L4 Orchestration - Job execution and coordination",
+}
+
+
+class ArchitectureLayer(RichEnumMixin, str, Enum):
+    """Enum describing the architectural layers (L0-L4)."""
+
+    FOUNDATION = "foundation"
+    PLATFORM = "platform"
+    INFRASTRUCTURE = "infrastructure"
+    DOMAIN = "domain"
+    ORCHESTRATION = "orchestration"
+
+    @classmethod
+    def choices(cls) -> List[str]:
+        """Return all valid layer values."""
+        return [member.value for member in cls]
+
+    @classmethod
+    def normalize(cls, raw: str | None) -> "ArchitectureLayer":
+        """Normalize a raw layer value."""
+        if isinstance(raw, cls):
+            return raw
+        if raw is None:
+            raise ValueError("ArchitectureLayer value must be provided")
+
+        candidate = raw.strip().lower()
+        for member in cls:
+            if member.value == candidate:
+                return member
+        raise ValueError(
+            f"Invalid ArchitectureLayer '{raw}'. "
+            f"Valid options: {', '.join(cls.choices())}"
+        )
+
+    def describe(self) -> str:
+        """Return human-readable description for the layer."""
+        return _ARCHITECTURE_LAYER_DESCRIPTIONS.get(self.value, self.value)
+
+
 # Module-level constants for RunStatus
 _RUN_STATUS_DESCRIPTIONS: Dict[str, str] = {
     "pending": "Run is queued but not yet started",
@@ -329,6 +374,7 @@ class RunMetadata:
 
 __all__ = [
     "Layer",
+    "ArchitectureLayer",
     "RunStatus",
     "DataClassification",
     "QualityRuleResult",

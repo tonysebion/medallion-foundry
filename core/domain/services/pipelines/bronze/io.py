@@ -13,16 +13,18 @@ import logging
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from core.foundation.time_utils import utc_isoformat as _utc_isoformat
 from core.infrastructure.runtime.file_io import (
     ChunkSizer as _RuntimeChunkSizer,
     chunk_records as _runtime_chunk_records,
     DataFrameMerger,
 )
-from core.infrastructure.io.storage import (
-    compute_file_sha256 as _runtime_compute_file_sha256,
-    write_checksum_manifest as _infra_write_checksum_manifest,
-    verify_checksum_manifest as _infra_verify_checksum_manifest,
+from core.infrastructure.runtime.metadata_helpers import (
+    write_batch_metadata as _write_batch_metadata,
+    write_checksum_manifest as _write_checksum_manifest,
+)
+from core.infrastructure.io.storage import compute_file_sha256 as _runtime_compute_file_sha256
+from core.infrastructure.io.storage.checksum import (
+    verify_checksum_manifest as _verify_checksum_manifest,
 )
 
 import pandas as pd
@@ -30,6 +32,9 @@ import pandas as pd
 ChunkSizer = _RuntimeChunkSizer
 chunk_records = _runtime_chunk_records
 compute_file_sha256 = _runtime_compute_file_sha256
+write_batch_metadata = _write_batch_metadata
+write_checksum_manifest = _write_checksum_manifest
+verify_checksum_manifest = _verify_checksum_manifest
 
 logger = logging.getLogger(__name__)
 
@@ -72,78 +77,6 @@ def write_parquet_chunk(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(out_path, index=False, compression=compression)
     logger.info("Wrote %d rows to Parquet at %s", len(chunk), out_path)
-
-
-def write_batch_metadata(
-    out_dir: Path,
-    record_count: int,
-    chunk_count: int,
-    cursor: Optional[str] = None,
-    performance_metrics: Optional[Dict[str, Any]] = None,
-    quality_metrics: Optional[Dict[str, Any]] = None,
-    extra_metadata: Optional[Dict[str, Any]] = None,
-) -> Path:
-    """
-    Write metadata file for batch tracking and monitoring.
-
-    Args:
-        out_dir: Directory where metadata file will be written
-        record_count: Total number of records processed
-        chunk_count: Number of chunk files created
-        cursor: Optional cursor value for incremental loads
-        performance_metrics: Optional performance metrics (duration, records/sec, etc.)
-        quality_metrics: Optional data quality metrics (nulls, duplicates, etc.)
-    """
-    import json
-
-    metadata = {
-        "timestamp": _utc_isoformat(),
-        "record_count": record_count,
-        "chunk_count": chunk_count,
-    }
-    if cursor:
-        metadata["cursor"] = cursor
-
-    if performance_metrics:
-        metadata["performance"] = performance_metrics
-
-    if quality_metrics:
-        metadata["quality"] = quality_metrics
-
-    if extra_metadata:
-        metadata.update(extra_metadata)
-
-    metadata_path = out_dir / "_metadata.json"
-    with metadata_path.open("w", encoding="utf-8") as f:
-        json.dump(metadata, f, indent=2)
-
-    logger.info("Wrote metadata to %s", metadata_path)
-    return metadata_path
-
-
-def write_checksum_manifest(
-    out_dir: Path,
-    files: List[Path],
-    load_pattern: str,
-    extra_metadata: Optional[Dict[str, Any]] = None,
-) -> Path:
-    """Write a checksum manifest containing hashes of produced files.
-
-    Delegates to infrastructure.storage.checksum.write_checksum_manifest().
-    """
-    return _infra_write_checksum_manifest(out_dir, files, load_pattern, extra_metadata)
-
-
-def verify_checksum_manifest(
-    bronze_dir: Path,
-    manifest_name: str = "_checksums.json",
-    expected_pattern: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Validate that files in a Bronze partition match recorded checksums.
-
-    Delegates to infrastructure.storage.checksum.verify_checksum_manifest().
-    """
-    return _infra_verify_checksum_manifest(bronze_dir, manifest_name, expected_pattern)
 
 
 def _merge_records_impl(

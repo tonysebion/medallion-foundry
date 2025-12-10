@@ -28,6 +28,7 @@ from .quarantine import (
 from .fsspec import create_filesystem, get_fs_for_path
 from .locks import LockAcquireError, file_lock
 from .local import LocalStorage
+from .plan import ChunkWriterConfig, StoragePlan
 from .policy import (
     StorageMetadata,
     VALID_BOUNDARIES,
@@ -73,6 +74,8 @@ __all__ = [
     "get_fs_for_path",
     "file_lock",
     "LockAcquireError",
+    "ChunkWriterConfig",
+    "StoragePlan",
     "build_partition_path",
     "sanitize_partition_value",
     "StorageURI",

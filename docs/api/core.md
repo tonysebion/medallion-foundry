@@ -13,8 +13,8 @@ This reference highlights the primary public modules and classes available under
 - `build_extractor(cfg)` selects the correct extractor implementation based on `source.type`.
 
 ## core.runner.chunks
-- `ChunkWriter`/`ChunkProcessor` write CSV/Parquet artifacts and optionally push each file to a configured storage backend through an abstract `StoragePlan`.
-- `StoragePlan` encapsulates remote upload paths and the associated backend.
+- `ChunkWriter`/`ChunkProcessor` write CSV/Parquet artifacts and optionally push each file to a configured storage backend through `core.infrastructure.io.storage.plan.StoragePlan`.
+- `StoragePlan` encapsulates remote upload paths and the associated backend (see `core.infrastructure.io.storage.plan`).
 
 ## core.bronze
 - Utility functions such as `build_chunk_writer_config`, `compute_output_formats`, and `resolve_load_pattern` centralize Bronze-specific decisions (load pattern, compression, formats).
@@ -25,7 +25,7 @@ This reference highlights the primary public modules and classes available under
 
 ## core.storage
 - `get_storage_backend(platform_cfg)` boots the registered backend for S3/Azure/local storage, caching instances per config.
-- `StoragePlan`/`StorageBackend` abstractions live under `threads` for cross-backend uploads.
+- `StoragePlan`/`StorageBackend` abstractions live under `core.infrastructure.io.storage` for cross-backend uploads.
 - Storage metadata helpers (`validate_storage_metadata`, `enforce_storage_scope`) guard on-premise policies.
 
 ## core.logging_config
