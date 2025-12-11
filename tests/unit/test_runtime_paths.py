@@ -20,7 +20,7 @@ class FixedDatetime:
     def __init__(self, formatted: str):
         self.formatted = formatted
 
-    def now(self):
+    def __call__(self):
         class Dummy:
             def __init__(self, value: str):
                 self.value = value
@@ -104,15 +104,17 @@ def test_build_bronze_relative_path_various_partitions(monkeypatch) -> None:
 
     # Hourly partitioning uses current hour
     cfg = _make_bronze_cfg(partitioning={"partition_strategy": "hourly"})
-    monkeypatch.setattr(paths, "datetime", FixedDatetime("08"))
+    paths.set_datetime_provider(FixedDatetime("08"))
     hourly = build_bronze_relative_path(cfg, run_date=date(2025, 1, 1))
     assert hourly.endswith("/hour=08/")
+    paths.reset_datetime_provider()
 
     # Timestamp partitioning
     cfg = _make_bronze_cfg(partitioning={"partition_strategy": "timestamp"})
-    monkeypatch.setattr(paths, "datetime", FixedDatetime("20250101_1234"))
+    paths.set_datetime_provider(FixedDatetime("20250101_1234"))
     timestamp_path = build_bronze_relative_path(cfg, run_date=date(2025, 1, 1))
     assert timestamp_path.endswith("/batch=20250101_1234/")
+    paths.reset_datetime_provider()
 
     # Batch id partitioning with user-supplied batch_id
     cfg = _make_bronze_cfg(

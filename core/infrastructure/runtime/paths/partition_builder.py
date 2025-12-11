@@ -19,6 +19,7 @@ from core.foundation.time_utils import utc_now
 DatetimeProvider = Callable[[], datetime]
 
 
+_default_datetime_provider: DatetimeProvider = utc_now
 _datetime_provider: DatetimeProvider = utc_now
 
 
@@ -26,6 +27,12 @@ def set_datetime_provider(provider: DatetimeProvider) -> None:
     """Override the datetime provider for testing/deterministic behavior."""
     global _datetime_provider
     _datetime_provider = provider
+
+
+def reset_datetime_provider() -> None:
+    """Restore the default datetime provider."""
+    global _datetime_provider
+    _datetime_provider = _default_datetime_provider
 
 
 def _bronze_config(cfg: Dict[str, Any]) -> tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
