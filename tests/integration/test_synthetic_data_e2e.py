@@ -17,6 +17,11 @@ from typing import Any, Dict
 
 import pandas as pd
 
+from core.infrastructure.runtime.chunking import chunk_records, write_parquet_chunk
+from core.infrastructure.runtime.metadata_helpers import (
+    write_batch_metadata,
+    write_checksum_manifest,
+)
 from tests.integration.conftest import (
     download_parquet_from_minio,
     list_objects_in_prefix,
@@ -462,11 +467,6 @@ class TestBronzeExtractionE2E:
         self, claims_t0_df, temp_dir
     ):
         """Bronze chunking should produce correctly sized chunks."""
-        from core.domain.services.pipelines.bronze.io import (
-            chunk_records,
-            write_parquet_chunk,
-        )
-
         records = claims_t0_df.to_dict("records")
 
         # Chunk with max 25 rows per chunk
@@ -493,12 +493,6 @@ class TestBronzeExtractionE2E:
 
     def test_bronze_metadata_generation(self, claims_t0_df, temp_dir):
         """Bronze should generate correct metadata files."""
-        from core.domain.services.pipelines.bronze.io import (
-            write_batch_metadata,
-            write_checksum_manifest,
-            write_parquet_chunk,
-        )
-
         records = claims_t0_df.to_dict("records")
 
         # Write chunk
@@ -545,7 +539,6 @@ class TestBronzeExtractionE2E:
     ):
         """Bronze extraction should upload results to MinIO."""
         from core.orchestration.runner.job import build_extractor
-        from core.domain.services.pipelines.bronze.io import write_parquet_chunk
         from tests.integration.conftest import (
             upload_dataframe_to_minio,
             list_objects_in_prefix,
@@ -603,7 +596,6 @@ class TestBronzeExtractionE2E:
     ):
         """Bronze should support incremental extraction across T0 and T1."""
         from core.orchestration.runner.job import build_extractor
-        from core.domain.services.pipelines.bronze.io import write_parquet_chunk
 
         # T0: Initial load
         t0_file = temp_dir / "claims_t0.parquet"
@@ -761,11 +753,6 @@ class TestSilverTransformationE2E:
         t0_date,
     ):
         """Complete Bronze-to-Silver transformation flow."""
-        from core.domain.services.pipelines.bronze.io import (
-            write_parquet_chunk,
-            write_batch_metadata,
-            write_checksum_manifest,
-        )
         from tests.integration.conftest import (
             upload_dataframe_to_minio,
             list_objects_in_prefix,

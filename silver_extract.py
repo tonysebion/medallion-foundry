@@ -21,9 +21,11 @@ from core.infrastructure.config import (
 )
 from core.infrastructure.runtime.cli import configure_logging_from_args, select_webhooks
 from core.infrastructure.runtime.context import RunContext, build_run_context, load_run_context
-from core.domain.services.pipelines.bronze.io import (
+from core.infrastructure.io.storage.checksum import verify_checksum_manifest
+from core.infrastructure.runtime.metadata_helpers import (
+    build_batch_metadata_extra,
+    build_checksum_metadata_extra,
     write_batch_metadata,
-    verify_checksum_manifest,
     write_checksum_manifest,
 )
 from core.foundation.primitives.patterns import LoadPattern
@@ -51,10 +53,6 @@ from core.domain.services.pipelines.silver.io import (
     normalize_dataframe,
     partition_dataframe,
     SilverModelPlanner,
-)
-from core.infrastructure.runtime.metadata_helpers import (
-    build_batch_metadata_extra,
-    build_checksum_metadata_extra,
 )
 from core.domain.services.pipelines.silver.writer import get_silver_writer
 from core.domain.services.pipelines.silver.models import (

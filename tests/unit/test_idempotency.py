@@ -16,13 +16,12 @@ import pandas as pd
 import pytest
 
 from tests.synthetic_data import generate_time_series_data
-from core.domain.services.pipelines.bronze.io import (
-    chunk_records,
-    write_parquet_chunk,
+from core.infrastructure.runtime.chunking import chunk_records, write_parquet_chunk
+from core.infrastructure.runtime.metadata_helpers import (
     write_batch_metadata,
     write_checksum_manifest,
-    verify_checksum_manifest,
 )
+from core.infrastructure.io.storage.checksum import verify_checksum_manifest
 
 
 def compute_file_hash(file_path: Path) -> str:

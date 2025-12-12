@@ -16,6 +16,12 @@ from typing import Any, Dict
 import pandas as pd
 import pytest
 
+from core.infrastructure.runtime.chunking import write_parquet_chunk
+from core.infrastructure.runtime.metadata_helpers import (
+    write_batch_metadata,
+    write_checksum_manifest,
+)
+
 from tests.synthetic_data import (
     LateDataGenerator,
     NestedJsonGenerator,
@@ -594,11 +600,6 @@ class TestLateDataPipelineIntegration:
         tmp_path: Path,
     ):
         """ALLOW mode should include late data in Bronze output."""
-        from core.domain.services.pipelines.bronze.io import (
-            write_parquet_chunk,
-            write_batch_metadata,
-            write_checksum_manifest,
-        )
         from core.platform.resilience.late_data import (
             LateDataConfig,
             LateDataHandler,
@@ -724,12 +725,6 @@ class TestLateDataPipelineIntegration:
         tmp_path: Path,
     ):
         """Silver should correctly process Bronze data containing late events."""
-        from core.domain.services.pipelines.bronze.io import (
-            write_parquet_chunk,
-            write_batch_metadata,
-            write_checksum_manifest,
-        )
-
         # Generate data with late events
         t0_df = late_data_generator.generate_t0(edge_case_run_date)
         late_df = late_data_generator.generate_late_data(
@@ -790,8 +785,6 @@ class TestLateDataPipelineIntegration:
         tmp_path: Path,
     ):
         """Bronze should handle out-of-order event batches correctly."""
-        from core.domain.services.pipelines.bronze.io import write_parquet_chunk
-
         # Generate out-of-order batch
         batch_df = late_data_generator.generate_out_of_order_batch(
             run_date=edge_case_run_date,
@@ -824,8 +817,6 @@ class TestLateDataPipelineIntegration:
         tmp_path: Path,
     ):
         """Bronze should preserve timezone information for late data."""
-        from core.domain.services.pipelines.bronze.io import write_parquet_chunk
-
         # Generate T0 with timezone diversity
         t0_df = late_data_generator.generate_t0(edge_case_run_date)
 

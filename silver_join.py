@@ -17,7 +17,7 @@ import yaml
 
 from pandas.api.types import is_datetime64_any_dtype
 
-from core.domain.services.pipelines.bronze.io import write_batch_metadata
+from core.infrastructure.runtime.metadata_helpers import write_batch_metadata
 from core.infrastructure.runtime.context import RunContext, load_run_context
 from core.foundation.primitives.patterns import LoadPattern
 from core.infrastructure.runtime.options import RunOptions

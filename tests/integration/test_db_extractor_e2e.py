@@ -42,7 +42,7 @@ def generate_db_records(
     Returns:
         List of row tuples as returned by pyodbc cursor
     """
-    rows = []
+    rows: List[Union[Tuple[str, str, str, float], Tuple[str, str, str, float, str]]] = []
     for i in range(count):
         row_id = start_id + i
         if cursor_column:

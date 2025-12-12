@@ -26,6 +26,12 @@ from typing import Any, Dict, List
 import pandas as pd
 import pytest
 
+from core.infrastructure.runtime.chunking import chunk_records, write_parquet_chunk
+from core.infrastructure.runtime.metadata_helpers import (
+    write_batch_metadata,
+    write_checksum_manifest,
+)
+
 from tests.synthetic_data import (
     ClaimsGenerator,
     OrdersGenerator,
@@ -197,11 +203,6 @@ class TestBronzeExtractionPerformance:
         tmp_path: Path,
     ):
         """Bronze chunking should handle 100K records with multiple chunks."""
-        from core.domain.services.pipelines.bronze.io import (
-            chunk_records,
-            write_parquet_chunk,
-        )
-
         # Generate data
         df = claims_100k_generator.generate_t0(performance_run_date)
         records = df.to_dict("records")
@@ -237,12 +238,6 @@ class TestBronzeExtractionPerformance:
         tmp_path: Path,
     ):
         """Full Bronze pipeline should complete in reasonable time for 100K records."""
-        from core.domain.services.pipelines.bronze.io import (
-            write_parquet_chunk,
-            write_batch_metadata,
-            write_checksum_manifest,
-        )
-
         # Generate data
         df = claims_100k_generator.generate_t0(performance_run_date)
         records = df.to_dict("records")
@@ -393,8 +388,6 @@ class TestMemoryUsage:
         tmp_path: Path,
     ):
         """Chunked processing should keep memory bounded."""
-        from core.domain.services.pipelines.bronze.io import chunk_records
-
         gen = ClaimsGenerator(seed=42, row_count=100_000)
         df = gen.generate_t0(performance_run_date)
         records = df.to_dict("records")
@@ -428,12 +421,6 @@ class TestFullPipelineScale:
         tmp_path: Path,
     ):
         """Full Bronze→Silver pipeline should complete for 100K records."""
-        from core.domain.services.pipelines.bronze.io import (
-            write_parquet_chunk,
-            write_batch_metadata,
-            write_checksum_manifest,
-        )
-
         timings = {}
 
         # Generate data
@@ -479,8 +466,6 @@ class TestFullPipelineScale:
         tmp_path: Path,
     ):
         """Multiple batches of 100K should be processable."""
-        from core.domain.services.pipelines.bronze.io import write_parquet_chunk
-
         bronze_path = tmp_path / "bronze"
 
         # Process 3 batches (T0, T1, T2)

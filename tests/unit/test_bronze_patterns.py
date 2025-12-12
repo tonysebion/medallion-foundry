@@ -17,11 +17,13 @@ import json
 
 import pandas as pd
 
-from core.domain.services.pipelines.bronze.io import (
+from core.infrastructure.runtime.chunking import (
     chunk_records,
     write_parquet_chunk,
     write_csv_chunk,
-    write_batch_metadata,
+)
+from core.infrastructure.runtime.metadata_helpers import write_batch_metadata
+from core.domain.services.pipelines.bronze.io import (
     merge_parquet_records,
     merge_csv_records,
 )

@@ -3,7 +3,10 @@
 import json
 from unittest.mock import patch
 
-from core.domain.services.pipelines.bronze.io import write_batch_metadata, write_checksum_manifest
+from core.infrastructure.runtime.metadata_helpers import (
+    write_batch_metadata,
+    write_checksum_manifest,
+)
 
 MOCK_TIMESTAMP = "2025-01-01T00:00:00Z"
 

@@ -23,6 +23,12 @@ from typing import Any, Dict, List
 import pandas as pd
 import pytest
 
+from core.infrastructure.runtime.chunking import write_parquet_chunk
+from core.infrastructure.runtime.metadata_helpers import (
+    write_batch_metadata,
+    write_checksum_manifest,
+)
+
 from tests.synthetic_data import SchemaEvolutionGenerator
 
 
@@ -155,12 +161,6 @@ class TestBronzeSchemaEvolution:
         tmp_path: Path,
     ):
         """Bronze should handle V1→V2 column additions gracefully."""
-        from core.domain.services.pipelines.bronze.io import (
-            write_parquet_chunk,
-            write_batch_metadata,
-            write_checksum_manifest,
-        )
-
         # Write V1 data
         v1_df = schema_evolution_generator.generate_v1_schema(v1_run_date)
         v1_path = tmp_path / "bronze" / f"dt={v1_run_date}"
@@ -198,8 +198,6 @@ class TestBronzeSchemaEvolution:
         tmp_path: Path,
     ):
         """Bronze should handle V2→V3 type widening."""
-        from core.domain.services.pipelines.bronze.io import write_parquet_chunk
-
         # Write V2 data
         v2_df = schema_evolution_generator.generate_v2_schema_new_columns(v2_run_date)
         v2_path = tmp_path / "bronze" / f"dt={v2_run_date}"
@@ -230,8 +228,6 @@ class TestBronzeSchemaEvolution:
         tmp_path: Path,
     ):
         """Bronze should handle V3→V4 column removal."""
-        from core.domain.services.pipelines.bronze.io import write_parquet_chunk
-
         # Write V3 data (has 'tags' column)
         v3_df = schema_evolution_generator.generate_v3_schema_type_widening(v3_run_date)
         v3_path = tmp_path / "bronze" / f"dt={v3_run_date}"
@@ -299,8 +295,6 @@ class TestSilverSchemaEvolution:
         tmp_path: Path,
     ):
         """Silver should handle full V1→V2→V3→V4 schema evolution."""
-        from core.domain.services.pipelines.bronze.io import write_parquet_chunk
-
         # Generate all versions
         v1_df = schema_evolution_generator.generate_v1_schema(v1_run_date)
         v2_df = schema_evolution_generator.generate_v2_schema_new_columns(v2_run_date)
@@ -536,12 +530,6 @@ class TestFullPipelineSchemaEvolution:
     ):
         """Full pipeline should handle V1→V2→V3→V4 schema evolution."""
         from core.orchestration.runner.job import build_extractor
-        from core.domain.services.pipelines.bronze.io import (
-            write_parquet_chunk,
-            write_batch_metadata,
-            write_checksum_manifest,
-        )
-
         bronze_path = tmp_path / "bronze"
         silver_path = tmp_path / "silver"
 
@@ -617,8 +605,6 @@ class TestFullPipelineSchemaEvolution:
         tmp_path: Path,
     ):
         """Incremental loads should handle schema evolution correctly."""
-        from core.domain.services.pipelines.bronze.io import write_parquet_chunk
-
         # T0: V1 schema
         v1_df = schema_evolution_generator.generate_v1_schema(v1_run_date)
         v1_df["load_ts"] = v1_run_date.isoformat()
