@@ -8,7 +8,10 @@ from typing import Any, Dict, List, Mapping, Protocol
 
 import pandas as pd
 
-from core.domain.services.pipelines.silver.io import write_silver_outputs as _artifact_write_silver_outputs
+from core.domain.services.pipelines.silver.io import (
+    write_silver_outputs as _artifact_write_silver_outputs,
+    WriteConfig,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,13 +53,16 @@ class DefaultSilverArtifactWriter:
         output_dir,
         chunk_tag: str | None = None,
     ) -> Mapping[str, List[Path]]:
+        write_cfg = WriteConfig(
+            write_parquet=write_parquet,
+            write_csv=write_csv,
+            parquet_compression=parquet_compression,
+        )
         outputs = _artifact_write_silver_outputs(
             df,
             primary_keys,
             order_column,
-            write_parquet,
-            write_csv,
-            parquet_compression,
+            write_cfg,
             artifact_names,
             partition_columns,
             error_cfg,
@@ -89,15 +95,18 @@ class TransactionalSilverArtifactWriter:
         output_dir,
         chunk_tag: str | None = None,
     ) -> Mapping[str, List[Path]]:
+        write_cfg = WriteConfig(
+            write_parquet=write_parquet,
+            write_csv=write_csv,
+            parquet_compression=parquet_compression,
+        )
         staging = Path(output_dir) / "_staging"
         staging.mkdir(parents=True, exist_ok=True)
         outputs = _artifact_write_silver_outputs(
             df,
             primary_keys,
             order_column,
-            write_parquet,
-            write_csv,
-            parquet_compression,
+            write_cfg,
             artifact_names,
             partition_columns,
             error_cfg,

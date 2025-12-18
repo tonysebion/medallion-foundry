@@ -21,7 +21,7 @@ from core.infrastructure.io.storage import (
 )
 from core.infrastructure.runtime.file_io import DataFrameLoader
 
-from core.domain.services.pipelines.silver.io import DatasetWriter
+from core.domain.services.pipelines.silver.io import DatasetWriter, WriteConfig
 from core.domain.services.pipelines.silver.verification import (
     ChecksumVerifier,
     VerificationConfig,
@@ -241,14 +241,17 @@ class SilverProcessor:
         self, frames: Dict[str, pd.DataFrame], metrics: SilverRunMetrics
     ) -> tuple[Dict[str, List[Path]], List[Dict[str, str]]]:
         """Write output DataFrames to Silver partition."""
+        write_cfg = WriteConfig(
+            write_parquet=self.write_parquet,
+            write_csv=self.write_csv,
+            parquet_compression=self.parquet_compression,
+        )
         writer = DatasetWriter(
             base_dir=self.silver_partition,
             primary_keys=self.dataset.silver.natural_keys,
             partition_columns=self._resolve_partition_columns(frames),
             error_cfg={"enabled": False, "max_bad_records": 0, "max_bad_percent": 0.0},
-            write_parquet=self.write_parquet,
-            write_csv=self.write_csv,
-            parquet_compression=self.parquet_compression,
+            write_cfg=write_cfg,
         )
 
         outputs: Dict[str, List[Path]] = {}

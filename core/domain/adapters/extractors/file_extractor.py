@@ -213,32 +213,3 @@ class FileExtractor(BaseExtractor):
                 records.append(json.loads(line_str))
 
         return records
-
-    # Legacy methods for backward compatibility (deprecated)
-    def _read_csv(
-        self, file_path: Path, delimiter: str, file_cfg: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
-        """Legacy CSV reader - use _read_csv_streaming instead."""
-        fs = fsspec.filesystem("file")
-        return self._read_csv_streaming(fs, str(file_path), delimiter, file_cfg)
-
-    def _read_json(
-        self, file_path: Path, file_cfg: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
-        """Legacy JSON reader - use _read_json_streaming instead."""
-        fs = fsspec.filesystem("file")
-        return self._read_json_streaming(fs, str(file_path), file_cfg)
-
-    def _read_json_lines(
-        self, file_path: Path, file_cfg: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
-        """Legacy JSONL reader - use _read_jsonl_streaming instead."""
-        fs = fsspec.filesystem("file")
-        return self._read_jsonl_streaming(fs, str(file_path), file_cfg)
-
-    def _read_parquet(
-        self, file_path: Path, file_cfg: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
-        """Legacy Parquet reader - use _read_parquet_streaming instead."""
-        fs = fsspec.filesystem("file")
-        return self._read_parquet_streaming(fs, str(file_path), file_cfg)

@@ -42,7 +42,7 @@ from typing import Any, Dict, Optional
 
 from core.foundation.time_utils import utc_isoformat as _utc_isoformat
 from core.foundation.primitives.base import RichEnumMixin
-from core.foundation.state.storage import StateStorageBackend
+from core.foundation.state.storage import StateStorageBackend, sanitize_path_for_filename
 
 logger = logging.getLogger(__name__)
 
@@ -204,12 +204,12 @@ class WatermarkStore(StateStorageBackend):
 
     def _get_local_path(self, source_key: str) -> Path:
         """Get local file path for a watermark."""
-        safe_key = source_key.replace(".", "_").replace("/", "_")
+        safe_key = sanitize_path_for_filename(source_key)
         return self.local_path / f"{safe_key}_watermark.json"
 
     def _get_s3_key(self, source_key: str) -> str:
         """Get S3 key for a watermark."""
-        safe_key = source_key.replace(".", "_").replace("/", "_")
+        safe_key = sanitize_path_for_filename(source_key)
         return f"{self.s3_prefix}/{safe_key}_watermark.json"
 
     def get(

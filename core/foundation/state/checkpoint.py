@@ -56,7 +56,7 @@ from typing import Any, Dict, List, Optional
 
 from core.foundation.time_utils import utc_isoformat as _utc_isoformat
 from core.foundation.primitives.base import RichEnumMixin
-from core.foundation.state.storage import StateStorageBackend
+from core.foundation.state.storage import StateStorageBackend, sanitize_path_for_filename
 
 logger = logging.getLogger(__name__)
 
@@ -320,17 +320,17 @@ class CheckpointStore(StateStorageBackend):
 
     def _get_local_path(self, partition_path: str) -> Path:
         """Get local file path for a checkpoint."""
-        safe_path = partition_path.replace("/", "_").replace("=", "_")
+        safe_path = sanitize_path_for_filename(partition_path)
         return self.local_path / f"{safe_path}_checkpoint.json"
 
     def _get_s3_key(self, partition_path: str) -> str:
         """Get S3 key for a checkpoint."""
-        safe_path = partition_path.replace("/", "_").replace("=", "_")
+        safe_path = sanitize_path_for_filename(partition_path)
         return f"{self.s3_prefix}/{safe_path}_checkpoint.json"
 
     def _get_azure_path(self, partition_path: str) -> str:
         """Get Azure path for a checkpoint."""
-        safe_path = partition_path.replace("/", "_").replace("=", "_")
+        safe_path = sanitize_path_for_filename(partition_path)
         return f"{self.azure_prefix}/{safe_path}_checkpoint.json"
 
     def get(self, partition_path: str) -> Optional[Checkpoint]:

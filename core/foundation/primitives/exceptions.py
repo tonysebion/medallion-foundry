@@ -50,6 +50,20 @@ class BronzeFoundryError(Exception):
         if error_code:
             self.error_code = error_code
 
+    @staticmethod
+    def _build_details(**kwargs: Any) -> Dict[str, Any]:
+        """Build details dict, filtering out None values.
+
+        Helper method to reduce boilerplate in subclass __init__ methods.
+
+        Args:
+            **kwargs: Key-value pairs for the details dict
+
+        Returns:
+            Dict containing only non-None values
+        """
+        return {k: v for k, v in kwargs.items() if v is not None}
+
     def __str__(self) -> str:
         """Return string representation with error code and details."""
         parts = [f"[{self.error_code}] {self.message}"]
@@ -82,11 +96,7 @@ class ConfigValidationError(BronzeFoundryError):
             config_path: Path to config file that failed validation
             key: Specific configuration key that caused the error
         """
-        details = {}
-        if config_path:
-            details["config_path"] = config_path
-        if key:
-            details["config_key"] = key
+        details = self._build_details(config_path=config_path, config_key=key)
         super().__init__(message, details)
 
 
@@ -121,17 +131,13 @@ class ExtractionError(BronzeFoundryError):
             table: Table name from configuration
             original_error: Original exception that caused this error
         """
-        details = {}
-        if extractor_type:
-            details["extractor_type"] = extractor_type
-        if system:
-            details["system"] = system
-        if table:
-            details["table"] = table
-        if original_error:
-            details["original_error"] = str(original_error)
-            details["error_type"] = type(original_error).__name__
-
+        details = self._build_details(
+            extractor_type=extractor_type,
+            system=system,
+            table=table,
+            original_error=str(original_error) if original_error else None,
+            error_type=type(original_error).__name__ if original_error else None,
+        )
         super().__init__(message, details)
         self.original_error = original_error
 
@@ -163,25 +169,20 @@ class StorageError(BronzeFoundryError):
 
         Args:
             message: Description of storage failure
-        backend_type: Storage backend type (s3, azure, local)
+            backend_type: Storage backend type (s3, azure, local)
             operation: Operation that failed (upload, download, delete, list)
             file_path: Local file path involved in the operation
             remote_path: Remote path involved in the operation
             original_error: Original exception that caused this error
         """
-        details = {}
-        if backend_type:
-            details["backend_type"] = backend_type
-        if operation:
-            details["operation"] = operation
-        if file_path:
-            details["file_path"] = file_path
-        if remote_path:
-            details["remote_path"] = remote_path
-        if original_error:
-            details["original_error"] = str(original_error)
-            details["error_type"] = type(original_error).__name__
-
+        details = self._build_details(
+            backend_type=backend_type,
+            operation=operation,
+            file_path=file_path,
+            remote_path=remote_path,
+            original_error=str(original_error) if original_error else None,
+            error_type=type(original_error).__name__ if original_error else None,
+        )
         super().__init__(message, details)
         self.original_error = original_error
 
@@ -212,14 +213,8 @@ class AuthenticationError(ExtractionError):
             auth_type: Type of authentication (bearer, api_key, basic)
             env_var: Environment variable name for credentials
         """
-        details = {}
-        if auth_type:
-            details["auth_type"] = auth_type
-        if env_var:
-            details["env_var"] = env_var
-
         super().__init__(message)
-        self.details.update(details)
+        self.details.update(self._build_details(auth_type=auth_type, env_var=env_var))
 
 
 class PaginationError(ExtractionError):
@@ -250,16 +245,10 @@ class PaginationError(ExtractionError):
             page: Current page number
             cursor: Current cursor value
         """
-        details: Dict[str, Any] = {}
-        if pagination_type:
-            details["pagination_type"] = pagination_type
-        if page is not None:
-            details["page"] = page
-        if cursor:
-            details["cursor"] = cursor
-
         super().__init__(message)
-        self.details.update(details)
+        self.details.update(
+            self._build_details(pagination_type=pagination_type, page=page, cursor=cursor)
+        )
 
 
 class StateManagementError(BronzeFoundryError):
@@ -290,15 +279,12 @@ class StateManagementError(BronzeFoundryError):
             cursor_column: Database column used for cursor
             original_error: Original exception that caused this error
         """
-        details = {}
-        if state_file:
-            details["state_file"] = state_file
-        if cursor_column:
-            details["cursor_column"] = cursor_column
-        if original_error:
-            details["original_error"] = str(original_error)
-            details["error_type"] = type(original_error).__name__
-
+        details = self._build_details(
+            state_file=state_file,
+            cursor_column=cursor_column,
+            original_error=str(original_error) if original_error else None,
+            error_type=type(original_error).__name__ if original_error else None,
+        )
         super().__init__(message, details)
         self.original_error = original_error
 
@@ -334,16 +320,12 @@ class DataQualityError(BronzeFoundryError):
             actual: Actual value found
             failed_records: Number of records that failed validation
         """
-        details: Dict[str, Any] = {}
-        if check_type:
-            details["check_type"] = check_type
-        if expected is not None:
-            details["expected"] = expected
-        if actual is not None:
-            details["actual"] = actual
-        if failed_records is not None:
-            details["failed_records"] = failed_records
-
+        details = self._build_details(
+            check_type=check_type,
+            expected=expected,
+            actual=actual,
+            failed_records=failed_records,
+        )
         super().__init__(message, details)
 
 
@@ -374,15 +356,12 @@ class RetryExhaustedError(BronzeFoundryError):
             operation: Operation that was retried
             last_error: Last exception before giving up
         """
-        details: Dict[str, Any] = {}
-        if attempts is not None:
-            details["attempts"] = attempts
-        if operation:
-            details["operation"] = operation
-        if last_error:
-            details["last_error"] = str(last_error)
-            details["error_type"] = type(last_error).__name__
-
+        details = self._build_details(
+            attempts=attempts,
+            operation=operation,
+            last_error=str(last_error) if last_error else None,
+            error_type=type(last_error).__name__ if last_error else None,
+        )
         super().__init__(message, details)
         self.last_error = last_error
 

@@ -44,17 +44,21 @@ class CircuitBreaker:
     _opened_at: float = field(default=0.0, init=False)
     _half_open_calls: int = field(default=0, init=False)
 
+    def _emit_state_change(self) -> None:
+        """Emit state change callback safely, catching any callback exceptions."""
+        if self.on_state_change:
+            try:
+                self.on_state_change(self._state)
+            except Exception as e:
+                logger.debug("Callback failed during state change to %s: %s", self._state, e)
+
     def allow(self) -> bool:
         """Check if a call is allowed through the circuit."""
         now = time.time()
         if self._state == CircuitState.OPEN:
             if now - self._opened_at >= self.cooldown_seconds:
                 self._state = CircuitState.HALF_OPEN
-                if self.on_state_change:
-                    try:
-                        self.on_state_change(self._state)
-                    except Exception as e:
-                        logger.debug("Callback failed during state change to %s: %s", self._state, e)
+                self._emit_state_change()
                 self._half_open_calls = 0
             else:
                 return False
@@ -70,11 +74,8 @@ class CircuitBreaker:
         self._state = CircuitState.CLOSED
         self._failures = 0
         self._half_open_calls = 0
-        if prev != self._state and self.on_state_change:
-            try:
-                self.on_state_change(self._state)
-            except Exception as e:
-                logger.debug("Callback failed during state change to %s: %s", self._state, e)
+        if prev != self._state:
+            self._emit_state_change()
 
     def record_failure(self) -> None:
         """Record a failed call."""
@@ -86,11 +87,7 @@ class CircuitBreaker:
             self._state = CircuitState.OPEN
             self._opened_at = time.time()
             self._half_open_calls = 0
-            if self.on_state_change:
-                try:
-                    self.on_state_change(self._state)
-                except Exception as e:
-                    logger.debug("Callback failed during state change to %s: %s", self._state, e)
+            self._emit_state_change()
 
     @property
     def state(self) -> CircuitState:

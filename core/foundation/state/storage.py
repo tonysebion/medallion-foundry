@@ -10,6 +10,7 @@ from __future__ import annotations
 __all__ = [
     "StateStorageBackend",
     "parse_s3_path",
+    "sanitize_path_for_filename",
 ]
 
 import json
@@ -43,6 +44,28 @@ def parse_s3_path(path: str) -> Tuple[str, str]:
     bucket = parts[0]
     key = parts[1] if len(parts) > 1 else ""
     return bucket, key
+
+
+def sanitize_path_for_filename(path: str) -> str:
+    """Convert a path or key to a filesystem-safe filename component.
+
+    Replaces common path separators and special characters with underscores.
+    Used by checkpoint and watermark stores to generate safe filenames from
+    partition paths and source keys.
+
+    Args:
+        path: Path string potentially containing unsafe characters (/, =, .)
+
+    Returns:
+        Sanitized string safe for use in filenames
+
+    Example:
+        >>> sanitize_path_for_filename("system=sys/table=tbl/dt=2025-01-15")
+        'system_sys_table_tbl_dt_2025-01-15'
+        >>> sanitize_path_for_filename("my_system.my_table")
+        'my_system_my_table'
+    """
+    return path.replace("/", "_").replace("=", "_").replace(".", "_")
 
 
 class StateStorageBackend:

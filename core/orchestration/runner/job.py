@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
@@ -394,8 +395,6 @@ class ExtractJob:
     ) -> None:
         self._assert_schema_compatible()
         reference_mode = self.source_cfg["run"].get("reference_mode")
-        from datetime import datetime
-
         run_datetime = datetime.combine(self.run_date, datetime.min.time())
         p_load_pattern = self.load_pattern or LoadPattern.SNAPSHOT
         chunk_artifacts = list(self.created_files)

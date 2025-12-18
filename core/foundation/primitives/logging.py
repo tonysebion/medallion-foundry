@@ -27,6 +27,50 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional, Union
 from pathlib import Path
 
+# Standard logging.LogRecord fields that should be excluded when extracting
+# custom fields from a log record. This list includes all built-in attributes
+# from Python's logging module.
+_STANDARD_LOG_FIELDS = frozenset({
+    "name",
+    "msg",
+    "args",
+    "created",
+    "filename",
+    "funcName",
+    "levelname",
+    "levelno",
+    "lineno",
+    "module",
+    "msecs",
+    "message",
+    "pathname",
+    "process",
+    "processName",
+    "relativeCreated",
+    "thread",
+    "threadName",
+    "exc_info",
+    "exc_text",
+    "stack_info",
+    "taskName",  # Added in Python 3.12
+})
+
+
+def _get_custom_log_fields(record: logging.LogRecord) -> Dict[str, Any]:
+    """Extract custom fields from a LogRecord, excluding standard fields.
+
+    Args:
+        record: The log record to extract fields from
+
+    Returns:
+        Dictionary of custom field names to their values
+    """
+    return {
+        key: value
+        for key, value in record.__dict__.items()
+        if key not in _STANDARD_LOG_FIELDS
+    }
+
 
 class JSONFormatter(logging.Formatter):
     """Format log records as JSON for structured logging."""
@@ -60,32 +104,8 @@ class JSONFormatter(logging.Formatter):
         if record.exc_info:
             log_data["exception"] = self.formatException(record.exc_info)
 
-        # Add extra fields from record
-        for key, value in record.__dict__.items():
-            if key not in [
-                "name",
-                "msg",
-                "args",
-                "created",
-                "filename",
-                "funcName",
-                "levelname",
-                "levelno",
-                "lineno",
-                "module",
-                "msecs",
-                "message",
-                "pathname",
-                "process",
-                "processName",
-                "relativeCreated",
-                "thread",
-                "threadName",
-                "exc_info",
-                "exc_text",
-                "stack_info",
-            ]:
-                log_data[key] = value
+        # Add custom fields from record (excludes standard logging fields)
+        log_data.update(_get_custom_log_fields(record))
 
         return json.dumps(log_data)
 

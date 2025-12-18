@@ -44,6 +44,7 @@ from core.domain.adapters.extractors.cursor_state import (
     build_incremental_query,
 )
 from core.domain.adapters.extractors.db_runner import fetch_records_from_query
+from core.domain.adapters.extractors.db_utils import is_retryable_db_error
 from core.domain.adapters.extractors.resilience import ResilientExtractorMixin
 from core.foundation.primitives.exceptions import ExtractionError
 from core.infrastructure.io.extractors.base import BaseExtractor, register_extractor
@@ -235,24 +236,7 @@ class DbMultiExtractor(BaseExtractor, ResilientExtractorMixin):
 
     def _should_retry(self, exc: BaseException) -> bool:
         """Determine if a database error is retryable."""
-        exc_type = type(exc).__name__
-        exc_module = type(exc).__module__
-
-        # pyodbc and database connection errors
-        if "pyodbc" in exc_module:
-            if "OperationalError" in exc_type or "InterfaceError" in exc_type:
-                return True
-
-        # SQLAlchemy connection errors
-        if "sqlalchemy" in exc_module:
-            if "OperationalError" in exc_type or "DisconnectionError" in exc_type:
-                return True
-
-        # Generic connection-related errors
-        if exc_type in ("ConnectionError", "TimeoutError", "BrokenPipeError"):
-            return True
-
-        return False
+        return is_retryable_db_error(exc)
 
     def fetch_records(
         self,

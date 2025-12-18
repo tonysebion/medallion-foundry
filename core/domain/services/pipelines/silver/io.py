@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Tuple
 
@@ -16,6 +17,34 @@ from core.infrastructure.runtime.file_io import (
 from core.infrastructure.io.storage import build_partition_path
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class WriteConfig:
+    """Configuration for writing Silver datasets.
+
+    Groups related write settings to reduce parameter counts in function signatures.
+    """
+
+    write_parquet: bool = True
+    write_csv: bool = False
+    parquet_compression: str = "snappy"
+
+    @classmethod
+    def from_dict(cls, cfg: Dict[str, Any]) -> "WriteConfig":
+        """Create WriteConfig from a configuration dict.
+
+        Args:
+            cfg: Dict with optional keys: write_parquet, write_csv, parquet_compression
+
+        Returns:
+            WriteConfig instance
+        """
+        return cls(
+            write_parquet=cfg.get("write_parquet", True),
+            write_csv=cfg.get("write_csv", False),
+            parquet_compression=cfg.get("parquet_compression", "snappy"),
+        )
 
 
 def build_current_view(
@@ -166,16 +195,26 @@ def _write_dataset(
     df: pd.DataFrame,
     base_name: str,
     output_dir: Path,
-    write_parquet: bool,
-    write_csv: bool,
-    parquet_compression: str,
+    write_cfg: WriteConfig,
 ) -> List[Path]:
     """Write dataset with idempotency (skips if file exists).
 
     Uses DataFrameWriter from runtime layer for atomic writes.
+
+    Args:
+        df: DataFrame to write
+        base_name: Base name for output files (without extension)
+        output_dir: Directory to write to
+        write_cfg: Write configuration (formats and compression)
+
+    Returns:
+        List of paths to written files
     """
     files: List[Path] = []
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    write_parquet = write_cfg.write_parquet
+    write_csv = write_cfg.write_csv
 
     # Check for existing files first (idempotency)
     if write_parquet:
@@ -195,7 +234,7 @@ def _write_dataset(
         writer = DataFrameWriter(
             write_parquet=write_parquet,
             write_csv=write_csv,
-            compression=parquet_compression,
+            compression=write_cfg.parquet_compression,
         )
         files.extend(writer.write_atomic(df, output_dir, base_name))
 
@@ -206,19 +245,25 @@ def _write_dataset_chunk(
     df: pd.DataFrame,
     base_name: str,
     output_dir: Path,
-    write_parquet: bool,
-    write_csv: bool,
-    parquet_compression: str,
+    write_cfg: WriteConfig,
     chunk_tag: str,
 ) -> List[Path]:
     """Chunked variant used by streaming promotions (suffix with -<chunk_tag>).
 
     Uses DataFrameWriter from runtime layer for atomic writes.
+
+    Args:
+        df: DataFrame to write
+        base_name: Base name for output files (without extension)
+        output_dir: Directory to write to
+        write_cfg: Write configuration (formats and compression)
+        chunk_tag: Chunk identifier to append to base_name
+
+    Returns:
+        List of paths to written files
     """
     chunk_name = f"{base_name}-{chunk_tag}"
-    return _write_dataset(
-        df, chunk_name, output_dir, write_parquet, write_csv, parquet_compression
-    )
+    return _write_dataset(df, chunk_name, output_dir, write_cfg)
 
 
 class DatasetWriter:
@@ -230,17 +275,13 @@ class DatasetWriter:
         primary_keys: List[str],
         partition_columns: List[str],
         error_cfg: Dict[str, Any],
-        write_parquet: bool,
-        write_csv: bool,
-        parquet_compression: str,
+        write_cfg: WriteConfig,
     ) -> None:
         self.base_dir = base_dir
         self.primary_keys = primary_keys
         self.partition_columns = partition_columns
         self.error_cfg = error_cfg
-        self.write_parquet = write_parquet
-        self.write_csv = write_csv
-        self.parquet_compression = parquet_compression
+        self.write_cfg = write_cfg
 
     def _write_partitioned(
         self,
@@ -296,14 +337,7 @@ class DatasetWriter:
         """Write a dataset with partition/error policies."""
 
         def write_fn(df: pd.DataFrame, name: str, target_dir: Path) -> List[Path]:
-            return _write_dataset(
-                df,
-                name,
-                target_dir,
-                self.write_parquet,
-                self.write_csv,
-                self.parquet_compression,
-            )
+            return _write_dataset(df, name, target_dir, self.write_cfg)
 
         return self._write_partitioned(
             dataset_name, dataset_df, write_fn, log_partitions=True
@@ -315,15 +349,7 @@ class DatasetWriter:
         """Write a chunk of a dataset with partition/error policies, suffixing filenames."""
 
         def write_fn(df: pd.DataFrame, name: str, target_dir: Path) -> List[Path]:
-            return _write_dataset_chunk(
-                df,
-                name,
-                target_dir,
-                self.write_parquet,
-                self.write_csv,
-                self.parquet_compression,
-                chunk_tag,
-            )
+            return _write_dataset_chunk(df, name, target_dir, self.write_cfg, chunk_tag)
 
         return self._write_partitioned(
             dataset_name, dataset_df, write_fn, log_partitions=False
@@ -444,9 +470,7 @@ def write_silver_outputs(
     df: pd.DataFrame,
     primary_keys: List[str],
     order_column: str | None,
-    write_parquet: bool,
-    write_csv: bool,
-    parquet_compression: str,
+    write_cfg: WriteConfig,
     artifact_names: Dict[str, str],
     partition_columns: List[str],
     error_cfg: Dict[str, Any],
@@ -454,14 +478,29 @@ def write_silver_outputs(
     output_dir: Path,
     chunk_tag: str | None = None,
 ) -> Dict[str, List[Path]]:
+    """Write Silver layer outputs based on the configured model.
+
+    Args:
+        df: DataFrame to write
+        primary_keys: List of primary key columns
+        order_column: Column to order by for deduplication
+        write_cfg: Write configuration (formats and compression)
+        artifact_names: Mapping of artifact types to names
+        partition_columns: Columns to partition by
+        error_cfg: Error handling configuration
+        silver_model: The silver model type to use
+        output_dir: Base output directory
+        chunk_tag: Optional chunk identifier for streaming
+
+    Returns:
+        Dict mapping artifact names to lists of written file paths
+    """
     writer = DatasetWriter(
         base_dir=output_dir,
         primary_keys=primary_keys,
         partition_columns=partition_columns,
         error_cfg=error_cfg,
-        write_parquet=write_parquet,
-        write_csv=write_csv,
-        parquet_compression=parquet_compression,
+        write_cfg=write_cfg,
     )
     planner = SilverModelPlanner(
         writer, primary_keys, order_column, artifact_names, silver_model
