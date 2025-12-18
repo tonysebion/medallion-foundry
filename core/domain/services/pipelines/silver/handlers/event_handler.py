@@ -7,7 +7,10 @@ from typing import Dict
 import pandas as pd
 
 from core.infrastructure.config import InputMode, EntityKind
-from core.domain.services.pipelines.silver.handlers.base import BasePatternHandler
+from core.domain.services.pipelines.silver.handlers.base import (
+    BasePatternHandler,
+    ensure_column_exists,
+)
 from core.domain.services.pipelines.silver.handlers.registry import register_handler
 
 
@@ -30,11 +33,9 @@ class EventHandler(BasePatternHandler):
         Raises:
             ValueError: If event_ts_column is not configured or missing from data.
         """
-        ts_col = self.event_ts_column
-        if not ts_col:
-            raise ValueError("event_ts_column is required for event datasets")
-        if ts_col not in df.columns:
-            raise ValueError(f"Event timestamp column '{ts_col}' not found in data")
+        ensure_column_exists(
+            df, self.event_ts_column, "event_ts_column", required=True
+        )
 
     def process(self, df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
         """Process event data.

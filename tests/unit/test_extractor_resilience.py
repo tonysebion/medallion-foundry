@@ -238,7 +238,7 @@ class TestApiExtractorResilience:
         exc = requests.exceptions.HTTPError()
         exc.response = mock_response
 
-        assert extractor._should_retry_api(exc) is True
+        assert extractor._should_retry(exc) is True
 
     def test_api_extractor_retry_predicate_handles_timeout(self) -> None:
         from core.domain.adapters.extractors.api_extractor import ApiExtractor
@@ -247,7 +247,7 @@ class TestApiExtractorResilience:
         extractor = ApiExtractor()
 
         exc = requests.exceptions.Timeout()
-        assert extractor._should_retry_api(exc) is True
+        assert extractor._should_retry(exc) is True
 
     def test_api_extractor_delay_from_retry_after_header(self) -> None:
         from core.domain.adapters.extractors.api_extractor import ApiExtractor

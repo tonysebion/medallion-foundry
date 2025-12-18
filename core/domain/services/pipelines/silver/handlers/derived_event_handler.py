@@ -7,7 +7,10 @@ from typing import Any, Dict, List, Optional, cast
 import pandas as pd
 
 from core.infrastructure.config import DeleteMode, EntityKind
-from core.domain.services.pipelines.silver.handlers.base import BasePatternHandler
+from core.domain.services.pipelines.silver.handlers.base import (
+    BasePatternHandler,
+    ensure_column_exists,
+)
 from core.domain.services.pipelines.silver.handlers.registry import register_handler
 
 
@@ -31,13 +34,12 @@ class DerivedEventHandler(BasePatternHandler):
         Raises:
             ValueError: If timestamp column is not configured or missing from data.
         """
-        ts_col = self.change_ts_column or self.event_ts_column
-        if not ts_col:
-            raise ValueError(
-                "change_ts_column (or event_ts_column) required for derived_event datasets"
-            )
-        if ts_col not in df.columns:
-            raise ValueError(f"Timestamp column '{ts_col}' not found in data")
+        ensure_column_exists(
+            df,
+            self.timestamp_column,
+            "change_ts_column (or event_ts_column)",
+            required=True,
+        )
 
     def process(self, df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
         """Generate derived events from state changes.
@@ -50,7 +52,7 @@ class DerivedEventHandler(BasePatternHandler):
         """
         self.validate(df)
 
-        ts_col = self.change_ts_column or self.event_ts_column
+        ts_col = self.timestamp_column
         assert ts_col is not None  # validate() ensures this
 
         attrs = self.dataset.silver.attributes or []

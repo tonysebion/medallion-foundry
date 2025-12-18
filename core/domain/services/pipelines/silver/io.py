@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Tuple
 
 import pandas as pd
 
@@ -242,7 +242,30 @@ class DatasetWriter:
         self.write_csv = write_csv
         self.parquet_compression = parquet_compression
 
-    def write_dataset(self, dataset_name: str, dataset_df: pd.DataFrame) -> List[Path]:
+    def _write_partitioned(
+        self,
+        dataset_name: str,
+        dataset_df: pd.DataFrame,
+        write_fn: Callable[[pd.DataFrame, str, Path], List[Path]],
+        log_partitions: bool = False,
+    ) -> List[Path]:
+        """Template method for writing partitioned data.
+
+        Handles the common pattern of:
+        1. Partitioning the DataFrame
+        2. Building target directories for each partition
+        3. Handling error rows
+        4. Calling the appropriate write function
+
+        Args:
+            dataset_name: Name of the dataset being written.
+            dataset_df: DataFrame to write.
+            write_fn: Function to write cleaned DataFrame (cleaned_df, name, target_dir) -> files.
+            log_partitions: Whether to log partition info (only for non-chunk writes).
+
+        Returns:
+            List of paths to written files.
+        """
         partitions = partition_dataframe(dataset_df, self.partition_columns) or [
             ([], dataset_df)
         ]
@@ -261,55 +284,50 @@ class DatasetWriter:
                 dataset_name,
                 target_dir,
             )
-            written_files.extend(
-                _write_dataset(
-                    cleaned_df,
-                    dataset_name,
-                    target_dir,
-                    self.write_parquet,
-                    self.write_csv,
-                    self.parquet_compression,
-                )
-            )
-            if path_parts:
+            written_files.extend(write_fn(cleaned_df, dataset_name, target_dir))
+
+            if log_partitions and path_parts:
                 suffix = "/".join(path_parts)
                 logger.info("Written partition %s for %s", suffix, dataset_name)
 
         return written_files
 
+    def write_dataset(self, dataset_name: str, dataset_df: pd.DataFrame) -> List[Path]:
+        """Write a dataset with partition/error policies."""
+
+        def write_fn(df: pd.DataFrame, name: str, target_dir: Path) -> List[Path]:
+            return _write_dataset(
+                df,
+                name,
+                target_dir,
+                self.write_parquet,
+                self.write_csv,
+                self.parquet_compression,
+            )
+
+        return self._write_partitioned(
+            dataset_name, dataset_df, write_fn, log_partitions=True
+        )
+
     def write_dataset_chunk(
         self, dataset_name: str, dataset_df: pd.DataFrame, chunk_tag: str
     ) -> List[Path]:
         """Write a chunk of a dataset with partition/error policies, suffixing filenames."""
-        partitions = partition_dataframe(dataset_df, self.partition_columns) or [
-            ([], dataset_df)
-        ]
-        written_files: List[Path] = []
-        for path_parts, partition_df in partitions:
-            target_dir = (
-                self.base_dir / build_partition_path(*path_parts)
-                if path_parts
-                else self.base_dir
-            )
-            cleaned_df = handle_error_rows(
-                partition_df,
-                self.primary_keys,
-                self.error_cfg,
-                dataset_name,
+
+        def write_fn(df: pd.DataFrame, name: str, target_dir: Path) -> List[Path]:
+            return _write_dataset_chunk(
+                df,
+                name,
                 target_dir,
+                self.write_parquet,
+                self.write_csv,
+                self.parquet_compression,
+                chunk_tag,
             )
-            written_files.extend(
-                _write_dataset_chunk(
-                    cleaned_df,
-                    dataset_name,
-                    target_dir,
-                    self.write_parquet,
-                    self.write_csv,
-                    self.parquet_compression,
-                    chunk_tag,
-                )
-            )
-        return written_files
+
+        return self._write_partitioned(
+            dataset_name, dataset_df, write_fn, log_partitions=False
+        )
 
 
 class SilverModelPlanner:

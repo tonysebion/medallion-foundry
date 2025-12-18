@@ -17,7 +17,6 @@ from core.domain.adapters.extractors.cursor_state import (
     build_incremental_query,
 )
 from core.domain.adapters.extractors.db_runner import fetch_records_from_query
-from core.domain.adapters.extractors.mixins import RateLimitMixin
 from core.domain.adapters.extractors.resilience import ResilientExtractorMixin
 from core.foundation.primitives.exceptions import ExtractionError
 from core.infrastructure.io.extractors.base import BaseExtractor, register_extractor
@@ -27,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 @register_extractor("db")
-class DbExtractor(BaseExtractor, RateLimitMixin, ResilientExtractorMixin):
+class DbExtractor(BaseExtractor, ResilientExtractorMixin):
     """Extractor for database sources with incremental loading support.
 
     Supports both db_table and db_query source types. Watermark handling
@@ -88,10 +87,10 @@ class DbExtractor(BaseExtractor, RateLimitMixin, ResilientExtractorMixin):
         return self._execute_with_resilience(
             _do_query,
             "db_extractor_query",
-            retry_if=self._should_retry_db_error,
+            retry_if=self._should_retry,
         )
 
-    def _should_retry_db_error(self, exc: BaseException) -> bool:
+    def _should_retry(self, exc: BaseException) -> bool:
         """Determine if a database error is retryable.
 
         Retries on transient connection errors but not on query/data errors.
@@ -166,7 +165,7 @@ class DbExtractor(BaseExtractor, RateLimitMixin, ResilientExtractorMixin):
             f"Executing database query (incremental={'yes' if use_incremental else 'no'})"
         )
 
-        limiter = self.create_rate_limiter(
+        limiter = RateLimiter.from_config(
             db_cfg,
             run_cfg,
             component="db_extractor",

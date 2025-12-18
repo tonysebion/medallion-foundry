@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Set
 import pandas as pd
 
 from core.infrastructure.config import SchemaMode
+from core.domain.services.pipelines.silver.handlers.base import ensure_columns_exist
 
 if TYPE_CHECKING:
     from core.infrastructure.config import DatasetConfig
@@ -73,11 +74,11 @@ class DataFramePreparer:
             ValueError: If required columns are missing.
         """
         expected = self.get_expected_columns()
-        missing = [col for col in expected if col not in df.columns]
-        if missing:
-            raise ValueError(
-                f"Bronze data missing required columns for {self.dataset.dataset_id}: {missing}"
-            )
+        ensure_columns_exist(
+            df,
+            list(expected),
+            f"Bronze data missing required columns for {self.dataset.dataset_id}",
+        )
 
     def check_extra_columns(self, df: pd.DataFrame) -> None:
         """Check for unexpected columns based on schema mode.
@@ -143,6 +144,40 @@ class DataFramePreparer:
 
         return df
 
+    def _resolve_sort_column(self, df: pd.DataFrame) -> str | None:
+        """Resolve the timestamp/order column for sorting during deduplication.
+
+        Priority order:
+        1. Explicit order_column if configured and present in DataFrame
+        2. event_ts_column for event-like entities if present
+        3. change_ts_column if present
+
+        Args:
+            df: DataFrame to check for column presence.
+
+        Returns:
+            Column name to use for sorting, or None if no valid column found.
+        """
+        silver = self.dataset.silver
+
+        # Priority 1: Explicit order column
+        if silver.order_column and silver.order_column in df.columns:
+            return silver.order_column
+
+        # Priority 2: Event timestamp for event-like entities
+        if (
+            silver.entity_kind.is_event_like
+            and silver.event_ts_column
+            and silver.event_ts_column in df.columns
+        ):
+            return silver.event_ts_column
+
+        # Priority 3: Change timestamp as fallback
+        if silver.change_ts_column and silver.change_ts_column in df.columns:
+            return silver.change_ts_column
+
+        return None
+
     def deduplicate(self, df: pd.DataFrame) -> pd.DataFrame:
         """Deduplicate DataFrame based on natural keys and timestamp.
 
@@ -153,23 +188,10 @@ class DataFramePreparer:
             Deduplicated DataFrame.
         """
         sort_columns = list(self.dataset.silver.natural_keys)
-        order_column = self.dataset.silver.order_column
-        if order_column and order_column in df.columns:
-            if order_column not in sort_columns:
-                sort_columns.append(order_column)
-        elif (
-            self.dataset.silver.entity_kind.is_event_like
-            and self.dataset.silver.event_ts_column
-            and self.dataset.silver.event_ts_column in df.columns
-        ):
-            if self.dataset.silver.event_ts_column not in sort_columns:
-                sort_columns.append(self.dataset.silver.event_ts_column)
-        elif (
-            self.dataset.silver.change_ts_column
-            and self.dataset.silver.change_ts_column in df.columns
-        ):
-            if self.dataset.silver.change_ts_column not in sort_columns:
-                sort_columns.append(self.dataset.silver.change_ts_column)
+
+        sort_column = self._resolve_sort_column(df)
+        if sort_column and sort_column not in sort_columns:
+            sort_columns.append(sort_column)
 
         df = df.sort_values(sort_columns).drop_duplicates(
             subset=list(self.dataset.silver.natural_keys), keep="last"

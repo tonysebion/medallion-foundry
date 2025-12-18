@@ -212,7 +212,7 @@ class DbMultiExtractor(BaseExtractor, ResilientExtractorMixin):
             records, max_cursor = self._execute_with_resilience(
                 _do_fetch,
                 f"db_multi_{entity.name}",
-                retry_if=self._should_retry_db_error,
+                retry_if=self._should_retry,
             )
         except Exception as exc:
             logger.error("Entity %s extraction failed: %s", entity.name, exc)
@@ -233,7 +233,7 @@ class DbMultiExtractor(BaseExtractor, ResilientExtractorMixin):
             row_count=len(records),
         )
 
-    def _should_retry_db_error(self, exc: BaseException) -> bool:
+    def _should_retry(self, exc: BaseException) -> bool:
         """Determine if a database error is retryable."""
         exc_type = type(exc).__name__
         exc_module = type(exc).__module__

@@ -105,6 +105,8 @@ silver/
 gold/
 landing/
 archive/
+# Keep the code module even though "bronze/" data directories must stay ignored.
+!core/domain/services/pipelines/bronze/
 *.csv
 *.tsv
 *.jsonl

@@ -37,15 +37,6 @@ from core.infrastructure.config.profiles import resolve_profile
 from .dataset import DatasetConfig
 
 
-# Module-level constants for DataClassification
-_DATA_CLASSIFICATION_DESCRIPTIONS: Dict[str, str] = {
-    "public": "Public data with no access restrictions",
-    "internal": "Internal data accessible within the organization",
-    "confidential": "Confidential data with restricted access",
-    "restricted": "Highly restricted data with strict access controls",
-}
-
-
 class DataClassification(RichEnumMixin, str, Enum):
     """Data classification levels per spec."""
 
@@ -54,32 +45,15 @@ class DataClassification(RichEnumMixin, str, Enum):
     CONFIDENTIAL = "confidential"
     RESTRICTED = "restricted"
 
-    @classmethod
-    def choices(cls) -> List[str]:
-        """Return list of valid enum values."""
-        return [member.value for member in cls]
 
-    @classmethod
-    def normalize(cls, raw: str | None) -> "DataClassification":
-        """Normalize a classification value."""
-        if isinstance(raw, cls):
-            return raw
-        if raw is None:
-            return cls.INTERNAL
-
-        candidate = raw.strip().lower()
-        for member in cls:
-            if member.value == candidate:
-                return member
-
-        raise ValueError(
-            f"Invalid DataClassification '{raw}'. Valid options: {', '.join(cls.choices())}"
-        )
-
-    def describe(self) -> str:
-        """Return human-readable description."""
-        value_str = str(self.value)
-        return _DATA_CLASSIFICATION_DESCRIPTIONS.get(value_str, value_str)
+# RichEnumMixin class variables must be set AFTER class definition due to Enum metaclass
+DataClassification._default = "INTERNAL"
+DataClassification._descriptions = {
+    "public": "Public data with no access restrictions",
+    "internal": "Internal data accessible within the organization",
+    "confidential": "Confidential data with restricted access",
+    "restricted": "Highly restricted data with strict access controls",
+}
 
 
 class OwnerConfig(BaseModel):
@@ -139,14 +113,6 @@ class SchemaConfig(BaseModel):
         }
 
 
-# Module-level constants for StorageBackend
-_STORAGE_BACKEND_DESCRIPTIONS: Dict[str, str] = {
-    "s3": "Amazon S3 cloud storage",
-    "azure": "Azure Blob Storage",
-    "local": "Local filesystem storage",
-}
-
-
 class StorageBackend(RichEnumMixin, str, Enum):
     """Storage backend types."""
 
@@ -154,40 +120,13 @@ class StorageBackend(RichEnumMixin, str, Enum):
     azure = "azure"
     local = "local"
 
-    @classmethod
-    def choices(cls) -> List[str]:
-        """Return list of valid enum values."""
-        return [member.value for member in cls]
 
-    @classmethod
-    def normalize(cls, raw: str | None) -> "StorageBackend":
-        """Normalize a storage backend value."""
-        if isinstance(raw, cls):
-            return raw
-        if raw is None:
-            return cls.local
-
-        candidate = raw.strip().lower()
-        for member in cls:
-            if member.value == candidate:
-                return member
-
-        raise ValueError(
-            f"Invalid StorageBackend '{raw}'. Valid options: {', '.join(cls.choices())}"
-        )
-
-    def describe(self) -> str:
-        """Return human-readable description."""
-        value_str = str(self.value)
-        return _STORAGE_BACKEND_DESCRIPTIONS.get(value_str, value_str)
-
-
-# Module-level constants for SourceType
-_SOURCE_TYPE_DESCRIPTIONS: Dict[str, str] = {
-    "api": "REST API data source",
-    "db": "Database query source",
-    "custom": "Custom extractor implementation",
-    "file": "File-based data source",
+# RichEnumMixin class variables must be set AFTER class definition due to Enum metaclass
+StorageBackend._default = "local"
+StorageBackend._descriptions = {
+    "s3": "Amazon S3 cloud storage",
+    "azure": "Azure Blob Storage",
+    "local": "Local filesystem storage",
 }
 
 
@@ -199,32 +138,15 @@ class SourceType(RichEnumMixin, str, Enum):
     custom = "custom"
     file = "file"
 
-    @classmethod
-    def choices(cls) -> List[str]:
-        """Return list of valid enum values."""
-        return [member.value for member in cls]
 
-    @classmethod
-    def normalize(cls, raw: str | None) -> "SourceType":
-        """Normalize a source type value."""
-        if isinstance(raw, cls):
-            return raw
-        if raw is None:
-            raise ValueError("SourceType value must be provided")
-
-        candidate = raw.strip().lower()
-        for member in cls:
-            if member.value == candidate:
-                return member
-
-        raise ValueError(
-            f"Invalid SourceType '{raw}'. Valid options: {', '.join(cls.choices())}"
-        )
-
-    def describe(self) -> str:
-        """Return human-readable description."""
-        value_str = str(self.value)
-        return _SOURCE_TYPE_DESCRIPTIONS.get(value_str, value_str)
+# RichEnumMixin class variables must be set AFTER class definition due to Enum metaclass
+# Note: SourceType has no default - None raises ValueError (as per original behavior)
+SourceType._descriptions = {
+    "api": "REST API data source",
+    "db": "Database query source",
+    "custom": "Custom extractor implementation",
+    "file": "File-based data source",
+}
 
 
 class BronzeConfig(BaseModel):

@@ -7,7 +7,10 @@ from typing import Dict, TYPE_CHECKING
 import pandas as pd
 
 from core.infrastructure.config import HistoryMode, EntityKind
-from core.domain.services.pipelines.silver.handlers.base import BasePatternHandler
+from core.domain.services.pipelines.silver.handlers.base import (
+    BasePatternHandler,
+    ensure_column_exists,
+)
 from core.domain.services.pipelines.silver.handlers.registry import register_handler
 
 if TYPE_CHECKING:
@@ -45,11 +48,9 @@ class StateHandler(BasePatternHandler):
         Raises:
             ValueError: If change_ts_column is not configured or missing from data.
         """
-        ts_col = self.change_ts_column or self.event_ts_column
-        if not ts_col:
-            raise ValueError("change_ts_column is required for state datasets")
-        if ts_col not in df.columns:
-            raise ValueError(f"Change timestamp column '{ts_col}' not found in data")
+        ensure_column_exists(
+            df, self.timestamp_column, "change_ts_column", required=True
+        )
 
     def process(self, df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
         """Process state data according to history mode.
@@ -64,7 +65,7 @@ class StateHandler(BasePatternHandler):
         self.validate(df)
 
         history_mode = self.dataset.silver.history_mode or HistoryMode.SCD2
-        ts_col = self.change_ts_column or self.event_ts_column
+        ts_col = self.timestamp_column
         assert ts_col is not None  # validate() ensures this
 
         ordered = df.sort_values(self.natural_keys + [ts_col]).copy()

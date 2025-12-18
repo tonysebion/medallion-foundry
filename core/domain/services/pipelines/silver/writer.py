@@ -1,12 +1,16 @@
 """Public SilverArtifactWriter interface and default implementation."""
 
 from __future__ import annotations
-from typing import Protocol, Dict, Any, List
-from typing import Mapping
+
+import logging
 from pathlib import Path
+from typing import Any, Dict, List, Mapping, Protocol
+
 import pandas as pd
 
 from core.domain.services.pipelines.silver.io import write_silver_outputs as _artifact_write_silver_outputs
+
+logger = logging.getLogger(__name__)
 
 
 class SilverArtifactWriter(Protocol):
@@ -109,13 +113,23 @@ class TransactionalSilverArtifactWriter:
                 p.replace(target)
                 moved.append(target)
             final_outputs[label] = moved
+
+        # Best-effort staging directory cleanup with logging
         try:
-            # Best-effort cleanup
-            for leftover in staging.iterdir():
-                pass
-            staging.rmdir()
-        except Exception:
-            pass
+            if staging.exists() and staging.is_dir():
+                remaining = list(staging.iterdir())
+                if remaining:
+                    logger.debug(
+                        "Staging directory %s has %d leftover items",
+                        staging,
+                        len(remaining),
+                    )
+                else:
+                    staging.rmdir()
+                    logger.debug("Removed empty staging directory %s", staging)
+        except Exception as e:
+            logger.warning("Failed to clean staging directory %s: %s", staging, e)
+
         return final_outputs
 
 

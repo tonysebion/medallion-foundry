@@ -228,7 +228,7 @@ class ApiExtractor(BaseExtractor, ResilientExtractorMixin):
             "type": api_cfg.get("cursor_type", "timestamp"),
         }
 
-    def _should_retry_api(self, exc: BaseException) -> bool:
+    def _should_retry(self, exc: BaseException) -> bool:
         """Determine if an API exception should trigger a retry.
 
         Args:
@@ -310,7 +310,7 @@ class ApiExtractor(BaseExtractor, ResilientExtractorMixin):
 
         # Build retry policy with API-specific handlers
         policy = self._build_retry_policy(
-            retry_if=self._should_retry_api,
+            retry_if=self._should_retry,
             delay_from_exception=self._delay_from_api_exc,
             retry_config=api_cfg.get("retry"),
         )
