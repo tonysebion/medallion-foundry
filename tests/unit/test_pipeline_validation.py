@@ -99,3 +99,123 @@ class TestValidationHelpers:
         source.target_path = ""
         with pytest.raises(ValueError, match="Configuration validation failed"):
             validate_and_raise(source=source)
+
+
+class TestBronzeSourceValidateMethod:
+    """Tests for BronzeSource.validate() method."""
+
+    def test_validate_returns_empty_for_valid_config(self, tmp_path):
+        """Valid configuration returns no issues."""
+        # Create a source file
+        source_file = tmp_path / "data.csv"
+        source_file.write_text("id,name\n1,test\n")
+
+        source = BronzeSource(
+            system="test",
+            entity="table",
+            source_type=SourceType.FILE_CSV,
+            source_path=str(source_file),
+            target_path=str(tmp_path / "bronze"),
+        )
+
+        issues = source.validate(check_connectivity=False)
+        assert issues == []
+
+    def test_validate_with_connectivity_check_for_missing_file(self, tmp_path):
+        """Connectivity check reports missing file."""
+        source = BronzeSource(
+            system="test",
+            entity="table",
+            source_type=SourceType.FILE_CSV,
+            source_path=str(tmp_path / "nonexistent.csv"),
+            target_path=str(tmp_path / "bronze"),
+        )
+
+        issues = source.validate(check_connectivity=True)
+        assert any("not found" in issue.lower() for issue in issues)
+
+    def test_validate_skips_connectivity_for_template_path(self, tmp_path):
+        """Connectivity check skipped for paths with {run_date} template."""
+        source = BronzeSource(
+            system="test",
+            entity="table",
+            source_type=SourceType.FILE_CSV,
+            source_path=str(tmp_path / "{run_date}" / "data.csv"),
+            target_path=str(tmp_path / "bronze"),
+        )
+
+        # Should not report missing file since path contains template
+        issues = source.validate(check_connectivity=True)
+        assert not any("not found" in issue.lower() for issue in issues)
+
+    def test_validate_with_run_date_resolves_path(self, tmp_path):
+        """Connectivity check with run_date resolves template."""
+        # Create dated directory
+        dated_dir = tmp_path / "2025-01-15"
+        dated_dir.mkdir()
+        (dated_dir / "data.csv").write_text("id\n1\n")
+
+        source = BronzeSource(
+            system="test",
+            entity="table",
+            source_type=SourceType.FILE_CSV,
+            source_path=str(tmp_path / "{run_date}" / "data.csv"),
+            target_path=str(tmp_path / "bronze"),
+        )
+
+        issues = source.validate("2025-01-15", check_connectivity=True)
+        assert issues == []
+
+
+class TestSilverEntityValidateMethod:
+    """Tests for SilverEntity.validate() method."""
+
+    def test_validate_returns_empty_for_valid_config(self, tmp_path):
+        """Valid configuration returns no issues."""
+        # Create source data
+        source_dir = tmp_path / "bronze"
+        source_dir.mkdir()
+
+        entity = SilverEntity(
+            source_path=str(source_dir / "*.parquet"),
+            target_path=str(tmp_path / "silver"),
+            natural_keys=["id"],
+            change_timestamp="updated_at",
+        )
+
+        issues = entity.validate(check_source=False)
+        assert issues == []
+
+    def test_validate_with_source_check_for_missing_data(self, tmp_path):
+        """Source check reports missing Bronze data."""
+        entity = SilverEntity(
+            source_path=str(tmp_path / "bronze" / "{run_date}" / "*.parquet"),
+            target_path=str(tmp_path / "silver"),
+            natural_keys=["id"],
+            change_timestamp="updated_at",
+        )
+
+        issues = entity.validate("2025-01-15", check_source=True)
+        assert any("not found" in issue.lower() for issue in issues)
+
+    def test_validate_with_existing_source_data(self, tmp_path):
+        """Source check passes when data exists."""
+        import pandas as pd
+
+        # Create source data
+        source_dir = tmp_path / "bronze" / "2025-01-15"
+        source_dir.mkdir(parents=True)
+
+        # Write a parquet file using pandas
+        df = pd.DataFrame([{"id": 1, "name": "test", "updated_at": "2025-01-15"}])
+        df.to_parquet(str(source_dir / "data.parquet"))
+
+        entity = SilverEntity(
+            source_path=str(tmp_path / "bronze" / "{run_date}" / "*.parquet"),
+            target_path=str(tmp_path / "silver"),
+            natural_keys=["id"],
+            change_timestamp="updated_at",
+        )
+
+        issues = entity.validate("2025-01-15", check_source=True)
+        assert issues == []

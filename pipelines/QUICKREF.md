@@ -3,7 +3,10 @@
 ## Running Pipelines
 
 ```bash
-# Full pipeline (Bronze → Silver)
+# List available pipelines
+python -m pipelines --list
+
+# Full pipeline (Bronze -> Silver)
 python -m pipelines claims.header --date 2025-01-15
 
 # Bronze only
@@ -11,6 +14,12 @@ python -m pipelines claims.header:bronze --date 2025-01-15
 
 # Silver only
 python -m pipelines claims.header:silver --date 2025-01-15
+
+# Validate configuration and connectivity (pre-flight check)
+python -m pipelines claims.header --date 2025-01-15 --check
+
+# Show what pipeline would do without executing
+python -m pipelines claims.header --date 2025-01-15 --explain
 
 # Dry run (validate without executing)
 python -m pipelines claims.header --date 2025-01-15 --dry-run
@@ -20,6 +29,9 @@ python -m pipelines claims.header --date 2025-01-15 --target ./local_output/
 
 # Verbose logging
 python -m pipelines claims.header --date 2025-01-15 -v
+
+# Test database connection
+python -m pipelines test-connection claims_db --host myserver.com --database ClaimsDB
 ```
 
 ## Source Types (Bronze)
@@ -153,7 +165,7 @@ python -m pipelines claims.header --date 2025-01-15 --dry-run
 ### Database Connection Issues
 
 1. Check environment variables are set: `echo $CLAIMS_DB_HOST`
-2. Test connection separately
+2. Test connection: `python -m pipelines test-connection claims_db --host myserver.com --database ClaimsDB`
 3. Add `@with_retry` for transient failures
 
 ### Incremental Load Not Working
@@ -161,3 +173,45 @@ python -m pipelines claims.header --date 2025-01-15 --dry-run
 1. Check watermark column exists in source
 2. Verify watermark file: `cat .state/system_entity_watermark.json`
 3. Delete watermark to reset: `rm .state/system_entity_watermark.json`
+
+## Programmatic Validation
+
+You can validate pipeline configuration before running:
+
+```python
+# Validate BronzeSource configuration
+issues = bronze.validate(run_date="2025-01-15", check_connectivity=True)
+if issues:
+    for issue in issues:
+        print(issue)
+
+# Validate SilverEntity configuration
+issues = silver.validate(run_date="2025-01-15", check_source=True)
+if issues:
+    for issue in issues:
+        print(issue)
+```
+
+## Structured Exceptions
+
+The pipelines library provides specific exception types for better error handling:
+
+```python
+from pipelines.lib.errors import (
+    PipelineError,           # Base exception
+    BronzeExtractionError,   # Source extraction failures
+    SilverCurationError,     # Curation/dedup failures
+    ConnectionError,         # Database/API connection issues
+    ConfigurationError,      # Invalid configuration
+    ChecksumError,           # Data integrity failures
+    SourceNotFoundError,     # Missing source files/tables
+    ValidationError,         # Configuration validation issues
+)
+
+try:
+    result = bronze.run("2025-01-15")
+except BronzeExtractionError as e:
+    print(f"Extraction failed: {e}")
+    print(f"System: {e.system}, Entity: {e.entity}")
+    print(f"Details: {e.details}")
+```

@@ -12,7 +12,6 @@ Bronze layer rules:
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -25,6 +24,8 @@ import pandas as pd
 from pipelines.lib.connections import get_connection
 from pipelines.lib.env import expand_env_vars, expand_options
 from pipelines.lib.watermark import get_watermark, save_watermark
+from pipelines.lib._path_utils import path_has_data, resolve_target_path
+from pipelines.lib.validate import validate_and_raise
 
 logger = logging.getLogger(__name__)
 
@@ -159,81 +160,109 @@ class BronzeSource:
 
     def __post_init__(self) -> None:
         """Validate configuration on instantiation."""
-        errors = self._validate()
-        if errors:
-            error_msg = "\n".join(f"  - {e}" for e in errors)
+        try:
+            validate_and_raise(source=self)
+        except ValueError as exc:
             raise ValueError(
                 f"BronzeSource configuration errors for {self.system}.{self.entity}:\n"
-                f"{error_msg}\n\n"
-                "Fix the configuration and try again."
-            )
+                f"{exc}"
+            ) from exc
 
-    def _validate(self) -> List[str]:
-        """Validate configuration and return list of errors."""
-        errors: List[str] = []
+    def validate(
+        self,
+        run_date: Optional[str] = None,
+        *,
+        check_connectivity: bool = True,
+    ) -> List[str]:
+        """Validate configuration and optionally check connectivity.
 
-        if not self.system:
-            errors.append("system is required (source system name)")
+        Performs pre-flight checks to ensure the pipeline can run successfully.
 
-        if not self.entity:
-            errors.append("entity is required (table/endpoint name)")
+        Args:
+            run_date: Optional run date for path resolution
+            check_connectivity: If True, test source connectivity
 
-        if not self.target_path:
-            errors.append("target_path is required")
+        Returns:
+            List of validation issues (empty if valid)
 
-        # Database-specific validation
-        db_types = (SourceType.DATABASE_MSSQL, SourceType.DATABASE_POSTGRES)
-        if self.source_type in db_types:
-            if "host" not in self.options:
-                errors.append(
-                    "Database sources require 'host' in options. "
-                    'Add options={"host": "your-server.database.com", ...}'
+        Example:
+            >>> issues = source.validate()
+            >>> if issues:
+            ...     for issue in issues:
+            ...         print(issue)
+            ... else:
+            ...     print("Configuration is valid")
+        """
+        from pipelines.lib.validate import validate_bronze_source
+
+        issues: List[str] = []
+
+        # Run configuration validation
+        config_issues = validate_bronze_source(self)
+        issues.extend(str(issue) for issue in config_issues)
+
+        # Check connectivity if requested
+        if check_connectivity:
+            connectivity_issues = self._check_connectivity(run_date)
+            issues.extend(connectivity_issues)
+
+        return issues
+
+    def _check_connectivity(self, run_date: Optional[str] = None) -> List[str]:
+        """Check source connectivity.
+
+        Returns list of issues found.
+        """
+        issues: List[str] = []
+
+        if self.source_type in (SourceType.DATABASE_MSSQL, SourceType.DATABASE_POSTGRES):
+            try:
+                opts = self._get_expanded_options()
+                connection_name = opts.get(
+                    "connection_name", f"{self.system}_{self.entity}"
                 )
-            if "database" not in self.options:
-                errors.append(
-                    "Database sources require 'database' in options. "
-                    'Add "database": "YourDatabase" to options.'
-                )
+                con = get_connection(connection_name, self.source_type, opts)
+                con.list_tables()
+            except Exception as e:
+                issues.append(f"Database connection failed: {e}")
 
-        # File-specific validation
-        if self.source_type in (
+        elif self.source_type in (
             SourceType.FILE_CSV,
             SourceType.FILE_PARQUET,
             SourceType.FILE_SPACE_DELIMITED,
+            SourceType.FILE_FIXED_WIDTH,
         ):
-            if not self.source_path:
-                errors.append(
-                    "File sources require source_path. "
-                    "Add source_path='/path/to/files/{run_date}/*.csv'"
-                )
+            source_path = self.source_path
+            if run_date:
+                source_path = source_path.format(run_date=run_date)
 
-        # Fixed-width specific validation
-        if self.source_type == SourceType.FILE_FIXED_WIDTH:
-            if "columns" not in self.options:
-                errors.append(
-                    "Fixed-width files require 'columns' list in options."
-                )
-            if "widths" not in self.options:
-                errors.append(
-                    "Fixed-width files require 'widths' list in options."
-                )
+            if "{run_date}" not in self.source_path or run_date:
+                if not self._path_exists(source_path):
+                    issues.append(f"Source path not found: {source_path}")
 
-        # Incremental load validation
-        if self.load_pattern == LoadPattern.INCREMENTAL_APPEND:
-            if not self.watermark_column:
-                errors.append(
-                    "Incremental loads require watermark_column. "
-                    "Add watermark_column='LastUpdated'"
-                )
+        return issues
 
-        # Warnings (logged but don't fail)
-        if self.load_pattern == LoadPattern.FULL_SNAPSHOT and self.watermark_column:
-            logger.warning(
-                "watermark_column is set but load_pattern is FULL_SNAPSHOT. "
-                "The watermark will be ignored. Use INCREMENTAL_APPEND or remove it."
-            )
-
-        return errors
+    def _path_exists(self, path: str) -> bool:
+        """Check if a path exists."""
+        if path.startswith("s3://"):
+            try:
+                import fsspec
+                fs = fsspec.filesystem("s3")
+                return fs.exists(path)
+            except Exception:
+                return False
+        elif path.startswith(("abfss://", "wasbs://")):
+            try:
+                import fsspec
+                fs = fsspec.filesystem("abfs")
+                return fs.exists(path)
+            except Exception:
+                return False
+        else:
+            if "*" in path:
+                import glob
+                return len(glob.glob(path)) > 0
+            return Path(path).exists()
 
     def run(
         self,
@@ -314,30 +343,20 @@ class BronzeSource:
 
     def _resolve_target(self, run_date: str, target_override: Optional[str]) -> str:
         """Resolve the target path with template substitution."""
-        base = (
-            target_override or os.environ.get("BRONZE_TARGET_ROOT") or self.target_path
-        )
-        return base.format(
-            system=self.system,
-            entity=self.entity,
-            run_date=run_date,
+        return resolve_target_path(
+            template=self.target_path,
+            target_override=target_override,
+            env_var="BRONZE_TARGET_ROOT",
+            format_vars={
+                "system": self.system,
+                "entity": self.entity,
+                "run_date": run_date,
+            },
         )
 
     def _already_ran(self, target: str) -> bool:
         """Check if data already exists for this run."""
-        if target.startswith("s3://"):
-            # For S3, check via fsspec
-            try:
-                import fsspec
-
-                fs = fsspec.filesystem("s3")
-                return fs.exists(target) and len(fs.ls(target)) > 0
-            except Exception:
-                return False
-        else:
-            # Local filesystem
-            path = Path(target)
-            return path.exists() and any(path.iterdir())
+        return path_has_data(target)
 
     def _read_source(
         self,

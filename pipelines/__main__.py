@@ -229,6 +229,320 @@ def run_pipeline(
             sys.exit(1)
 
 
+def explain_pipeline(module: Any, layer: Optional[str], run_date: str) -> None:
+    """Explain what the pipeline would do without executing.
+
+    Shows configuration details and execution plan.
+    """
+    print()
+    print("=" * 60)
+    print("PIPELINE EXPLANATION")
+    print("=" * 60)
+    print(f"Run Date: {run_date}")
+    print(f"Layer: {layer or 'all (bronze → silver)'}")
+    print()
+
+    # Check for bronze configuration
+    bronze = getattr(module, "bronze", None)
+    if bronze and (layer is None or layer == "bronze"):
+        print("BRONZE LAYER:")
+        print("-" * 40)
+        print(f"  System:       {bronze.system}")
+        print(f"  Entity:       {bronze.entity}")
+        print(f"  Source Type:  {bronze.source_type.value}")
+        print(f"  Source Path:  {bronze.source_path or '(from database)'}")
+        print(f"  Target Path:  {bronze.target_path}")
+        print(f"  Load Pattern: {bronze.load_pattern.value}")
+        if bronze.watermark_column:
+            print(f"  Watermark:    {bronze.watermark_column}")
+        print()
+
+    # Check for silver configuration
+    silver = getattr(module, "silver", None)
+    if silver and (layer is None or layer == "silver"):
+        print("SILVER LAYER:")
+        print("-" * 40)
+        print(f"  Source Path:  {silver.source_path}")
+        print(f"  Target Path:  {silver.target_path}")
+        print(f"  Natural Keys: {', '.join(silver.natural_keys)}")
+        print(f"  Change Col:   {silver.change_timestamp}")
+        print(f"  Entity Kind:  {silver.entity_kind.value}")
+        print(f"  History Mode: {silver.history_mode.value}")
+        if silver.attributes:
+            print(f"  Attributes:   {', '.join(silver.attributes)}")
+        print()
+
+    # Show execution flow
+    print("EXECUTION FLOW:")
+    print("-" * 40)
+    if layer == "bronze":
+        print("  1. Extract data from source")
+        print("  2. Add Bronze metadata columns")
+        print("  3. Write to Bronze target path")
+        print("  4. Generate _metadata.json and _checksums.json")
+    elif layer == "silver":
+        print("  1. Read Bronze data from source path")
+        print("  2. Deduplicate by natural keys")
+        print("  3. Apply history mode (SCD1/SCD2)")
+        print("  4. Write to Silver target path")
+        print("  5. Generate _metadata.json and _checksums.json")
+    else:
+        print("  1. BRONZE: Extract data from source")
+        print("  2. BRONZE: Add metadata, write parquet + artifacts")
+        print("  3. SILVER: Read Bronze data")
+        print("  4. SILVER: Deduplicate and apply history mode")
+        print("  5. SILVER: Write parquet + artifacts")
+    print()
+    print("=" * 60)
+
+
+def check_pipeline(module: Any, layer: Optional[str], run_date: str) -> None:
+    """Validate pipeline configuration and connectivity.
+
+    Performs pre-flight checks without executing the pipeline.
+    """
+    from pipelines.lib.validate import (
+        validate_bronze_source,
+        validate_silver_entity,
+        format_validation_report,
+        ValidationSeverity,
+    )
+
+    print()
+    print("=" * 60)
+    print("PIPELINE VALIDATION")
+    print("=" * 60)
+
+    all_issues = []
+    has_errors = False
+
+    # Check bronze configuration
+    bronze = getattr(module, "bronze", None)
+    if bronze and (layer is None or layer == "bronze"):
+        print(f"\nBronze: {bronze.system}.{bronze.entity}")
+        print("-" * 40)
+
+        issues = validate_bronze_source(bronze)
+        all_issues.extend(issues)
+
+        if issues:
+            print(format_validation_report(issues))
+            if any(i.severity == ValidationSeverity.ERROR for i in issues):
+                has_errors = True
+        else:
+            print("  Configuration: OK")
+
+        # Check source connectivity
+        print("  Connectivity: ", end="")
+        try:
+            connectivity_ok = _check_bronze_connectivity(bronze)
+            if connectivity_ok:
+                print("OK")
+            else:
+                print("FAILED (see above)")
+                has_errors = True
+        except Exception as e:
+            print(f"FAILED - {e}")
+            has_errors = True
+
+    # Check silver configuration
+    silver = getattr(module, "silver", None)
+    if silver and (layer is None or layer == "silver"):
+        print(f"\nSilver: {silver.target_path}")
+        print("-" * 40)
+
+        issues = validate_silver_entity(silver)
+        all_issues.extend(issues)
+
+        if issues:
+            print(format_validation_report(issues))
+            if any(i.severity == ValidationSeverity.ERROR for i in issues):
+                has_errors = True
+        else:
+            print("  Configuration: OK")
+
+        # Check source path exists (Bronze output)
+        print("  Source Data:  ", end="")
+        source_path = silver.source_path.format(run_date=run_date)
+        if _check_path_exists(source_path):
+            print("OK")
+        else:
+            print(f"NOT FOUND at {source_path}")
+            print("  (Run Bronze layer first to generate source data)")
+
+    print()
+    print("=" * 60)
+
+    if has_errors:
+        print("RESULT: FAILED - Fix errors above before running")
+        sys.exit(1)
+    else:
+        print("RESULT: PASSED - Pipeline is ready to run")
+
+
+def _check_bronze_connectivity(bronze: Any) -> bool:
+    """Check connectivity to Bronze source."""
+    from pipelines.lib.bronze import SourceType
+    from pipelines.lib.env import expand_options
+
+    if bronze.source_type in (SourceType.DATABASE_MSSQL, SourceType.DATABASE_POSTGRES):
+        # For databases, try to connect
+        from pipelines.lib.connections import get_connection
+
+        opts = expand_options(bronze.options)
+        connection_name = opts.get(
+            "connection_name", f"{bronze.system}_{bronze.entity}"
+        )
+        try:
+            con = get_connection(connection_name, bronze.source_type, opts)
+            # Try a simple query to verify connection
+            con.list_tables()
+            return True
+        except Exception as e:
+            print(f"FAILED - Cannot connect to database: {e}")
+            return False
+
+    elif bronze.source_type in (
+        SourceType.FILE_CSV,
+        SourceType.FILE_PARQUET,
+        SourceType.FILE_SPACE_DELIMITED,
+        SourceType.FILE_FIXED_WIDTH,
+    ):
+        # For files, check if path exists
+        source_path = bronze.source_path
+        if "{run_date}" in source_path:
+            print("(skipped - path contains {run_date} template)")
+            return True
+        return _check_path_exists(source_path)
+
+    elif bronze.source_type == SourceType.API_REST:
+        # For APIs, just check URL format
+        print("(skipped - API connectivity checked at runtime)")
+        return True
+
+    return True
+
+
+def _check_path_exists(path: str) -> bool:
+    """Check if a path exists (local or cloud)."""
+    from pathlib import Path
+
+    if path.startswith("s3://"):
+        try:
+            import fsspec
+
+            fs = fsspec.filesystem("s3")
+            return fs.exists(path)
+        except Exception:
+            return False
+    elif path.startswith(("abfss://", "wasbs://")):
+        try:
+            import fsspec
+
+            fs = fsspec.filesystem("abfs")
+            return fs.exists(path)
+        except Exception:
+            return False
+    else:
+        # Local path - handle glob patterns
+        if "*" in path:
+            import glob
+
+            return len(glob.glob(path)) > 0
+        return Path(path).exists()
+
+
+def test_connection_command(connection_name: str, args: Any) -> None:
+    """Test database connection.
+
+    Usage: python -m pipelines test-connection <name> --host <host> --database <db>
+    """
+    import os
+    from pipelines.lib.bronze import SourceType
+    from pipelines.lib.connections import get_connection
+
+    print()
+    print("=" * 60)
+    print(f"TESTING CONNECTION: {connection_name}")
+    print("=" * 60)
+
+    # Build options from args or environment
+    options: Dict[str, Any] = {}
+
+    # Check for host/database in remaining args or env vars
+    host = os.environ.get(f"{connection_name.upper()}_HOST")
+    database = os.environ.get(f"{connection_name.upper()}_DATABASE")
+    db_type = os.environ.get(f"{connection_name.upper()}_TYPE", "mssql")
+
+    # Parse additional args (simple key=value parsing)
+    remaining = sys.argv[3:] if len(sys.argv) > 3 else []
+    for arg in remaining:
+        if arg.startswith("--host="):
+            host = arg.split("=", 1)[1]
+        elif arg.startswith("--database="):
+            database = arg.split("=", 1)[1]
+        elif arg.startswith("--type="):
+            db_type = arg.split("=", 1)[1]
+        elif arg == "--host" and remaining.index(arg) + 1 < len(remaining):
+            host = remaining[remaining.index(arg) + 1]
+        elif arg == "--database" and remaining.index(arg) + 1 < len(remaining):
+            database = remaining[remaining.index(arg) + 1]
+        elif arg == "--type" and remaining.index(arg) + 1 < len(remaining):
+            db_type = remaining[remaining.index(arg) + 1]
+
+    if not host:
+        print("ERROR: No host specified.")
+        print(f"  Set {connection_name.upper()}_HOST environment variable")
+        print("  Or use: --host <hostname>")
+        sys.exit(1)
+
+    if not database:
+        print("ERROR: No database specified.")
+        print(f"  Set {connection_name.upper()}_DATABASE environment variable")
+        print("  Or use: --database <database>")
+        sys.exit(1)
+
+    options["host"] = host
+    options["database"] = database
+
+    # Determine source type
+    source_type = (
+        SourceType.DATABASE_POSTGRES
+        if db_type.lower() in ("postgres", "postgresql", "pg")
+        else SourceType.DATABASE_MSSQL
+    )
+
+    print(f"  Host:     {host}")
+    print(f"  Database: {database}")
+    print(f"  Type:     {source_type.value}")
+    print()
+    print("Connecting...", end=" ")
+
+    try:
+        con = get_connection(connection_name, source_type, options)
+        tables = con.list_tables()
+        print("OK")
+        print()
+        print(f"Found {len(tables)} tables")
+        if tables and len(tables) <= 10:
+            print("Tables:")
+            for table in sorted(tables)[:10]:
+                print(f"  - {table}")
+        elif tables:
+            print(f"First 10 tables: {', '.join(sorted(tables)[:10])}")
+        print()
+        print("=" * 60)
+        print("RESULT: CONNECTION SUCCESSFUL")
+    except Exception as e:
+        print("FAILED")
+        print()
+        print(f"Error: {e}")
+        print()
+        print("=" * 60)
+        print("RESULT: CONNECTION FAILED")
+        sys.exit(1)
+
+
 def print_result(result: Dict[str, Any], pipeline_spec: str) -> None:
     """Print pipeline result in a readable format."""
     print()
@@ -281,7 +595,7 @@ Examples:
     # List available pipelines
     python -m pipelines --list
 
-    # Run full pipeline (Bronze → Silver)
+    # Run full pipeline (Bronze -> Silver)
     python -m pipelines claims.header --date 2025-01-15
 
     # Run only Bronze extraction
@@ -290,11 +604,20 @@ Examples:
     # Run only Silver curation
     python -m pipelines claims.header:silver --date 2025-01-15
 
+    # Validate configuration and connectivity
+    python -m pipelines claims.header --date 2025-01-15 --check
+
+    # Show what pipeline would do without executing
+    python -m pipelines claims.header --date 2025-01-15 --explain
+
     # Dry run (validate without executing)
     python -m pipelines claims.header --date 2025-01-15 --dry-run
 
     # Local development (override target paths)
     python -m pipelines claims.header --date 2025-01-15 --target ./local_output/
+
+    # Test database connection
+    python -m pipelines test-connection claims_db --host myserver.com --database ClaimsDB
         """,
     )
 
@@ -330,12 +653,33 @@ Examples:
         action="store_true",
         help="Enable verbose logging",
     )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Validate pipeline configuration without running (checks connectivity)",
+    )
+    parser.add_argument(
+        "--explain",
+        action="store_true",
+        help="Show what the pipeline would do without executing",
+    )
 
     args = parser.parse_args()
 
     # Handle --list flag
     if args.list_pipelines:
         list_pipelines()
+        return
+
+    # Handle test-connection command
+    if args.pipeline and args.pipeline.startswith("test-connection"):
+        parts = args.pipeline.split()
+        if len(parts) < 2:
+            print("Usage: python -m pipelines test-connection <connection_name>")
+            print("  Options: --host, --database, --type (mssql|postgres)")
+            sys.exit(1)
+        connection_name = parts[1] if len(parts) > 1 else "default"
+        test_connection_command(connection_name, args)
         return
 
     # Validate required arguments for running a pipeline
@@ -362,6 +706,17 @@ Examples:
     # Load and run pipeline
     try:
         module = load_pipeline_module(module_path)
+
+        # Handle --explain: show what would run without executing
+        if args.explain:
+            explain_pipeline(module, layer, args.date)
+            return
+
+        # Handle --check: validate configuration and connectivity
+        if args.check:
+            check_pipeline(module, layer, args.date)
+            return
+
         result = run_pipeline(
             module,
             layer,

@@ -47,6 +47,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from pipelines.lib._path_utils import path_has_data, resolve_target_path
 from pipelines.lib.auth import AuthConfig, build_auth_headers
 from pipelines.lib.checksum import write_checksum_manifest
 from pipelines.lib.env import expand_env_vars, expand_options
@@ -358,19 +359,20 @@ class ApiSource:
 
     def _resolve_target(self, run_date: str, target_override: Optional[str]) -> str:
         """Resolve target path with template substitution."""
-        import os
-
-        base = target_override or os.environ.get("BRONZE_TARGET_ROOT") or self.target_path
-        return base.format(
-            system=self.system,
-            entity=self.entity,
-            run_date=run_date,
+        return resolve_target_path(
+            template=self.target_path,
+            target_override=target_override,
+            env_var="BRONZE_TARGET_ROOT",
+            format_vars={
+                "system": self.system,
+                "entity": self.entity,
+                "run_date": run_date,
+            },
         )
 
     def _already_exists(self, target: str) -> bool:
         """Check if data already exists at target."""
-        path = Path(target)
-        return path.exists() and any(path.iterdir())
+        return path_has_data(target)
 
     def _fetch_all(
         self,

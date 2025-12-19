@@ -14,7 +14,6 @@ Silver layer rules:
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -24,6 +23,7 @@ from typing import Any, Dict, List, Optional
 import ibis
 
 from pipelines.lib.curate import build_history, dedupe_latest
+from pipelines.lib._path_utils import resolve_target_path
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +137,90 @@ class SilverEntity:
 
         return errors
 
+    def validate(
+        self,
+        run_date: Optional[str] = None,
+        *,
+        check_source: bool = True,
+    ) -> List[str]:
+        """Validate configuration and optionally check source data exists.
+
+        Performs pre-flight checks to ensure the pipeline can run successfully.
+
+        Args:
+            run_date: Optional run date for path resolution
+            check_source: If True, verify source data exists
+
+        Returns:
+            List of validation issues (empty if valid)
+
+        Example:
+            >>> issues = entity.validate("2025-01-15")
+            >>> if issues:
+            ...     for issue in issues:
+            ...         print(issue)
+            ... else:
+            ...     print("Configuration is valid")
+        """
+        from pipelines.lib.validate import validate_silver_entity
+
+        issues: List[str] = []
+
+        # Run configuration validation
+        config_issues = validate_silver_entity(self)
+        issues.extend(str(issue) for issue in config_issues)
+
+        # Check source data exists if requested
+        if check_source and run_date:
+            source_issues = self._check_source(run_date)
+            issues.extend(source_issues)
+
+        return issues
+
+    def _check_source(self, run_date: str) -> List[str]:
+        """Check that source data exists.
+
+        Returns list of issues found.
+        """
+        issues: List[str] = []
+
+        source_path = self.source_path.format(run_date=run_date)
+
+        if not self._path_exists(source_path):
+            issues.append(
+                f"Source data not found: {source_path}\n"
+                "  Run the Bronze layer first to generate source data."
+            )
+
+        return issues
+
+    def _path_exists(self, path: str) -> bool:
+        """Check if a path exists."""
+        import glob as glob_module
+
+        if path.startswith("s3://"):
+            try:
+                import fsspec
+                fs = fsspec.filesystem("s3")
+                if "*" in path or "?" in path:
+                    return len(fs.glob(path)) > 0
+                return fs.exists(path)
+            except Exception:
+                return False
+        elif path.startswith(("abfss://", "wasbs://")):
+            try:
+                import fsspec
+                fs = fsspec.filesystem("abfs")
+                if "*" in path or "?" in path:
+                    return len(fs.glob(path)) > 0
+                return fs.exists(path)
+            except Exception:
+                return False
+        else:
+            if "*" in path or "?" in path:
+                return len(glob_module.glob(path)) > 0
+            return Path(path).exists()
+
     def run(
         self,
         run_date: str,
@@ -155,7 +239,7 @@ class SilverEntity:
             Dictionary with curation results including row_count, target path
         """
         source = self.source_path.format(run_date=run_date)
-        target = self._resolve_target(target_override)
+        target = self._resolve_target(target_override, run_date)
 
         if dry_run:
             logger.info("[DRY RUN] Would curate %s to %s", source, target)
@@ -200,10 +284,13 @@ class SilverEntity:
 
         return result
 
-    def _resolve_target(self, target_override: Optional[str]) -> str:
+    def _resolve_target(self, target_override: Optional[str], run_date: str) -> str:
         """Resolve the target path."""
-        return (
-            target_override or os.environ.get("SILVER_TARGET_ROOT") or self.target_path
+        return resolve_target_path(
+            template=self.target_path,
+            target_override=target_override,
+            env_var="SILVER_TARGET_ROOT",
+            format_vars={"run_date": run_date},
         )
 
     def _validate_source(self, source: str) -> Optional[Dict[str, Any]]:
