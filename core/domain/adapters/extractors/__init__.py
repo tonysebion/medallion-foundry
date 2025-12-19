@@ -1,4 +1,8 @@
-"""Extractor implementations for various source types."""
+"""Extractor implementations for various source types.
+
+Note: API extraction has been migrated to pipelines.lib.api.ApiSource.
+This module now only contains DB and file extractors.
+"""
 from core.domain.adapters.extractors.factory import (
     get_extractor,
     get_extractor_class,

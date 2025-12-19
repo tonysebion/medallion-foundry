@@ -77,9 +77,6 @@ Repository = "https://github.com/tonysebion/medallion-foundry"
 "Bug Reports" = "https://github.com/tonysebion/medallion-foundry/issues"
 Changelog = "https://github.com/tonysebion/medallion-foundry/blob/main/CHANGELOG.md"
 
-[project.scripts]
-bronze-extract = "bronze_extract:main"
-
 [tool.setuptools]
 packages = [
     "core",
@@ -115,8 +112,10 @@ packages = [
     "core.orchestration",
     "core.orchestration.runner",
     "core._compat",
+    # Pipelines - Ibis-based pipeline framework (recommended for new development)
+    "pipelines",
+    "pipelines.lib",
 ]
-py-modules = ["bronze_extract"]
 
 [tool.setuptools.package-data]
 "*" = ["*.yaml", "*.yml"]
@@ -168,7 +167,7 @@ module = [
 ignore_missing_imports = true
 
 [tool.coverage.run]
-source = ["core", "extractors"]
+source = ["core", "extractors", "pipelines"]
 omit = ["tests/*", "*/test_*"]
 
 [tool.coverage.report]

@@ -1,13 +1,15 @@
 """External system adapters for bronze-foundry.
 
 This package contains integrations with external systems:
-- extractors/: Data source extractors (API, DB, file)
+- extractors/: Data source extractors (DB, file)
 - polybase/: PolyBase DDL generation
 - schema/: Schema validation (future feature)
 - quality/: Quality rules engine (future feature)
 
+Note: API extraction has been migrated to pipelines.lib.api.ApiSource
+
 Import from child packages directly:
-    from core.domain.adapters.extractors.api_extractor import ApiExtractor
+    from core.domain.adapters.extractors.db_extractor import DbExtractor
     from core.domain.adapters.polybase import generate_polybase_setup
     from core.domain.adapters.schema import SchemaValidator
     from core.domain.adapters.quality import evaluate_rules
