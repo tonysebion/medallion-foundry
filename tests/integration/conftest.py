@@ -500,29 +500,8 @@ def bronze_s3_pipeline_config(
     }
 
 
-@pytest.fixture
-def run_bronze_extraction(bronze_pipeline_config: Dict[str, Any], t0_date: date):
-    """Fixture that runs Bronze extraction and returns result info.
-
-    Returns a function that can be called to run extraction and get results.
-    """
-    from core.infrastructure.runtime.context import build_run_context
-    from core.orchestration.runner import ExtractJob
-
-    def _run_extraction() -> Dict[str, Any]:
-        context = build_run_context(
-            cfg=bronze_pipeline_config,
-            run_date=t0_date,
-        )
-        job = ExtractJob(context)
-        exit_code = job.run()
-
-        return {
-            "exit_code": exit_code,
-            "bronze_path": context.bronze_path,
-            "created_files": job.created_files,
-            "schema_snapshot": job.schema_snapshot,
-            "context": context,
-        }
-
-    return _run_extraction
+# Note: run_bronze_extraction fixture removed - use pipelines.lib.bronze.BronzeSource instead
+# Example:
+#   from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
+#   bronze = BronzeSource(system="test", entity="test", source_type=SourceType.FILE_PARQUET, ...)
+#   result = bronze.run(run_date)

@@ -1,5 +1,5 @@
 # Makefile for medallion-foundry development tasks
-# Requires: Python 3.8+, venv created at .venv/
+# Requires: Python 3.9+, venv created at .venv/
 
 PYTHON ?= python
 PIP ?= $(PYTHON) -m pip
@@ -33,7 +33,7 @@ test-smoke:  ## Run smoke tests
 	RUN_SMOKE=1 $(PYTEST) -v -m integration
 
 test-cov:  ## Run tests with coverage report
-	$(PYTEST) --cov=core --cov=bronze_extract --cov=silver_extract --cov-report=html --cov-report=term
+	$(PYTEST) --cov=pipelines --cov-report=html --cov-report=term
 
 lint:  ## Run linters (ruff check)
 	$(PYTHON) -m ruff check .
