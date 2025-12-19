@@ -5,10 +5,7 @@ without requiring ibis or external dependencies.
 """
 
 import json
-import tempfile
-from datetime import datetime, timezone
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -199,98 +196,93 @@ class TestResilience:
 
 
 class TestValidate:
-    """Tests for configuration validation."""
+    """Tests for configuration validation.
+
+    Note: BronzeSource and SilverEntity now validate in __post_init__,
+    so these tests verify that invalid configurations raise ValueError
+    at construction time.
+    """
 
     def test_validate_bronze_source_missing_system(self):
-        """Should report error when system is missing."""
-        from pipelines.lib.bronze import BronzeSource, LoadPattern, SourceType
-        from pipelines.lib.validate import validate_bronze_source, ValidationSeverity
+        """Should raise error when system is missing."""
+        from pipelines.lib.bronze import BronzeSource, SourceType
 
-        source = BronzeSource(
-            system="",  # Missing
-            entity="test",
-            source_type=SourceType.FILE_CSV,
-            source_path="/path/to/file.csv",
-            target_path="/output/",
-        )
-
-        issues = validate_bronze_source(source)
-        errors = [i for i in issues if i.severity == ValidationSeverity.ERROR]
-
-        assert len(errors) >= 1
-        assert any("system" in e.field for e in errors)
+        with pytest.raises(ValueError, match="system"):
+            BronzeSource(
+                system="",  # Missing
+                entity="test",
+                source_type=SourceType.FILE_CSV,
+                source_path="/path/to/file.csv",
+                target_path="/output/",
+            )
 
     def test_validate_bronze_source_database_missing_host(self):
-        """Should report error when database host is missing."""
-        from pipelines.lib.bronze import BronzeSource, LoadPattern, SourceType
-        from pipelines.lib.validate import validate_bronze_source, ValidationSeverity
+        """Should raise error when database host is missing."""
+        from pipelines.lib.bronze import BronzeSource, SourceType
 
-        source = BronzeSource(
-            system="test_system",
-            entity="test_entity",
-            source_type=SourceType.DATABASE_MSSQL,
-            source_path="",
-            target_path="/output/",
-            options={},  # Missing host
-        )
-
-        issues = validate_bronze_source(source)
-        errors = [i for i in issues if i.severity == ValidationSeverity.ERROR]
-
-        assert any("host" in e.field for e in errors)
+        with pytest.raises(ValueError, match="host"):
+            BronzeSource(
+                system="test_system",
+                entity="test_entity",
+                source_type=SourceType.DATABASE_MSSQL,
+                source_path="",
+                target_path="/output/",
+                options={},  # Missing host
+            )
 
     def test_validate_bronze_source_incremental_missing_watermark(self):
-        """Should report error when incremental load has no watermark column."""
+        """Should raise error when incremental load has no watermark column."""
         from pipelines.lib.bronze import BronzeSource, LoadPattern, SourceType
-        from pipelines.lib.validate import validate_bronze_source, ValidationSeverity
 
+        with pytest.raises(ValueError, match="watermark"):
+            BronzeSource(
+                system="test_system",
+                entity="test_entity",
+                source_type=SourceType.FILE_CSV,
+                source_path="/path/to/file.csv",
+                target_path="/output/",
+                load_pattern=LoadPattern.INCREMENTAL_APPEND,
+                watermark_column=None,  # Missing!
+            )
+
+    def test_validate_silver_entity_missing_natural_keys(self):
+        """Should raise error when natural keys are missing."""
+        from pipelines.lib.silver import SilverEntity
+
+        with pytest.raises(ValueError, match="natural_keys"):
+            SilverEntity(
+                source_path="/bronze/*.parquet",
+                target_path="/silver/",
+                natural_keys=[],  # Missing!
+                change_timestamp="updated_at",
+            )
+
+    def test_validate_bronze_source_valid_config(self):
+        """Valid configuration should not raise."""
+        from pipelines.lib.bronze import BronzeSource, SourceType
+
+        # Should not raise
         source = BronzeSource(
             system="test_system",
             entity="test_entity",
             source_type=SourceType.FILE_CSV,
             source_path="/path/to/file.csv",
             target_path="/output/",
-            load_pattern=LoadPattern.INCREMENTAL_APPEND,
-            watermark_column=None,  # Missing!
         )
+        assert source.system == "test_system"
 
-        issues = validate_bronze_source(source)
-        errors = [i for i in issues if i.severity == ValidationSeverity.ERROR]
+    def test_validate_silver_entity_valid_config(self):
+        """Valid configuration should not raise."""
+        from pipelines.lib.silver import SilverEntity
 
-        assert any("watermark" in e.field for e in errors)
-
-    def test_validate_silver_entity_missing_natural_keys(self):
-        """Should report error when natural keys are missing."""
-        from pipelines.lib.silver import EntityKind, HistoryMode, SilverEntity
-        from pipelines.lib.validate import validate_silver_entity, ValidationSeverity
-
+        # Should not raise
         entity = SilverEntity(
             source_path="/bronze/*.parquet",
             target_path="/silver/",
-            natural_keys=[],  # Missing!
+            natural_keys=["id"],
             change_timestamp="updated_at",
         )
-
-        issues = validate_silver_entity(entity)
-        errors = [i for i in issues if i.severity == ValidationSeverity.ERROR]
-
-        assert any("natural_keys" in e.field for e in errors)
-
-    def test_validate_and_raise_with_errors(self):
-        """Should raise ValueError when errors exist."""
-        from pipelines.lib.bronze import BronzeSource, SourceType
-        from pipelines.lib.validate import validate_and_raise
-
-        source = BronzeSource(
-            system="",  # Invalid
-            entity="",  # Invalid
-            source_type=SourceType.FILE_CSV,
-            source_path="",
-            target_path="",
-        )
-
-        with pytest.raises(ValueError, match="Configuration validation failed"):
-            validate_and_raise(source=source)
+        assert entity.natural_keys == ["id"]
 
 
 class TestRunner:
@@ -376,7 +368,6 @@ class TestConnections:
     def test_connection_registry_reuses_connections(self):
         """Should reuse existing connections by name."""
         from pipelines.lib.connections import (
-            _connections,
             close_all_connections,
             get_connection_count,
             list_connections,
