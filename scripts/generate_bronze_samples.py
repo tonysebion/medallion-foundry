@@ -25,7 +25,6 @@ Examples:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import shutil
 import sys
@@ -33,10 +32,14 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import pandas as pd
+
 # Add project root to path for imports
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+from pipelines.lib.bronze import BronzeOutputMetadata, LoadPattern, SourceType  # noqa: E402
+from pipelines.lib.checksum import verify_checksum_manifest, write_checksum_manifest  # noqa: E402
 from tests.pattern_verification.pattern_data.generators import (  # noqa: E402
     PatternTestDataGenerator,
 )
@@ -75,84 +78,56 @@ PATTERN_CONFIGS = {
     },
 }
 
-
-def compute_file_sha256(path: Path) -> str:
-    """Compute SHA256 hash of a file."""
-    hasher = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            hasher.update(chunk)
-    return hasher.hexdigest()
+PATTERN_LOAD_MAP = {
+    "snapshot": LoadPattern.FULL_SNAPSHOT,
+    "incremental_append": LoadPattern.INCREMENTAL_APPEND,
+    "incremental_merge": LoadPattern.CDC,
+    "current_history": LoadPattern.CDC,
+}
 
 
-def write_checksum_manifest(
-    out_dir: Path,
-    files: List[Path],
-    load_pattern: str,
-    extra_metadata: Optional[Dict[str, Any]] = None,
-) -> Path:
-    """Write a checksum manifest for the generated files."""
-    manifest: Dict[str, Any] = {
-        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "load_pattern": load_pattern,
-        "files": [],
-    }
-
-    for file_path in files:
-        if not file_path.exists():
-            continue
-        manifest["files"].append({
-            "path": file_path.name,
-            "size_bytes": file_path.stat().st_size,
-            "sha256": compute_file_sha256(file_path),
-        })
-
-    if extra_metadata:
-        manifest.update(extra_metadata)
-
-    manifest_path = out_dir / "_checksums.json"
-    with manifest_path.open("w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2)
-
-    return manifest_path
+def _infer_columns(batch_df: pd.DataFrame) -> List[Dict[str, Any]]:
+    """Infer column metadata from a DataFrame."""
+    return [
+        {
+            "name": col,
+            "type": str(batch_df[col].dtype),
+        }
+        for col in batch_df.columns
+    ]
 
 
 def write_metadata(
     out_dir: Path,
     load_pattern: str,
     batch_name: str,
-    row_count: int,
+    batch_df: pd.DataFrame,
     run_date: date,
     scenario_metadata: Dict[str, Any],
     seed: int,
 ) -> Path:
     """Write metadata file for the Bronze batch."""
-    metadata: Dict[str, Any] = {
-        "pipeline_id": f"bronze_synthetic_{load_pattern}_ingest",
-        "run_id": f"sample-{load_pattern}-{batch_name}",
-        "layer": "bronze",
-        "environment": "sample",
-        "source_system": "synthetic",
-        "domain": "sample",
-        "table": f"pattern_{load_pattern}",
-        "load_pattern": load_pattern,
-        "batch_name": batch_name,
-        "run_date": run_date.isoformat(),
-        "row_count": row_count,
-        "seed": seed,
-        "schema_evolution_mode": "strict",
-        "status": "completed",
-        "start_time": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "end_time": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    }
+    columns = _infer_columns(batch_df)
+    metadata = BronzeOutputMetadata(
+        row_count=len(batch_df),
+        columns=columns,
+        written_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        system="synthetic",
+        entity=f"pattern_{load_pattern}",
+        source_type=SourceType.FILE_PARQUET.value,
+        load_pattern=PATTERN_LOAD_MAP.get(load_pattern, LoadPattern.CDC).value,
+        run_date=run_date.isoformat(),
+        data_files=["chunk_0.parquet"],
+    )
 
-    # Add pattern-specific metadata
-    if load_pattern in scenario_metadata:
-        metadata["pattern_info"] = scenario_metadata[load_pattern]
+    metadata_dict = metadata.to_dict()
+    if scenario_metadata:
+        metadata_dict["pattern_info"] = scenario_metadata.get(load_pattern) or scenario_metadata
+    metadata_dict["seed"] = seed
 
     metadata_path = out_dir / "_metadata.json"
     with metadata_path.open("w", encoding="utf-8") as f:
-        json.dump(metadata, f, indent=2)
+        json.dump(metadata_dict, f, indent=2)
 
     return metadata_path
 
@@ -237,7 +212,7 @@ def generate_pattern_samples(
             out_dir=batch_dir,
             load_pattern=pattern,
             batch_name=batch_name,
-            row_count=len(batch_df),
+            batch_df=batch_df,
             run_date=batch_date,
             scenario_metadata=scenario.metadata,
             seed=seed,
@@ -250,8 +225,11 @@ def generate_pattern_samples(
         checksum_path = write_checksum_manifest(
             out_dir=batch_dir,
             files=[parquet_path],
-            load_pattern=pattern,
-            extra_metadata={"batch_name": batch_name, "row_count": len(batch_df)},
+            row_count=len(batch_df),
+            extra_metadata={
+                "batch_name": batch_name,
+                "load_pattern": pattern,
+            },
         )
 
         if verbose:
@@ -312,65 +290,15 @@ def verify_samples(output_dir: Path, verbose: bool = False) -> Dict[str, Any]:
         # Check each date partition
         for batch_dir in pattern_dir.glob("dt=*"):
             batch_date = batch_dir.name.replace("dt=", "")
-            checksums_path = batch_dir / "_checksums.json"
+            verification = verify_checksum_manifest(batch_dir)
 
-            if not checksums_path.exists():
-                pattern_results["batches"][batch_date] = {
-                    "valid": False,
-                    "error": "Missing _checksums.json",
-                }
-                pattern_results["valid"] = False
-                results["valid"] = False
-                continue
+            pattern_results["batches"][batch_date] = {
+                "valid": verification.valid,
+                "missing_files": verification.missing_files,
+                "mismatched_files": verification.mismatched_files,
+            }
 
-            try:
-                with checksums_path.open("r", encoding="utf-8") as f:
-                    manifest = json.load(f)
-
-                batch_valid = True
-                file_results = []
-
-                for file_entry in manifest.get("files", []):
-                    file_path = batch_dir / file_entry["path"]
-                    if not file_path.exists():
-                        file_results.append({
-                            "file": file_entry["path"],
-                            "valid": False,
-                            "error": "File missing",
-                        })
-                        batch_valid = False
-                        continue
-
-                    actual_hash = compute_file_sha256(file_path)
-                    expected_hash = file_entry["sha256"]
-
-                    if actual_hash != expected_hash:
-                        file_results.append({
-                            "file": file_entry["path"],
-                            "valid": False,
-                            "error": f"Hash mismatch: expected {expected_hash[:16]}..., got {actual_hash[:16]}...",
-                        })
-                        batch_valid = False
-                    else:
-                        file_results.append({
-                            "file": file_entry["path"],
-                            "valid": True,
-                        })
-
-                pattern_results["batches"][batch_date] = {
-                    "valid": batch_valid,
-                    "files": file_results,
-                }
-
-                if not batch_valid:
-                    pattern_results["valid"] = False
-                    results["valid"] = False
-
-            except (json.JSONDecodeError, KeyError) as e:
-                pattern_results["batches"][batch_date] = {
-                    "valid": False,
-                    "error": f"Invalid checksums file: {e}",
-                }
+            if not verification.valid:
                 pattern_results["valid"] = False
                 results["valid"] = False
 

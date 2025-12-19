@@ -92,7 +92,6 @@ packages = [
     "core.infrastructure.config",
     "core.infrastructure.config.models",
     "core.infrastructure.io",
-    "core.infrastructure.pipelines",
     "core.infrastructure.io.storage",
     "core.infrastructure.io.http",
     "core.infrastructure.io.extractors",

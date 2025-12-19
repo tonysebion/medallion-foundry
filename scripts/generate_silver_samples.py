@@ -25,7 +25,6 @@ Examples:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import shutil
 import sys
@@ -39,6 +38,8 @@ sys.path.insert(0, str(project_root))
 
 import pandas as pd  # noqa: E402
 
+from pipelines.lib.checksum import verify_checksum_manifest, write_checksum_manifest  # noqa: E402
+from pipelines.lib.silver import SilverOutputMetadata  # noqa: E402
 from tests.synthetic_data import DuplicateInjector, DuplicateConfig  # noqa: E402
 
 # Output directory structure:
@@ -126,78 +127,69 @@ SILVER_CONFIGS = {
 }
 
 
-def compute_file_sha256(path: Path) -> str:
-    """Compute SHA256 hash of a file."""
-    hasher = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            hasher.update(chunk)
-    return hasher.hexdigest()
+def _infer_columns(df: pd.DataFrame) -> List[Dict[str, Any]]:
+    """Infer column metadata from a DataFrame."""
+    return [
+        {
+            "name": col,
+            "type": str(df[col].dtype),
+            "nullable": bool(df[col].isnull().any()),
+        }
+        for col in df.columns
+    ]
 
 
-def write_checksum_manifest(
-    out_dir: Path,
-    files: List[Path],
-    extra_metadata: Optional[Dict[str, Any]] = None,
-) -> Path:
-    """Write a checksum manifest for the generated files."""
-    manifest: Dict[str, Any] = {
-        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "files": [],
-    }
-
-    for file_path in files:
-        if not file_path.exists():
-            continue
-        manifest["files"].append({
-            "path": file_path.name,
-            "size_bytes": file_path.stat().st_size,
-            "sha256": compute_file_sha256(file_path),
-        })
-
-    if extra_metadata:
-        manifest.update(extra_metadata)
-
-    manifest_path = out_dir / "_checksums.json"
-    with manifest_path.open("w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2)
-
-    return manifest_path
+def _normalize_history_mode(config_value: Optional[str], entity_kind: str) -> str:
+    """Normalize history mode names to Silver conventions."""
+    if entity_kind == "event":
+        return "current_only"
+    if config_value == "scd2":
+        return "full_history"
+    return "current_only"
 
 
 def write_silver_metadata(
     out_dir: Path,
     silver_config: Dict[str, Any],
     batch_name: str,
-    row_count: int,
+    df: pd.DataFrame,
     run_date: date,
     processing_info: Dict[str, Any],
+    view: Optional[str] = None,
 ) -> Path:
     """Write metadata file for the Silver batch."""
-    metadata: Dict[str, Any] = {
-        "pipeline_id": f"silver_synthetic_{silver_config['bronze_pattern']}_ingest",
-        "run_id": f"sample-silver-{batch_name}",
-        "layer": "silver",
-        "environment": "sample",
-        "source_system": "synthetic",
-        "domain": "sample",
-        "entity": f"silver_{silver_config['bronze_pattern']}",
-        "entity_kind": silver_config["entity_kind"],
-        "history_mode": silver_config.get("history_mode"),
-        "input_mode": silver_config.get("input_mode"),
-        "batch_name": batch_name,
-        "run_date": run_date.isoformat(),
-        "row_count": row_count,
-        "natural_keys": silver_config["natural_keys"],
-        "status": "completed",
-        "start_time": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "end_time": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "processing_info": processing_info,
-    }
+    history_mode = _normalize_history_mode(
+        silver_config.get("history_mode"),
+        silver_config["entity_kind"],
+    )
+    change_ts = silver_config.get("change_ts_column") or silver_config.get(
+        "event_ts_column", "updated_at"
+    )
+
+    metadata = SilverOutputMetadata(
+        row_count=len(df),
+        columns=_infer_columns(df),
+        written_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        entity_kind=silver_config["entity_kind"],
+        history_mode=history_mode,
+        natural_keys=silver_config["natural_keys"],
+        change_timestamp=change_ts,
+        source_path=str(out_dir.parent),
+        pipeline_name=f"silver_synthetic_{silver_config['bronze_pattern']}_ingest",
+        run_date=run_date.isoformat(),
+        format="parquet",
+        compression="snappy",
+        data_files=["chunk_0.parquet"],
+    )
+
+    metadata_dict = metadata.to_dict()
+    metadata_dict["processing_info"] = processing_info
+    if view:
+        metadata_dict["view"] = view
 
     metadata_path = out_dir / "_metadata.json"
     with metadata_path.open("w", encoding="utf-8") as f:
-        json.dump(metadata, f, indent=2)
+        json.dump(metadata_dict, f, indent=2)
 
     return metadata_path
 
@@ -396,6 +388,11 @@ def generate_silver_samples(
         "duplicates_injected": with_duplicates,
     }
 
+    history_mode_value = _normalize_history_mode(
+        config.get("history_mode"),
+        entity_kind,
+    )
+
     if entity_kind == "event":
         input_mode = config.get("input_mode", "append_log")
         result_df = process_event_pattern(bronze_dfs, config, input_mode)
@@ -416,14 +413,17 @@ def generate_silver_samples(
             out_dir=batch_dir,
             silver_config=config,
             batch_name=f"silver_{output_date}",
-            row_count=len(result_df),
+            df=result_df,
             run_date=date.fromisoformat(output_date),
-            processing_info=processing_info,
+            processing_info={**processing_info, "view": "event"},
         )
         checksum_path = write_checksum_manifest(
             out_dir=batch_dir,
             files=[parquet_path],
-            extra_metadata={"row_count": len(result_df)},
+            entity_kind=config["entity_kind"],
+            history_mode=history_mode_value,
+            row_count=len(result_df),
+            extra_metadata={"view": "event"},
         )
 
         if verbose:
@@ -458,14 +458,18 @@ def generate_silver_samples(
             out_dir=current_dir,
             silver_config=config,
             batch_name=f"silver_current_{output_date}",
-            row_count=len(current_df),
+            df=current_df,
             run_date=date.fromisoformat(output_date),
             processing_info={**processing_info, "view": "current"},
+            view="current",
         )
         write_checksum_manifest(
             out_dir=current_dir,
             files=[current_parquet],
-            extra_metadata={"row_count": len(current_df), "view": "current"},
+            entity_kind=config["entity_kind"],
+            history_mode=history_mode_value,
+            row_count=len(current_df),
+            extra_metadata={"view": "current"},
         )
 
         summary["batches"][f"{output_date}/current"] = {
@@ -490,14 +494,18 @@ def generate_silver_samples(
                 out_dir=history_dir,
                 silver_config=config,
                 batch_name=f"silver_history_{output_date}",
-                row_count=len(history_df),
+                df=history_df,
                 run_date=date.fromisoformat(output_date),
                 processing_info={**processing_info, "view": "history"},
+                view="history",
             )
             write_checksum_manifest(
                 out_dir=history_dir,
                 files=[history_parquet],
-                extra_metadata={"row_count": len(history_df), "view": "history"},
+                entity_kind=config["entity_kind"],
+                history_mode=history_mode_value,
+                row_count=len(history_df),
+                extra_metadata={"view": "history"},
             )
 
             summary["batches"][f"{output_date}/history"] = {
@@ -546,34 +554,18 @@ def verify_samples(output_dir: Path, verbose: bool = False) -> Dict[str, Any]:
             "batches": {},
         }
 
-        # Check each date partition and view
         for checksums_path in pattern_dir.rglob("_checksums.json"):
             batch_dir = checksums_path.parent
             relative_path = str(batch_dir.relative_to(pattern_dir))
 
-            try:
-                with checksums_path.open("r", encoding="utf-8") as f:
-                    manifest = json.load(f)
+            verification = verify_checksum_manifest(batch_dir)
+            pattern_results["batches"][relative_path] = {
+                "valid": verification.valid,
+                "missing_files": verification.missing_files,
+                "mismatched_files": verification.mismatched_files,
+            }
 
-                batch_valid = True
-                for file_entry in manifest.get("files", []):
-                    file_path = batch_dir / file_entry["path"]
-                    if not file_path.exists():
-                        batch_valid = False
-                        continue
-
-                    actual_hash = compute_file_sha256(file_path)
-                    if actual_hash != file_entry["sha256"]:
-                        batch_valid = False
-
-                pattern_results["batches"][relative_path] = {"valid": batch_valid}
-
-                if not batch_valid:
-                    pattern_results["valid"] = False
-                    results["valid"] = False
-
-            except (json.JSONDecodeError, KeyError):
-                pattern_results["batches"][relative_path] = {"valid": False, "error": "Invalid manifest"}
+            if not verification.valid:
                 pattern_results["valid"] = False
                 results["valid"] = False
 
