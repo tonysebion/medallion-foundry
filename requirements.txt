@@ -7,6 +7,7 @@ pyyaml>=6.0
 requests>=2.28.0
 tenacity>=8.0.0
 pydantic>=2.0.0
+ibis-framework[duckdb]>=9.0.0  # Portable dataframe library with DuckDB backend
 fsspec>=2023.1.0  # Filesystem abstraction for S3/local storage
 s3fs>=2023.1.0  # S3 filesystem implementation for fsspec
 pyodbc>=4.0.0  # ODBC support for database extractors
