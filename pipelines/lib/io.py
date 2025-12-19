@@ -20,12 +20,14 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "ReadResult",
+    "SilverOutputMetadata",
     "WriteMetadata",
     "get_latest_partition",
     "list_partitions",
     "read_bronze",
     "write_partitioned",
     "write_silver",
+    "write_silver_with_artifacts",
 ]
 
 
@@ -332,3 +334,237 @@ def get_latest_partition(
         return None
 
     return sorted(values)[-1]
+
+
+@dataclass
+class SilverOutputMetadata:
+    """Comprehensive metadata for Silver layer outputs.
+
+    Includes schema information for PolyBase external table generation.
+    """
+
+    # Basic metadata
+    row_count: int
+    columns: List[Dict[str, Any]]  # List of {name, type, nullable}
+    written_at: str
+
+    # Entity information
+    entity_kind: str  # "state" or "event"
+    history_mode: str  # "current_only" or "full_history"
+    natural_keys: List[str]
+    change_timestamp: str
+
+    # Partitioning
+    partition_by: Optional[List[str]] = None
+
+    # Source tracking
+    source_path: Optional[str] = None
+    pipeline_name: Optional[str] = None
+    run_date: Optional[str] = None
+
+    # Format info
+    format: str = "parquet"
+    compression: str = "snappy"
+
+    # Files written
+    data_files: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return asdict(self)
+
+    def to_json(self) -> str:
+        """Convert to JSON string."""
+        return json.dumps(self.to_dict(), indent=2)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SilverOutputMetadata":
+        """Create from dictionary."""
+        fields = {k for k in cls.__dataclass_fields__}
+        return cls(**{k: v for k, v in data.items() if k in fields})
+
+    @classmethod
+    def from_file(cls, path: Path) -> "SilverOutputMetadata":
+        """Load from file."""
+        with open(path, encoding="utf-8") as f:
+            return cls.from_dict(json.load(f))
+
+
+def _infer_column_types(t: "ibis.Table") -> List[Dict[str, Any]]:
+    """Infer column types from an Ibis table schema.
+
+    Args:
+        t: Ibis table
+
+    Returns:
+        List of column info dicts with name, type, nullable
+    """
+    columns = []
+    schema = t.schema()
+
+    for name in schema.names:
+        dtype = schema[name]
+        # Map Ibis types to SQL types
+        type_str = str(dtype)
+        sql_type = _map_ibis_type_to_sql(type_str)
+
+        columns.append({
+            "name": name,
+            "ibis_type": type_str,
+            "sql_type": sql_type,
+            "nullable": dtype.nullable if hasattr(dtype, "nullable") else True,
+        })
+
+    return columns
+
+
+def _map_ibis_type_to_sql(ibis_type: str) -> str:
+    """Map Ibis type string to SQL Server type.
+
+    Args:
+        ibis_type: Ibis type name
+
+    Returns:
+        SQL Server type string
+    """
+    type_lower = ibis_type.lower()
+
+    # Handle parametric types
+    if "string" in type_lower or "utf8" in type_lower:
+        return "NVARCHAR(4000)"
+    elif "int64" in type_lower or "bigint" in type_lower:
+        return "BIGINT"
+    elif "int32" in type_lower or "int" in type_lower:
+        return "INT"
+    elif "int16" in type_lower or "smallint" in type_lower:
+        return "SMALLINT"
+    elif "float64" in type_lower or "double" in type_lower:
+        return "FLOAT"
+    elif "float32" in type_lower or "float" in type_lower:
+        return "REAL"
+    elif "decimal" in type_lower:
+        # Try to extract precision/scale
+        return "DECIMAL(18,2)"
+    elif "bool" in type_lower:
+        return "BIT"
+    elif "date" in type_lower and "time" not in type_lower:
+        return "DATE"
+    elif "timestamp" in type_lower or "datetime" in type_lower:
+        return "DATETIME2"
+    elif "time" in type_lower:
+        return "TIME"
+    elif "binary" in type_lower or "bytes" in type_lower:
+        return "VARBINARY(MAX)"
+    else:
+        return "NVARCHAR(4000)"
+
+
+def write_silver_with_artifacts(
+    t: "ibis.Table",
+    path: str,
+    *,
+    entity_kind: str,
+    history_mode: str,
+    natural_keys: List[str],
+    change_timestamp: str,
+    format: str = "parquet",
+    compression: str = "snappy",
+    partition_by: Optional[List[str]] = None,
+    pipeline_name: Optional[str] = None,
+    run_date: Optional[str] = None,
+    source_path: Optional[str] = None,
+    write_checksums: bool = True,
+) -> SilverOutputMetadata:
+    """Write Silver layer data with metadata and checksums.
+
+    This is the preferred method for writing Silver outputs as it generates
+    all necessary artifacts for data integrity and PolyBase integration.
+
+    Args:
+        t: Ibis table to write
+        path: Output directory path
+        entity_kind: "state" or "event"
+        history_mode: "current_only" or "full_history"
+        natural_keys: Primary key columns
+        change_timestamp: Timestamp column name
+        format: Output format ("parquet" or "csv")
+        compression: Compression codec for parquet
+        partition_by: Columns to partition by
+        pipeline_name: Name of the pipeline for metadata
+        run_date: Run date for metadata
+        source_path: Source path for lineage tracking
+        write_checksums: Whether to write _checksums.json
+
+    Returns:
+        SilverOutputMetadata with comprehensive details
+
+    Example:
+        >>> metadata = write_silver_with_artifacts(
+        ...     table,
+        ...     "./silver/orders/",
+        ...     entity_kind="state",
+        ...     history_mode="current_only",
+        ...     natural_keys=["order_id"],
+        ...     change_timestamp="updated_at",
+        ... )
+    """
+    from pipelines.lib.checksum import write_checksum_manifest
+
+    # Execute count before writing (Ibis is lazy)
+    row_count = t.count().execute()
+    columns = _infer_column_types(t)
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Prepare output directory
+    output_path = Path(path)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Write data files
+    data_files = []
+    if format == "parquet":
+        data_file = output_path / "data.parquet"
+        t.to_parquet(str(data_file))
+        data_files.append(str(data_file))
+    elif format == "csv":
+        data_file = output_path / "data.csv"
+        t.execute().to_csv(str(data_file), index=False)
+        data_files.append(str(data_file))
+    else:
+        raise ValueError(f"Unsupported format: {format}")
+
+    # Create comprehensive metadata
+    metadata = SilverOutputMetadata(
+        row_count=row_count,
+        columns=columns,
+        written_at=now,
+        entity_kind=entity_kind,
+        history_mode=history_mode,
+        natural_keys=natural_keys,
+        change_timestamp=change_timestamp,
+        partition_by=partition_by,
+        source_path=source_path,
+        pipeline_name=pipeline_name,
+        run_date=run_date,
+        format=format,
+        compression=compression if format == "parquet" else None,
+        data_files=[Path(f).name for f in data_files],
+    )
+
+    # Write metadata file
+    metadata_file = output_path / "_metadata.json"
+    metadata_file.write_text(metadata.to_json(), encoding="utf-8")
+    logger.debug("Wrote metadata to %s", metadata_file)
+
+    # Write checksums
+    if write_checksums:
+        write_checksum_manifest(
+            output_path,
+            [Path(f) for f in data_files],
+            entity_kind=entity_kind,
+            history_mode=history_mode,
+            row_count=row_count,
+        )
+
+    logger.info("Wrote %d rows to %s with artifacts", row_count, path)
+
+    return metadata

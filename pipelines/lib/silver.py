@@ -88,6 +88,9 @@ class SilverEntity:
     output_formats: List[str] = field(default_factory=lambda: ["parquet"])
     parquet_compression: str = "snappy"
 
+    # Validation options
+    validate_source: str = "skip"  # "skip", "warn", or "strict"
+
     def __post_init__(self) -> None:
         """Validate configuration on instantiation."""
         errors = self._validate()
@@ -164,6 +167,9 @@ class SilverEntity:
                 "history_mode": self.history_mode.value,
             }
 
+        # Validate Bronze source checksums (if configured)
+        validation_result = self._validate_source(source)
+
         # Read from Bronze
         con = ibis.duckdb.connect()
         t = self._read_source(con, source)
@@ -186,13 +192,61 @@ class SilverEntity:
         t = self._add_metadata(t, run_date)
 
         # Write output
-        return self._write(t, target)
+        result = self._write(t, target, run_date, source)
+
+        # Include validation result if performed
+        if validation_result:
+            result["source_validation"] = validation_result
+
+        return result
 
     def _resolve_target(self, target_override: Optional[str]) -> str:
         """Resolve the target path."""
         return (
             target_override or os.environ.get("SILVER_TARGET_ROOT") or self.target_path
         )
+
+    def _validate_source(self, source: str) -> Optional[Dict[str, Any]]:
+        """Validate Bronze source data before processing.
+
+        Args:
+            source: Source path (may contain glob patterns)
+
+        Returns:
+            Validation result dict or None if validation is skipped
+        """
+        if self.validate_source == "skip":
+            return None
+
+        from pipelines.lib.checksum import validate_bronze_checksums
+
+        # For glob patterns, extract the directory path
+        if "*" in source or "?" in source:
+            # Get the base directory before any wildcards
+            parts = source.split("*")[0].split("?")[0]
+            source_dir = Path(parts).parent if parts else Path(".")
+        else:
+            source_dir = Path(source)
+            if source_dir.is_file():
+                source_dir = source_dir.parent
+
+        # Only validate if it's a local path
+        if str(source_dir).startswith("s3://"):
+            logger.debug("Skipping checksum validation for S3 source")
+            return None
+
+        result = validate_bronze_checksums(
+            source_dir,
+            validation_mode=self.validate_source,
+        )
+
+        return {
+            "valid": result.valid,
+            "verified_files": result.verified_files,
+            "missing_files": result.missing_files,
+            "mismatched_files": result.mismatched_files,
+            "verification_time_ms": result.verification_time_ms,
+        }
 
     def _read_source(self, con: ibis.BaseBackend, source: str) -> ibis.Table:
         """Read from Bronze source.
@@ -276,8 +330,16 @@ class SilverEntity:
             _silver_run_date=ibis.literal(run_date),
         )
 
-    def _write(self, t: ibis.Table, target: str) -> Dict[str, Any]:
-        """Write to Silver target."""
+    def _write(
+        self,
+        t: ibis.Table,
+        target: str,
+        run_date: str,
+        source: str,
+    ) -> Dict[str, Any]:
+        """Write to Silver target with metadata and checksums."""
+        from pipelines.lib.io import write_silver_with_artifacts
+
         # Execute count before writing (Ibis is lazy)
         row_count = t.count().execute()
 
@@ -288,41 +350,57 @@ class SilverEntity:
                 "target": target,
             }
 
-        # Prepare write options
-        write_opts = {}
-        if self.partition_by:
-            write_opts["partition_by"] = self.partition_by
-
-        # Write to target
-        written_files = []
-
+        # For S3, use standard Ibis write (checksums not applicable)
         if target.startswith("s3://"):
+            write_opts = {}
+            if self.partition_by:
+                write_opts["partition_by"] = self.partition_by
+
+            written_files = []
             if "parquet" in self.output_formats:
                 t.to_parquet(target, **write_opts)
                 written_files.append(target)
-        else:
-            # Local filesystem
+
+            logger.info("Wrote %d rows to %s", row_count, target)
+
+            return {
+                "row_count": row_count,
+                "target": target,
+                "columns": list(t.columns),
+                "entity_kind": self.entity_kind.value,
+                "history_mode": self.history_mode.value,
+                "files": written_files,
+            }
+
+        # For local filesystem, use enhanced write with artifacts
+        metadata = write_silver_with_artifacts(
+            t,
+            target,
+            entity_kind=self.entity_kind.value,
+            history_mode=self.history_mode.value,
+            natural_keys=self.natural_keys,
+            change_timestamp=self.change_timestamp,
+            format="parquet" if "parquet" in self.output_formats else "csv",
+            compression=self.parquet_compression,
+            partition_by=self.partition_by,
+            run_date=run_date,
+            source_path=source,
+            write_checksums=True,
+        )
+
+        # Also write CSV if requested
+        if "csv" in self.output_formats and "parquet" in self.output_formats:
             output_dir = Path(target)
-            output_dir.mkdir(parents=True, exist_ok=True)
-
-            if "parquet" in self.output_formats:
-                output_file = output_dir / "data.parquet"
-                t.to_parquet(str(output_file))
-                written_files.append(str(output_file))
-
-            if "csv" in self.output_formats:
-                output_file = output_dir / "data.csv"
-                # Convert to pandas for CSV output
-                t.execute().to_csv(str(output_file), index=False)
-                written_files.append(str(output_file))
-
-        logger.info("Wrote %d rows to %s", row_count, target)
+            csv_file = output_dir / "data.csv"
+            t.execute().to_csv(str(csv_file), index=False)
 
         return {
-            "row_count": row_count,
+            "row_count": metadata.row_count,
             "target": target,
-            "columns": list(t.columns),
+            "columns": [c["name"] for c in metadata.columns],
             "entity_kind": self.entity_kind.value,
             "history_mode": self.history_mode.value,
-            "files": written_files,
+            "files": metadata.data_files,
+            "metadata_file": "_metadata.json",
+            "checksums_file": "_checksums.json",
         }

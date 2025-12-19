@@ -28,7 +28,7 @@ from pipelines.lib.watermark import get_watermark, save_watermark
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["BronzeSource", "LoadPattern", "SourceType"]
+__all__ = ["BronzeOutputMetadata", "BronzeSource", "LoadPattern", "SourceType"]
 
 
 class SourceType(Enum):
@@ -49,6 +49,60 @@ class LoadPattern(Enum):
     FULL_SNAPSHOT = "full_snapshot"  # Replace everything each run
     INCREMENTAL_APPEND = "incremental"  # Append new records only
     CDC = "cdc"  # Change data capture deltas
+
+
+@dataclass
+class BronzeOutputMetadata:
+    """Metadata for Bronze layer outputs.
+
+    Written alongside data files to track lineage and enable validation.
+    """
+
+    # Basic metadata
+    row_count: int
+    columns: List[Dict[str, Any]]  # List of {name, type}
+    written_at: str
+
+    # Source information
+    system: str
+    entity: str
+    source_type: str
+    load_pattern: str
+
+    # Temporal
+    run_date: str
+    watermark_column: Optional[str] = None
+    last_watermark: Optional[str] = None
+    new_watermark: Optional[str] = None
+
+    # Files written
+    data_files: List[str] = field(default_factory=list)
+
+    # Format info
+    format: str = "parquet"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        from dataclasses import asdict
+        return asdict(self)
+
+    def to_json(self) -> str:
+        """Convert to JSON string."""
+        import json
+        return json.dumps(self.to_dict(), indent=2)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "BronzeOutputMetadata":
+        """Create from dictionary."""
+        fields = {k for k in cls.__dataclass_fields__}
+        return cls(**{k: v for k, v in data.items() if k in fields})
+
+    @classmethod
+    def from_file(cls, path: Path) -> "BronzeOutputMetadata":
+        """Load from file."""
+        import json
+        with open(path, encoding="utf-8") as f:
+            return cls.from_dict(json.load(f))
 
 
 @dataclass
@@ -98,6 +152,10 @@ class BronzeSource:
 
     # Partitioning (Bronze always partitions by load date)
     partition_by: List[str] = field(default_factory=lambda: ["_load_date"])
+
+    # Artifact generation options
+    write_checksums: bool = True  # Write _checksums.json for data integrity
+    write_metadata: bool = True  # Write _metadata.json for lineage/PolyBase
 
     def __post_init__(self) -> None:
         """Validate configuration on instantiation."""
@@ -243,7 +301,7 @@ class BronzeSource:
         t = self._add_metadata(t, run_date)
 
         # Write to target
-        result = self._write(t, target, run_date)
+        result = self._write(t, target, run_date, last_watermark)
 
         # Save new watermark for incremental
         if self.watermark_column and result.get("row_count", 0) > 0:
@@ -425,8 +483,16 @@ class BronzeSource:
             _source_entity=ibis.literal(self.entity),
         )
 
-    def _write(self, t: ibis.Table, target: str, run_date: str) -> Dict[str, Any]:
-        """Write to Bronze target."""
+    def _write(
+        self,
+        t: ibis.Table,
+        target: str,
+        run_date: str,
+        last_watermark: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Write to Bronze target with optional checksums and metadata."""
+        from pipelines.lib.checksum import write_checksum_manifest
+
         # Execute count before writing (Ibis is lazy)
         row_count = t.count().execute()
 
@@ -438,15 +504,57 @@ class BronzeSource:
                 "source_type": self.source_type.value,
             }
 
+        # Infer column types for metadata
+        columns = self._infer_column_types(t)
+        now = datetime.now(timezone.utc).isoformat()
+
         # Determine output format based on target
+        data_files: List[str] = []
+
         if target.startswith("s3://"):
+            # S3 - checksums not applicable
             t.to_parquet(target, partition_by=self.partition_by)
+            data_files.append(target)
         else:
-            # Local filesystem
+            # Local filesystem - write with artifacts
             output_dir = Path(target)
             output_dir.mkdir(parents=True, exist_ok=True)
             output_file = output_dir / f"{self.entity}.parquet"
             t.to_parquet(str(output_file))
+            data_files.append(str(output_file))
+
+            # Write metadata
+            if self.write_metadata:
+                metadata = BronzeOutputMetadata(
+                    row_count=row_count,
+                    columns=columns,
+                    written_at=now,
+                    system=self.system,
+                    entity=self.entity,
+                    source_type=self.source_type.value,
+                    load_pattern=self.load_pattern.value,
+                    run_date=run_date,
+                    watermark_column=self.watermark_column,
+                    last_watermark=last_watermark,
+                    data_files=[Path(f).name for f in data_files],
+                )
+                metadata_file = output_dir / "_metadata.json"
+                metadata_file.write_text(metadata.to_json(), encoding="utf-8")
+                logger.debug("Wrote metadata to %s", metadata_file)
+
+            # Write checksums
+            if self.write_checksums:
+                write_checksum_manifest(
+                    output_dir,
+                    [Path(f) for f in data_files],
+                    entity_kind="bronze",
+                    row_count=row_count,
+                    extra_metadata={
+                        "system": self.system,
+                        "entity": self.entity,
+                        "load_pattern": self.load_pattern.value,
+                    },
+                )
 
         logger.info(
             "Wrote %d rows for %s.%s to %s",
@@ -456,12 +564,35 @@ class BronzeSource:
             target,
         )
 
-        return {
+        result: Dict[str, Any] = {
             "row_count": row_count,
             "target": target,
             "source_type": self.source_type.value,
-            "columns": list(t.columns),
+            "columns": [c["name"] for c in columns],
+            "files": [Path(f).name for f in data_files],
         }
+
+        if self.write_metadata and not target.startswith("s3://"):
+            result["metadata_file"] = "_metadata.json"
+        if self.write_checksums and not target.startswith("s3://"):
+            result["checksums_file"] = "_checksums.json"
+
+        return result
+
+    def _infer_column_types(self, t: ibis.Table) -> List[Dict[str, Any]]:
+        """Infer column types from an Ibis table schema."""
+        columns = []
+        schema = t.schema()
+
+        for name in schema.names:
+            dtype = schema[name]
+            columns.append({
+                "name": name,
+                "ibis_type": str(dtype),
+                "nullable": dtype.nullable if hasattr(dtype, "nullable") else True,
+            })
+
+        return columns
 
     def _get_max_watermark(self, t: ibis.Table) -> Optional[str]:
         """Get the maximum value of the watermark column."""

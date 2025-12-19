@@ -4,7 +4,16 @@ This package contains the core abstractions and utilities for building
 Ibis-based medallion architecture pipelines.
 """
 
-from pipelines.lib.bronze import BronzeSource, LoadPattern, SourceType
+from pipelines.lib.bronze import BronzeOutputMetadata, BronzeSource, LoadPattern, SourceType
+from pipelines.lib.checksum import (
+    ChecksumManifest,
+    ChecksumValidationError,
+    ChecksumVerificationResult,
+    compute_file_sha256,
+    validate_bronze_checksums,
+    verify_checksum_manifest,
+    write_checksum_manifest,
+)
 from pipelines.lib.connections import close_all_connections, get_connection
 from pipelines.lib.env import expand_env_vars, expand_options
 from pipelines.lib.late_data import (
@@ -13,6 +22,12 @@ from pipelines.lib.late_data import (
     LateDataResult,
     detect_late_data,
     filter_late_data,
+)
+from pipelines.lib.polybase import (
+    PolyBaseConfig,
+    generate_external_table_ddl,
+    generate_from_metadata,
+    generate_polybase_setup,
 )
 from pipelines.lib.rate_limiter import RateLimiter, rate_limited
 from pipelines.lib.curate import (
@@ -27,12 +42,14 @@ from pipelines.lib.curate import (
 )
 from pipelines.lib.io import (
     ReadResult,
+    SilverOutputMetadata,
     WriteMetadata,
     get_latest_partition,
     list_partitions,
     read_bronze,
     write_partitioned,
     write_silver,
+    write_silver_with_artifacts,
 )
 from pipelines.lib.quality import (
     QualityCheckFailed,
@@ -66,9 +83,18 @@ from pipelines.lib.watermark import delete_watermark, get_watermark, save_waterm
 
 __all__ = [
     # Bronze
+    "BronzeOutputMetadata",
     "BronzeSource",
     "LoadPattern",
     "SourceType",
+    # Checksum
+    "ChecksumManifest",
+    "ChecksumValidationError",
+    "ChecksumVerificationResult",
+    "compute_file_sha256",
+    "validate_bronze_checksums",
+    "verify_checksum_manifest",
+    "write_checksum_manifest",
     # Connections
     "close_all_connections",
     "get_connection",
@@ -81,6 +107,11 @@ __all__ = [
     "LateDataResult",
     "detect_late_data",
     "filter_late_data",
+    # PolyBase
+    "PolyBaseConfig",
+    "generate_external_table_ddl",
+    "generate_from_metadata",
+    "generate_polybase_setup",
     # Rate Limiting
     "RateLimiter",
     "rate_limited",
@@ -95,12 +126,14 @@ __all__ = [
     "union_dedupe",
     # I/O
     "ReadResult",
+    "SilverOutputMetadata",
     "WriteMetadata",
     "get_latest_partition",
     "list_partitions",
     "read_bronze",
     "write_partitioned",
     "write_silver",
+    "write_silver_with_artifacts",
     # Quality
     "QualityCheckFailed",
     "QualityResult",
