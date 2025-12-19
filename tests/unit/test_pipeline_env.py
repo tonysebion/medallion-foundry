@@ -1,7 +1,5 @@
 """Tests for pipelines environment helpers."""
 
-import os
-
 import pytest
 
 from pipelines.lib.env import expand_env_vars, expand_options

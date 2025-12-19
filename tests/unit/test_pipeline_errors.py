@@ -1,7 +1,5 @@
 """Tests for pipelines/lib/errors.py - structured exception hierarchy."""
 
-import pytest
-
 from pipelines.lib.errors import (
     PipelineError,
     BronzeExtractionError,

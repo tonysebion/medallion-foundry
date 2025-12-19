@@ -1,8 +1,5 @@
 """Tests for pipelines/lib/storage/ - storage backend abstraction."""
 
-import pytest
-from pathlib import Path
-
 from pipelines.lib.storage import (
     get_storage,
     parse_uri,

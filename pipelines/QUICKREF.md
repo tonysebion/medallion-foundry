@@ -138,6 +138,86 @@ Or delete the file manually:
 rm .state/claims_dw_claims_header_watermark.json
 ```
 
+## Storage Backends
+
+Pipelines support multiple storage backends for reading and writing data:
+
+### Supported URI Schemes
+
+| Scheme | Storage Type | Example |
+|--------|-------------|---------|
+| Local path | Local filesystem | `./bronze/`, `/data/silver/` |
+| `s3://` | AWS S3 | `s3://my-bucket/bronze/` |
+| `abfss://` | Azure Data Lake Gen2 | `abfss://container@account.dfs.core.windows.net/bronze/` |
+| `wasbs://` | Azure Blob Storage | `wasbs://container@account.blob.core.windows.net/bronze/` |
+| `az://` | Azure (short form) | `az://container/bronze/` |
+
+### Cloud Storage Examples
+
+```python
+# AWS S3
+bronze = BronzeSource(
+    system="sales",
+    entity="orders",
+    source_type=SourceType.FILE_PARQUET,
+    source_path="s3://source-bucket/orders/{run_date}/*.parquet",
+    target_path="s3://bronze-bucket/system={system}/entity={entity}/dt={run_date}/",
+)
+
+# Azure Data Lake Storage Gen2
+bronze = BronzeSource(
+    system="claims",
+    entity="header",
+    source_type=SourceType.DATABASE_MSSQL,
+    target_path="abfss://bronze@myaccount.dfs.core.windows.net/system={system}/entity={entity}/dt={run_date}/",
+    options={
+        "connection_name": "claims_db",
+        "host": "${DB_HOST}",
+        "database": "ClaimsDB",
+    },
+)
+```
+
+### Storage Backend API
+
+For advanced use cases, you can use the storage backend directly:
+
+```python
+from pipelines.lib.storage import get_storage, parse_uri
+
+# Auto-detect storage type from URI
+storage = get_storage("s3://my-bucket/data/")
+
+# Check if path exists
+if storage.exists("file.parquet"):
+    data = storage.read_bytes("file.parquet")
+
+# Write files
+storage.write_text("manifest.json", '{"version": 1}')
+storage.write_bytes("data.parquet", parquet_bytes)
+
+# List files
+files = storage.list_files(pattern="*.parquet")
+for f in files:
+    print(f"{f.path}: {f.size} bytes")
+
+# Parse URI to get scheme
+scheme, path = parse_uri("s3://bucket/prefix/")
+# scheme = "s3", path = "bucket/prefix/"
+```
+
+### Cloud Credentials
+
+**AWS S3:**
+- Uses default AWS credential chain (environment, config file, IAM role)
+- Set `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` for explicit credentials
+- For custom endpoints (MinIO, LocalStack): pass `endpoint_url` option
+
+**Azure ADLS:**
+- Set `AZURE_STORAGE_ACCOUNT_KEY` for account key auth
+- Or use service principal: `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`
+- For Azure AD auth, ensure `azure-identity` is installed
+
 ## Environment Variables
 
 | Variable | Description |
@@ -146,6 +226,12 @@ rm .state/claims_dw_claims_header_watermark.json
 | `SILVER_TARGET_ROOT` | Override Silver target path |
 | `PIPELINE_STATE_DIR` | Directory for watermark files (default: `.state`) |
 | `${VAR_NAME}` in options | Resolved from environment |
+| `AWS_ACCESS_KEY_ID` | AWS access key for S3 |
+| `AWS_SECRET_ACCESS_KEY` | AWS secret key for S3 |
+| `AZURE_STORAGE_ACCOUNT_KEY` | Azure storage account key |
+| `AZURE_TENANT_ID` | Azure AD tenant ID |
+| `AZURE_CLIENT_ID` | Azure AD client ID |
+| `AZURE_CLIENT_SECRET` | Azure AD client secret |
 
 ## Troubleshooting
 

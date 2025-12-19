@@ -23,6 +23,7 @@ import pandas as pd
 
 from pipelines.lib.connections import get_connection
 from pipelines.lib.env import expand_env_vars, expand_options
+from pipelines.lib.storage import get_storage
 from pipelines.lib.watermark import get_watermark, save_watermark
 from pipelines.lib._path_utils import path_has_data, resolve_target_path
 from pipelines.lib.validate import validate_and_raise
@@ -243,26 +244,25 @@ class BronzeSource:
         return issues
 
     def _path_exists(self, path: str) -> bool:
-        """Check if a path exists."""
-        if path.startswith("s3://"):
-            try:
-                import fsspec
-                fs = fsspec.filesystem("s3")
-                return fs.exists(path)
-            except Exception:
-                return False
-        elif path.startswith(("abfss://", "wasbs://")):
-            try:
-                import fsspec
-                fs = fsspec.filesystem("abfs")
-                return fs.exists(path)
-            except Exception:
-                return False
-        else:
-            if "*" in path:
-                import glob
-                return len(glob.glob(path)) > 0
-            return Path(path).exists()
+        """Check if a path exists using storage backend."""
+        try:
+            # For glob patterns in local paths, use the parent directory
+            if "*" in path or "?" in path:
+                # Extract base directory before wildcards
+                base_path = path.split("*")[0].split("?")[0].rstrip("/\\")
+                if not base_path:
+                    base_path = "."
+                storage = get_storage(base_path)
+                # Check if any files match the pattern
+                pattern = Path(path).name if "/" in path or "\\" in path else path
+                return storage.exists(pattern)
+            else:
+                # For exact paths, check directly
+                storage = get_storage(str(Path(path).parent) if Path(path).suffix else path)
+                relative = Path(path).name if Path(path).suffix else ""
+                return storage.exists(relative) if relative else True
+        except Exception:
+            return False
 
     def run(
         self,
@@ -511,9 +511,12 @@ class BronzeSource:
     ) -> Dict[str, Any]:
         """Write to Bronze target with optional checksums and metadata."""
         from pipelines.lib.checksum import write_checksum_manifest
+        from pipelines.lib.storage import parse_uri
 
         # Execute count before writing (Ibis is lazy)
-        row_count = t.count().execute()
+        # Ibis count() returns different types depending on backend
+        count_result = t.count().execute()
+        row_count: int = int(count_result.iloc[0] if hasattr(count_result, "iloc") else count_result)  # type: ignore[arg-type]
 
         if row_count == 0:
             logger.warning("No rows to write for %s.%s", self.system, self.entity)
@@ -527,18 +530,39 @@ class BronzeSource:
         columns = self._infer_column_types(t)
         now = datetime.now(timezone.utc).isoformat()
 
-        # Determine output format based on target
+        # Determine output format based on target using storage backend
         data_files: List[str] = []
+        scheme, _ = parse_uri(target)
 
-        if target.startswith("s3://"):
-            # S3 - checksums not applicable
+        if scheme in ("s3", "abfs"):
+            # Cloud storage - use storage backend for metadata writes
+            storage = get_storage(target)
+            storage.makedirs("")  # Ensure target exists
             t.to_parquet(target, partition_by=self.partition_by)
             data_files.append(target)
+
+            # Write metadata to cloud storage
+            if self.write_metadata:
+                metadata = BronzeOutputMetadata(
+                    row_count=row_count,
+                    columns=columns,
+                    written_at=now,
+                    system=self.system,
+                    entity=self.entity,
+                    source_type=self.source_type.value,
+                    load_pattern=self.load_pattern.value,
+                    run_date=run_date,
+                    watermark_column=self.watermark_column,
+                    last_watermark=last_watermark,
+                    data_files=[f"{self.entity}.parquet"],
+                )
+                storage.write_text("_metadata.json", metadata.to_json())
+                logger.debug("Wrote metadata to %s/_metadata.json", target)
         else:
             # Local filesystem - write with artifacts
-            output_dir = Path(target)
-            output_dir.mkdir(parents=True, exist_ok=True)
-            output_file = output_dir / f"{self.entity}.parquet"
+            storage = get_storage(target)
+            storage.makedirs("")
+            output_file = Path(target) / f"{self.entity}.parquet"
             t.to_parquet(str(output_file))
             data_files.append(str(output_file))
 
@@ -557,14 +581,13 @@ class BronzeSource:
                     last_watermark=last_watermark,
                     data_files=[Path(f).name for f in data_files],
                 )
-                metadata_file = output_dir / "_metadata.json"
-                metadata_file.write_text(metadata.to_json(), encoding="utf-8")
-                logger.debug("Wrote metadata to %s", metadata_file)
+                storage.write_text("_metadata.json", metadata.to_json())
+                logger.debug("Wrote metadata to %s/_metadata.json", target)
 
             # Write checksums
             if self.write_checksums:
                 write_checksum_manifest(
-                    output_dir,
+                    Path(target),
                     [Path(f) for f in data_files],
                     entity_kind="bronze",
                     row_count=row_count,
@@ -588,12 +611,12 @@ class BronzeSource:
             "target": target,
             "source_type": self.source_type.value,
             "columns": [c["name"] for c in columns],
-            "files": [Path(f).name for f in data_files],
+            "files": [Path(f).name for f in data_files] if scheme == "local" else data_files,
         }
 
-        if self.write_metadata and not target.startswith("s3://"):
+        if self.write_metadata:
             result["metadata_file"] = "_metadata.json"
-        if self.write_checksums and not target.startswith("s3://"):
+        if self.write_checksums and scheme == "local":
             result["checksums_file"] = "_checksums.json"
 
         return result

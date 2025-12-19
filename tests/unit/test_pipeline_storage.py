@@ -1,6 +1,4 @@
 """Tests for pipeline storage helpers (Silver I/O and partition utilities)."""
-
-import json
 from pathlib import Path
 
 import ibis
