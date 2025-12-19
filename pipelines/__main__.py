@@ -24,14 +24,21 @@ from typing import Any, Dict, List, Optional
 from pipelines.lib.connections import close_all_connections
 
 
-def setup_logging(verbose: bool = False) -> None:
-    """Configure logging for pipeline execution."""
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+def setup_logging(
+    verbose: bool = False,
+    json_format: bool = False,
+    log_file: Optional[str] = None,
+) -> None:
+    """Configure logging for pipeline execution.
+
+    Args:
+        verbose: Enable debug-level logging
+        json_format: Use JSON output format (for log aggregation)
+        log_file: Optional file path to write logs to
+    """
+    from pipelines.lib.logging import setup_logging as _setup_logging
+
+    _setup_logging(verbose=verbose, json_format=json_format, log_file=log_file)
 
 
 def discover_pipelines() -> List[Dict[str, Any]]:
@@ -565,10 +572,10 @@ def generate_sample_command(pipeline_name: str, rows: int = 100, output_dir: str
     print()
 
     # Try to load the pipeline module to understand its schema
+    module_path, _ = parse_pipeline_spec(pipeline_name)
     try:
-        module_path, _ = parse_pipeline_spec(pipeline_name)
-        module = load_pipeline_module(module_path)
-
+        full_path = f"pipelines.{module_path.replace('.', '_')}"
+        module = importlib.import_module(full_path)
         bronze = getattr(module, "bronze", None)
         if bronze:
             system = bronze.system
@@ -576,11 +583,23 @@ def generate_sample_command(pipeline_name: str, rows: int = 100, output_dir: str
         else:
             system = module_path.split(".")[0] if "." in module_path else module_path
             entity = module_path.split(".")[-1] if "." in module_path else "data"
-
-    except Exception:
-        # Fallback: generate generic data
-        system = pipeline_name.split(".")[0] if "." in pipeline_name else pipeline_name
-        entity = pipeline_name.split(".")[-1] if "." in pipeline_name else "data"
+    except ModuleNotFoundError:
+        try:
+            full_path_nested = f"pipelines.{module_path}"
+            module = importlib.import_module(full_path_nested)
+            bronze = getattr(module, "bronze", None)
+            if bronze:
+                system = bronze.system
+                entity = bronze.entity
+            else:
+                system = module_path.split(".")[0] if "." in module_path else module_path
+                entity = module_path.split(".")[-1] if "." in module_path else "data"
+        except ModuleNotFoundError:
+            # Pipeline doesn't exist yet - use name-based defaults
+            print(f"Note: Pipeline '{pipeline_name}' not found, generating generic sample data.")
+            print()
+            system = module_path.split(".")[0] if "." in module_path else module_path
+            entity = module_path.split(".")[-1] if "." in module_path else "data"
 
     # Generate synthetic data
     def random_string(length: int = 8) -> str:
@@ -926,6 +945,15 @@ Examples:
 
     # Test database connection
     python -m pipelines test-connection claims_db --host myserver.com --database ClaimsDB
+
+    # Create a new pipeline from template
+    python -m pipelines new claims.header --source-type database_mssql
+
+    # Generate sample test data
+    python -m pipelines generate-sample claims.header --rows 1000 --output ./test_data/
+
+    # Inspect a data source and get configuration suggestions
+    python -m pipelines inspect-source --file ./data/input.csv
         """,
     )
 
@@ -962,6 +990,15 @@ Examples:
         help="Enable verbose logging",
     )
     parser.add_argument(
+        "--json-log",
+        action="store_true",
+        help="Output logs in JSON format (for log aggregation systems)",
+    )
+    parser.add_argument(
+        "--log-file",
+        help="Write logs to a file in addition to console",
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="Validate pipeline configuration without running (checks connectivity)",
@@ -971,6 +1008,32 @@ Examples:
         action="store_true",
         help="Show what the pipeline would do without executing",
     )
+    parser.add_argument(
+        "--rows",
+        type=int,
+        default=100,
+        help="Number of rows for generate-sample command (default: 100)",
+    )
+    parser.add_argument(
+        "--output",
+        default="./sample_data",
+        help="Output directory for generate-sample command (default: ./sample_data)",
+    )
+    parser.add_argument(
+        "--source-type",
+        default="file_csv",
+        help="Source type for new command (file_csv, file_parquet, database_mssql, database_postgres, api_rest)",
+    )
+    parser.add_argument(
+        "--file",
+        dest="inspect_file",
+        help="File path for inspect-source command",
+    )
+    parser.add_argument(
+        "extra_args",
+        nargs="*",
+        help=argparse.SUPPRESS,  # Hidden - for command arguments
+    )
 
     args = parser.parse_args()
 
@@ -979,16 +1042,47 @@ Examples:
         list_pipelines()
         return
 
-    # Handle test-connection command
-    if args.pipeline and args.pipeline.startswith("test-connection"):
-        parts = args.pipeline.split()
-        if len(parts) < 2:
-            print("Usage: python -m pipelines test-connection <connection_name>")
-            print("  Options: --host, --database, --type (mssql|postgres)")
-            sys.exit(1)
-        connection_name = parts[1] if len(parts) > 1 else "default"
-        test_connection_command(connection_name, args)
-        return
+    # Handle special commands
+    if args.pipeline:
+        # Handle test-connection command
+        if args.pipeline == "test-connection":
+            # Get connection name from extra_args
+            if not args.extra_args:
+                print("Usage: python -m pipelines test-connection <connection_name>")
+                print("  Options: --host, --database, --type (mssql|postgres)")
+                sys.exit(1)
+            connection_name = args.extra_args[0]
+            test_connection_command(connection_name, args)
+            return
+
+        # Handle generate-sample command
+        if args.pipeline == "generate-sample":
+            if not args.extra_args:
+                print("Usage: python -m pipelines generate-sample <pipeline_name>")
+                print("  Options: --rows (default 100), --output (default ./sample_data)")
+                sys.exit(1)
+            pipeline_name = args.extra_args[0]
+            generate_sample_command(pipeline_name, rows=args.rows, output_dir=args.output)
+            return
+
+        # Handle new command
+        if args.pipeline == "new":
+            if not args.extra_args:
+                print("Usage: python -m pipelines new <pipeline_name>")
+                print("  Options: --source-type (file_csv, file_parquet, database_mssql, database_postgres, api_rest)")
+                sys.exit(1)
+            pipeline_name = args.extra_args[0]
+            new_pipeline_command(pipeline_name, source_type=args.source_type)
+            return
+
+        # Handle inspect-source command
+        if args.pipeline == "inspect-source":
+            if not args.inspect_file:
+                print("Usage: python -m pipelines inspect-source --file <path>")
+                print("  Supported formats: .csv, .parquet, .json")
+                sys.exit(1)
+            inspect_source_command(source_path=args.inspect_file)
+            return
 
     # Validate required arguments for running a pipeline
     if not args.pipeline:
@@ -998,7 +1092,11 @@ Examples:
         parser.error("--date is required when running a pipeline")
 
     # Setup logging
-    setup_logging(args.verbose)
+    setup_logging(
+        verbose=args.verbose,
+        json_format=args.json_log,
+        log_file=args.log_file,
+    )
     logger = logging.getLogger("pipelines")
 
     # Parse pipeline specification
