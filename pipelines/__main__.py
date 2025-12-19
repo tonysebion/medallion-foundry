@@ -131,6 +131,7 @@ def list_pipelines() -> None:
 
     print()
     print("Usage:")
+    print("  python -m pipelines.create              # Launch interactive pipeline creator")
     print("  python -m pipelines <name> --date YYYY-MM-DD")
     print("  python -m pipelines <name>:bronze --date YYYY-MM-DD  # Bronze only")
     print("  python -m pipelines <name>:silver --date YYYY-MM-DD  # Silver only")
