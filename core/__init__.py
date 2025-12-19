@@ -1,43 +1,27 @@
 """Core modules for Bronze extraction framework.
 
+.. deprecated::
+    The ``core/`` module is deprecated and will be removed in a future release.
+    Use ``pipelines/`` instead for all new development.
+
+    See ``core/DEPRECATED.md`` for migration guide and ``pipelines/QUICKREF.md``
+    for the new API documentation.
+
 Layer Structure:
     core.foundation      - L0: Zero-dependency building blocks
     core.platform        - L1: Cross-cutting platform services
     core.infrastructure  - L2: Config, I/O, runtime
     core.domain          - L3: Adapters, services, pipelines
     core.orchestration   - L4: Job execution
-
-Package Map:
-    foundation/          # L0: Zero-dependency building blocks
-    ├── primitives/      # patterns, exceptions, logging, base models
-    ├── state/           # watermark, manifest
-    └── catalog/         # hooks, webhooks, tracing
-
-    platform/            # L1: Cross-cutting platform services
-    ├── resilience/      # retry, circuit breaker, rate limiter
-    ├── observability/   # tracing helpers
-    └── om/              # OpenMetadata client
-
-    infrastructure/      # L2: Core infrastructure services
-    ├── config/          # configuration loading, validation, models
-    ├── io/              # storage backends, HTTP, extractor base
-    └── runtime/         # execution context, paths, metadata
-
-    domain/              # L3: Business domain logic
-    ├── adapters/        # extractors (API, DB, file), quality, schema
-    ├── services/        # pipeline processing (bronze, silver)
-    └── catalog/         # yaml_generator
-
-    orchestration/       # L4: Job execution and coordination
-    ├── runner/          # job execution
-    └── parallel.py      # parallel execution
-
-Recommended imports:
-    from core import LoadPattern, RunContext, RetryPolicy
-    from core.foundation.primitives import LoadPattern
-    from core.platform.resilience import CircuitBreaker
-    from core.infrastructure.config import load_config
 """
+import warnings
+
+warnings.warn(
+    "The 'core' module is deprecated. Use 'pipelines' instead. "
+    "See core/DEPRECATED.md for migration guide.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 __version__ = "1.0.0"
 

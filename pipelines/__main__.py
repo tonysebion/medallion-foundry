@@ -543,6 +543,314 @@ def test_connection_command(connection_name: str, args: Any) -> None:
         sys.exit(1)
 
 
+def generate_sample_command(pipeline_name: str, rows: int = 100, output_dir: str = "./sample_data") -> None:
+    """Generate sample data for testing a pipeline.
+
+    Creates synthetic data matching the pipeline's expected schema.
+
+    Usage:
+        python -m pipelines generate-sample claims.header --rows 1000
+    """
+    import pandas as pd
+    import random
+    import string
+    from datetime import datetime, timedelta
+
+    print()
+    print("=" * 60)
+    print(f"GENERATING SAMPLE DATA: {pipeline_name}")
+    print("=" * 60)
+    print(f"Rows: {rows}")
+    print(f"Output: {output_dir}")
+    print()
+
+    # Try to load the pipeline module to understand its schema
+    try:
+        module_path, _ = parse_pipeline_spec(pipeline_name)
+        module = load_pipeline_module(module_path)
+
+        bronze = getattr(module, "bronze", None)
+        if bronze:
+            system = bronze.system
+            entity = bronze.entity
+        else:
+            system = module_path.split(".")[0] if "." in module_path else module_path
+            entity = module_path.split(".")[-1] if "." in module_path else "data"
+
+    except Exception:
+        # Fallback: generate generic data
+        system = pipeline_name.split(".")[0] if "." in pipeline_name else pipeline_name
+        entity = pipeline_name.split(".")[-1] if "." in pipeline_name else "data"
+
+    # Generate synthetic data
+    def random_string(length: int = 8) -> str:
+        return "".join(random.choices(string.ascii_letters, k=length))
+
+    def random_date(start_year: int = 2024) -> str:
+        start = datetime(start_year, 1, 1)
+        offset = random.randint(0, 365)
+        return (start + timedelta(days=offset)).strftime("%Y-%m-%d")
+
+    def random_timestamp() -> str:
+        return f"{random_date()} {random.randint(0, 23):02d}:{random.randint(0, 59):02d}:{random.randint(0, 59):02d}"
+
+    # Create sample data
+    data = {
+        "id": list(range(1, rows + 1)),
+        f"{entity}_name": [f"{entity.title()}_{random_string(6)}" for _ in range(rows)],
+        "status": [random.choice(["active", "inactive", "pending"]) for _ in range(rows)],
+        "amount": [round(random.uniform(10, 10000), 2) for _ in range(rows)],
+        "created_at": [random_timestamp() for _ in range(rows)],
+        "updated_at": [random_timestamp() for _ in range(rows)],
+    }
+
+    df = pd.DataFrame(data)
+
+    # Write to output
+    from pathlib import Path
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Write as CSV and Parquet
+    csv_file = output_path / f"{system}_{entity}_sample.csv"
+    parquet_file = output_path / f"{system}_{entity}_sample.parquet"
+
+    df.to_csv(csv_file, index=False)
+    df.to_parquet(parquet_file, index=False)
+
+    print(f"Generated {rows} sample rows")
+    print(f"CSV: {csv_file}")
+    print(f"Parquet: {parquet_file}")
+    print()
+    print("Columns generated:")
+    for col in df.columns:
+        print(f"  - {col} ({df[col].dtype})")
+    print()
+    print("=" * 60)
+
+
+def new_pipeline_command(pipeline_name: str, source_type: str = "file_csv") -> None:
+    """Create a new pipeline from template.
+
+    Usage:
+        python -m pipelines new claims.header --source-type database_mssql
+    """
+    from pathlib import Path
+
+    print()
+    print("=" * 60)
+    print(f"CREATING NEW PIPELINE: {pipeline_name}")
+    print("=" * 60)
+    print(f"Source Type: {source_type}")
+    print()
+
+    # Parse pipeline name
+    parts = pipeline_name.split(".")
+    if len(parts) == 2:
+        system, entity = parts
+        filename = f"{system}_{entity}.py"
+        dir_path = Path("pipelines")
+    else:
+        system = parts[0]
+        entity = parts[-1]
+        filename = f"{entity}.py"
+        dir_path = Path("pipelines") / "/".join(parts[:-1])
+
+    dir_path.mkdir(parents=True, exist_ok=True)
+    file_path = dir_path / filename
+
+    if file_path.exists():
+        print(f"ERROR: Pipeline already exists at {file_path}")
+        sys.exit(1)
+
+    # Determine template based on source type
+    source_type_map = {
+        "file_csv": "SourceType.FILE_CSV",
+        "file_parquet": "SourceType.FILE_PARQUET",
+        "database_mssql": "SourceType.DATABASE_MSSQL",
+        "database_postgres": "SourceType.DATABASE_POSTGRES",
+        "api_rest": "SourceType.API_REST",
+    }
+
+    source_type_enum = source_type_map.get(source_type.lower(), "SourceType.FILE_CSV")
+
+    # Generate template
+    template = f'''"""Pipeline: {system}.{entity}
+
+Bronze extraction and Silver curation for {entity} data.
+"""
+
+from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
+from pipelines.lib.silver import SilverEntity, EntityKind, HistoryMode
+
+
+# =============================================================================
+# BRONZE LAYER - Raw extraction
+# =============================================================================
+
+bronze = BronzeSource(
+    system="{system}",
+    entity="{entity}",
+    source_type={source_type_enum},
+    source_path="./source_data/{system}/{entity}.csv",  # <-- CHANGE THIS
+    target_path="./bronze/system={{system}}/entity={{entity}}/dt={{run_date}}/",
+    load_pattern=LoadPattern.FULL_SNAPSHOT,
+    options={{
+        # Add source-specific options here
+    }},
+)
+
+
+# =============================================================================
+# SILVER LAYER - Curation
+# =============================================================================
+
+silver = SilverEntity(
+    source_path="./bronze/system={system}/entity={entity}/dt={{run_date}}/*.parquet",
+    target_path="./silver/{entity}/",
+    natural_keys=["id"],  # <-- CHANGE THIS: columns that uniquely identify a record
+    change_timestamp="updated_at",  # <-- CHANGE THIS: when the record was last modified
+    entity_kind=EntityKind.STATE,
+    history_mode=HistoryMode.CURRENT_ONLY,
+)
+
+
+# =============================================================================
+# PIPELINE ENTRY POINT
+# =============================================================================
+
+def run(run_date: str, *, dry_run: bool = False, target_override: str = None):
+    """Run the full Bronze -> Silver pipeline."""
+    bronze_result = bronze.run(run_date, dry_run=dry_run, target_override=target_override)
+    silver_result = silver.run(run_date, dry_run=dry_run, target_override=target_override)
+    return {{"bronze": bronze_result, "silver": silver_result}}
+
+
+def run_bronze(run_date: str, *, dry_run: bool = False, target_override: str = None):
+    """Run only the Bronze layer."""
+    return bronze.run(run_date, dry_run=dry_run, target_override=target_override)
+
+
+def run_silver(run_date: str, *, dry_run: bool = False, target_override: str = None):
+    """Run only the Silver layer."""
+    return silver.run(run_date, dry_run=dry_run, target_override=target_override)
+'''
+
+    file_path.write_text(template)
+
+    print(f"Created: {file_path}")
+    print()
+    print("Next steps:")
+    print(f"  1. Edit {file_path}")
+    print("  2. Update source_path to your data location")
+    print("  3. Update natural_keys and change_timestamp")
+    print(f"  4. Test: python -m pipelines {pipeline_name} --date 2025-01-15 --dry-run")
+    print()
+    print("=" * 60)
+
+
+def inspect_source_command(source_path: str = None, file_type: str = None) -> None:
+    """Inspect a data source and suggest pipeline configuration.
+
+    Usage:
+        python -m pipelines inspect-source --file ./data.csv
+        python -m pipelines inspect-source --file ./data.parquet
+    """
+    import pandas as pd
+    from pathlib import Path
+
+    print()
+    print("=" * 60)
+    print("SOURCE INSPECTION")
+    print("=" * 60)
+
+    if not source_path:
+        print("ERROR: --file is required")
+        print("Usage: python -m pipelines inspect-source --file ./data.csv")
+        sys.exit(1)
+
+    path = Path(source_path)
+    if not path.exists():
+        print(f"ERROR: File not found: {source_path}")
+        sys.exit(1)
+
+    print(f"File: {source_path}")
+    print()
+
+    # Read the file
+    try:
+        if path.suffix.lower() == ".csv":
+            df = pd.read_csv(path, nrows=1000)
+        elif path.suffix.lower() in (".parquet", ".pq"):
+            df = pd.read_parquet(path)
+        elif path.suffix.lower() == ".json":
+            df = pd.read_json(path, lines=True, nrows=1000)
+        else:
+            print(f"Unsupported file type: {path.suffix}")
+            print("Supported: .csv, .parquet, .json")
+            sys.exit(1)
+    except Exception as e:
+        print(f"ERROR reading file: {e}")
+        sys.exit(1)
+
+    print("SCHEMA:")
+    print("-" * 40)
+    for col in df.columns:
+        dtype = df[col].dtype
+        null_count = df[col].isna().sum()
+        unique_count = df[col].nunique()
+        sample = df[col].dropna().iloc[0] if not df[col].isna().all() else "N/A"
+        print(f"  {col:<25} {str(dtype):<15} nulls={null_count:<5} unique={unique_count}")
+    print()
+
+    print("STATISTICS:")
+    print("-" * 40)
+    print(f"  Rows: {len(df)}")
+    print(f"  Columns: {len(df.columns)}")
+    print()
+
+    # Suggest configuration
+    print("SUGGESTED CONFIGURATION:")
+    print("-" * 40)
+
+    # Find potential primary keys
+    pk_candidates = []
+    for col in df.columns:
+        if df[col].nunique() == len(df) and df[col].isna().sum() == 0:
+            pk_candidates.append(col)
+
+    if pk_candidates:
+        print(f"  natural_keys = {pk_candidates[:2]}")
+    else:
+        print("  natural_keys = [???]  # No unique columns found")
+
+    # Find potential timestamp columns
+    timestamp_cols = []
+    for col in df.columns:
+        if "date" in col.lower() or "time" in col.lower() or "updated" in col.lower():
+            timestamp_cols.append(col)
+        elif df[col].dtype == "datetime64[ns]":
+            timestamp_cols.append(col)
+
+    if timestamp_cols:
+        print(f"  change_timestamp = \"{timestamp_cols[0]}\"")
+    else:
+        print("  change_timestamp = \"???\"  # No timestamp column found")
+
+    # Suggest source type
+    source_type = {
+        ".csv": "SourceType.FILE_CSV",
+        ".parquet": "SourceType.FILE_PARQUET",
+        ".pq": "SourceType.FILE_PARQUET",
+        ".json": "# JSON not directly supported - convert to CSV/Parquet first",
+    }.get(path.suffix.lower(), "SourceType.FILE_CSV")
+    print(f"  source_type = {source_type}")
+
+    print()
+    print("=" * 60)
+
+
 def print_result(result: Dict[str, Any], pipeline_spec: str) -> None:
     """Print pipeline result in a readable format."""
     print()
