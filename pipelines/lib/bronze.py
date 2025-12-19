@@ -23,6 +23,7 @@ import ibis
 import pandas as pd
 
 from pipelines.lib.connections import get_connection
+from pipelines.lib.env import expand_env_vars, expand_options
 from pipelines.lib.watermark import get_watermark, save_watermark
 
 logger = logging.getLogger(__name__)
@@ -315,6 +316,10 @@ class BronzeSource:
         else:
             raise ValueError(f"Unsupported source type: {self.source_type}")
 
+    def _get_expanded_options(self) -> Dict[str, Any]:
+        """Get options with environment variables expanded."""
+        return expand_options(self.options)
+
     def _read_database(
         self,
         con: ibis.BaseBackend,
@@ -322,10 +327,11 @@ class BronzeSource:
         last_watermark: Optional[str],
     ) -> ibis.Table:
         """Read from database source using connection pooling."""
-        connection_name = self.options.get(
+        opts = self._get_expanded_options()
+        connection_name = opts.get(
             "connection_name", f"{self.system}_{self.entity}"
         )
-        db_con = get_connection(connection_name, self.source_type, self.options)
+        db_con = get_connection(connection_name, self.source_type, opts)
 
         query = self.options.get("query")
         if query:
@@ -380,9 +386,10 @@ class BronzeSource:
         """
         import requests
 
-        url = self.source_path.format(run_date=run_date)
-        headers = self.options.get("headers", {})
-        params = self.options.get("params", {})
+        opts = self._get_expanded_options()
+        url = expand_env_vars(self.source_path.format(run_date=run_date))
+        headers = opts.get("headers", {})
+        params = opts.get("params", {})
 
         if last_watermark and self.watermark_column:
             params[self.watermark_column] = last_watermark

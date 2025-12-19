@@ -18,7 +18,8 @@ import argparse
 import importlib
 import logging
 import sys
-from typing import Any, Dict, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from pipelines.lib.connections import close_all_connections
 
@@ -31,6 +32,101 @@ def setup_logging(verbose: bool = False) -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+
+
+def discover_pipelines() -> List[Dict[str, Any]]:
+    """Discover available pipelines in the pipelines directory.
+
+    Returns:
+        List of dicts with pipeline info: name, path, has_bronze, has_silver
+    """
+    pipelines_dir = Path(__file__).parent
+    pipelines: List[Dict[str, Any]] = []
+
+    # Skip these directories/files
+    skip = {"lib", "templates", "examples", "__pycache__", "__init__.py", "__main__.py"}
+
+    for py_file in pipelines_dir.rglob("*.py"):
+        # Get relative path from pipelines dir
+        rel_path = py_file.relative_to(pipelines_dir)
+
+        # Skip lib, templates, examples, and special files
+        if any(part in skip for part in rel_path.parts):
+            continue
+
+        # Skip __init__.py and __main__.py
+        if py_file.name.startswith("_"):
+            continue
+
+        # Convert path to module name: claims/header.py -> claims.header
+        module_name = str(rel_path.with_suffix("")).replace("\\", ".").replace("/", ".")
+
+        # Try to load and inspect the module
+        try:
+            full_path = f"pipelines.{module_name}"
+            module = importlib.import_module(full_path)
+
+            has_bronze = hasattr(module, "run_bronze") or hasattr(module, "bronze")
+            has_silver = hasattr(module, "run_silver") or hasattr(module, "silver")
+            has_run = hasattr(module, "run")
+
+            # Get docstring if available
+            doc = module.__doc__.strip().split("\n")[0] if module.__doc__ else ""
+
+            pipelines.append({
+                "name": module_name,
+                "path": str(rel_path),
+                "has_bronze": has_bronze,
+                "has_silver": has_silver,
+                "has_run": has_run,
+                "description": doc,
+            })
+        except Exception:
+            # Skip modules that can't be loaded
+            pass
+
+    return sorted(pipelines, key=lambda p: p["name"])
+
+
+def list_pipelines() -> None:
+    """Print list of available pipelines."""
+    pipelines = discover_pipelines()
+
+    if not pipelines:
+        print("No pipelines found.")
+        print()
+        print("To create a pipeline, add a Python file to the pipelines/ directory.")
+        print("See pipelines/templates/ for examples.")
+        return
+
+    print("Available pipelines:")
+    print()
+
+    # Calculate column widths
+    max_name = max(len(p["name"]) for p in pipelines)
+    max_name = max(max_name, 10)  # Minimum width
+
+    # Print header
+    print(f"  {'Name':<{max_name}}  {'Layers':<15}  Description")
+    print(f"  {'-' * max_name}  {'-' * 15}  {'-' * 40}")
+
+    for p in pipelines:
+        layers = []
+        if p["has_bronze"]:
+            layers.append("bronze")
+        if p["has_silver"]:
+            layers.append("silver")
+        layers_str = ", ".join(layers) if layers else "run only"
+
+        desc = p["description"][:40] if p["description"] else ""
+
+        print(f"  {p['name']:<{max_name}}  {layers_str:<15}  {desc}")
+
+    print()
+    print("Usage:")
+    print("  python -m pipelines <name> --date YYYY-MM-DD")
+    print("  python -m pipelines <name>:bronze --date YYYY-MM-DD  # Bronze only")
+    print("  python -m pipelines <name>:silver --date YYYY-MM-DD  # Silver only")
 
 
 def parse_pipeline_spec(spec: str) -> tuple[str, Optional[str]]:
@@ -182,6 +278,9 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+    # List available pipelines
+    python -m pipelines --list
+
     # Run full pipeline (Bronze → Silver)
     python -m pipelines claims.header --date 2025-01-15
 
@@ -201,11 +300,18 @@ Examples:
 
     parser.add_argument(
         "pipeline",
+        nargs="?",
         help="Pipeline name (e.g., claims.header, retail.orders:bronze)",
     )
     parser.add_argument(
+        "--list",
+        "-l",
+        action="store_true",
+        dest="list_pipelines",
+        help="List available pipelines",
+    )
+    parser.add_argument(
         "--date",
-        required=True,
         help="Run date in YYYY-MM-DD format",
     )
     parser.add_argument(
@@ -226,6 +332,18 @@ Examples:
     )
 
     args = parser.parse_args()
+
+    # Handle --list flag
+    if args.list_pipelines:
+        list_pipelines()
+        return
+
+    # Validate required arguments for running a pipeline
+    if not args.pipeline:
+        parser.error("Pipeline name is required (or use --list to see available pipelines)")
+
+    if not args.date:
+        parser.error("--date is required when running a pipeline")
 
     # Setup logging
     setup_logging(args.verbose)

@@ -6,6 +6,15 @@ Ibis-based medallion architecture pipelines.
 
 from pipelines.lib.bronze import BronzeSource, LoadPattern, SourceType
 from pipelines.lib.connections import close_all_connections, get_connection
+from pipelines.lib.env import expand_env_vars, expand_options
+from pipelines.lib.late_data import (
+    LateDataConfig,
+    LateDataMode,
+    LateDataResult,
+    detect_late_data,
+    filter_late_data,
+)
+from pipelines.lib.rate_limiter import RateLimiter, rate_limited
 from pipelines.lib.curate import (
     build_history,
     coalesce_columns,
@@ -63,6 +72,18 @@ __all__ = [
     # Connections
     "close_all_connections",
     "get_connection",
+    # Environment
+    "expand_env_vars",
+    "expand_options",
+    # Late Data
+    "LateDataConfig",
+    "LateDataMode",
+    "LateDataResult",
+    "detect_late_data",
+    "filter_late_data",
+    # Rate Limiting
+    "RateLimiter",
+    "rate_limited",
     # Curate
     "build_history",
     "coalesce_columns",
