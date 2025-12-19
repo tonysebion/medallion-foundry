@@ -4,7 +4,20 @@ This package contains the core abstractions and utilities for building
 Ibis-based medallion architecture pipelines.
 """
 
+from pipelines.lib.api import ApiOutputMetadata, ApiSource, create_api_source_from_options
+from pipelines.lib.auth import AuthConfig, AuthType, build_auth_headers
 from pipelines.lib.bronze import BronzeOutputMetadata, BronzeSource, LoadPattern, SourceType
+from pipelines.lib.pagination import (
+    CursorPaginationState,
+    NoPaginationState,
+    OffsetPaginationState,
+    PagePaginationState,
+    PaginationConfig,
+    PaginationState,
+    PaginationStrategy,
+    build_pagination_config_from_dict,
+    build_pagination_state,
+)
 from pipelines.lib.checksum import (
     ChecksumManifest,
     ChecksumValidationError,
@@ -82,11 +95,29 @@ from pipelines.lib.validate import (
 from pipelines.lib.watermark import delete_watermark, get_watermark, save_watermark
 
 __all__ = [
+    # API
+    "ApiOutputMetadata",
+    "ApiSource",
+    "create_api_source_from_options",
+    # Auth
+    "AuthConfig",
+    "AuthType",
+    "build_auth_headers",
     # Bronze
     "BronzeOutputMetadata",
     "BronzeSource",
     "LoadPattern",
     "SourceType",
+    # Pagination
+    "CursorPaginationState",
+    "NoPaginationState",
+    "OffsetPaginationState",
+    "PagePaginationState",
+    "PaginationConfig",
+    "PaginationState",
+    "PaginationStrategy",
+    "build_pagination_config_from_dict",
+    "build_pagination_state",
     # Checksum
     "ChecksumManifest",
     "ChecksumValidationError",
