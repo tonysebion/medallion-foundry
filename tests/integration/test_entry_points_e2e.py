@@ -1,11 +1,14 @@
 """End-to-end tests for CLI entry points (Story 1.7).
 
-Tests the actual CLI entry points (bronze_extract.py, silver_extract.py)
+Tests the actual CLI entry points (bronze_extract.py)
 via subprocess to validate the complete user experience:
 - Config validation (--validate-only, --dry-run)
 - Exit codes
 - Output file structure
 - Metadata generation
+
+Note: Silver layer has been migrated to pipelines/lib/silver.py
+      Use `python -m pipelines` for Silver operations.
 """
 
 from __future__ import annotations
@@ -129,27 +132,6 @@ def run_bronze_cli(
 ) -> subprocess.CompletedProcess:
     """Run bronze_extract.py with given arguments."""
     cmd = [sys.executable, "bronze_extract.py"] + args
-    full_env = os.environ.copy()
-    if env:
-        full_env.update(env)
-
-    return subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        env=full_env,
-        cwd=Path(__file__).parent.parent.parent,  # project root
-    )
-
-
-def run_silver_cli(
-    args: list,
-    env: Dict[str, str] | None = None,
-    timeout: int = 60,
-) -> subprocess.CompletedProcess:
-    """Run silver_extract.py with given arguments."""
-    cmd = [sys.executable, "silver_extract.py"] + args
     full_env = os.environ.copy()
     if env:
         full_env.update(env)
@@ -320,36 +302,6 @@ class TestBronzeEntryPoint:
         # Check if date appears in output path or files
         output_contents = list(output_dir.rglob("*"))
         assert len(output_contents) > 0
-
-
-# =============================================================================
-# Silver Entry Point Tests
-# =============================================================================
-
-
-class TestSilverEntryPoint:
-    """Tests for silver_extract.py CLI."""
-
-    def test_help_flag(self):
-        """--help should show usage information."""
-        result = run_silver_cli(["--help"])
-
-        assert result.returncode == 0
-        assert "usage" in result.stdout.lower()
-
-    def test_requires_bronze_path_or_config(self):
-        """Should error if neither --bronze-path nor --config provided."""
-        result = run_silver_cli([])
-
-        # Should fail or show help
-        # (actual behavior depends on argparse config)
-
-    def test_version_if_available(self):
-        """--version should work if implemented."""
-        result = run_silver_cli(["--version"])
-
-        # May or may not be implemented
-        # Just verify it doesn't crash badly
 
 
 # =============================================================================

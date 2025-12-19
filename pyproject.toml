@@ -79,7 +79,6 @@ Changelog = "https://github.com/tonysebion/medallion-foundry/blob/main/CHANGELOG
 
 [project.scripts]
 bronze-extract = "bronze_extract:main"
-silver-extract = "silver_extract:main"
 
 [tool.setuptools]
 packages = [
@@ -97,7 +96,6 @@ packages = [
     "core.infrastructure.config.models",
     "core.infrastructure.io",
     "core.infrastructure.pipelines",
-    "core.infrastructure.pipelines.silver",
     "core.infrastructure.io.storage",
     "core.infrastructure.io.http",
     "core.infrastructure.io.extractors",
@@ -113,13 +111,12 @@ packages = [
     "core.domain.services",
     "core.domain.services.pipelines",
     "core.domain.services.pipelines.bronze",
-    "core.domain.services.pipelines.silver",
     "core.domain.catalog",
     "core.orchestration",
     "core.orchestration.runner",
     "core._compat",
 ]
-py-modules = ["bronze_extract", "silver_extract", "silver_join"]
+py-modules = ["bronze_extract"]
 
 [tool.setuptools.package-data]
 "*" = ["*.yaml", "*.yml"]

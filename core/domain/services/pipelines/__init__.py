@@ -1,16 +1,16 @@
-"""Pipeline processing for Bronze and Silver layers.
+"""Pipeline processing for Bronze layer.
+
+The Silver layer has been migrated to pipelines/lib/silver.py
+which provides a simpler, Ibis-based approach.
 
 Subpackages:
     bronze/  - Bronze extraction and I/O utilities
-    silver/  - Silver transformation and promotion
 """
 
 from __future__ import annotations
 
 from core.domain.services.pipelines import bronze
-from core.domain.services.pipelines import silver
 
 __all__ = [
     "bronze",
-    "silver",
 ]
