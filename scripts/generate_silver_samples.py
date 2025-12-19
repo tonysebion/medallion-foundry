@@ -39,7 +39,7 @@ sys.path.insert(0, str(project_root))
 import pandas as pd  # noqa: E402
 
 from pipelines.lib.checksum import verify_checksum_manifest, write_checksum_manifest  # noqa: E402
-from pipelines.lib.silver import SilverOutputMetadata  # noqa: E402
+from pipelines.lib.io import SilverOutputMetadata  # noqa: E402
 from tests.synthetic_data import DuplicateInjector, DuplicateConfig  # noqa: E402
 
 # Output directory structure:

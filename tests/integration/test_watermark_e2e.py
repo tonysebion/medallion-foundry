@@ -16,24 +16,20 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-import pandas as pd
 import pytest
 
-from core.foundation.primitives.patterns import LoadPattern
 from core.foundation.state.watermark import (
     Watermark,
     WatermarkStore,
     WatermarkType,
-    build_watermark_store,
     compute_max_watermark,
 )
 from core.platform.resilience.late_data import (
     LateDataConfig,
     LateDataHandler,
     LateDataMode,
-    LateDataResult,
 )
 from tests.synthetic_data import (
     LateDataGenerator,
@@ -364,7 +360,7 @@ class TestLateDataGeneratorIntegration:
 
         # Verify late data structure
         assert len(late_df) > 0
-        assert all(late_df["is_late"] == True)
+        assert all(late_df["is_late"])
         assert all(late_df["arrival_delay_hours"] >= 24)
         assert all(late_df["arrival_delay_hours"] <= 168)
 

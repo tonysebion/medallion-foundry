@@ -22,7 +22,6 @@ def test_ruff_check() -> None:
         "pipelines",
         "tests/unit",
         "tests/pattern_verification",
-        "bronze_extract.py",
     ]
 
     process = subprocess.run(

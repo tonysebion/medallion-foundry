@@ -164,15 +164,18 @@ class TestExtractorRegistryPattern:
     """Ensure extractors are properly registered."""
 
     def test_registry_has_expected_types(self) -> None:
-        """The extractor registry should have all expected source types."""
+        """The extractor registry should have all expected source types.
+
+        Note: API extraction has been migrated to pipelines/lib/api.py.
+        The EXTRACTOR_REGISTRY now only contains DB and file extractors.
+        """
         from core.infrastructure.io.extractors.base import EXTRACTOR_REGISTRY
         # Force import of extractor modules to trigger registration
-        from core.domain.adapters.extractors import api_extractor  # noqa: F401
         from core.domain.adapters.extractors import db_extractor  # noqa: F401
         from core.domain.adapters.extractors import db_multi_extractor  # noqa: F401
         from core.domain.adapters.extractors import file_extractor  # noqa: F401
 
-        expected_types = {"api", "db", "db_multi", "file"}
+        expected_types = {"db", "db_multi", "file"}
         registered_types = set(EXTRACTOR_REGISTRY.keys())
 
         assert expected_types <= registered_types, (
@@ -180,10 +183,12 @@ class TestExtractorRegistryPattern:
         )
 
     def test_registered_extractors_subclass_base(self) -> None:
-        """All registered extractors should subclass BaseExtractor."""
+        """All registered extractors should subclass BaseExtractor.
+
+        Note: API extraction has been migrated to pipelines/lib/api.py.
+        """
         from core.infrastructure.io.extractors.base import BaseExtractor, EXTRACTOR_REGISTRY
         # Force import of extractor modules
-        from core.domain.adapters.extractors import api_extractor  # noqa: F401
         from core.domain.adapters.extractors import db_extractor  # noqa: F401
         from core.domain.adapters.extractors import db_multi_extractor  # noqa: F401
         from core.domain.adapters.extractors import file_extractor  # noqa: F401

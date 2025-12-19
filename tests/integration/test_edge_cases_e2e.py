@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict
 
 import pandas as pd
 import pytest
@@ -249,7 +248,7 @@ class TestWideSchemaData:
         df = wide_schema_generator.generate_t0(edge_case_run_date)
 
         sparse_null_rate = df["sparse_col_01"].isna().mean()
-        regular_null_rate = df["int_col_01"].isna().mean()
+        df["int_col_01"].isna().mean()
 
         # Sparse columns have 30% null rate, regular have 20%
         # Allow some variance due to randomness
@@ -340,7 +339,7 @@ class TestLateDataHandling:
 
         # Check that events are not in chronological order
         event_times = batch_df["event_ts_utc"].tolist()
-        is_sorted = all(
+        all(
             event_times[i] <= event_times[i + 1] for i in range(len(event_times) - 1)
         )
         # Very unlikely to be sorted by chance if properly shuffled
@@ -429,7 +428,7 @@ class TestSchemaEvolution:
 
         # V3 values should have larger range (up to 10 billion)
         v1_max = v1_df["value"].max()
-        v3_max = v3_df["value"].max()
+        v3_df["value"].max()
 
         # V1 max is up to 1000, V3 can go up to 10 billion
         assert v1_max <= 1000
@@ -775,7 +774,7 @@ class TestLateDataPipelineIntegration:
         assert late_event_ids.issubset(silver_ids)
 
         # Verify is_late flag is preserved
-        late_in_silver = final_silver[final_silver["is_late"] == True]
+        late_in_silver = final_silver[final_silver["is_late"]]
         assert len(late_in_silver) == len(late_df)
 
     def test_late_data_out_of_order_events_bronze(

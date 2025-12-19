@@ -28,18 +28,15 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import date
 from pathlib import Path
 
 # Add project root to path for imports
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from tests.integration.pattern_data import (
+from tests.integration.pattern_data import (  # noqa: E402
     PatternTestDataGenerator,
     PatternScenario,
-    generate_all_pattern_scenarios,
-    PatternAssertions,
     create_snapshot_assertions,
     create_incremental_append_assertions,
     create_incremental_merge_assertions,

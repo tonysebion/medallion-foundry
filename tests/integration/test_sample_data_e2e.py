@@ -27,6 +27,16 @@ import pytest
 
 # Test configuration
 BRONZE_PATTERNS = ["snapshot", "incremental_append", "incremental_merge", "current_history"]
+
+# Mapping from directory pattern names to actual load_pattern values in metadata
+# The generator uses LoadPattern enum values which differ from directory names
+BRONZE_PATTERN_TO_LOAD_PATTERN = {
+    "snapshot": "full_snapshot",  # LoadPattern.FULL_SNAPSHOT.value
+    "incremental_append": "incremental",  # LoadPattern.INCREMENTAL_APPEND.value
+    "incremental_merge": "cdc",  # LoadPattern.CDC.value
+    "current_history": "cdc",  # LoadPattern.CDC.value
+}
+
 SILVER_PATTERNS = [
     "pattern1_full_events",
     "pattern2_cdc_events",
@@ -239,14 +249,16 @@ class TestBronzeSampleGeneration:
         """Verify metadata contains correct load_pattern."""
         for pattern in BRONZE_PATTERNS:
             pattern_dir = generated_bronze_samples / f"sample={pattern}"
+            expected_load_pattern = BRONZE_PATTERN_TO_LOAD_PATTERN[pattern]
 
             for date_dir in pattern_dir.glob("dt=*"):
                 metadata_path = date_dir / "_metadata.json"
                 with metadata_path.open() as f:
                     metadata = json.load(f)
 
-                assert metadata["load_pattern"] == pattern, (
-                    f"Wrong load_pattern in {metadata_path}"
+                assert metadata["load_pattern"] == expected_load_pattern, (
+                    f"Wrong load_pattern in {metadata_path}: "
+                    f"expected {expected_load_pattern}, got {metadata['load_pattern']}"
                 )
 
 

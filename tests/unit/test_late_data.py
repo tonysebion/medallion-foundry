@@ -1,6 +1,5 @@
 """Tests for the pipelines late-data helpers."""
 
-from datetime import datetime, timedelta
 
 import ibis
 import pandas as pd

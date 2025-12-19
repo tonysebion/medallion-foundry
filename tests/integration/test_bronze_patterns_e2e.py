@@ -16,7 +16,6 @@ Key validations:
 
 from __future__ import annotations
 
-import json
 from datetime import date
 from pathlib import Path
 from typing import Any, Dict
@@ -24,32 +23,24 @@ from typing import Any, Dict
 import pandas as pd
 import pytest
 
-from core.foundation.primitives.patterns import LoadPattern
 from tests.integration.conftest import (
-    MINIO_BUCKET,
-    MINIO_ENDPOINT,
     requires_minio,
     upload_dataframe_to_minio,
-    list_objects_in_prefix,
     download_parquet_from_minio,
 )
 from tests.integration.helpers import (
-    build_bronze_config,
     read_bronze_parquet,
     verify_bronze_metadata,
     verify_checksum_integrity,
 )
 from tests.pattern_verification.pattern_data.generators import (
     PatternTestDataGenerator,
-    PatternScenario,
 )
 from tests.pattern_verification.pattern_data.assertions import (
     AssertionValidator,
-    PatternAssertions,
     create_snapshot_assertions,
     create_incremental_append_assertions,
     create_incremental_merge_assertions,
-    create_scd2_assertions,
 )
 
 
@@ -799,7 +790,7 @@ class TestCurrentHistoryPatternE2E:
         )
 
         # Run T0
-        t0_result = run_bronze_extraction_for_pattern(
+        run_bronze_extraction_for_pattern(
             input_df=scenario.t0,
             output_path=tmp_path / "bronze_t0",
             load_pattern="current_history",

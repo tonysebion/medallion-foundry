@@ -18,10 +18,9 @@ from __future__ import annotations
 
 import gc
 import time
-import uuid
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import pandas as pd
 import pytest
@@ -364,7 +363,6 @@ class TestMemoryUsage:
         performance_run_date: date,
     ):
         """Generator should release memory after use."""
-        import gc
 
         # Get baseline memory
         gc.collect()

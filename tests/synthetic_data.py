@@ -21,8 +21,8 @@ import hashlib
 import json
 import random
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Type, TypedDict, Union
+from datetime import date, datetime, timedelta
+from typing import Any, Dict, List, Optional, Type, TypedDict
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -452,7 +452,7 @@ class NestedJsonGenerator(BaseSyntheticGenerator):
             # Shipping preferences (nested object with optional fields)
             shipping = {
                 "method": self._random_choice(self.SHIPPING_METHODS),
-                "instructions": f"Leave at door" if self.rng.random() > 0.7 else None,
+                "instructions": "Leave at door" if self.rng.random() > 0.7 else None,
                 "signature_required": self.rng.random() > 0.8,
             }
 

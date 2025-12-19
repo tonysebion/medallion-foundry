@@ -1,9 +1,7 @@
 """Tests for pipelines runner utilities."""
 
 import logging
-from unittest.mock import Mock
 
-import pytest
 
 from pipelines.lib.runner import (
     PipelineResult,

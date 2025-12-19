@@ -14,11 +14,8 @@ Tests:
 
 from __future__ import annotations
 
-import json
-import uuid
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List
 
 import pandas as pd
 import pytest
@@ -116,7 +113,7 @@ class TestSchemaVersionGeneration:
 
         # V1 values are 0-1000, V3 values can be 0-10 billion
         v1_max = v1_df["value"].max()
-        v3_max = v3_df["value"].max()
+        v3_df["value"].max()
 
         assert v1_max <= 1000
         # V3 likely has larger values (high probability with 50 rows)
@@ -403,7 +400,7 @@ class TestSchemaValidation:
         added_columns = v2_cols - v1_cols
         for col in added_columns:
             # At least some nulls allowed (nullable column)
-            has_nulls = v2_df[col].isna().sum() > 0
+            v2_df[col].isna().sum() > 0
             # Column exists
             assert col in v2_df.columns
 
