@@ -46,7 +46,6 @@ from typing import Any, Dict, List, Optional
 import httpx
 import requests_toolbelt
 import tenacity
-from pydantic import BaseModel, ConfigDict, Field
 from requests_toolbelt.utils.user_agent import user_agent
 from tenacity import (
     before_sleep_log,
@@ -60,6 +59,7 @@ from pipelines.lib._path_utils import path_has_data, resolve_target_path
 from pipelines.lib.auth import AuthConfig, build_auth_headers
 from pipelines.lib.checksum import write_checksum_manifest
 from pipelines.lib.env import expand_env_vars, expand_options
+from pipelines.lib.io import OutputMetadata, infer_column_types
 from pipelines.lib.pagination import (
     PagePaginationState,
     PaginationConfig,
@@ -86,49 +86,8 @@ _USER_AGENT = user_agent(
 
 __all__ = ["ApiSource", "ApiOutputMetadata"]
 
-
-class ApiOutputMetadata(BaseModel):
-    """Metadata for API extraction outputs.
-
-    Written alongside data files to track lineage.
-    """
-
-    # Basic metadata
-    row_count: int
-    columns: List[Dict[str, Any]]
-    written_at: str
-
-    # Source information
-    system: str
-    entity: str
-    base_url: str
-    endpoint: str
-
-    # Temporal
-    run_date: str
-    watermark_column: Optional[str] = None
-    last_watermark: Optional[str] = None
-    new_watermark: Optional[str] = None
-
-    # Pagination info
-    pages_fetched: int = 0
-    total_requests: int = 0
-
-    # Files written
-    data_files: List[str] = Field(default_factory=list)
-
-    # Format info
-    format: str = "parquet"
-
-    model_config = ConfigDict(extra="forbid")
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        return self.model_dump()
-
-    def to_json(self) -> str:
-        """Convert to JSON string."""
-        return self.model_dump_json(indent=2)
+# Backwards compatibility: ApiOutputMetadata is now OutputMetadata
+ApiOutputMetadata = OutputMetadata
 
 
 @dataclass
@@ -510,7 +469,8 @@ class ApiSource:
         t = ibis.memtable(records)
 
         row_count = len(records)
-        columns = self._infer_columns(records)
+        # Use shared column inference function
+        columns = infer_column_types(records)
         now = datetime.now(timezone.utc).isoformat()
 
         # Write to target
@@ -521,22 +481,27 @@ class ApiSource:
 
         data_files = [str(output_file)]
 
+        # API-specific metadata fields
+        api_extra = {
+            "system": self.system,
+            "entity": self.entity,
+            "base_url": self.base_url,
+            "endpoint": self.endpoint,
+            "watermark_column": self.watermark_column,
+            "last_watermark": last_watermark,
+            "pages_fetched": pages_fetched,
+            "total_requests": total_requests,
+        }
+
         # Write metadata
         if self.write_metadata:
-            metadata = ApiOutputMetadata(
+            metadata = OutputMetadata(
                 row_count=row_count,
                 columns=columns,
                 written_at=now,
-                system=self.system,
-                entity=self.entity,
-                base_url=self.base_url,
-                endpoint=self.endpoint,
                 run_date=run_date,
-                watermark_column=self.watermark_column,
-                last_watermark=last_watermark,
-                pages_fetched=pages_fetched,
-                total_requests=total_requests,
                 data_files=[Path(f).name for f in data_files],
+                extra=api_extra,
             )
             metadata_file = output_dir / "_metadata.json"
             metadata_file.write_text(metadata.to_json(), encoding="utf-8")
@@ -579,38 +544,6 @@ class ApiSource:
             result["checksums_file"] = "_checksums.json"
 
         return result
-
-    def _infer_columns(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Infer column types from records."""
-        if not records:
-            return []
-
-        # Collect all keys
-        all_keys: set[str] = set()
-        for record in records:
-            all_keys.update(record.keys())
-
-        # Infer types from first non-null value
-        columns = []
-        for key in sorted(all_keys):
-            sample_value = None
-            for record in records:
-                if key in record and record[key] is not None:
-                    sample_value = record[key]
-                    break
-
-            if sample_value is None:
-                type_name = "string"
-            else:
-                type_name = type(sample_value).__name__
-
-            columns.append({
-                "name": key,
-                "type": type_name,
-                "nullable": True,
-            })
-
-        return columns
 
     def _format_endpoint(self) -> str:
         endpoint = self.endpoint

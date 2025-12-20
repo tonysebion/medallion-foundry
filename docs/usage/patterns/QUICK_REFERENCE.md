@@ -181,7 +181,7 @@ silver:
 
 **Try the demo first:**
 ```bash
-python scripts/run_demo.py
+python -m pipelines examples.retail_orders --date 2025-01-15
 ```
 
 **Check real examples:**

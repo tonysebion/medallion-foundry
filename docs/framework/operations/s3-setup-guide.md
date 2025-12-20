@@ -184,11 +184,13 @@ storage:
 If using sample data:
 
 ```bash
-# Generate samples locally
-python scripts/generate_sample_data.py
+# Generate Bronze + Silver samples locally
+python scripts/generate_bronze_samples.py --all
+python scripts/generate_silver_samples.py --all
 
 # Upload to S3
-python scripts/generate_sample_data.py --upload-to-s3 my-medallion-bucket
+aws s3 cp sampledata/bronze_samples/ s3://my-medallion-bucket/bronze_samples/ --recursive
+aws s3 cp sampledata/silver_samples/ s3://my-medallion-bucket/silver_samples/ --recursive
 ```
 
 ## Step 6: Run Test Extraction

@@ -88,6 +88,8 @@ python -m pipelines myteam.orders:bronze --date 2025-01-15
 python -m pipelines myteam.orders:silver --date 2025-01-15
 ```
 
+You can add `--dry-run` to validate without writing data, `--check` to validate configuration and connectivity, or `--explain` to print the execution plan. Override the Bronze/Silver targets for local development with `--target ./local_output/`, enable verbose logs with `-v`, or stream JSON logs with `--json-log`. Run `python -m pipelines --list` at any time to discover every module and the layers it exposes.
+
 ## Using the Interactive Creator
 
 For guided pipeline creation:
@@ -102,6 +104,14 @@ This wizard prompts for:
 - Connection details
 - Key columns and history mode
 - Output path
+
+## Pipeline helper commands
+
+- `python -m pipelines test-connection <connection_name>` with `--host`, `--database`, and `--type` flags to confirm live database access before wiring the Bronze job.
+- `python -m pipelines inspect-source --file ./data/sample.csv` to log schema, potential natural keys, and timestamps for a new file.
+- `python -m pipelines generate-sample myteam.orders --rows 250 --output ./test_fixtures` to emit fake data tailored to your pipeline definition (useful for CI or manual smoke tests).
+- `python -m pipelines new myteam.orders --source-type database_mssql` scaffolds Bronze+Silver boilerplate (source path, default load pattern, natural keys, history mode).
+- Explore `pipelines/templates/` and `pipelines/examples/` for fully working patterns once the new file is saved.
 
 ## Source Types
 
@@ -324,6 +334,17 @@ from pipelines.lib.watermark import delete_watermark
 delete_watermark("retail", "orders")
 ```
 
+## Sample data & fixtures
+
+Use the generation scripts to refresh the canonical Bronze and Silver fixtures under `sampledata/bronze_samples` and `sampledata/silver_samples`.
+
+```bash
+python scripts/generate_bronze_samples.py --all
+python scripts/generate_silver_samples.py --all
+```
+
+Use `--pattern <name>` to regenerate a single load pattern, `--rows` to control the batch size, and `--verify` to make sure existing metadata/checksums still match. When you need very specific scenarios (extra batches, SCD2, or custom assertions), run `python scripts/generate_pattern_test_data.py --pattern current_history --rows 1000 --generate-assertions`.
+
 ## Directory Structure
 
 Organize pipelines by team or domain:
@@ -340,8 +361,10 @@ pipelines/
 
 ## Next Steps
 
-- Browse `pipelines/templates/` for more examples
-- See `pipelines/QUICKREF.md` for command reference
+- Browse `pipelines/templates/` for ready-to-edit Bronze/Silver scaffolds.
+- Review `pipelines/QUICKREF.md` for flags, storage tips, and troubleshooting.
+- Refresh fixtures with `scripts/generate_bronze_samples.py` and `scripts/generate_silver_samples.py`, or craft scenario-specific data via `scripts/generate_pattern_test_data.py`.
+- Use `python -m pipelines --list` to verify the new pipeline is discoverable before running it end to end.
 - Check `pipelines/examples/` for advanced patterns
 
 ## Common Patterns

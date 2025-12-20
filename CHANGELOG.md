@@ -24,10 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `silver_extract.py --stream` / `--resume` CLI flags (STREAM001, removal in 1.3.0) – switch to the new chunking flow and rely on metadata/checksum files for reruns.
 
 ### Changed
-- `generate_silver_samples.py` no longer auto-synthesizes Bronze data; tests and users must now generate Bronze fixtures explicitly (e.g., via `python scripts/generate_sample_data.py`).
+- `generate_silver_samples.py` no longer auto-synthesizes Bronze data; tests and users must now generate Bronze fixtures explicitly (e.g., via `python scripts/generate_bronze_samples.py --all`).
 
 ### Removed
-- `core.samples.bootstrap` and its automatic fixture creation; sampledata must already exist before running pytest (use `scripts/generate_sample_data.py` or a similar workflow).
+- `core.samples.bootstrap` and its automatic fixture creation; sampledata must already exist before running pytest (use `scripts/generate_bronze_samples.py --all` or a similar workflow).
 
 ### Migration Guidance
 Add explicit `platform.bronze.local_path`; rename `source.api.url` to `base_url`; specify `source.api.endpoint`; replace calls to `write_silver_outputs` wrapper with `DefaultSilverArtifactWriter().write(...)` before v1.3.0; eliminate `--stream`/`--resume` invocations (chunking is automatic via `SilverProcessor`).

@@ -54,10 +54,12 @@ from pipelines.lib.curate import (
     union_dedupe,
 )
 from pipelines.lib.io import (
+    OutputMetadata,
     ReadResult,
     SilverOutputMetadata,
     WriteMetadata,
     get_latest_partition,
+    infer_column_types,
     list_partitions,
     read_bronze,
     write_partitioned,
@@ -156,10 +158,12 @@ __all__ = [
     "rank_by_keys",
     "union_dedupe",
     # I/O
+    "OutputMetadata",
     "ReadResult",
     "SilverOutputMetadata",
     "WriteMetadata",
     "get_latest_partition",
+    "infer_column_types",
     "list_partitions",
     "read_bronze",
     "write_partitioned",

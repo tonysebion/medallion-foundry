@@ -1,175 +1,84 @@
 # medallion-foundry
 
-**Extract data from APIs, databases, or files → Bronze layer → Silver curated datasets**
+**From source → Bronze → Silver with one Python package.**
 
----
+## Quick start (5 minutes)
 
-## 🚀 **Quick Start (5 minutes)**
+1. **Install** (Windows shown here, adapt for macOS/Linux):
 
-**New to data pipelines?** Get running in 5 minutes:
+   ```powershell
+   python -m venv .venv
+   .venv\Scripts\activate
+   pip install -e .
+   ```
 
-```bash
-# 1. Install
-pip install -r requirements.txt
+2. **Discover built-in pipelines**:
 
-# 2. Try the demo
-python scripts/run_demo.py
+   ```powershell
+   python -m pipelines --list
+   ```
 
-# 3. Copy a minimal config for your data
-cp docs/examples/configs/minimal/minimal_api_example.yaml config/my_api.yaml
-# Edit config/my_api.yaml with your API details
+3. **Run an example**:
 
-# 4. Run
-python bronze_extract.py --config config/my_api.yaml --date 2025-11-27
-```
+   ```powershell
+   python -m pipelines examples.retail_orders --date 2025-01-15
+   ```
 
-**Prefer other sources?** Use minimal configs for your source type:
-- REST API: `docs/examples/configs/minimal/minimal_api_example.yaml`
-- Database: `docs/examples/configs/minimal/minimal_db_example.yaml`
-- CSV/JSON Files: `docs/examples/configs/minimal/minimal_file_example.yaml`
+4. **Validate before writing**:
 
-**That's it!** Check `output/` for your Bronze data, then run Silver for curated datasets.
+   ```powershell
+   python -m pipelines examples.retail_orders --date 2025-01-15 --dry-run
+   python -m pipelines examples.retail_orders --date 2025-01-15 --check
+   ```
 
----
+5. **Generate canonical fixtures**:
 
-## 🎯 **What Do You Want To Do?**
+   ```powershell
+   python scripts/generate_bronze_samples.py --all
+   python scripts/generate_silver_samples.py --all
+   ```
 
-### **I want to extract data from...**
-
-| Data Source | Quick Config | Example |
-|-------------|--------------|---------|
-| **REST API** | `docs/examples/configs/examples/api_example.yaml` | GitHub API, Shopify, Stripe |
-| **Database** | `docs/examples/configs/examples/db_example.yaml` | SQL Server, PostgreSQL |
-| **CSV/JSON Files** | `docs/examples/configs/examples/file_example.yaml` | Local files, S3 buckets |
-| **Custom Source** | `docs/examples/configs/examples/custom_example.yaml` | Build your own extractor |
-
-### **I want to...**
-
-- **Learn the basics** → [README Quick Start](../README.md)
-- **Customize configs** → [Copy & Customize Guide](usage/beginner/COPY_AND_CUSTOMIZE.md)
-- **Set up production** → [Intent Owner Guide](usage/onboarding/intent-owner-guide.md)
-- **Choose the right pattern** → [Pattern Picker](usage/patterns/QUICK_REFERENCE.md) - Bronze patterns + Silver models
-- **Build resilient pipelines** → [Error Handling Guide](guides/error_handling.md) - Retry, rate limiting, circuit breakers  
-  → [Retry Configuration Guide](guides/retry_configuration.md)  
-  → [API Rate Limiting Guide](guides/api_rate_limiting.md)
-- **Troubleshoot** → [Config Doctor](framework/operations/CONFIG_DOCTOR.md)
-- **Set up S3 storage** → [S3 Setup Guide](framework/operations/s3-setup-guide.md)
-- **Understand Silver models** → [Silver Models Explained](usage/patterns/silver-models-explained.md)
-
----
-
-## 📚 **Learning Paths**
-
-### **Path 1: Just Get Data Moving (Beginner)**
-1. [README Quick Start](../README.md) - Run sample data
-2. [Copy & Customize](usage/beginner/COPY_AND_CUSTOMIZE.md) - Adapt for your source
-3. [Intent Owner Guide](usage/onboarding/intent-owner-guide.md) - Define your dataset
-
-### **Path 2: Production Data Pipeline (Advanced)**
-1. [Intent Owner Guide](usage/onboarding/intent-owner-guide.md) - Define your dataset
-2. [Pattern Picker](usage/patterns/QUICK_REFERENCE.md) - Choose Bronze pattern + Silver model
-3. [Config Doctor](framework/operations/CONFIG_DOCTOR.md) - Pre-flight checks
-
-### **Path 3: Extend the Framework (Developer)**
-1. [Architecture](framework/architecture.md) - System design
-2. [Custom Extractor Examples](framework/extending/custom-extractor-examples.md) - Build your own extractors
-3. [Testing](framework/operations/TESTING.md) - Quality assurance
-
----
-
-## 🔧 **Common Tasks**
+## Common tasks
 
 | Task | Command | Notes |
-|------|---------|-------|
-| **Extract data** | `python bronze_extract.py --config config/my.yaml --date YYYY-MM-DD` | Creates Bronze layer |
-| **Create Silver** | `python silver_extract.py --config config/my.yaml --date YYYY-MM-DD` | Curates Bronze data |
-| **Validate config only** | `python bronze_extract.py --config config/my.yaml --validate-only` | Check YAML syntax and schema |
-| **Dry run (test connections)** | `python bronze_extract.py --config config/my.yaml --dry-run` | Test connections without extraction |
-| **Run demo** | `python scripts/run_demo.py` | Safe experimentation with sample data |
+| --- | --- | --- |
+| List pipelines | `python -m pipelines --list` | Includes Bronze/Silver availability and descriptions |
+| Run Bronze + Silver | `python -m pipelines <module> --date YYYY-MM-DD` | Module mirrors `pipelines/<path>.py` (e.g., `examples.retail_orders`) |
+| Run Bronze only | `python -m pipelines <module>:bronze --date YYYY-MM-DD` | |
+| Run Silver only | `python -m pipelines <module>:silver --date YYYY-MM-DD` | |
+| Dry run | Add `--dry-run` | Validates config without writing anything |
+| Pre-flight checks | Add `--check` | Validates config + connectivity |
+| Explain run | Add `--explain` | Shows steps without executing |
+| Override targets | Add `--target ./local_output/` | Honors `BRONZE_TARGET_ROOT` / `SILVER_TARGET_ROOT` semantics |
+| Test a connection | `python -m pipelines test-connection claims_db --host ... --database ...` | Supports `--type` (mssql/postgres) |
+| Inspect source | `python -m pipelines inspect-source --file ./data.csv` | Prints schema + suggested keys |
+| Generate pipeline data | `python -m pipelines generate-sample examples.retail_orders --rows 250 --output ./sample_data/` | |
+| Bootstrap pipeline | `python -m pipelines new claims.header --source-type database_mssql` | Creates scaffolded file |
+| Interactive creator | `python -m pipelines.create` | Prompts for system, source, Silver config, outputs ready-to-run file |
 
----
+## Reference links
 
-## 📖 **Reference**
+- `docs/pipelines/GETTING_STARTED.md` — Pipeline primer, Bronze/Silver snippets, and patterns tailored for pipeline authors.
+- `pipelines/QUICKREF.md` — Operational cheatsheet with storage tips, environment variables, and troubleshooting topics.
+- `docs/scripts/README.md` — How to regenerate `sampledata/bronze_samples` and `sampledata/silver_samples`.
+- `docs/usage/` — Ownership guides, onboarding checklists, and pattern references that complement the pipeline-first workflow.
+- `docs/framework/` — Architecture, operations playbooks, testing strategy, and migration guides.
 
-- [Configuration Reference](framework/reference/CONFIG_REFERENCE.md) - All config options
-- [Glossary](framework/reference/glossary.md) - Key terms and concepts
-- [API Documentation](api/core.md) - Code reference
-- [Operations Playbook](framework/operations/OPS_PLAYBOOK.md) - Production runbooks
-- [Troubleshooting Guide](framework/operations/troubleshooting-guide.md) - Common issues & solutions
-- [Error Handling & Resilience](guides/error_handling.md) - Retry, circuit breaker, rate limiting
-- [Scripts Overview](scripts/README.md) - Utility scripts reference
+## System requirements & compatibility
 
----
+| Item | Notes |
+| --- | --- |
+| Python | 3.9+ |
+| Storage backends | Local filesystem, `s3://`, `abfss://`, `wasbs://`, `az://` |
+| Credentials | AWS env vars or Azure account/service principal credentials |
+| Windows support | Fully supported; CLI examples above use PowerShell |
 
-## ⚙️ **System Requirements & Compatibility**
+## Need help?
 
-### Python Version Matrix
+1. `python -m pipelines --list` to confirm your module is discoverable.
+2. `python -m pipelines <module> --date YYYY-MM-DD --dry-run --check` before running anything that writes.
+3. Use `scripts/generate_bronze_samples.py` + `scripts/generate_silver_samples.py` to refresh fixtures for regression tests.
+4. Inspect sources via `python -m pipelines inspect-source --file ./data.csv` when onboarding new files.
+5. Roll your own pipeline and then run it with `python -m pipelines myteam.orders --date YYYY-MM-DD`.
 
-| Python | Status | Notes |
-|--------|--------|-------|
-| 3.9 | ✅ Recommended | Minimum supported version; best compatibility |
-| 3.10 | ✅ Supported | Recommended for production |
-| 3.11 | ✅ Supported | Recommended for production |
-| 3.12 | ✅ Supported | Tested in CI/CD |
-| 3.13 | ✅ Supported | Latest version supported |
-| 3.8 | ❌ Not Supported | Uses Python 3.9+ features (f-strings, type hints) |
-
-**Action:** Use `python3.9` or later. Run `python --version` to verify.
-
-### Storage Backends
-
-| Backend | Status | Min Requirements |
-|---------|--------|------------------|
-| **Local Filesystem** | ✅ | Python 3.9+, read/write permissions |
-| **AWS S3** | ✅ | boto3, AWS credentials, IAM permissions |
-| **Azure Blob/ADLS** | ✅ | Azure SDK, connection string or managed identity |
-
----
-
-## 📋 **Intent Configs vs Legacy Configs**
-
-Modern medallion-foundry uses **Intent Configs** – single YAML files containing both Bronze extraction and Silver promotion definitions.
-
-### Intent Config (Recommended)
-```yaml
-# Single file: config/my_dataset.yaml
-bronze:
-  source_type: api
-  system: my_system
-  # ... Bronze config ...
-
-silver:
-  entity_kind: event
-  # ... Silver config ...
-```
-
-**Usage:**
-```bash
-python bronze_extract.py --config config/my_dataset.yaml
-python silver_extract.py --config config/my_dataset.yaml
-```
-
-### Legacy Approach (Not Recommended)
-Separate files for Bronze and Silver – leads to sync issues and duplication.
-
-```
-config/
-  ├── my_dataset_bronze.yaml   # Bronze only
-  └── my_dataset_silver.yaml   # Silver only
-```
-
-**Migration:** Move to intent configs by consolidating separate files into a single file with both `bronze:` and `silver:` sections. See the example configs in `docs/examples/configs/examples/` for reference patterns.
-
----
-
-## 🆘 **Need Help?**
-
-**Stuck?** Try these in order:
-1. Run `python scripts/run_demo.py` - See working examples
-2. Check [Copy & Customize Guide](usage/beginner/COPY_AND_CUSTOMIZE.md) - Step-by-step config adaptation
-3. Use [Config Doctor](framework/operations/CONFIG_DOCTOR.md) - Automated troubleshooting
-4. Search [Pattern Reference](usage/patterns/QUICK_REFERENCE.md) - Find Bronze + Silver combinations
-5. Check [Troubleshooting Guide](framework/operations/troubleshooting-guide.md) - Detailed problem solving
-6. Review [S3 Setup Guide](framework/operations/s3-setup-guide.md) - Storage configuration
-
-**Still stuck?** Check the [examples](../examples/) directory for working configs.
+If you run into issues, the troubleshooting guides live under `docs/framework/operations/`.

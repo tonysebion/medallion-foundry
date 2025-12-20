@@ -1,7 +1,7 @@
 # Intent Lifecycle Flow
 
 1. **Generate or locate Bronze samples**
-- Run `python scripts/generate_sample_data.py` to populate `sampledata/source_samples`.
+- Run `python scripts/generate_bronze_samples.py --all` to populate `sampledata/bronze_samples`.
    - When starting from the owner intent template, run `python scripts/expand_owner_intent.py --config docs/examples/configs/templates/owner_intent_template.yaml` to see which folders the intent resolves to before you run Bronze.
    - Each intent YAML (e.g., `file_complex.yaml`) points its `bronze.path_pattern` or `source.file.path` into one of those folders, so Bronze always reads the same layout (`system=<system>/table=<entity>/pattern=<pattern>/dt=YYYY-MM-DD/…`).
 

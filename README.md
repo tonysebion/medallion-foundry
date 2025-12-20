@@ -1,569 +1,126 @@
 # medallion-foundry
 
-`medallion-foundry` is a **production-ready**, config-driven Python framework for landing data from **APIs**, **databases**, or **custom sources** into a **Bronze layer** with **pluggable storage backends** (S3, Azure, local filesystem), using conventions that support future analytics platforms and medallion-style architectures.
+`medallion-foundry` is an opinionated Python framework for building Bronze → Silver pipelines that stay light, declarative, and orchestration neutral. You define data sources with `BronzeSource`, curate them with `SilverEntity`, then run everything through the `pipelines` CLI or your own lightweight orchestrator.
 
-This framework is intentionally lightweight and orchestration-neutral: you can run it from any scheduler or workflow orchestrator that can invoke a Python CLI.
+## Highlights
 
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![CI](https://github.com/tonysebion/medallion-foundry/actions/workflows/ci.yml/badge.svg)](https://github.com/tonysebion/medallion-foundry/actions)
+- **Declarative layers** — `pipelines.lib.BronzeSource` lets you land raw data, add telemetry, enforce load patterns, and emit `_metadata.json`/`_checksums.json`. `SilverEntity` deduplicates by natural keys, applies SCD1/SCD2 history, and writes standardized Silver output.
+- **Rich source coverage** — Files (CSV, Parquet, space-delimited, fixed-width), MSSQL/Postgres, and REST APIs all sit behind the same interface, work with reusable pagination & pagination state helpers, and honor retry, rate limiting, and watermark configuration.
+- **Pluggable storage** — Target local paths, S3 buckets, or Azure Blob/ADLS via the storage helpers (`pipelines.lib.storage`), and optionally override `BRONZE_TARGET_ROOT`/`SILVER_TARGET_ROOT` in CI.
+- **Pipeline-first CLI** — `python -m pipelines` discovers everything under `pipelines/`, supports Bronze-only (`:bronze`) and Silver-only (`:silver`) runs, dry runs, pre-flight checks, explanations, and has helpers for testing connections, generating samples, and creating new pipelines.
+- **Sample data & helpers** — Scripts such as `scripts/generate_bronze_samples.py`, `scripts/generate_silver_samples.py`, and `scripts/generate_pattern_test_data.py` recreate canonical test data so you can exercise Bronze→Silver flows locally.
+- **Documentation & quality** — `pipelines/QUICKREF.md`, `docs/index.md`, and `docs/pipelines/GETTING_STARTED.md` walk through usage, plus there are guides for resilience, storage, and operations across `docs/`.
 
-## Key Features
+## Quick start
 
-### Core Capabilities
-- **Multiple Source Types** – APIs (REST), databases (SQL), local files, or custom Python extractors
-- **Authentication** – Bearer tokens, API keys, Basic auth, and custom headers
-- **Pagination** – Offset, page, cursor, or none
-- **Incremental Loading** – Bronze deltas capture source changes while metadata tracks load patterns for safe replays
-- **Multiple Formats** – Parquet (Snappy) for analytics; optional CSV for debugging
-- **Pluggable Storage** – S3, Azure Blob/ADLS, local filesystem
-- **Resilience** – Unified retry + circuit breaker + rate limiting
-- **Error Taxonomy** – Standardized error codes for routing & ops
-- **Structured Logging & Tracing** – Rich logs plus optional OpenTelemetry spans
-- **Production Ready** – Idempotent writes, atomic Silver promotion, consistent layout
+1. **Prepare the environment**
 
-### Enhanced Features
-- **File Size Control** – Configurable `max_file_size_mb` (128MB–1GB) and row splitting
-- **Intraday Partitioning** – Hourly / batch-id / timestamp partition strategies
-- **Parallel Extraction** –
-  - Config-level: multi-thread across configs (`--parallel-workers`)
-  - Chunk-level: concurrent chunk processing (`parallel_workers`)
-- **Async HTTP Path** – httpx-based extractor with prefetch pagination & backpressure
-- **Batch Metadata** – Automatic `_metadata.json` for monitoring and idempotency
-- **Reliable Reruns** – `_metadata.json` and `_checksums.json` ensure Bronze and Silver stay in sync so retrying a run is safe.
-- **Benchmark Harness** – Performance scenarios (sync vs async, rate limit impact)
-- **Extensible Architecture** – Clean interfaces for new storage backends or extractors
-
-*See [docs/usage/patterns/ENHANCED_FEATURES.md](docs/usage/patterns/ENHANCED_FEATURES.md) and [docs/usage/PERFORMANCE_TUNING.md](docs/usage/PERFORMANCE_TUNING.md) for deep dives.*
-
-Need a concrete intent example before touching Python? Follow `docs/usage/onboarding/intent-owner-guide.md`—it bundles the owner intent template, the generated pattern matrix, the expand-intent helper, and a safe-first validation (`python bronze_extract.py --config ... --validate-only` to check syntax, or `--dry-run` to test connections) into one narrative. After the guide, the new dataset checklist and Bronze readiness checklist list every checkbox you need before declaring a dataset “ready”. Use `docs/index.md` to jump to the setup track (environment, deps, first-run check), maintainer track (`silver_patterns.md`, `pipeline_engine.md`, etc.), or the owner track depending on whether you’re prepping the install, evolving the engine, or filling out configs. For a bird’s-eye view of the usage docs, start at `docs/usage/index.md` to see how beginner, onboarding, and pattern sections fit together.
-
-## Architecture Principles
-
-- **Multiple CLIs, unified config-driven approach**
-  Three entrypoints handle the medallion architecture:
-  - `bronze_extract.py` – Extract data from APIs/databases to Bronze layer
-  - `silver_extract.py` – Promote Bronze data to Silver layer with transformations
-  - `silver_join.py` – Join Silver assets into curated datasets
-
-- **Standard Bronze layout**
-  All data lands in a predictable directory structure (by default):
-
-  ```text
-  bronze/system=<system>/table=<table>/dt=YYYY-MM-DD/part-0001.parquet
-  ```
-
-- **Config-driven rigor**
-  Each config file has:
-  - A **`platform`** section: owned by the data platform team (buckets, prefixes, defaults).
-  - A **`source`** section: owned by product/domain teams (API/DB details, query, table name, etc.).
-
-- **Extractor interface**
-  Implement a simple `BaseExtractor` interface to support new source types, while reusing the same Bronze writing, S3 upload, and partitioning logic.
-
-- **Formats and file splitting**
-  - CSV for human-readable debugging (optional)
-  - Parquet (with Snappy) for analytics
-  - Configurable `max_rows_per_file` to split large extracts into part files (e.g., `part-0001`, `part-0002`, ...).
-
-- **Orchestration friendly**
-  - CLI takes `--config` and optional `--date`
-  - Validation flags: `--dry-run` (test connections), `--validate-only` (check syntax)
-  - Uses exit codes (0 = success, non-zero = failure)
-  - Structured logging with levels and timestamps
-
-- **Pattern-driven guidance**
-  Source and semantic owners can lean on `docs/framework/silver_patterns.md` and `docs/usage/onboarding/new_dataset_checklist.md` to describe entity_kind, history_mode, input_mode, natural keys, timestamps, attributes, and advanced controls for every dataset. These docs demonstrate how Bronze and Silver work together so configs become intent-driven rather than procedural.
-
-## Storage Configuration Patterns
-
-The framework supports multiple storage backends with a unified abstraction. Configuration patterns differ based on your target:
-
-### Local Filesystem (Development/Testing)
-```yaml
-bronze:
-  options:
-    local_output_dir: ./output  # All outputs go here; no cloud credentials needed
-```
-
-### S3 (AWS)
-```yaml
-platform:
-  storage:
-    source:      # Where to read source files
-      backend: s3
-      bucket: my-data-bucket
-      prefix: source_data/
-    bronze:      # Where to write Bronze layer
-      backend: s3
-      bucket: my-data-bucket
-      prefix: bronze/
-    silver:      # Where to write Silver layer
-      backend: s3
-      bucket: my-data-bucket
-      prefix: silver/
-```
-
-### Azure Blob Storage / ADLS
-```yaml
-platform:
-  storage:
-    source:
-      backend: azure
-      container: source-data
-      path: source_data/
-    bronze:
-      backend: azure
-      container: data-lake
-      path: bronze/
-```
-
-**Migration Path:** Start with `local_output_dir` for testing, then switch to `storage.source/bronze/silver` configuration for production cloud deployments.
-
-## Quick Start
-
-### Testing Your API (For Product/API Teams)
-
-**Not familiar with Python?** No problem! The quick start sections above have complete walkthroughs.
-
-**Quick summary:**
-
-```bash
-# 1. Setup (one-time, ~3 minutes), use Python 3.9 or later (64-bit install)
-which python3.9  # or python3 --version (should be 3.9+)
-python3.9 -m venv .venv
-.venv\Scripts\activate  # Windows
-pip install -r requirements.txt
-
-# 2. Copy and edit the quick test config
-cp docs/examples/configs/examples/file_example.yaml config/test.yaml
-# Edit config/test.yaml with your API details
-
-# 3. Set your token
-export MY_API_TOKEN="your-token-here"  # Linux/Mac
-$env:MY_API_TOKEN="your-token-here"    # Windows
-
-# 4. Run
-python bronze_extract.py --config config/test.yaml
-
-# 5. Check ./output/ folder - if you see data, you're done!
-```
-
-**See the quick start sections above for detailed instructions.**
-
-### Offline Local Quick Test
-
-Need proof the tooling works but don't have API credentials yet? Use the bundled sample data.
-
-```bash
-# 0. (Once) prepare the sandbox data (produces the 60-day, 250K-row default with linear growth + updates)
-python scripts/generate_sample_data.py
-
-# (Optional) Customize the span/scale or disable updates via the CLI flags shown nearby.
-
-# 1. Run Bronze with the file-based config
-python bronze_extract.py --config docs/examples/configs/examples/file_example.yaml --date 2025-11-13
-
-# 2. Promote the same run into Silver
-python silver_extract.py --config docs/examples/configs/examples/file_example.yaml --date 2025-11-13
-
-# 3. Inspect the outputs
-tree output/system=retail_demo
-tree silver_output/domain=retail_demo
-```
-
-This workflow uses only local files, so a non-Python user can validate everything end-to-end before wiring real APIs or databases.
-
----
-
-### Cloud Quick Test (S3)
-
-For cloud-native deployments, use S3-based sample data. Requires AWS credentials and an S3 bucket with sample data uploaded.
-
-**Prerequisites:**
-- AWS credentials configured (via `aws configure` or environment variables)
-- S3 bucket with sample data at `source_samples/`, `bronze_samples/`, and `silver_samples/` prefixes
-- Upload local samples to S3: `aws s3 cp sampledata/ s3://your-bucket/ --recursive`
-
-```bash
-# 0. (Once) prepare the sandbox data locally, then upload to S3
-python scripts/generate_sample_data.py
-aws s3 cp sampledata/source_samples/ s3://your-bucket/source_samples/ --recursive
-
-# 1. Run Bronze with the S3-based config
-python bronze_extract.py --config docs/examples/configs/examples/s3_example.yaml --date 2025-11-13
-
-# 2. Promote the same run into Silver
-python silver_extract.py --config docs/examples/configs/examples/s3_example.yaml --date 2025-11-13
-
-# 3. Inspect the outputs in S3
-aws s3 ls s3://your-bucket/bronze_samples/
-aws s3 ls s3://your-bucket/silver_samples/
-```
-
-This workflow validates the full pipeline using cloud storage, ideal for production-like testing.
-
----
-
-### Intent Configs (Unified Bronze + Silver)
-
-Modern medallion-foundry configs bundle Bronze and Silver definitions in a single YAML file for easier management and consistency. This is the recommended approach for all new projects.
-
-**Intent Config Structure:** Each file contains both `bronze:` and `silver:` sections:
-```yaml
-bronze:          # Bronze extraction layer definition
-  source_type: api
-  # ... Bronze config ...
-
-silver:          # Silver promotion layer definition (optional)
-  entity_kind: event
-  # ... Silver config ...
-```
-
-To exercise the example configurations under `docs/examples/configs`, run Bronze and Silver separately with the same YAML (each config now has both sections). For example:
-
-```bash
-python bronze_extract.py --config docs/examples/configs/advanced/enhanced_example.yaml --date 2025-11-13
-python silver_extract.py --config docs/examples/configs/advanced/enhanced_example.yaml --date 2025-11-13
-```
-
-Repeat those steps for `api_example.yaml`, `db_complex.yaml`, `file_cdc_example.yaml`, etc., to cover different entity kinds/load patterns. Bronze outputs always land under `output/env=<environment>/system=<system>/table=<entity>/…` (defaulting to no `env=` when none is specified); Silver promotes into `silver/env=<environment>/domain=<domain>/entity=<entity>/v<version>/<load_partition>=<date>/…`. Setting `environment` at the top level of the intent config ensures Bronze and Silver placements follow the same hierarchy.
-
-Need a single command to run Bronze and Silver together? Use `scripts/run_intent_config.py --config docs/examples/configs/examples/<name>.yaml --date 2025-11-13`; it shells out to the Bronze and Silver CLIs so you can treat each intent config like a runnable script bundle. Use `--skip-bronze` or `--skip-silver` if you only want one leg.
-
-The integration tests (`tests/test_integration_samples.py`) already automate this loop; read it for how we rewrite file paths and validate the Tiered outputs. See `docs/framework/reference/intent-lifecycle.md` for the canonical Bronze→Silver flow, directory mapping, and metadata expectations that keep the manifesto-lived experience calm.
-
----
-
-### Full Setup (For Data Teams)
-
-Complete production setup:
-
-1. **Install dependencies:**
-
-   ```bash
+   ```powershell
    python -m venv .venv
-   source .venv/bin/activate  # or .venv\Scripts\activate on Windows
-   pip install -r requirements.txt
+   .venv\Scripts\activate
+   pip install -e .
    ```
 
-2. **Create a config file:**
+2. **List the bundled pipelines**
 
-   ```bash
-   cp docs/examples/configs/examples/api_example.yaml config/my_api.yaml
-   # Edit config/my_api.yaml with your settings
+   ```powershell
+   python -m pipelines --list
    ```
 
-3. **Set environment variables:**
+3. **Run a sample pipeline**
 
-   ```bash
-   export MY_API_TOKEN="your-token-here"
+   ```powershell
+   python -m pipelines examples.retail_orders --date 2025-01-15
    ```
 
-4. **Run an extract:**
+4. **Validate before writing**
 
-   ```bash
-   # Single extraction
-   python bronze_extract.py --config config/my_api.yaml --date 2025-01-12
-
-   # Multiple sources in parallel
-   python bronze_extract.py \
-     --config config/sales.yaml,config/marketing.yaml,config/products.yaml \
-     --parallel-workers 3 \
-     --date 2025-01-12
+   ```powershell
+   python -m pipelines examples.retail_orders --date 2025-01-15 --dry-run
+   python -m pipelines examples.retail_orders --date 2025-01-15 --check
    ```
 
-5. **Check output:**
+5. **Generate sample data**
 
-   ```bash
-   ls -la output/system=*/table=*/dt=*/
-   # With hourly partitioning:
-   ls -la output/system=*/table=*/dt=*/hour=*/
+   ```powershell
+   python scripts/generate_bronze_samples.py --all
+   python scripts/generate_silver_samples.py --all
    ```
 
-## ?? What's Included
+6. **Create new pipelines**
 
-### API Extractor
-- ? Bearer token authentication
-- ? API key authentication
-- ? Basic authentication
-- ? Offset-based pagination
-- ? Page-based pagination
-- ? Cursor-based pagination
-- ? Retry logic with exponential backoff
-- ? Custom headers support
-- ? Flexible response parsing
+   ```powershell
+   python -m pipelines create                     # Interactive wizard
+   python -m pipelines new finance.invoices --source-type database_mssql
+   ```
 
-### Database Extractor
-- ? SQL Server, PostgreSQL, MySQL support (via ODBC)
-- ? Incremental loading with cursor tracking
-- ? State file management
-- ? Batch fetching
-- ? Automatic WHERE clause injection
-- ? Retry logic for failed queries
+## Building a pipeline
 
+Pipelines live under the `pipelines/` package. Use the templates in `pipelines/templates/` or copy the examples in `pipelines/examples/` as starting points. A minimal pipeline imports the core dataclasses:
 
-### Local File Extractor
-- Read CSV, TSV, JSON, JSONL, or Parquet files that live next to your code
-- Optional column selection and `limit_rows` keep fixtures tiny for tests
-- Reuses the same `source.run` options so Bronze writing stays identical
-- Great for demos, workshops, or development on machines without network access
+```python
+from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
+from pipelines.lib.silver import SilverEntity, EntityKind, HistoryMode
 
-```yaml
-source:
-  type: file
-  system: local_demo
-  table: offline_sample
-  file:
-    path: ./data/sample.csv
-    format: csv          # csv, tsv, json, jsonl, parquet (auto if omitted)
-    columns: ['id', 'name']
-    limit_rows: 100
-  run:
-    write_csv: true
-    write_parquet: false
+bronze = BronzeSource(...)
+silver = SilverEntity(...)
+
+def run(run_date: str, **kwargs):
+    return {
+        "bronze": bronze.run(run_date, **kwargs),
+        "silver": silver.run(run_date, **kwargs),
+    }
 ```
 
-- ### Load Patterns & Silver Promotion
-- Configure the Bronze CLI with `--load-pattern` (or `source.run.load_pattern`) to label outputs as `full`, `cdc`, or `current_history`
-- Bronze partition paths now include the load pattern (`system=foo/table=bar/pattern=current_history/...`) so downstream jobs can select data easily
-- Use the new `silver_extract.py` helper to pull Bronze chunks into curated Silver tables; it mirrors the partition layout and writes metadata for later stages
-- When Bronze partitions are large, let `SilverProcessor` handle chunking; the retired streaming/resume flow is described in `docs/framework/operations/legacy-streaming.md`.
-- Example:
+`LoadPattern`, `SourceType`, `EntityKind`, and `HistoryMode` are typed enums, and the `pipelines.lib.runner.pipeline` decorator wires consistent logging, timing, and dry-run semantics.
 
-```bash
-# Bronze full snapshot with explicit pattern override
-python bronze_extract.py --config config/my_api.yaml --load-pattern full
+## CLI at a glance
 
-# Promote a Bronze partition into Silver, building current/history views
-python silver_extract.py \
-  --bronze-path output/system=my/table=orders/pattern=current_history/dt=2025-11-14/ \
-  --silver-base ./silver_output \
-  --primary-key order_id \
-  --order-column updated_at
+| Command | Description |
+| --- | --- |
+| `python -m pipelines <module>` | Run both Bronze and Silver. Module names mirror `pipelines/<path>.py`, e.g., `examples.retail_orders`. |
+| `python -m pipelines <module>:bronze` | Run Bronze only. |
+| `python -m pipelines <module>:silver` | Run Silver only. |
+| `--date YYYY-MM-DD` | Required when executing a pipeline. |
+| `--dry-run` | Skip writes but still validate configuration. |
+| `--check` | Validate configuration + connectivity without running. |
+| `--explain` | Describe the pipeline plan without touching data. |
+| `--target <path>` | Override target roots (uses `BRONZE_TARGET_ROOT` / `SILVER_TARGET_ROOT` semantics). |
+| `-v`, `--json-log`, `--log-file` | Logging controls. |
+| `python -m pipelines --list` | Show every discovered pipeline along with available layers. |
+| `python -m pipelines test-connection <name>` | Validate a database connection (supports `--host`, `--database`, `--type`). |
+| `python -m pipelines inspect-source --file ./data.csv` | Inspect an input file and suggest natural keys/timestamps. |
+| `python -m pipelines generate-sample <module>` | Generate fake rows for the named pipeline (`--rows`, `--output`). |
+| `python -m pipelines new <module> --source-type ...` | Create a scaffold file with the requested source type. |
+| `python -m pipelines.create` | Launch interactive wizard that prompts for system, entity, source type, and Silver settings. |
+
+## Sample data and helpers
+
+- `scripts/generate_bronze_samples.py` replays every load pattern into `sampledata/bronze_samples/sample=<pattern>/dt=<date>/` with `_metadata.json` and `_checksums.json`.
+- `scripts/generate_silver_samples.py` reads those Bronze samples and emits curated Silver assets in `sampledata/silver_samples/`.
+- `scripts/generate_pattern_test_data.py` builds ad-hoc batch series (snapshot, incremental, CDC, SCD2) for verification or manual experiments.
+- Reference sample pipelines live under `pipelines/examples/` and use `sampledata/bronze_samples` as input.
+
+## Environment hooks
+
+- `BRONZE_TARGET_ROOT` / `SILVER_TARGET_ROOT` — Redirect Bronze/Silver outputs for local development or testing.
+- `PIPELINE_STATE_DIR` — Defaults to `.state/` and houses watermark/checkpoint files.
+- `${VAR_NAME}` inside pipeline `options` respects environment expansion via `pipelines.lib.env.expand_env_vars`.
+- AWS/Azure credentials (e.g., `AWS_ACCESS_KEY_ID`, `AZURE_STORAGE_ACCOUNT_KEY`) power cloud storage helpers.
+
+## Documentation & further reading
+
+- `docs/index.md` — Guided table of contents for beginners, owners, and developers.
+- `docs/pipelines/GETTING_STARTED.md` — Pipeline-specific walkthrough with Bronze/Silver snippets and patterns.
+- `pipelines/QUICKREF.md` — CLI cheatsheet and operational tips.
+- `docs/scripts/README.md` — Sample data generation & tooling reference.
+- `docs/usage/`, `docs/guides/`, and `docs/framework/` — Deep dives on onboarding, resilience, patterns, and operations.
+
+## Testing & validation
+
+```powershell
+pip install -e .
+python -m pytest tests
 ```
 
-### Sample Data Sets
-- Regenerate fixtures anytime with `python scripts/generate_sample_data.py`
-- **Local paths**: Full snapshot (500 rows): `sampledata/source_samples/pattern1_full_events/system=retail_demo/table=orders/pattern=full/dt=2025-11-01/`
-- **S3 paths** (after upload): `s3://your-bucket/source_samples/pattern1_full_events/system=retail_demo/table=orders/pattern=full/dt=2025-11-01/`
-- Full snapshot (500 rows): `sampledata/source_samples/pattern1_full_events/system=retail_demo/table=orders/pattern=full/dt=2025-11-01/`
-- CDC stream (400 events): `sampledata/source_samples/pattern2_cdc_events/system=retail_demo/table=orders/pattern=cdc/dt=2025-11-02/`
-- Current + history mix (800 rows): `sampledata/source_samples/pattern3_scd_state/system=retail_demo/table=orders/pattern=current_history/dt=2025-11-03/`
-- Silver curated samples per model: `sampledata/silver_samples/<load_pattern>/<silver_model>/domain=<domain>/entity=<entity>/v<version>/load_date=<YYYY-MM-DD>/`. Run `python scripts/generate_silver_samples.py --formats both` to regenerate the Bronze -> Silver outputs for every supported Silver model.
-- Bronze hybrid samples now include both point-in-time and cumulative variations per pattern (see `hybrid_cdc_point`, `hybrid_cdc_cumulative`, `hybrid_incremental_point`, `hybrid_incremental_cumulative`) plus rotated references; rerun `python scripts/generate_sample_data.py` to refresh them.
-- Documentation structure:
-  - **Architecture overview**: `docs/ARCHITECTURE.md` sketches Bronze/Silver/storage flows plus the plugin registry and sample references.
-  - **Operations & governance**: `docs/framework/operations/OPERATIONS.md` describes validation, sample generation, storage policy, and log/metric practices so different roles know where to look.
-- **Silver Join**: Join two existing Silver assets with `silver_join.py`, including configurable `join_key_pairs`, `join_strategy`, `quality_guards`, spill directories, checkpoints (`progress.json`), and richer metadata (column lineage, chunk metrics) that trace back to the Bronze inputs. Sample outputs in `docs/examples/data/silver_join_samples/v1` exercise every combination of inputs/formats and are generated with `python scripts/generate_silver_join_samples.py --version 1 --formats both`. See `docs/SILVER_JOIN.md` and `docs/examples/configs/advanced/silver_join_example.yaml` for configuration patterns.
-- Matching configs: `file_example.yaml` (full), `file_cdc_example.yaml` (cdc), `file_current_history_example.yaml`, `s3_example.yaml` (S3)
-
-### Sample Configs
-- `docs/examples/configs/` contains starter configs in `examples/` plus advanced versions in `advanced/` that showcase options for each extractor type (API, DB, file, custom). Use the examples configs to get Bronze/Silver running quickly and refer to the advanced ones when you need to enable partitioning, normalization, error handling, or chunk-friendly tuning; `SilverProcessor` chunking happens automatically (legacy streaming flags are now documented in `docs/framework/operations/legacy-streaming.md`).
-
-### Multi-Source Pipelines (One YAML, Many Jobs)
-
-Group related extracts into a single config by using the `sources:` array. Shared settings (storage, schema, normalization) live at the top, while each entry supplies only the bits that differ.
-
-```yaml
-platform:
-  bronze: { ... }
-silver:
-  output_dir: ./silver_output
-sources:
-  - name: claims_header
-    source:
-      system: claims
-      table: header
-      type: file
-      file: { path: ./data/claim_header.csv, format: csv }
-      run: { load_pattern: full }
-    silver:
-      domain: claims
-      entity: claim_header
-  - name: claims_cdc
-    source:
-      system: claims
-      table: header_cdc
-      type: file
-      file: { path: ./data/claim_header_cdc.csv, format: csv }
-      run: { load_pattern: cdc }
-```
-
-Run both layers with the same file:
-
-```bash
-python bronze_extract.py --config pipeline.yaml
-python silver_extract.py --config pipeline.yaml --source-name claims_cdc
-```
-
-This keeps medallion assets in sync without juggling dozens of CLI flags or bespoke Python scripts.
-
-### Shared Bronze/Silver Configs
-- Every example config now contains a `silver` section with the same vocabulary as `source.run` (e.g., `write_parquet`, `write_csv`, `output_dir`, `primary_keys`, `order_column`)
-- Run both stages with the same file so settings stay in sync:
-
-```bash
-python bronze_extract.py --config docs/examples/configs/examples/file_example.yaml --date 2025-11-14
-python silver_extract.py --config docs/examples/configs/examples/file_example.yaml --date 2025-11-14
-```
-
-- Silver CLI highlights:
-  - `--config`, `--date` – standard inputs
-  - `--dry-run` – test connections without running extraction
-  - `--validate-only` – check YAML syntax and configuration schema
-  - `--pattern {full|cdc|current_history}` – override load pattern
-  - Output controls: `--write-parquet/--no-write-parquet`, `--write-csv/--no-write-csv`, `--parquet-compression`
-  - Naming overrides: `--full-output-name`, `--cdc-output-name`, `--current-output-name`, `--history-output-name`
-  - Asset model controls: `--silver-model {scd_type_1|scd_type_2|incremental_merge|full_merge_dedupe|periodic_snapshot}` to request one of the supported Silver asset types (defaults are derived from the Bronze load pattern)
-  - Partition overrides still available via `--bronze-path`/`--silver-base` when you need to promote ad-hoc data
-- Under the hood, the CLI flows through `SilverPromotionService` and `DatasetWriter` (see `silver_extract.py`), so extending behavior means overriding a focused class instead of editing a 600-line script. Shared defaults/validation now live in the typed dataclasses inside `core/config_models.py`, keeping Bronze and Silver configs perfectly aligned.
-- Define many inputs in a single YAML by using the `sources:` list (each item holds its own `source` and optional `silver` overrides). Bronze automatically runs every entry; Silver uses `--source-name <entry>` to pick the one you want when the config contains multiple sources.
-
-Example Silver section:
-
-```yaml
-silver:
-  domain: claims
-  entity: claim_header
-  version: 1
-  load_partition_name: load_date
-  include_pattern_folder: false
-  write_parquet: true
-  partitioning:
-    columns: ["status", "is_current"]
-  schema:
-    column_order: ["claim_id", "member_id", "status", "is_current", "load_timestamp"]
-  normalization:
-    trim_strings: true
-    empty_strings_as_null: true
-  error_handling:
-    enabled: true
-    max_bad_records: 25
-    max_bad_percent: 1.5
-```
-
-This produces a layout such as:
-
-```
-silver_output/
-  domain=claims/
-    entity=claim_header/
-      v1/
-        load_date=2025-11-01/
-          status=approved/
-            is_current=1/
-              claim_snapshot.parquet
-```
-
-| Key | Description | Default |
-| --- | --- | --- |
-| `silver.domain` / `silver.entity` | Medallion folders (`domain=<domain>/entity=<entity>`) | `source.system` / `source.table` |
-| `silver.version` | Version folder (e.g., `v1`) | `1` |
-| `silver.load_partition_name` | Load-level partition name | `load_date` |
-| `silver.partitioning.columns` | Additional partition folders (e.g., `status`, `is_current`) | `[]` |
-| `silver.schema.rename_map` / `column_order` | Structural column cleanup | `None` |
-| `silver.normalization.trim_strings` / `empty_strings_as_null` | Consistent string handling | `False` / `False` |
-| `silver.error_handling.enabled` | Quarantine rows missing primary keys | `False` |
-| `silver.error_handling.max_bad_records` / `max_bad_percent` | Threshold before failing | `0` / `0.0` |
-
-### What Silver Will *Not* Do
-
-- ? Business logic or row-level filteringï¿½Silver only standardizes structure.
-- ? Custom transformations per dataset beyond the declarative `schema`/`normalization` options.
-- ? Silent drops of bad dataï¿½use `silver.error_handling` to quarantine and alert.
-
-### Core Features
-- ? Proper Python package structure
-- ? Comprehensive configuration validation
-- ? Structured logging system
-- ? Error handling with cleanup
-- ? CSV and Parquet output
-- ? S3 upload with retries
-- ? File chunking for large datasets
-- ? Test suite with pytest
-- ? Extensible architecture
-
-## ?? Documentation
-
-- [OPS_PLAYBOOK.md](docs/framework/operations/OPS_PLAYBOOK.md) ï¿½ day-two operations, hooks, and monitoring tips.
-- [GOLD_CONTRACTS.md](docs/framework/operations/GOLD_CONTRACTS.md) ï¿½ guidance for documenting downstream contracts and expectations.
-- [docs/framework/reference/DOCUMENTATION.md](docs/framework/reference/DOCUMENTATION.md) ï¿½ architecture concepts and FAQs.
-- [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) ï¿½ advanced configuration & features.
-- [CONFIG_REFERENCE.md](docs/framework/reference/CONFIG_REFERENCE.md) ï¿½ exhaustive list of config options.
-- [TESTING.md](TESTING.md) ï¿½ how to run tests and interpret results.
-- [CONTRIBUTING.md](CONTRIBUTING.md) â€” how to contribute and run local checks
-- [SECURITY.md](SECURITY.md) â€” how to report a security issue
-### Silver Refinement Options\n- silver.schema: rename or reorder columns for standardized curated tables.\n- silver.normalization: toggle 	rim_strings / empty_strings_as_null to keep formatting consistent across datasets.\n- silver.error_handling: set enabled, max_bad_records, and max_bad_percent to quarantine bad rows into _errors/ files instead of failing immediately.\n- silver.partitioning: add a secondary partition column (e.g., status, region) for Silver outputs while still mirroring the Bronze folder layout.\n- silver.domain / entity / ersion / load_partition_name: describe the medallion layout so outputs land under domain=<domain>/entity=<entity>/v<version>/<load partition>=YYYY-MM-DD/.. Optional include_pattern_folder: true inserts pattern=<load_pattern> before the load partition.\n- silver.model: choose the Silver asset type to emit. Available options now mirror the requested asset catalogue:\n  - scd_type_1 â€“ deduplicated current view (SCD Type 1).\n  - scd_type_2 â€“ current + full history split with an is_current flag (SCD Type 2).\n  - incremental_merge â€“ incremental change set from the Bronze data (CDC/timestamp).\n  - ull_merge_dedupe â€“ full snapshot deduplicated by the configured keys/order column, ready for full merges.\n  - periodic_snapshot â€“ exact Bronze snapshot for periodic refreshes.\n  - silver.model_profile â€“ pick a named preset (analytics, operational, merge_ready, cdc_delta, snapshot) that maps to silver.model.\n- storage_metadata: classify your storage target with oundary, provider_type, and cloud_provider. Use --storage-scope onprem to force an on-prem policy.\n\nExample Silver section:
-
-```yaml
-silver:
-  domain: claims
-  entity: claim_header
-  version: 1
-  load_partition_name: load_date
-  include_pattern_folder: false
-  write_parquet: true
-  partitioning:
-    columns: ["status", "is_current"]
-  schema:
-    column_order: ["claim_id", "member_id", "status", "is_current", "load_timestamp"]
-  normalization:
-    trim_strings: true
-    empty_strings_as_null: true
-  error_handling:
-    enabled: true
-    max_bad_records: 25
-    max_bad_percent: 1.5
-```
-
-This produces a layout such as:
-
-```
-silver_output/
-  domain=claims/
-    entity=claim_header/
-      v1/
-        load_date=2025-11-01/
-          status=approved/
-            is_current=1/
-              claim_snapshot.parquet
-```
-
-| Key | Description | Default |
-| --- | --- | --- |
-| `silver.domain` / `silver.entity` | Medallion folders (`domain=<domain>/entity=<entity>`) | `source.system` / `source.table` |
-| `silver.version` | Version folder (e.g., `v1`) | `1` |
-| `silver.load_partition_name` | Load-level partition name | `load_date` |
-| `silver.partitioning.columns` | Additional partition folders (e.g., `status`, `is_current`) | `[]` |
-| `silver.schema.rename_map` / `column_order` | Structural column cleanup | `None` |
-| `silver.normalization.trim_strings` / `empty_strings_as_null` | Consistent string handling | `False` / `False` |
-| `silver.error_handling.enabled` | Quarantine rows missing primary keys | `False` |
-| `silver.error_handling.max_bad_records` / `max_bad_percent` | Threshold before failing | `0` / `0.0` |
-
-### What Silver Will *Not* Do
-
-- ? Business logic or row-level filteringï¿½Silver only standardizes structure.
-- ? Custom transformations per dataset beyond the declarative `schema`/`normalization` options.
-- ? Silent drops of bad dataï¿½use `silver.error_handling` to quarantine and alert.
-
-### Core Features
-- ? Proper Python package structure
-- ? Comprehensive configuration validation
-- ? Structured logging system
-- ? Error handling with cleanup
-- ? CSV and Parquet output
-- ? S3 upload with retries
-- ? File chunking for large datasets
-- ? Test suite with pytest
-- ? Extensible architecture
-
-## ?? Documentation
-
-- [OPS_PLAYBOOK.md](docs/framework/operations/OPS_PLAYBOOK.md) ï¿½ day-two operations, hooks, and monitoring tips.
-- [GOLD_CONTRACTS.md](docs/framework/operations/GOLD_CONTRACTS.md) ï¿½ guidance for documenting downstream contracts and expectations.
-- [docs/QUICKSTART.md](docs/QUICKSTART.md) ï¿½ detailed tutorial with screenshots.
-- [docs/framework/reference/DOCUMENTATION.md](docs/framework/reference/DOCUMENTATION.md) ï¿½ architecture concepts and FAQs.
-- [ENHANCED_FEATURES.md](docs/ENHANCED_FEATURES.md) ï¿½ advanced configuration & features.
-- [CONFIG_REFERENCE.md](docs/framework/reference/CONFIG_REFERENCE.md) ï¿½ exhaustive list of config options.
-- [TESTING.md](TESTING.md) ï¿½ how to run tests and interpret results.
+Pair pytest with the sample data scripts above before running integration suites so fixtures are available.

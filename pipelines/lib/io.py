@@ -19,10 +19,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "OutputMetadata",
     "ReadResult",
     "SilverOutputMetadata",
     "WriteMetadata",
     "get_latest_partition",
+    "infer_column_types",
     "list_partitions",
     "read_bronze",
     "write_partitioned",
@@ -32,32 +34,90 @@ __all__ = [
 
 
 @dataclass
-class WriteMetadata:
-    """Metadata written alongside data files."""
+class OutputMetadata:
+    """Unified metadata for Bronze, Silver, and API outputs.
 
+    Common fields are defined as dataclass attributes. Source-specific fields
+    (system, entity, watermarks, etc.) are stored in the 'extra' dict.
+
+    Examples:
+        # Bronze output
+        metadata = OutputMetadata(
+            row_count=1000,
+            columns=[{"name": "id", "type": "int64"}],
+            written_at="2025-01-15T10:00:00Z",
+            run_date="2025-01-15",
+            extra={
+                "system": "claims_dw",
+                "entity": "claims_header",
+                "source_type": "database_mssql",
+                "load_pattern": "full_snapshot",
+            },
+        )
+
+        # Silver output
+        metadata = OutputMetadata(
+            row_count=1000,
+            columns=[{"name": "id", "type": "int64"}],
+            written_at="2025-01-15T10:00:00Z",
+            run_date="2025-01-15",
+            extra={
+                "entity_kind": "state",
+                "history_mode": "current_only",
+                "natural_keys": ["id"],
+                "change_timestamp": "updated_at",
+            },
+        )
+    """
+
+    # Core fields (present in all outputs)
     row_count: int
-    columns: List[str]
+    columns: List[Dict[str, Any]]  # List of {name, type, nullable, ...}
     written_at: str
-    source_path: Optional[str] = None
-    pipeline_name: Optional[str] = None
+
+    # Common optional fields
     run_date: Optional[str] = None
     format: str = "parquet"
     compression: Optional[str] = None
-    partition_by: Optional[List[str]] = None
+    data_files: List[str] = field(default_factory=list)
+
+    # Source-specific fields go here
     extra: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        return asdict(self)
+        """Convert to flat dictionary (extra fields merged at top level)."""
+        result = asdict(self)
+        # Merge extra into top level for backwards compatibility
+        extra = result.pop("extra", {})
+        result.update(extra)
+        return result
 
     def to_json(self) -> str:
         """Convert to JSON string."""
         return json.dumps(self.to_dict(), indent=2)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "WriteMetadata":
-        """Create from dictionary."""
-        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+    def from_dict(cls, data: Dict[str, Any]) -> "OutputMetadata":
+        """Create from dictionary, putting unknown fields in extra."""
+        known_fields = {k for k in cls.__dataclass_fields__}
+        known = {k: v for k, v in data.items() if k in known_fields and k != "extra"}
+        extra = data.get("extra", {})
+        # Also collect unknown fields into extra
+        for k, v in data.items():
+            if k not in known_fields:
+                extra[k] = v
+        known["extra"] = extra
+        return cls(**known)
+
+    @classmethod
+    def from_file(cls, path: Path) -> "OutputMetadata":
+        """Load from file."""
+        with open(path, encoding="utf-8") as f:
+            return cls.from_dict(json.load(f))
+
+
+# Backwards compatibility alias
+WriteMetadata = OutputMetadata
 
 
 @dataclass
@@ -390,32 +450,104 @@ class SilverOutputMetadata:
             return cls.from_dict(json.load(f))
 
 
-def _infer_column_types(t: "ibis.Table") -> List[Dict[str, Any]]:
-    """Infer column types from an Ibis table schema.
+def infer_column_types(
+    source: Any,
+    *,
+    include_sql_types: bool = True,
+) -> List[Dict[str, Any]]:
+    """Infer column types from an Ibis table or list of records.
+
+    This is the unified column inference function used by Bronze, Silver, and API.
 
     Args:
-        t: Ibis table
+        source: Either an Ibis table or a list of dicts (records)
+        include_sql_types: Whether to include SQL Server type mappings
 
     Returns:
-        List of column info dicts with name, type, nullable
+        List of column info dicts with name, type, nullable, and optionally sql_type
+
+    Examples:
+        # From Ibis table
+        columns = infer_column_types(ibis_table)
+
+        # From list of records (API data)
+        columns = infer_column_types([{"id": 1, "name": "foo"}])
     """
+    # Check if it's an Ibis table by looking for schema method
+    if hasattr(source, "schema"):
+        return _infer_column_types_from_ibis(source, include_sql_types)
+    elif isinstance(source, list):
+        return _infer_column_types_from_records(source)
+    else:
+        raise TypeError(f"Cannot infer columns from {type(source)}")
+
+
+def _infer_column_types_from_ibis(
+    t: "ibis.Table",
+    include_sql_types: bool = True,
+) -> List[Dict[str, Any]]:
+    """Infer column types from an Ibis table schema."""
     columns = []
     schema = t.schema()
 
     for name in schema.names:
         dtype = schema[name]
-        # Map Ibis types to SQL types
         type_str = str(dtype)
-        sql_type = _map_ibis_type_to_sql(type_str)
 
-        columns.append({
+        col_info: Dict[str, Any] = {
             "name": name,
             "ibis_type": type_str,
-            "sql_type": sql_type,
             "nullable": dtype.nullable if hasattr(dtype, "nullable") else True,
+        }
+
+        if include_sql_types:
+            col_info["sql_type"] = _map_ibis_type_to_sql(type_str)
+
+        columns.append(col_info)
+
+    return columns
+
+
+def _infer_column_types_from_records(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Infer column types from a list of records (dicts)."""
+    if not records:
+        return []
+
+    # Collect all keys
+    all_keys: set[str] = set()
+    for record in records:
+        all_keys.update(record.keys())
+
+    # Infer types from first non-null value
+    columns = []
+    for key in sorted(all_keys):
+        sample_value = None
+        for record in records:
+            if key in record and record[key] is not None:
+                sample_value = record[key]
+                break
+
+        if sample_value is None:
+            type_name = "string"
+        else:
+            type_name = type(sample_value).__name__
+
+        columns.append({
+            "name": key,
+            "type": type_name,
+            "nullable": True,
         })
 
     return columns
+
+
+# Keep the old name as an alias for backwards compatibility
+def _infer_column_types(t: "ibis.Table") -> List[Dict[str, Any]]:
+    """Infer column types from an Ibis table schema.
+
+    Deprecated: Use infer_column_types() instead.
+    """
+    return infer_column_types(t, include_sql_types=True)
 
 
 def _map_ibis_type_to_sql(ibis_type: str) -> str:

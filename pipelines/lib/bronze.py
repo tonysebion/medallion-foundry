@@ -23,6 +23,7 @@ import pandas as pd
 
 from pipelines.lib.connections import get_connection
 from pipelines.lib.env import expand_env_vars, expand_options
+from pipelines.lib.io import OutputMetadata, infer_column_types
 from pipelines.lib.storage import get_storage
 from pipelines.lib.watermark import get_watermark, save_watermark
 from pipelines.lib._path_utils import (
@@ -35,6 +36,10 @@ from pipelines.lib.validate import validate_and_raise
 logger = logging.getLogger(__name__)
 
 __all__ = ["BronzeOutputMetadata", "BronzeSource", "LoadPattern", "SourceType"]
+
+
+# Backwards compatibility: BronzeOutputMetadata is now OutputMetadata
+BronzeOutputMetadata = OutputMetadata
 
 
 class SourceType(Enum):
@@ -55,60 +60,6 @@ class LoadPattern(Enum):
     FULL_SNAPSHOT = "full_snapshot"  # Replace everything each run
     INCREMENTAL_APPEND = "incremental"  # Append new records only
     CDC = "cdc"  # Change data capture deltas
-
-
-@dataclass
-class BronzeOutputMetadata:
-    """Metadata for Bronze layer outputs.
-
-    Written alongside data files to track lineage and enable validation.
-    """
-
-    # Basic metadata
-    row_count: int
-    columns: List[Dict[str, Any]]  # List of {name, type}
-    written_at: str
-
-    # Source information
-    system: str
-    entity: str
-    source_type: str
-    load_pattern: str
-
-    # Temporal
-    run_date: str
-    watermark_column: Optional[str] = None
-    last_watermark: Optional[str] = None
-    new_watermark: Optional[str] = None
-
-    # Files written
-    data_files: List[str] = field(default_factory=list)
-
-    # Format info
-    format: str = "parquet"
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        from dataclasses import asdict
-        return asdict(self)
-
-    def to_json(self) -> str:
-        """Convert to JSON string."""
-        import json
-        return json.dumps(self.to_dict(), indent=2)
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "BronzeOutputMetadata":
-        """Create from dictionary."""
-        fields = {k for k in cls.__dataclass_fields__}
-        return cls(**{k: v for k, v in data.items() if k in fields})
-
-    @classmethod
-    def from_file(cls, path: Path) -> "BronzeOutputMetadata":
-        """Load from file."""
-        import json
-        with open(path, encoding="utf-8") as f:
-            return cls.from_dict(json.load(f))
 
 
 @dataclass
@@ -370,7 +321,7 @@ class BronzeSource:
                 key in self.options for key in fixed_width_keys
             ):
                 return self._read_fixed_width(source_path)
-            return self._read_space_delimited(source_path)
+            return self._read_character_delimited(source_path)
 
         elif self.source_type == SourceType.FILE_FIXED_WIDTH:
             return self._read_fixed_width(source_path)
@@ -461,8 +412,8 @@ class BronzeSource:
         df = pd.read_fwf(source_path, **pandas_opts)
         return ibis.memtable(df)
 
-    def _read_space_delimited(self, source_path: str) -> ibis.Table:
-        """Read files where columns are separated by whitespace."""
+    def _read_character_delimited(self, source_path: str) -> ibis.Table:
+        """Read files where columns are separated by characters (spaces, pipes, tabs)."""
         csv_opts = dict(self.options.get("csv_options", {}))
 
         column_names = csv_opts.pop("columns", None) or csv_opts.pop(
@@ -476,12 +427,6 @@ class BronzeSource:
         pandas_opts: Dict[str, Any] = {"engine": "python"}
         pandas_opts.update(csv_opts)
 
-        if column_names:
-            pandas_opts["names"] = column_names
-
-        column_names = csv_opts.pop("columns", None) or csv_opts.pop(
-            "column_names", None
-        ) or csv_opts.pop("col_names", None)
         if column_names:
             pandas_opts["names"] = column_names
 
@@ -572,13 +517,23 @@ class BronzeSource:
                 "source_type": self.source_type.value,
             }
 
-        # Infer column types for metadata
-        columns = self._infer_column_types(t)
+        # Infer column types for metadata using shared function
+        columns = infer_column_types(t, include_sql_types=False)
         now = datetime.now(timezone.utc).isoformat()
 
         # Determine output format based on target using storage backend
         data_files: List[str] = []
         scheme, _ = parse_uri(target)
+
+        # Bronze-specific metadata fields
+        bronze_extra = {
+            "system": self.system,
+            "entity": self.entity,
+            "source_type": self.source_type.value,
+            "load_pattern": self.load_pattern.value,
+            "watermark_column": self.watermark_column,
+            "last_watermark": last_watermark,
+        }
 
         if scheme in ("s3", "abfs"):
             # Cloud storage - use storage backend for metadata writes
@@ -589,18 +544,13 @@ class BronzeSource:
 
             # Write metadata to cloud storage
             if self.write_metadata:
-                metadata = BronzeOutputMetadata(
+                metadata = OutputMetadata(
                     row_count=row_count,
                     columns=columns,
                     written_at=now,
-                    system=self.system,
-                    entity=self.entity,
-                    source_type=self.source_type.value,
-                    load_pattern=self.load_pattern.value,
                     run_date=run_date,
-                    watermark_column=self.watermark_column,
-                    last_watermark=last_watermark,
                     data_files=[f"{self.entity}.parquet"],
+                    extra=bronze_extra,
                 )
                 storage.write_text("_metadata.json", metadata.to_json())
                 logger.debug("Wrote metadata to %s/_metadata.json", target)
@@ -614,18 +564,13 @@ class BronzeSource:
 
             # Write metadata
             if self.write_metadata:
-                metadata = BronzeOutputMetadata(
+                metadata = OutputMetadata(
                     row_count=row_count,
                     columns=columns,
                     written_at=now,
-                    system=self.system,
-                    entity=self.entity,
-                    source_type=self.source_type.value,
-                    load_pattern=self.load_pattern.value,
                     run_date=run_date,
-                    watermark_column=self.watermark_column,
-                    last_watermark=last_watermark,
                     data_files=[Path(f).name for f in data_files],
+                    extra=bronze_extra,
                 )
                 storage.write_text("_metadata.json", metadata.to_json())
                 logger.debug("Wrote metadata to %s/_metadata.json", target)
@@ -666,21 +611,6 @@ class BronzeSource:
             result["checksums_file"] = "_checksums.json"
 
         return result
-
-    def _infer_column_types(self, t: ibis.Table) -> List[Dict[str, Any]]:
-        """Infer column types from an Ibis table schema."""
-        columns = []
-        schema = t.schema()
-
-        for name in schema.names:
-            dtype = schema[name]
-            columns.append({
-                "name": name,
-                "ibis_type": str(dtype),
-                "nullable": dtype.nullable if hasattr(dtype, "nullable") else True,
-            })
-
-        return columns
 
     def _get_max_watermark(self, t: ibis.Table) -> Optional[str]:
         """Get the maximum value of the watermark column."""
