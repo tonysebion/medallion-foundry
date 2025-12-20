@@ -1,3 +1,3 @@
 -r requirements.txt
 
-textual>=0.47.0  # TUI framework for interactive pipeline configuration
+prompt_toolkit>=3.0.0  # For enhanced command-line interfaces

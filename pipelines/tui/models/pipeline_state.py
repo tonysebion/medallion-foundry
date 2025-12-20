@@ -17,7 +17,6 @@ from pipelines.tui.models.field_value import FieldSource, FieldValue
 from pipelines.tui.models.field_metadata import (
     ALL_BRONZE_FIELDS,
     ALL_SILVER_FIELDS,
-    BEGINNER_FIELDS,
     SENSITIVE_FIELDS,
     get_dynamic_required_fields,
     get_visible_fields,

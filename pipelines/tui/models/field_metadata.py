@@ -7,7 +7,7 @@ dynamic visibility rules based on other field values.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pipelines.tui.models.pipeline_state import PipelineState
