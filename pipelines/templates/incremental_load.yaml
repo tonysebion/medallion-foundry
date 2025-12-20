@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=../schema/pipeline.schema.json
+#
+# TEMPLATE: Incremental Load with Watermark
+# ==========================================
+# Use this for incremental/delta loads:
+# - Only fetch new records since last run
+# - Uses a watermark column (e.g., LastUpdated) to track progress
+#
+# Prerequisites:
+#   export DB_HOST="your-server.database.com"
+#
+# To run:
+#   python -m pipelines ./pipelines/templates/incremental_load.yaml --date 2025-01-15
+
+# Optional metadata
+name: incremental_load_template
+description: Template for incremental database extraction with watermark
+
+# Bronze layer - incremental extract from database
+bronze:
+  system: your_system           # e.g., "orders_db", "sales_dw"
+  entity: your_entity           # e.g., "orders", "transactions"
+  source_type: database_mssql
+
+  # Database connection
+  host: ${DB_HOST}              # Use env var for host
+  database: YourDatabase
+
+  # Optional custom query
+  # query: |
+  #   SELECT OrderID, CustomerID, Amount, Status, LastUpdated
+  #   FROM dbo.Orders
+
+  # Incremental load settings
+  load_pattern: incremental
+  watermark_column: LastUpdated  # Column to track for incremental
+
+# Silver layer - curate with full history (SCD Type 2)
+silver:
+  natural_keys: [OrderID]           # Primary key column(s)
+  change_timestamp: LastUpdated     # When was the record changed?
+  history_mode: full_history        # Keep all versions (SCD Type 2)

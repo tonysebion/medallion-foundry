@@ -11,7 +11,7 @@ import ibis
 import pandas as pd
 import pytest
 
-from pipelines.lib.curate import dedupe_latest, dedupe_earliest, dedupe_exact, build_history
+from pipelines.lib.curate import dedupe_latest, dedupe_exact, build_history
 from tests.data_validation.assertions import SCD1Assertions, SCD2Assertions
 
 

@@ -66,6 +66,8 @@ from pipelines.lib.quality import (
     QualityRule,
     Severity,
     check_quality,
+    check_quality_pandera,
+    create_pandera_schema,
     in_list,
     matches_pattern,
     non_negative,
@@ -81,6 +83,9 @@ from pipelines.lib.resilience import with_retry
 from pipelines.lib.runner import pipeline
 from pipelines.lib.silver import EntityKind, HistoryMode, SilverEntity
 from pipelines.lib.validate import (
+    BronzeConfig,
+    PipelineSettings,
+    SilverConfig,
     ValidationIssue,
     ValidationSeverity,
     format_validation_report,
@@ -186,6 +191,8 @@ __all__ = [
     "QualityRule",
     "Severity",
     "check_quality",
+    "check_quality_pandera",
+    "create_pandera_schema",
     "in_list",
     "matches_pattern",
     "non_negative",
@@ -205,6 +212,9 @@ __all__ = [
     "HistoryMode",
     "SilverEntity",
     # Validate
+    "BronzeConfig",
+    "PipelineSettings",
+    "SilverConfig",
     "ValidationIssue",
     "ValidationSeverity",
     "format_validation_report",

@@ -1,0 +1,43 @@
+# yaml-language-server: $schema=../schema/pipeline.schema.json
+#
+# Example Pipeline: Customer SCD Type 2
+# =====================================
+# Demonstrates SCD Type 2 (full history) curation for tracking changes over time.
+#
+# This example shows:
+# - Loading customer data from CSV (source_type: file_csv)
+# - SCD Type 2 history with effective dates (history_mode: full_history)
+# - How records get effective_from, effective_to, and is_current columns
+#
+# Setup:
+#   Generate sample data:
+#     python -m pipelines generate-samples
+#
+# Run:
+#   python -m pipelines ./pipelines/examples/customer_scd2.yaml --date 2025-01-15
+#
+# Output columns in Silver:
+#   - customer_id: Natural key
+#   - name, email, tier, status: Tracked attributes
+#   - effective_from: When this version became valid
+#   - effective_to: When this version expired (NULL if current)
+#   - is_current: True for the latest version of each customer
+
+name: customer_scd2
+description: Customer data with SCD Type 2 history tracking
+
+bronze:
+  system: crm
+  entity: customers
+  source_type: file_csv
+  source_path: "./pipelines/examples/sample_data/customers_{run_date}.csv"
+
+silver:
+  natural_keys: [customer_id]
+  change_timestamp: updated_at
+  history_mode: full_history    # SCD Type 2!
+  attributes:
+    - name
+    - email
+    - tier
+    - status

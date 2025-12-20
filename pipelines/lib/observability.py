@@ -3,6 +3,9 @@
 Combines metrics collection with structured logging helpers so pipeline
 runs can capture both operational metrics and JSON-friendly logs from the
 same module.
+
+Uses structlog for Splunk-friendly JSON logging with context binding.
+Falls back to standard logging for compatibility.
 """
 
 from __future__ import annotations
@@ -16,6 +19,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Generator, List, Optional
 
+import structlog
+from structlog.processors import JSONRenderer, TimeStamper
+from structlog.stdlib import BoundLogger, ProcessorFormatter
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -28,6 +35,10 @@ __all__ = [
     "PipelineLogger",
     "get_pipeline_logger",
     "setup_logging",
+    "setup_structlog",
+    "get_structlog_logger",
+    "bind_pipeline_context",
+    "clear_pipeline_context",
 ]
 
 
@@ -391,3 +402,159 @@ def setup_logging(
 
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("requests").setLevel(logging.WARNING)
+
+
+# ============================================
+# Structlog Integration
+# ============================================
+
+
+def setup_structlog(
+    verbose: bool = False,
+    json_format: bool = True,
+    log_file: Optional[str] = None,
+) -> None:
+    """Configure structlog for Splunk-friendly JSON logging.
+
+    This sets up structlog with processors that produce JSON output
+    compatible with Splunk and other log aggregation systems.
+
+    Args:
+        verbose: If True, set log level to DEBUG; otherwise INFO
+        json_format: If True, output JSON; otherwise human-readable
+        log_file: Optional file path for log output
+
+    Example:
+        >>> setup_structlog(json_format=True)
+        >>> log = get_structlog_logger("my_pipeline")
+        >>> log.info("pipeline_started", system="claims", entity="header")
+        {"timestamp": "2025-01-15T10:30:00Z", "level": "info", ...}
+    """
+    level = logging.DEBUG if verbose else logging.INFO
+
+    # Shared processors for all logging
+    shared_processors: list[Any] = [
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        TimeStamper(fmt="iso", utc=True),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.UnicodeDecoder(),
+    ]
+
+    # Choose renderer based on format
+    renderer: Any
+    if json_format:
+        # JSON output for Splunk ingestion
+        renderer = JSONRenderer()
+    else:
+        # Human-readable for development
+        renderer = structlog.dev.ConsoleRenderer(colors=True)
+
+    # Configure structlog
+    structlog.configure(
+        processors=shared_processors + [
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
+    )
+
+    # Configure stdlib logging to use structlog formatter
+    formatter = ProcessorFormatter(
+        foreign_pre_chain=shared_processors,
+        processors=[
+            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            renderer,
+        ],
+    )
+
+    # Set up root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level)
+
+    # Remove existing handlers
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+
+    # Add console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(level)
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
+
+    # Add file handler if specified
+    if log_file:
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(level)
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+
+    # Quiet noisy libraries
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("requests").setLevel(logging.WARNING)
+    logging.getLogger("botocore").setLevel(logging.WARNING)
+
+
+def get_structlog_logger(name: str) -> BoundLogger:
+    """Get a structlog logger with bound context support.
+
+    Structlog loggers support context binding, making it easy to add
+    pipeline context that appears in all subsequent log entries.
+
+    Args:
+        name: Logger name (typically __name__ or pipeline name)
+
+    Returns:
+        Structlog BoundLogger instance
+
+    Example:
+        >>> log = get_structlog_logger("claims_pipeline")
+        >>> log = log.bind(system="claims", entity="header", run_date="2025-01-15")
+        >>> log.info("extraction_started")
+        {"system": "claims", "entity": "header", "run_date": "2025-01-15", ...}
+        >>> log.info("rows_extracted", row_count=1000)
+        {"system": "claims", ..., "row_count": 1000, ...}
+    """
+    result: BoundLogger = structlog.get_logger(name)
+    return result
+
+
+def bind_pipeline_context(
+    system: str,
+    entity: str,
+    run_date: str,
+    layer: Optional[str] = None,
+) -> None:
+    """Bind pipeline context to all subsequent log entries.
+
+    Uses structlog's contextvars to add context that persists across
+    function calls within the same execution context.
+
+    Args:
+        system: Source system name
+        entity: Entity/table name
+        run_date: Pipeline run date
+        layer: Optional layer (bronze, silver)
+
+    Example:
+        >>> bind_pipeline_context("claims", "header", "2025-01-15", "bronze")
+        >>> log = get_structlog_logger(__name__)
+        >>> log.info("processing_started")
+        # Output includes system, entity, run_date, layer automatically
+    """
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(
+        pipeline_system=system,
+        pipeline_entity=entity,
+        pipeline_run_date=run_date,
+    )
+    if layer:
+        structlog.contextvars.bind_contextvars(pipeline_layer=layer)
+
+
+def clear_pipeline_context() -> None:
+    """Clear all bound pipeline context."""
+    structlog.contextvars.clear_contextvars()

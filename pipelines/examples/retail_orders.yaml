@@ -1,0 +1,41 @@
+# yaml-language-server: $schema=../schema/pipeline.schema.json
+#
+# Example Pipeline: Retail Orders
+# ================================
+# Demonstrates a complete Bronze -> Silver pipeline using local CSV files.
+#
+# This example shows:
+# - Loading from CSV files (source_type: file_csv)
+# - SCD Type 1 (current only) curation
+# - Full snapshot load pattern
+#
+# Setup:
+#   Generate sample data:
+#     python -m pipelines generate-samples
+#
+# Run:
+#   python -m pipelines ./pipelines/examples/retail_orders.yaml --date 2025-01-15
+#
+# Dry run (validate without executing):
+#   python -m pipelines ./pipelines/examples/retail_orders.yaml --date 2025-01-15 --dry-run
+#
+# Output:
+#   bronze/system=retail/entity=orders/dt=2025-01-15/
+#   silver/orders/
+
+name: retail_orders
+description: Load retail orders from CSV and curate with SCD Type 1
+
+bronze:
+  system: retail
+  entity: orders
+  source_type: file_csv
+  source_path: "./pipelines/examples/sample_data/orders_{run_date}.csv"
+
+silver:
+  natural_keys: [order_id]
+  change_timestamp: updated_at
+  attributes:
+    - customer_id
+    - order_total
+    - status

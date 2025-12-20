@@ -8,12 +8,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
-import ibis
-import pandas as pd
-import pytest
 
-from pipelines.lib.curate import dedupe_exact
-from tests.data_validation.assertions import EventAssertions, SCD1Assertions
+from tests.data_validation.assertions import EventAssertions
 from tests.combination.helpers import simulate_incremental_to_event
 from tests.combination.conftest import create_memtable
 

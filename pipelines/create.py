@@ -1,10 +1,12 @@
 """Interactive pipeline creator.
 
 Guides users through creating a new pipeline with prompts.
+Generates YAML configuration files by default (recommended for non-Python users).
 
 Usage:
     python -m pipelines.create
-    python -m pipelines.create --output pipelines/claims/header.py
+    python -m pipelines.create --output pipelines/my_pipeline.yaml
+    python -m pipelines.create --format python --output pipelines/my_pipeline.py
 """
 
 from __future__ import annotations
@@ -59,41 +61,64 @@ def prompt_list(message: str, example: str = "") -> list[str]:
     return [item.strip() for item in result.split(",")]
 
 
-def create_pipeline() -> str:
-    """Interactive pipeline creation wizard."""
+def prompt_yes_no(message: str, default: bool = False) -> bool:
+    """Prompt for yes/no answer."""
+    default_str = "Y/n" if default else "y/N"
+    result = input(f"{message} [{default_str}]: ").strip().lower()
+    if not result:
+        return default
+    return result in ("y", "yes", "true", "1")
+
+
+def create_pipeline() -> dict:
+    """Interactive pipeline creation wizard.
+
+    Returns a dictionary with all pipeline configuration.
+    """
     print("=" * 60)
     print("  Pipeline Creator")
     print("=" * 60)
-    print("\nThis wizard will help you create a new pipeline.\n")
+    print("\nThis wizard will help you create a new pipeline.")
+    print("YAML format is recommended for non-Python users.\n")
+
+    config = {}
 
     # Step 1: Basic info
     print("STEP 1: Basic Information")
     print("-" * 40)
-    system = prompt("Source system name", "my_system")
-    entity = prompt("Entity/table name", "my_table")
+    config["system"] = prompt("Source system name", "my_system")
+    config["entity"] = prompt("Entity/table name", "my_table")
+    config["name"] = f"{config['system']}_{config['entity']}"
+    config["description"] = prompt(
+        "Brief description",
+        f"Pipeline for {config['entity']} from {config['system']}",
+    )
 
     # Step 2: Source type
     source_choices = [
-        ("DATABASE_MSSQL", "SQL Server database"),
-        ("DATABASE_POSTGRES", "PostgreSQL database"),
-        ("FILE_CSV", "CSV file"),
-        ("FILE_PARQUET", "Parquet file"),
-        ("FILE_SPACE_DELIMITED", "Space-delimited file"),
-        ("API_REST", "REST API"),
+        ("database_mssql", "SQL Server database"),
+        ("database_postgres", "PostgreSQL database"),
+        ("database_mysql", "MySQL/MariaDB database"),
+        ("file_csv", "CSV file"),
+        ("file_parquet", "Parquet file"),
+        ("file_json", "JSON file"),
+        ("file_jsonl", "JSON Lines file"),
+        ("file_excel", "Excel file"),
+        ("file_fixed_width", "Fixed-width file"),
+        ("api_rest", "REST API"),
     ]
-    source_type = prompt_choice("What type of source?", source_choices)
+    config["source_type"] = prompt_choice("What type of source?", source_choices)
 
     # Step 3: Source-specific options
     print("\nSTEP 2: Source Configuration")
     print("-" * 40)
 
-    options_code = ""
-    source_path = ""
+    config["options"] = {}
 
-    if source_type.startswith("DATABASE_"):
-        host = prompt("Database host", "${DB_HOST}")
-        database = prompt("Database name")
-        use_query = input("Use custom SQL query? [y/N]: ").strip().lower() == "y"
+    if config["source_type"].startswith("database_"):
+        config["host"] = prompt("Database host", "${DB_HOST}")
+        config["database"] = prompt("Database name")
+        use_query = prompt_yes_no("Use custom SQL query?", False)
 
         if use_query:
             print("  Enter your SQL query (end with a blank line):")
@@ -103,198 +128,381 @@ def create_pipeline() -> str:
                 if not line:
                     break
                 query_lines.append(line)
-            query = "\n".join(query_lines)
-            options_code = f'''options={{
-        "connection_name": "{system}_db",
-        "host": "{host}",
-        "database": "{database}",
-        "query": """
-{query}
-        """,
-    }},'''
-        else:
-            options_code = f'''options={{
-        "connection_name": "{system}_db",
-        "host": "{host}",
-        "database": "{database}",
-    }},'''
+            config["query"] = "\n".join(query_lines)
 
-    elif source_type.startswith("FILE_"):
-        default_path = f"/data/{system}/{entity}_{{run_date}}.csv"
-        source_path = prompt("File path pattern", default_path)
-        if source_type == "FILE_SPACE_DELIMITED":
+    elif config["source_type"].startswith("file_"):
+        ext_map = {
+            "file_csv": ".csv",
+            "file_parquet": ".parquet",
+            "file_json": ".json",
+            "file_jsonl": ".jsonl",
+            "file_excel": ".xlsx",
+            "file_fixed_width": ".txt",
+        }
+        ext = ext_map.get(config["source_type"], ".csv")
+        default_path = f"./data/{config['system']}/{config['entity']}_{{run_date}}{ext}"
+        config["source_path"] = prompt("File path pattern", default_path)
+
+        if config["source_type"] == "file_fixed_width":
             cols = prompt_list("Column names", "id, name, value")
             if cols:
-                options_code = f"""options={{
-        "csv_options": {{
-            "columns": {cols},
-        }}
-    }},"""
+                config["options"]["columns"] = cols
+            widths = prompt_list("Column widths (characters)", "10, 20, 15")
+            if widths:
+                config["options"]["widths"] = [int(w) for w in widths]
 
-    elif source_type == "API_REST":
-        source_path = prompt("API URL", f"https://api.example.com/{entity}")
+        elif config["source_type"] == "file_json":
+            data_path = prompt("Path to data in JSON (leave blank for root)", "")
+            if data_path:
+                config["options"]["data_path"] = data_path
+
+        elif config["source_type"] == "file_excel":
+            sheet = prompt("Sheet name or index", "0")
+            if sheet != "0":
+                config["options"]["sheet"] = sheet
+
+    elif config["source_type"] == "api_rest":
+        config["source_path"] = prompt(
+            "API URL",
+            f"https://api.example.com/{config['entity']}",
+        )
 
     # Step 4: Load pattern
     load_choices = [
-        ("FULL_SNAPSHOT", "Full snapshot (replace all each run)"),
-        ("INCREMENTAL_APPEND", "Incremental (only new records)"),
+        ("full_snapshot", "Full snapshot (replace all each run)"),
+        ("incremental", "Incremental (only new records via watermark)"),
+        ("cdc", "CDC (change data capture with I/U/D flags)"),
     ]
-    load_pattern = prompt_choice("How should data be loaded?", load_choices)
+    config["load_pattern"] = prompt_choice("How should data be loaded?", load_choices)
 
-    watermark_col = ""
-    if load_pattern == "INCREMENTAL_APPEND":
-        watermark_col = prompt("Watermark column (e.g., LastUpdated)")
+    if config["load_pattern"] in ("incremental", "cdc"):
+        config["watermark_column"] = prompt(
+            "Watermark column (e.g., LastUpdated, modified_at)"
+        )
+
+    # Ask about periodic full refresh for incremental loads
+    if config["load_pattern"] == "incremental":
+        if prompt_yes_no("Enable periodic full refresh?", False):
+            days = prompt("Full refresh every N days", "7")
+            config["full_refresh_days"] = int(days)
+
+    # Ask about chunking for large datasets
+    if prompt_yes_no("Enable chunking for large data?", False):
+        chunk_size = prompt("Rows per chunk", "100000")
+        config["chunk_size"] = int(chunk_size)
 
     # Step 5: Silver configuration
     print("\nSTEP 3: Silver Configuration")
     print("-" * 40)
 
-    natural_keys = prompt_list("Primary key column(s)", "id")
-    if not natural_keys:
-        natural_keys = ["id"]
+    config["natural_keys"] = prompt_list("Primary key column(s)", "id")
+    if not config["natural_keys"]:
+        config["natural_keys"] = ["id"]
 
-    change_ts = prompt("Change timestamp column", "updated_at")
+    config["change_timestamp"] = prompt("Change timestamp column", "updated_at")
 
     entity_choices = [
-        ("STATE", "Dimension (customer, product) - slowly changing"),
-        ("EVENT", "Fact/Event (orders, clicks) - immutable"),
+        ("state", "Dimension (customer, product) - slowly changing"),
+        ("event", "Fact/Event (orders, clicks) - immutable"),
     ]
-    entity_kind = prompt_choice("What kind of entity is this?", entity_choices)
+    config["entity_kind"] = prompt_choice("What kind of entity is this?", entity_choices)
 
     history_choices = [
-        ("CURRENT_ONLY", "SCD Type 1 - Keep only latest version"),
-        ("FULL_HISTORY", "SCD Type 2 - Keep all versions with effective dates"),
+        ("current_only", "SCD Type 1 - Keep only latest version"),
+        ("full_history", "SCD Type 2 - Keep all versions with effective dates"),
     ]
-    history_mode = prompt_choice("How to handle history?", history_choices)
+    config["history_mode"] = prompt_choice("How to handle history?", history_choices)
 
-    # Step 6: Output path
-    print("\nSTEP 4: Output Configuration")
-    print("-" * 40)
-    target_path = prompt("Silver output path", f"s3://silver/{system}/{entity}/")
+    # Optional: specify attributes
+    if prompt_yes_no("Specify which columns to include?", False):
+        config["attributes"] = prompt_list("Columns to include", "name, email, status")
 
-    # Generate the pipeline code
-    code = generate_pipeline_code(
-        system=system,
-        entity=entity,
-        source_type=source_type,
-        source_path=source_path,
-        options_code=options_code,
-        load_pattern=load_pattern,
-        watermark_col=watermark_col,
-        natural_keys=natural_keys,
-        change_ts=change_ts,
-        entity_kind=entity_kind,
-        history_mode=history_mode,
-        target_path=target_path,
-    )
-
-    return code
+    return config
 
 
-def generate_pipeline_code(
-    system: str,
-    entity: str,
-    source_type: str,
-    source_path: str,
-    options_code: str,
-    load_pattern: str,
-    watermark_col: str,
-    natural_keys: list[str],
-    change_ts: str,
-    entity_kind: str,
-    history_mode: str,
-    target_path: str,
-) -> str:
-    """Generate pipeline Python code from inputs."""
-    if watermark_col:
-        watermark_line = f'    watermark_column="{watermark_col}",'
+def generate_yaml_config(config: dict) -> str:
+    """Generate YAML configuration from collected inputs."""
+    lines = [
+        "# yaml-language-server: $schema=../schema/pipeline.schema.json",
+        "#",
+        f"# Pipeline: {config['name']}",
+        f"# {config.get('description', '')}",
+        "#",
+        "# To run:",
+        f"#   python -m pipelines ./{config['name']}.yaml --date 2025-01-15",
+        "",
+        f"name: {config['name']}",
+        f"description: {config.get('description', '')}",
+        "",
+        "# Bronze layer - raw data extraction",
+        "bronze:",
+        f"  system: {config['system']}",
+        f"  entity: {config['entity']}",
+        f"  source_type: {config['source_type']}",
+    ]
+
+    # Source path
+    if config.get("source_path"):
+        lines.append(f"  source_path: \"{config['source_path']}\"")
+
+    # Database connection
+    if config.get("host"):
+        lines.append(f"  host: {config['host']}")
+    if config.get("database"):
+        lines.append(f"  database: {config['database']}")
+    if config.get("query"):
+        lines.append("  query: |")
+        for line in config["query"].split("\n"):
+            lines.append(f"    {line}")
+
+    # Load pattern
+    if config.get("load_pattern") != "full_snapshot":
+        lines.append(f"  load_pattern: {config['load_pattern']}")
+
+    # Watermark
+    if config.get("watermark_column"):
+        lines.append(f"  watermark_column: {config['watermark_column']}")
+
+    # Full refresh
+    if config.get("full_refresh_days"):
+        lines.append(f"  full_refresh_days: {config['full_refresh_days']}")
+
+    # Chunk size
+    if config.get("chunk_size"):
+        lines.append(f"  chunk_size: {config['chunk_size']}")
+
+    # Options
+    if config.get("options"):
+        lines.append("  options:")
+        for key, value in config["options"].items():
+            if isinstance(value, list):
+                lines.append(f"    {key}:")
+                for item in value:
+                    lines.append(f"      - {item}")
+            else:
+                lines.append(f"    {key}: {value}")
+
+    # Silver layer
+    lines.extend([
+        "",
+        "# Silver layer - data curation",
+        "silver:",
+    ])
+
+    # Natural keys
+    if len(config["natural_keys"]) == 1:
+        lines.append(f"  natural_keys: [{config['natural_keys'][0]}]")
     else:
-        watermark_line = ""
+        lines.append("  natural_keys:")
+        for key in config["natural_keys"]:
+            lines.append(f"    - {key}")
 
-    if source_path:
-        source_path_line = f'    source_path="{source_path}",'
-    else:
-        source_path_line = '    source_path="",'
-    options_section = f"    {options_code}" if options_code else "    options={},"
+    lines.append(f"  change_timestamp: {config['change_timestamp']}")
+
+    # Entity kind (only if not default)
+    if config.get("entity_kind") != "state":
+        lines.append(f"  entity_kind: {config['entity_kind']}")
+
+    # History mode (only if not default)
+    if config.get("history_mode") != "current_only":
+        lines.append(f"  history_mode: {config['history_mode']}")
+
+    # Attributes
+    if config.get("attributes"):
+        lines.append("  attributes:")
+        for attr in config["attributes"]:
+            lines.append(f"    - {attr}")
+
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def generate_python_code(config: dict) -> str:
+    """Generate Python pipeline code from collected inputs."""
+    # Map YAML values to Python enum names
+    source_type_map = {
+        "file_csv": "FILE_CSV",
+        "file_parquet": "FILE_PARQUET",
+        "file_json": "FILE_JSON",
+        "file_jsonl": "FILE_JSONL",
+        "file_excel": "FILE_EXCEL",
+        "file_fixed_width": "FILE_FIXED_WIDTH",
+        "database_mssql": "DATABASE_MSSQL",
+        "database_postgres": "DATABASE_POSTGRES",
+        "database_mysql": "DATABASE_MYSQL",
+        "database_db2": "DATABASE_DB2",
+        "api_rest": "API_REST",
+    }
+    load_pattern_map = {
+        "full_snapshot": "FULL_SNAPSHOT",
+        "incremental": "INCREMENTAL_APPEND",
+        "cdc": "CDC",
+    }
+    entity_kind_map = {"state": "STATE", "event": "EVENT"}
+    history_mode_map = {"current_only": "CURRENT_ONLY", "full_history": "FULL_HISTORY"}
+
+    source_type = source_type_map.get(config["source_type"], "FILE_CSV")
+    load_pattern = load_pattern_map.get(config.get("load_pattern", "full_snapshot"), "FULL_SNAPSHOT")
+    entity_kind = entity_kind_map.get(config.get("entity_kind", "state"), "STATE")
+    history_mode = history_mode_map.get(config.get("history_mode", "current_only"), "CURRENT_ONLY")
+
+    # Build options dict
+    options_parts = []
+    if config.get("options"):
+        for key, value in config["options"].items():
+            options_parts.append(f'        "{key}": {repr(value)},')
+
+    options_code = "options={},\n" if not options_parts else "options={\n" + "\n".join(options_parts) + "\n    },\n"
+
+    # Build source path line
+    source_path_line = ""
+    if config.get("source_path"):
+        source_path_line = f'    source_path="{config["source_path"]}",\n'
+
+    # Build database lines
+    db_lines = ""
+    if config.get("host"):
+        db_lines += f'    host="{config["host"]}",\n'
+    if config.get("database"):
+        db_lines += f'    database="{config["database"]}",\n'
+    if config.get("query"):
+        db_lines += f'    query="""\n{config["query"]}\n    """,\n'
+
+    # Build watermark line
+    watermark_line = ""
+    if config.get("watermark_column"):
+        watermark_line = f'    watermark_column="{config["watermark_column"]}",\n'
+
+    # Build full refresh line
+    full_refresh_line = ""
+    if config.get("full_refresh_days"):
+        full_refresh_line = f"    full_refresh_days={config['full_refresh_days']},\n"
+
+    # Build chunk size line
+    chunk_size_line = ""
+    if config.get("chunk_size"):
+        chunk_size_line = f"    chunk_size={config['chunk_size']},\n"
+
+    # Build attributes line
+    attributes_line = ""
+    if config.get("attributes"):
+        attributes_line = f"    attributes={config['attributes']},\n"
 
     return f'''"""
-Pipeline: {system}.{entity}
-Generated by pipeline creator
+Pipeline: {config['name']}
+{config.get('description', '')}
+
+Generated by pipeline creator.
+
+To run:
+    python -m pipelines {config['name']} --date 2025-01-15
 """
 
-from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
-from pipelines.lib.silver import SilverEntity, EntityKind, HistoryMode
+from pipelines.lib import Pipeline
+from pipelines.lib.bronze import BronzeSource, LoadPattern, SourceType
+from pipelines.lib.silver import EntityKind, HistoryMode, SilverEntity
 
 # ============================================
 # BRONZE
 # ============================================
 
 bronze = BronzeSource(
-    system="{system}",
-    entity="{entity}",
+    system="{config['system']}",
+    entity="{config['entity']}",
     source_type=SourceType.{source_type},
-{source_path_line}
-{options_section}
-    target_path="s3://bronze/system={{system}}/entity={{entity}}/dt={{run_date}}/",
-    load_pattern=LoadPattern.{load_pattern},
-{watermark_line}
-)
+{source_path_line}{db_lines}    {options_code}    load_pattern=LoadPattern.{load_pattern},
+{watermark_line}{full_refresh_line}{chunk_size_line})
 
 # ============================================
 # SILVER
 # ============================================
 
 silver = SilverEntity(
-    source_path="s3://bronze/system={system}/entity={entity}/dt={{run_date}}/*.parquet",
-    target_path="{target_path}",
-    natural_keys={natural_keys},
-    change_timestamp="{change_ts}",
+    natural_keys={config['natural_keys']},
+    change_timestamp="{config['change_timestamp']}",
     entity_kind=EntityKind.{entity_kind},
     history_mode=HistoryMode.{history_mode},
-)
+{attributes_line})
 
+# ============================================
+# PIPELINE
+# ============================================
 
-def run_bronze(run_date: str, **kwargs):
-    return bronze.run(run_date, **kwargs)
-
-
-def run_silver(run_date: str, **kwargs):
-    return silver.run(run_date, **kwargs)
-
-
-def run(run_date: str, **kwargs):
-    bronze_result = run_bronze(run_date, **kwargs)
-    silver_result = run_silver(run_date, **kwargs)
-    return {{"bronze": bronze_result, "silver": silver_result}}
+pipeline = Pipeline(bronze=bronze, silver=silver)
+run = pipeline.run
+run_bronze = pipeline.run_bronze
+run_silver = pipeline.run_silver
 '''
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Create a new pipeline interactively")
+    parser = argparse.ArgumentParser(
+        description="Create a new pipeline interactively",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+    # Create a YAML pipeline (recommended)
+    python -m pipelines.create --output ./pipelines/my_pipeline.yaml
+
+    # Create a Python pipeline
+    python -m pipelines.create --format python --output ./pipelines/my_pipeline.py
+
+    # Print to stdout (for testing)
+    python -m pipelines.create
+        """,
+    )
     parser.add_argument(
         "--output",
         "-o",
         help="Output file path (default: print to stdout)",
     )
+    parser.add_argument(
+        "--format",
+        "-f",
+        choices=["yaml", "python"],
+        default="yaml",
+        help="Output format: yaml (default) or python",
+    )
     args = parser.parse_args()
 
     try:
-        code = create_pipeline()
+        config = create_pipeline()
 
         print("\n" + "=" * 60)
         print("  Generated Pipeline")
         print("=" * 60)
 
+        # Generate code in requested format
+        if args.format == "yaml":
+            code = generate_yaml_config(config)
+            default_ext = ".yaml"
+        else:
+            code = generate_python_code(config)
+            default_ext = ".py"
+
         if args.output:
             output_path = Path(args.output)
+            # Add extension if not provided
+            if not output_path.suffix:
+                output_path = output_path.with_suffix(default_ext)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_text(code)
             print(f"\nPipeline saved to: {output_path}")
-            print(f"\nTo run: python -m pipelines {output_path.stem} --date 2025-01-15")
+
+            if args.format == "yaml":
+                print("\nTo run:")
+                print(f"  python -m pipelines {output_path} --date 2025-01-15")
+            else:
+                print("\nTo run:")
+                print(f"  python -m pipelines {output_path.stem} --date 2025-01-15")
         else:
-            print("\n" + code)
+            print(f"\n{code}")
             print("\nTo save this pipeline, run with --output:")
-            print("  python -m pipelines.create --output pipelines/your/pipeline.py")
+            if args.format == "yaml":
+                print(f"  python -m pipelines.create --output ./pipelines/{config['name']}.yaml")
+            else:
+                print(f"  python -m pipelines.create --format python --output ./pipelines/{config['name']}.py")
 
     except KeyboardInterrupt:
         print("\n\nCancelled.")

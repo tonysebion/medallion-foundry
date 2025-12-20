@@ -1,0 +1,119 @@
+# yaml-language-server: $schema=../schema/pipeline.schema.json
+#
+# PIPELINE TEMPLATE: Copy this file and fill in the blanks
+# =========================================================
+#
+# To run:
+#   python -m pipelines ./your_pipeline.yaml --date 2025-01-15
+#
+# To test:
+#   python -m pipelines ./your_pipeline.yaml --date 2025-01-15 --dry-run
+#
+# To validate:
+#   python -m pipelines ./your_pipeline.yaml --date 2025-01-15 --check
+#
+# FILE LOCATION & NAMING
+# ----------------------
+# Place YAML files anywhere - just reference the full path when running.
+# Convention: pipelines/{system}_{entity}.yaml
+#
+# SECRETS & ENVIRONMENT VARIABLES
+# -------------------------------
+# NEVER hardcode passwords, API keys, or tokens in pipeline files.
+# Use ${VAR_NAME} syntax - values are expanded at runtime:
+#
+#     host: ${DB_HOST}
+#     password: ${DB_PASSWORD}
+#
+# Set variables before running:
+#     # Linux/Mac
+#     export DB_HOST="server.example.com"
+#     export DB_PASSWORD="secret"
+#
+#     # Windows PowerShell
+#     $env:DB_HOST = "server.example.com"
+#     $env:DB_PASSWORD = "secret"
+#
+#     # Windows Command Prompt
+#     set DB_HOST=server.example.com
+#     set DB_PASSWORD=secret
+#
+# Pipeline fails with clear error if required variables are missing.
+
+# Optional metadata
+name: your_pipeline_name
+description: Brief description of what this pipeline does
+
+# ============================================================
+# BRONZE: Where does the data come from?
+# ============================================================
+bronze:
+  # SYSTEM: The source system name (e.g., "salesforce", "erp", "legacy_db")
+  system: your_system
+
+  # ENTITY: The table or file name (e.g., "customers", "orders", "products")
+  entity: your_entity
+
+  # SOURCE TYPE: What kind of source is this?
+  # Options: file_csv, file_parquet, file_json, file_jsonl, file_excel,
+  #          file_fixed_width, database_mssql, database_postgres,
+  #          database_mysql, database_db2, api_rest
+  source_type: file_csv
+
+  # SOURCE PATH: Where to find the data
+  # For files: path to the file (use {run_date} for date-based files)
+  # For databases: leave empty (use connection info below)
+  source_path: "./data/your_file_{run_date}.csv"
+
+  # DATABASE CONNECTION (only for database sources):
+  # host: ${DB_HOST}           # Database host (use env var)
+  # database: YourDatabase     # Database name
+  # query: SELECT * FROM table # Optional custom SQL
+
+  # LOAD PATTERN: How to load the data?
+  # Options: full_snapshot (replace all each run)
+  #          incremental (only new records)
+  #          cdc (change data capture)
+  load_pattern: full_snapshot
+
+  # WATERMARK: For incremental loads, which column tracks changes?
+  # watermark_column: updated_at
+
+  # PERIODIC FULL REFRESH: Force full reload every N days (optional)
+  # full_refresh_days: 7
+
+  # CHUNKING: For large datasets, process in chunks (optional)
+  # chunk_size: 100000
+
+# ============================================================
+# SILVER: How should data be curated?
+# ============================================================
+silver:
+  # NATURAL KEYS: What makes a record unique? (the primary key)
+  # Examples: [id], [customer_id], [order_id, line_id]
+  natural_keys: [id]
+
+  # CHANGE TIMESTAMP: Which column has the "last updated" time?
+  # This is used to detect changes and order records
+  change_timestamp: updated_at
+
+  # ENTITY KIND: What type of data is this?
+  # state = Dimension (customer, product, account) - can change over time
+  # event = Fact/Log (orders, clicks, payments) - immutable
+  entity_kind: state
+
+  # HISTORY MODE: How to handle changes over time?
+  # current_only (or scd1) = Only keep latest version
+  # full_history (or scd2) = Keep all versions with effective dates
+  history_mode: current_only
+
+  # OPTIONAL: Specify which columns to include (default: all)
+  # attributes:
+  #   - name
+  #   - email
+  #   - status
+
+  # OPTIONAL: Exclude these columns (cannot use with attributes)
+  # exclude_columns:
+  #   - internal_id
+  #   - password_hash

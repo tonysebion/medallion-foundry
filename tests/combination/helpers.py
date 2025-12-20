@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from typing import List, Dict, Any
+from typing import List
 
 import ibis
-import pandas as pd
 
-from pipelines.lib.curate import dedupe_latest, dedupe_earliest, build_history, dedupe_exact
+from pipelines.lib.curate import dedupe_latest, build_history, dedupe_exact
 
 
 def simulate_snapshot_to_scd1(

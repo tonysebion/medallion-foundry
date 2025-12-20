@@ -1,0 +1,259 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://bronze-foundry.io/schema/pipeline.json",
+  "title": "Bronze-Foundry Pipeline Configuration",
+  "description": "Schema for Bronze-Foundry YAML pipeline configuration files",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Optional pipeline name (defaults to filename)"
+    },
+    "description": {
+      "type": "string",
+      "description": "Description of what this pipeline does"
+    },
+    "bronze": {
+      "$ref": "#/definitions/bronze"
+    },
+    "silver": {
+      "$ref": "#/definitions/silver"
+    }
+  },
+  "anyOf": [
+    { "required": ["bronze"] },
+    { "required": ["silver"] }
+  ],
+  "definitions": {
+    "bronze": {
+      "type": "object",
+      "description": "Bronze layer configuration - raw data extraction",
+      "additionalProperties": false,
+      "required": ["system", "entity", "source_type"],
+      "properties": {
+        "system": {
+          "type": "string",
+          "description": "Source system name (e.g., 'salesforce', 'erp', 'legacy')",
+          "examples": ["retail", "crm", "hr_db"]
+        },
+        "entity": {
+          "type": "string",
+          "description": "Table or endpoint name (e.g., 'customers', 'orders')",
+          "examples": ["orders", "customers", "products"]
+        },
+        "source_type": {
+          "type": "string",
+          "description": "Type of data source",
+          "enum": [
+            "file_csv",
+            "file_parquet",
+            "file_space_delimited",
+            "file_fixed_width",
+            "file_json",
+            "file_jsonl",
+            "file_excel",
+            "database_mssql",
+            "database_postgres",
+            "database_mysql",
+            "database_db2",
+            "api_rest"
+          ]
+        },
+        "source_path": {
+          "type": "string",
+          "description": "Path to source file, connection string, or API URL. Use {run_date} for date substitution.",
+          "examples": [
+            "./data/orders_{run_date}.csv",
+            "s3://bucket/data/*.parquet"
+          ]
+        },
+        "target_path": {
+          "type": "string",
+          "description": "Where to write Bronze output. Defaults to ./bronze/system={system}/entity={entity}/dt={run_date}/",
+          "examples": [
+            "./bronze/system={system}/entity={entity}/dt={run_date}/",
+            "s3://bucket/bronze/{system}/{entity}/"
+          ]
+        },
+        "load_pattern": {
+          "type": "string",
+          "description": "How to load data from source",
+          "enum": ["full_snapshot", "incremental", "incremental_append", "cdc"],
+          "default": "full_snapshot"
+        },
+        "watermark_column": {
+          "type": "string",
+          "description": "Column to use for incremental loads (required if load_pattern is incremental)",
+          "examples": ["updated_at", "modified_date", "LastModified"]
+        },
+        "connection": {
+          "type": "string",
+          "description": "Named connection for reuse across multiple entities"
+        },
+        "host": {
+          "type": "string",
+          "description": "Database host or environment variable like ${DB_HOST}",
+          "examples": ["${DB_HOST}", "server.database.com"]
+        },
+        "database": {
+          "type": "string",
+          "description": "Database name"
+        },
+        "query": {
+          "type": "string",
+          "description": "Custom SQL query (optional - defaults to SELECT * FROM entity)"
+        },
+        "chunk_size": {
+          "type": "integer",
+          "description": "Number of rows per chunk for large data (null = load all at once)",
+          "minimum": 1000,
+          "examples": [100000, 500000]
+        },
+        "full_refresh_days": {
+          "type": "integer",
+          "description": "Force full refresh every N days (null = never auto-refresh)",
+          "minimum": 1,
+          "examples": [7, 30]
+        },
+        "partition_by": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Columns to partition output by",
+          "default": ["_load_date"]
+        },
+        "write_checksums": {
+          "type": "boolean",
+          "description": "Write _checksums.json for data integrity verification",
+          "default": true
+        },
+        "write_metadata": {
+          "type": "boolean",
+          "description": "Write _metadata.json for lineage and PolyBase DDL generation",
+          "default": true
+        },
+        "options": {
+          "type": "object",
+          "description": "Source-specific options",
+          "additionalProperties": true,
+          "properties": {
+            "csv_options": {
+              "type": "object",
+              "description": "Options for CSV parsing",
+              "properties": {
+                "delimiter": { "type": "string" },
+                "header": { "type": "boolean" },
+                "skip_rows": { "type": "integer" }
+              }
+            },
+            "sheet": {
+              "type": ["string", "integer"],
+              "description": "Excel sheet name or index (for file_excel)"
+            },
+            "data_path": {
+              "type": "string",
+              "description": "Dot-notation path to navigate nested JSON (for file_json)",
+              "examples": ["response.data.items", "records"]
+            },
+            "flatten": {
+              "type": "boolean",
+              "description": "Flatten nested JSON structures",
+              "default": false
+            },
+            "widths": {
+              "type": "array",
+              "items": { "type": "integer" },
+              "description": "Column widths for fixed-width files"
+            },
+            "columns": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Column names for fixed-width or space-delimited files"
+            }
+          }
+        }
+      }
+    },
+    "silver": {
+      "type": "object",
+      "description": "Silver layer configuration - data curation",
+      "additionalProperties": false,
+      "required": ["natural_keys", "change_timestamp"],
+      "properties": {
+        "natural_keys": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+          ],
+          "description": "Column(s) that uniquely identify a record",
+          "examples": ["order_id", ["customer_id", "account_id"]]
+        },
+        "change_timestamp": {
+          "type": "string",
+          "description": "Column containing when the source record was last modified",
+          "examples": ["updated_at", "modified_date", "LastModified"]
+        },
+        "source_path": {
+          "type": "string",
+          "description": "Path to Bronze data. Auto-wired from Bronze target if not specified.",
+          "examples": [
+            "./bronze/system=retail/entity=orders/dt={run_date}/*.parquet"
+          ]
+        },
+        "target_path": {
+          "type": "string",
+          "description": "Where to write Silver output. Defaults to ./silver/{entity}/",
+          "examples": ["./silver/orders/", "s3://bucket/silver/orders/"]
+        },
+        "entity_kind": {
+          "type": "string",
+          "description": "What kind of entity this represents",
+          "enum": ["state", "event"],
+          "default": "state"
+        },
+        "history_mode": {
+          "type": "string",
+          "description": "How to handle historical changes. 'current_only' (SCD1) or 'full_history' (SCD2)",
+          "enum": ["current_only", "scd1", "full_history", "scd2"],
+          "default": "current_only"
+        },
+        "attributes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Columns to include (null = all columns). Cannot be used with exclude_columns."
+        },
+        "exclude_columns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Columns to exclude (null = none). Cannot be used with attributes."
+        },
+        "partition_by": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Columns to partition output by (optional)"
+        },
+        "output_formats": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["parquet", "csv"]
+          },
+          "description": "Output file formats",
+          "default": ["parquet"]
+        },
+        "parquet_compression": {
+          "type": "string",
+          "description": "Compression codec for Parquet files",
+          "enum": ["snappy", "gzip", "zstd", "lz4", "none"],
+          "default": "snappy"
+        },
+        "validate_source": {
+          "type": "string",
+          "description": "How to validate Bronze source checksums",
+          "enum": ["skip", "warn", "strict"],
+          "default": "skip"
+        }
+      }
+    }
+  }
+}

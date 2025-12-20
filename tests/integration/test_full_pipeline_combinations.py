@@ -141,7 +141,7 @@ def create_cdc_stream(num_records: int = 5, include_deletes: bool = True) -> pd.
     if include_deletes and num_records > 1:
         events.append({
             "id": 2,
-            "name": f"Entity_2_deleted",
+            "name": "Entity_2_deleted",
             "value": 0,
             "ts": datetime(2025, 1, 20),
             "op": "D",
@@ -151,7 +151,7 @@ def create_cdc_stream(num_records: int = 5, include_deletes: bool = True) -> pd.
     if num_records > 2:
         events.append({
             "id": 3,
-            "name": f"Entity_3_v3",
+            "name": "Entity_3_v3",
             "value": 350,
             "ts": datetime(2025, 1, 25),
             "op": "U",

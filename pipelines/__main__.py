@@ -1,14 +1,19 @@
 """CLI entry point for running pipelines.
 
 Usage:
+    # Run a YAML pipeline (recommended for non-Python users)
+    python -m pipelines ./pipelines/retail_orders.yaml --date 2025-01-15
+    python -m pipelines ./pipelines/retail_orders.yaml:bronze --date 2025-01-15
+
+    # Run a Python pipeline
     python -m pipelines claims.header --date 2025-01-15
     python -m pipelines claims.header:bronze --date 2025-01-15
     python -m pipelines claims.header:silver --date 2025-01-15
     python -m pipelines claims.header --date 2025-01-15 --dry-run
 
-Pipeline naming convention:
-    - Pipelines are Python modules in the pipelines/ directory
-    - Use dot notation: claims.header -> pipelines/claims/header.py
+Pipeline formats:
+    - YAML files: ./path/to/pipeline.yaml (recommended for non-Python users)
+    - Python modules: Use dot notation claims.header -> pipelines/claims/header.py
     - Append :bronze or :silver to run only that layer
 """
 
@@ -117,14 +122,244 @@ def discover_pipelines() -> List[Dict[str, Any]]:
     return sorted(pipelines, key=lambda p: p["name"])
 
 
-def list_pipelines() -> None:
-    """Print list of available pipelines."""
-    pipelines = discover_pipelines()
+def discover_yaml_pipelines() -> List[Dict[str, Any]]:
+    """Discover available YAML pipeline configurations.
 
-    if not pipelines:
+    Searches for .yaml and .yml files in the pipelines/ directory.
+
+    Returns:
+        List of dicts with pipeline info: name, path, description
+    """
+    pipelines_dir = Path(__file__).parent
+    yaml_pipelines: List[Dict[str, Any]] = []
+
+    # Skip these directories
+    skip = {"lib", "__pycache__", "schema"}
+
+    for yaml_file in pipelines_dir.rglob("*.yaml"):
+        rel_path = yaml_file.relative_to(pipelines_dir)
+
+        # Skip internal directories
+        if any(part in skip for part in rel_path.parts):
+            continue
+
+        try:
+            import yaml as yaml_lib
+            with open(yaml_file, "r", encoding="utf-8") as f:
+                config = yaml_lib.safe_load(f)
+
+            if config:
+                name = config.get("name", yaml_file.stem)
+                description = config.get("description", "")
+                has_bronze = "bronze" in config
+                has_silver = "silver" in config
+
+                yaml_pipelines.append({
+                    "name": name,
+                    "path": str(rel_path),
+                    "full_path": str(yaml_file),
+                    "has_bronze": has_bronze,
+                    "has_silver": has_silver,
+                    "description": description[:60] if description else "",
+                    "type": "yaml",
+                })
+        except Exception as e:
+            logger.warning(
+                "Failed to parse YAML pipeline '%s': %s",
+                yaml_file,
+                e,
+            )
+
+    # Also check .yml files
+    for yml_file in pipelines_dir.rglob("*.yml"):
+        rel_path = yml_file.relative_to(pipelines_dir)
+
+        if any(part in skip for part in rel_path.parts):
+            continue
+
+        try:
+            import yaml as yaml_lib
+            with open(yml_file, "r", encoding="utf-8") as f:
+                config = yaml_lib.safe_load(f)
+
+            if config:
+                name = config.get("name", yml_file.stem)
+                description = config.get("description", "")
+                has_bronze = "bronze" in config
+                has_silver = "silver" in config
+
+                yaml_pipelines.append({
+                    "name": name,
+                    "path": str(rel_path),
+                    "full_path": str(yml_file),
+                    "has_bronze": has_bronze,
+                    "has_silver": has_silver,
+                    "description": description[:60] if description else "",
+                    "type": "yaml",
+                })
+        except Exception as e:
+            logger.warning(
+                "Failed to parse YAML pipeline '%s': %s",
+                yml_file,
+                e,
+            )
+
+    return sorted(yaml_pipelines, key=lambda p: p["name"])
+
+
+def is_yaml_pipeline(spec: str) -> bool:
+    """Check if the pipeline specification refers to a YAML file."""
+    # Remove layer suffix if present
+    base_spec = spec.rsplit(":", 1)[0] if ":" in spec else spec
+    return base_spec.endswith((".yaml", ".yml"))
+
+
+def run_yaml_pipeline(
+    yaml_path: str,
+    layer: Optional[str],
+    run_date: str,
+    dry_run: bool = False,
+    target_override: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Run a pipeline from a YAML configuration file.
+
+    Args:
+        yaml_path: Path to the YAML configuration file
+        layer: Optional layer to run ("bronze", "silver", or None for both)
+        run_date: Date for this pipeline run
+        dry_run: If True, validate but don't execute
+        target_override: Override target path for local development
+
+    Returns:
+        Pipeline result dictionary
+    """
+    from pipelines.lib.config_loader import load_pipeline, YAMLConfigError
+
+    try:
+        pipeline = load_pipeline(yaml_path)
+    except (FileNotFoundError, YAMLConfigError) as e:
+        print(f"Error loading YAML pipeline: {e}")
+        sys.exit(1)
+
+    kwargs: Dict[str, Any] = {"dry_run": dry_run}
+    if target_override:
+        kwargs["target_override"] = target_override
+
+    if layer == "bronze":
+        if not pipeline.bronze:
+            print("Error: Pipeline has no 'bronze' section defined")
+            sys.exit(1)
+        return pipeline.run_bronze(run_date, **kwargs)
+
+    elif layer == "silver":
+        if not pipeline.silver:
+            print("Error: Pipeline has no 'silver' section defined")
+            sys.exit(1)
+        return pipeline.run_silver(run_date, **kwargs)
+
+    else:
+        return pipeline.run(run_date, **kwargs)
+
+
+def explain_yaml_pipeline(yaml_path: str, layer: Optional[str], run_date: str) -> None:
+    """Explain what a YAML pipeline would do without executing."""
+    from pipelines.lib.config_loader import load_pipeline, YAMLConfigError
+
+    try:
+        pipeline = load_pipeline(yaml_path)
+    except (FileNotFoundError, YAMLConfigError) as e:
+        print(f"Error loading YAML pipeline: {e}")
+        sys.exit(1)
+
+    print()
+    print("=" * 60)
+    print("PIPELINE EXPLANATION")
+    print("=" * 60)
+    print(f"Config File: {yaml_path}")
+    print(f"Run Date: {run_date}")
+    print(f"Layer: {layer or 'all (bronze → silver)'}")
+    print()
+    print(pipeline.explain())
+    print("=" * 60)
+
+
+def check_yaml_pipeline(yaml_path: str, layer: Optional[str], run_date: str) -> None:
+    """Validate a YAML pipeline configuration and connectivity."""
+    from pipelines.lib.config_loader import load_pipeline, validate_yaml_config, YAMLConfigError
+
+    print()
+    print("=" * 60)
+    print("PIPELINE VALIDATION")
+    print("=" * 60)
+    print(f"Config File: {yaml_path}")
+    print()
+
+    # First validate YAML syntax and structure
+    errors = validate_yaml_config(yaml_path)
+
+    if errors:
+        print("Configuration errors:")
+        for error in errors:
+            print(f"  - {error}")
+        print()
+        print("=" * 60)
+        print("RESULT: FAILED - Fix errors above before running")
+        sys.exit(1)
+    else:
+        print("Configuration: OK")
+
+    # Load and run additional checks
+    try:
+        pipeline = load_pipeline(yaml_path)
+
+        # Check bronze
+        if pipeline.bronze and (layer is None or layer == "bronze"):
+            print(f"\nBronze: {pipeline.bronze.system}.{pipeline.bronze.entity}")
+            print("-" * 40)
+            issues = pipeline.bronze.validate(run_date, check_connectivity=True)
+            if issues:
+                for issue in issues:
+                    print(f"  - {issue}")
+            else:
+                print("  Configuration: OK")
+
+        # Check silver
+        if pipeline.silver and (layer is None or layer == "silver"):
+            print(f"\nSilver: {pipeline.silver.target_path}")
+            print("-" * 40)
+            issues = pipeline.silver.validate(run_date, check_source=True)
+            if issues:
+                for issue in issues:
+                    print(f"  - {issue}")
+            else:
+                print("  Configuration: OK")
+
+        print()
+        print("=" * 60)
+        print("RESULT: PASSED - Pipeline is ready to run")
+
+    except YAMLConfigError as e:
+        print(f"Error: {e}")
+        print()
+        print("=" * 60)
+        print("RESULT: FAILED")
+        sys.exit(1)
+
+
+def list_pipelines() -> None:
+    """Print list of available pipelines (both Python and YAML)."""
+    python_pipelines = discover_pipelines()
+    yaml_pipelines = discover_yaml_pipelines()
+
+    all_pipelines = python_pipelines + yaml_pipelines
+
+    if not all_pipelines:
         print("No pipelines found.")
         print()
-        print("To create a pipeline, add a Python file to the pipelines/ directory.")
+        print("To create a pipeline:")
+        print("  - YAML (recommended): Add a .yaml file to the pipelines/ directory")
+        print("  - Python: Add a .py file to the pipelines/ directory")
+        print()
         print("See pipelines/templates/ for examples.")
         return
 
@@ -132,28 +367,35 @@ def list_pipelines() -> None:
     print()
 
     # Calculate column widths
-    max_name = max(len(p["name"]) for p in pipelines)
+    max_name = max(len(p["name"]) for p in all_pipelines)
     max_name = max(max_name, 10)  # Minimum width
 
     # Print header
-    print(f"  {'Name':<{max_name}}  {'Layers':<15}  Description")
-    print(f"  {'-' * max_name}  {'-' * 15}  {'-' * 40}")
+    print(f"  {'Name':<{max_name}}  {'Type':<6}  {'Layers':<15}  Description")
+    print(f"  {'-' * max_name}  {'-' * 6}  {'-' * 15}  {'-' * 35}")
 
-    for p in pipelines:
+    for p in all_pipelines:
         layers = []
-        if p["has_bronze"]:
+        if p.get("has_bronze"):
             layers.append("bronze")
-        if p["has_silver"]:
+        if p.get("has_silver"):
             layers.append("silver")
         layers_str = ", ".join(layers) if layers else "run only"
 
-        desc = p["description"][:40] if p["description"] else ""
+        desc = p.get("description", "")[:35] if p.get("description") else ""
+        p_type = p.get("type", "py")[:6]
 
-        print(f"  {p['name']:<{max_name}}  {layers_str:<15}  {desc}")
+        print(f"  {p['name']:<{max_name}}  {p_type:<6}  {layers_str:<15}  {desc}")
 
     print()
     print("Usage:")
     print("  python -m pipelines.create              # Launch interactive pipeline creator")
+    print()
+    print("  # YAML pipelines (recommended)")
+    print("  python -m pipelines ./path/to/pipeline.yaml --date YYYY-MM-DD")
+    print("  python -m pipelines ./path/to/pipeline.yaml:bronze --date YYYY-MM-DD")
+    print()
+    print("  # Python pipelines")
     print("  python -m pipelines <name> --date YYYY-MM-DD")
     print("  python -m pipelines <name>:bronze --date YYYY-MM-DD  # Bronze only")
     print("  python -m pipelines <name>:silver --date YYYY-MM-DD  # Silver only")
@@ -557,7 +799,7 @@ def generate_sample_command(pipeline_name: str, rows: int = 100, output_dir: str
     Usage:
         python -m pipelines generate-sample claims.header --rows 1000
     """
-    import pandas as pd
+    import polars as pl
     import random
     import string
     from datetime import datetime, timedelta
@@ -622,7 +864,7 @@ def generate_sample_command(pipeline_name: str, rows: int = 100, output_dir: str
         "updated_at": [random_timestamp() for _ in range(rows)],
     }
 
-    df = pd.DataFrame(data)
+    df = pl.DataFrame(data)
 
     # Write to output
     from pathlib import Path
@@ -634,8 +876,8 @@ def generate_sample_command(pipeline_name: str, rows: int = 100, output_dir: str
     csv_file = output_path / f"{system}_{entity}_sample.csv"
     parquet_file = output_path / f"{system}_{entity}_sample.parquet"
 
-    df.to_csv(csv_file, index=False)
-    df.to_parquet(parquet_file, index=False)
+    df.write_csv(csv_file)
+    df.write_parquet(parquet_file)
 
     print(f"Generated {rows} sample rows")
     print(f"CSV: {csv_file}")
@@ -643,7 +885,7 @@ def generate_sample_command(pipeline_name: str, rows: int = 100, output_dir: str
     print()
     print("Columns generated:")
     for col in df.columns:
-        print(f"  - {col} ({df[col].dtype})")
+        print(f"  - {col} ({df.schema[col]})")
     print()
     print("=" * 60)
 
@@ -840,7 +1082,7 @@ def inspect_source_command(source_path: str = None, file_type: str = None) -> No
         python -m pipelines inspect-source --file ./data.csv
         python -m pipelines inspect-source --file ./data.parquet
     """
-    import pandas as pd
+    import polars as pl
     from pathlib import Path
 
     print()
@@ -861,14 +1103,14 @@ def inspect_source_command(source_path: str = None, file_type: str = None) -> No
     print(f"File: {source_path}")
     print()
 
-    # Read the file
+    # Read the file using Polars for better performance
     try:
         if path.suffix.lower() == ".csv":
-            df = pd.read_csv(path, nrows=1000)
+            df = pl.read_csv(path, n_rows=1000)
         elif path.suffix.lower() in (".parquet", ".pq"):
-            df = pd.read_parquet(path)
+            df = pl.read_parquet(path)
         elif path.suffix.lower() == ".json":
-            df = pd.read_json(path, lines=True, nrows=1000)
+            df = pl.read_ndjson(path, n_rows=1000)
         else:
             print(f"Unsupported file type: {path.suffix}")
             print("Supported: .csv, .parquet, .json")
@@ -880,9 +1122,9 @@ def inspect_source_command(source_path: str = None, file_type: str = None) -> No
     print("SCHEMA:")
     print("-" * 40)
     for col in df.columns:
-        dtype = df[col].dtype
-        null_count = df[col].isna().sum()
-        unique_count = df[col].nunique()
+        dtype = df.schema[col]
+        null_count = df[col].is_null().sum()
+        unique_count = df[col].n_unique()
         print(f"  {col:<25} {str(dtype):<15} nulls={null_count:<5} unique={unique_count}")
     print()
 
@@ -899,7 +1141,7 @@ def inspect_source_command(source_path: str = None, file_type: str = None) -> No
     # Find potential primary keys
     pk_candidates = []
     for col in df.columns:
-        if df[col].nunique() == len(df) and df[col].isna().sum() == 0:
+        if df[col].n_unique() == len(df) and df[col].is_null().sum() == 0:
             pk_candidates.append(col)
 
     if pk_candidates:
@@ -912,7 +1154,7 @@ def inspect_source_command(source_path: str = None, file_type: str = None) -> No
     for col in df.columns:
         if "date" in col.lower() or "time" in col.lower() or "updated" in col.lower():
             timestamp_cols.append(col)
-        elif df[col].dtype == "datetime64[ns]":
+        elif df.schema[col] in (pl.Datetime, pl.Date):
             timestamp_cols.append(col)
 
     if timestamp_cols:
@@ -983,8 +1225,14 @@ def print_welcome_message() -> None:
     print()
     print("Quick Start:")
     print("  python -m pipelines --list              List available pipelines")
-    print("  python -m pipelines <name> --date YYYY-MM-DD    Run a pipeline")
     print("  python -m pipelines.create              Launch interactive wizard")
+    print()
+    print("Run a YAML Pipeline (recommended for non-Python users):")
+    print("  python -m pipelines ./path/to/pipeline.yaml --date 2025-01-15")
+    print("  python -m pipelines ./path/to/pipeline.yaml:bronze --date 2025-01-15")
+    print()
+    print("Run a Python Pipeline:")
+    print("  python -m pipelines <module.name> --date YYYY-MM-DD")
     print()
     print("Common Commands:")
     print("  python -m pipelines new <name> --source-type file_csv")
@@ -1003,7 +1251,7 @@ def print_welcome_message() -> None:
     print()
     print("Try an Example:")
     print("  python -m pipelines generate-samples")
-    print("  python -m pipelines examples.retail_orders --date 2025-01-15")
+    print("  python -m pipelines ./pipelines/templates/retail_orders.yaml --date 2025-01-15")
     print()
     print("Documentation: python -m pipelines --help")
     print()
@@ -1016,30 +1264,41 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    # List available pipelines
+    # List available pipelines (YAML and Python)
     python -m pipelines --list
 
+    # YAML Pipelines (recommended for non-Python users)
+    # ------------------------------------------------
+    # Run full pipeline from YAML config
+    python -m pipelines ./pipelines/retail_orders.yaml --date 2025-01-15
+
+    # Run only Bronze extraction
+    python -m pipelines ./pipelines/retail_orders.yaml:bronze --date 2025-01-15
+
+    # Run only Silver curation
+    python -m pipelines ./pipelines/retail_orders.yaml:silver --date 2025-01-15
+
+    # Python Pipelines
+    # ----------------
     # Run full pipeline (Bronze -> Silver)
     python -m pipelines claims.header --date 2025-01-15
 
     # Run only Bronze extraction
     python -m pipelines claims.header:bronze --date 2025-01-15
 
-    # Run only Silver curation
-    python -m pipelines claims.header:silver --date 2025-01-15
-
+    # Validation and Debugging
+    # ------------------------
     # Validate configuration and connectivity
-    python -m pipelines claims.header --date 2025-01-15 --check
+    python -m pipelines ./my_pipeline.yaml --date 2025-01-15 --check
 
     # Show what pipeline would do without executing
-    python -m pipelines claims.header --date 2025-01-15 --explain
+    python -m pipelines ./my_pipeline.yaml --date 2025-01-15 --explain
 
-    # Dry run (validate without executing)
-    python -m pipelines claims.header --date 2025-01-15 --dry-run
+    # Dry run (validate without writing data)
+    python -m pipelines ./my_pipeline.yaml --date 2025-01-15 --dry-run
 
-    # Local development (override target paths)
-    python -m pipelines claims.header --date 2025-01-15 --target ./local_output/
-
+    # Other Commands
+    # --------------
     # Test database connection
     python -m pipelines test-connection claims_db --host myserver.com --database ClaimsDB
 
@@ -1203,52 +1462,95 @@ Examples:
     )
     logger = logging.getLogger("pipelines")
 
-    # Parse pipeline specification
-    module_path, layer = parse_pipeline_spec(args.pipeline)
+    # Parse pipeline specification and determine type (YAML vs Python)
+    pipeline_spec, layer = parse_pipeline_spec(args.pipeline)
 
-    logger.info(
-        "Running pipeline: %s (layer=%s, date=%s)",
-        module_path,
-        layer or "all",
-        args.date,
-    )
-
-    # Load and run pipeline
-    try:
-        module = load_pipeline_module(module_path)
-
-        # Handle --explain: show what would run without executing
-        if args.explain:
-            explain_pipeline(module, layer, args.date)
-            return
-
-        # Handle --check: validate configuration and connectivity
-        if args.check:
-            check_pipeline(module, layer, args.date)
-            return
-
-        result = run_pipeline(
-            module,
-            layer,
+    # Check if this is a YAML pipeline
+    if is_yaml_pipeline(args.pipeline):
+        logger.info(
+            "Running YAML pipeline: %s (layer=%s, date=%s)",
+            pipeline_spec,
+            layer or "all",
             args.date,
-            dry_run=args.dry_run,
-            target_override=args.target_override,
         )
 
-        print_result(result, args.pipeline)
+        try:
+            # Handle --explain: show what would run without executing
+            if args.explain:
+                explain_yaml_pipeline(pipeline_spec, layer, args.date)
+                return
 
-    except KeyboardInterrupt:
-        print("\nInterrupted by user")
-        sys.exit(130)
+            # Handle --check: validate configuration and connectivity
+            if args.check:
+                check_yaml_pipeline(pipeline_spec, layer, args.date)
+                return
 
-    except Exception as e:
-        logger.exception("Pipeline failed: %s", e)
-        print(f"\nError: {e}")
-        sys.exit(1)
+            result = run_yaml_pipeline(
+                pipeline_spec,
+                layer,
+                args.date,
+                dry_run=args.dry_run,
+                target_override=args.target_override,
+            )
 
-    finally:
-        # Clean up connections
-        close_all_connections()
+            print_result(result, args.pipeline)
+
+        except KeyboardInterrupt:
+            print("\nInterrupted by user")
+            sys.exit(130)
+
+        except Exception as e:
+            logger.exception("YAML pipeline failed: %s", e)
+            print(f"\nError: {e}")
+            sys.exit(1)
+
+        finally:
+            close_all_connections()
+
+    else:
+        # Python module pipeline
+        logger.info(
+            "Running pipeline: %s (layer=%s, date=%s)",
+            pipeline_spec,
+            layer or "all",
+            args.date,
+        )
+
+        try:
+            module = load_pipeline_module(pipeline_spec)
+
+            # Handle --explain: show what would run without executing
+            if args.explain:
+                explain_pipeline(module, layer, args.date)
+                return
+
+            # Handle --check: validate configuration and connectivity
+            if args.check:
+                check_pipeline(module, layer, args.date)
+                return
+
+            result = run_pipeline(
+                module,
+                layer,
+                args.date,
+                dry_run=args.dry_run,
+                target_override=args.target_override,
+            )
+
+            print_result(result, args.pipeline)
+
+        except KeyboardInterrupt:
+            print("\nInterrupted by user")
+            sys.exit(130)
+
+        except Exception as e:
+            logger.exception("Pipeline failed: %s", e)
+            print(f"\nError: {e}")
+            sys.exit(1)
+
+        finally:
+            # Clean up connections
+            close_all_connections()
 
 
 if __name__ == "__main__":

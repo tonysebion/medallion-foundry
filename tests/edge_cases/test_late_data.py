@@ -143,7 +143,7 @@ class TestLateDataWithIncremental:
     def test_late_data_in_new_batch(self, con):
         """Late data arriving in new batch is filtered."""
         # Batch 1: Normal data
-        batch1 = pd.DataFrame([
+        pd.DataFrame([
             {"id": 1, "name": "Normal", "ts": datetime(2025, 1, 15)},
         ])
 

@@ -1,5 +1,10 @@
 # Core dependencies - required for all installations
 python-dotenv>=1.0.0
+polars>=1.0.0
+pandera>=0.20.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+structlog>=24.1.0
 boto3>=1.26.0
 jmespath>=1.0.0  # Required by boto3
 pandas>=1.5.0

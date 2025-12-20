@@ -1,0 +1,71 @@
+# yaml-language-server: $schema=../schema/pipeline.schema.json
+#
+# Example Pipeline: MSSQL Incremental Load
+# =========================================
+# Demonstrates incremental loading from a SQL Server database with watermark tracking.
+#
+# This example shows:
+# - Database extraction with MSSQL (source_type: database_mssql)
+# - Incremental load pattern using watermarks (load_pattern: incremental)
+# - Environment variable expansion for secrets (${DB_HOST} syntax)
+# - SCD Type 1 curation
+#
+# Setup:
+#   1. Set environment variables:
+#       export DB_HOST=your-server.database.windows.net
+#       export DB_USER=your_username
+#       export DB_PASSWORD=your_password
+#
+#   2. Ensure the database has an 'order_details' table with an 'UpdatedAt' column
+#
+# Test connectivity:
+#   python -m pipelines test-connection sales_db --host $DB_HOST --database SalesDB
+#
+# Run:
+#   python -m pipelines ./pipelines/examples/mssql_incremental.yaml --date 2025-01-15
+#
+# Dry run (validate configuration):
+#   python -m pipelines ./pipelines/examples/mssql_incremental.yaml --date 2025-01-15 --dry-run
+#
+# Check connectivity:
+#   python -m pipelines ./pipelines/examples/mssql_incremental.yaml --date 2025-01-15 --check
+
+name: mssql_incremental
+description: Incremental load from SQL Server with watermark tracking
+
+bronze:
+  system: sales_dw
+  entity: order_details
+  source_type: database_mssql
+
+  # Database connection using environment variables
+  host: ${DB_HOST}
+  database: SalesDB
+
+  # Custom query - use :watermark placeholder for incremental
+  query: |
+    SELECT
+      OrderDetailID,
+      OrderID,
+      ProductID,
+      Quantity,
+      UnitPrice,
+      Discount,
+      UpdatedAt
+    FROM Sales.OrderDetails
+    WHERE UpdatedAt > :watermark
+    ORDER BY UpdatedAt
+
+  # Incremental load settings
+  load_pattern: incremental
+  watermark_column: UpdatedAt
+
+silver:
+  natural_keys: [OrderDetailID]
+  change_timestamp: UpdatedAt
+  attributes:
+    - OrderID
+    - ProductID
+    - Quantity
+    - UnitPrice
+    - Discount

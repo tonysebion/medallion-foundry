@@ -8,11 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-import ibis
-import pandas as pd
-import pytest
 
-from pipelines.lib.curate import dedupe_latest, build_history, dedupe_exact
 from tests.data_validation.assertions import SCD1Assertions, SCD2Assertions
 from tests.combination.helpers import simulate_snapshot_to_scd1, simulate_snapshot_to_scd2
 from tests.combination.conftest import create_memtable

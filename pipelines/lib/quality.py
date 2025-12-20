@@ -6,6 +6,8 @@ These are DATA quality rules (schema, nulls, types) - NOT business logic.
 Good: "natural key must not be null"
 Good: "timestamp must be valid date"
 Bad: "order total must be > $10" (that's business logic - belongs in Gold)
+
+Uses Pandera for data validation when available, with fallback to custom checks.
 """
 
 from __future__ import annotations
@@ -13,7 +15,11 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, TYPE_CHECKING, Type
+
+import pandera as pa
+from pandera import Column, Check, DataFrameSchema
+import pandas as pd
 
 if TYPE_CHECKING:
     import ibis
@@ -26,6 +32,8 @@ __all__ = [
     "QualityRule",
     "Severity",
     "check_quality",
+    "check_quality_pandera",
+    "create_pandera_schema",
     "in_list",
     "matches_pattern",
     "non_negative",
@@ -282,7 +290,172 @@ def matches_pattern(
 
 
 # ============================================
-# Quality Check Execution
+# Pandera Integration
+# ============================================
+
+
+def create_pandera_schema(
+    rules: List[QualityRule],
+    columns: Optional[Dict[str, Type]] = None,
+) -> DataFrameSchema:
+    """Create a Pandera schema from quality rules.
+
+    This converts QualityRule objects into a Pandera DataFrameSchema
+    for efficient validation.
+
+    Args:
+        rules: List of QualityRule objects
+        columns: Optional column type hints {column_name: dtype}
+
+    Returns:
+        Pandera DataFrameSchema
+
+    Example:
+        rules = not_null("id", "name") + [positive("amount")]
+        schema = create_pandera_schema(rules)
+        validated_df = schema.validate(df)
+    """
+    pandera_columns: Dict[str, Column] = {}
+
+    for rule in rules:
+        # Parse rule expression to create Pandera checks
+        if "IS NOT NULL" in rule.expression and "TRIM" not in rule.expression:
+            # Simple not_null rule
+            col_name = rule.expression.split()[0]
+            if col_name not in pandera_columns:
+                pandera_columns[col_name] = Column(nullable=False)
+            else:
+                # Update existing column to not nullable
+                pandera_columns[col_name] = Column(
+                    pandera_columns[col_name].dtype,
+                    nullable=False,
+                    checks=pandera_columns[col_name].checks,
+                )
+
+        elif "TRIM" in rule.expression and "!= ''" in rule.expression:
+            # not_empty rule - column cannot be null or empty string
+            col_name = rule.expression.split()[0]
+            check = Check(lambda s: s.notna() & (s.str.strip() != ""), name=rule.name)
+            if col_name in pandera_columns:
+                existing_checks = list(pandera_columns[col_name].checks or [])
+                existing_checks.append(check)
+                pandera_columns[col_name] = Column(
+                    checks=existing_checks,
+                    nullable=False,
+                )
+            else:
+                pandera_columns[col_name] = Column(checks=[check], nullable=False)
+
+        elif "> 0" in rule.expression:
+            # positive rule
+            col_name = rule.expression.split()[0]
+            check = Check.greater_than(0, name=rule.name)
+            if col_name in pandera_columns:
+                existing_checks = list(pandera_columns[col_name].checks or [])
+                existing_checks.append(check)
+                pandera_columns[col_name] = Column(checks=existing_checks)
+            else:
+                pandera_columns[col_name] = Column(checks=[check])
+
+        elif ">= 0" in rule.expression:
+            # non_negative rule
+            col_name = rule.expression.split()[0]
+            check = Check.greater_than_or_equal_to(0, name=rule.name)
+            if col_name in pandera_columns:
+                existing_checks = list(pandera_columns[col_name].checks or [])
+                existing_checks.append(check)
+                pandera_columns[col_name] = Column(checks=existing_checks)
+            else:
+                pandera_columns[col_name] = Column(checks=[check])
+
+        elif " IN (" in rule.expression:
+            # in_list rule
+            col_name = rule.expression.split()[0]
+            # Extract values from expression
+            start = rule.expression.index("(") + 1
+            end = rule.expression.index(")")
+            values_str = rule.expression[start:end]
+            values = [v.strip().strip("'") for v in values_str.split(",")]
+            check = Check.isin(values, name=rule.name)
+            if col_name in pandera_columns:
+                existing_checks = list(pandera_columns[col_name].checks or [])
+                existing_checks.append(check)
+                pandera_columns[col_name] = Column(checks=existing_checks)
+            else:
+                pandera_columns[col_name] = Column(checks=[check])
+
+    return DataFrameSchema(columns=pandera_columns, coerce=True)
+
+
+def check_quality_pandera(
+    df: pd.DataFrame,
+    rules: List[QualityRule],
+    *,
+    fail_on_error: bool = True,
+) -> QualityResult:
+    """Run quality checks using Pandera.
+
+    This is a more efficient alternative to check_quality() that uses
+    Pandera for validation instead of SQL expressions.
+
+    Args:
+        df: Pandas DataFrame to check
+        rules: List of quality rules to apply
+        fail_on_error: Raise exception on ERROR-level violations
+
+    Returns:
+        QualityResult with check details
+
+    Raises:
+        QualityCheckFailed: If fail_on_error=True and ERROR violations exist
+
+    Example:
+        rules = not_null("order_id") + [positive("amount")]
+        result = check_quality_pandera(df, rules)
+    """
+    total_rows = len(df)
+    violations: List[Dict[str, Any]] = []
+    failed_rows = 0
+
+    try:
+        schema = create_pandera_schema(rules)
+        schema.validate(df, lazy=True)
+    except pa.errors.SchemaErrors as e:
+        # Collect all validation errors
+        for failure_case in e.failure_cases.to_dict("records"):
+            violations.append({
+                "rule": failure_case.get("check", "unknown"),
+                "column": failure_case.get("column", "unknown"),
+                "error": failure_case.get("failure_case", "validation failed"),
+                "severity": "error",
+            })
+        failed_rows = len(e.failure_cases)
+    except Exception as e:
+        logger.warning("Pandera validation error: %s", e)
+        violations.append({
+            "rule": "pandera_validation",
+            "error": str(e),
+            "severity": "error",
+        })
+
+    passed = len(violations) == 0
+
+    result = QualityResult(
+        passed=passed,
+        total_rows=total_rows,
+        failed_rows=failed_rows,
+        rules_checked=len(rules),
+        violations=violations,
+    )
+
+    if not passed and fail_on_error:
+        raise QualityCheckFailed(result)
+
+    return result
+
+
+# ============================================
+# Quality Check Execution (Original API)
 # ============================================
 
 

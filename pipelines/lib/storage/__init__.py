@@ -1,7 +1,8 @@
 """Storage backend abstraction for pipelines.
 
 Provides a unified interface for reading and writing data to different
-storage backends: local filesystem, AWS S3, and Azure Data Lake Storage (ADLS).
+storage backends: local filesystem, AWS S3, Azure Data Lake Storage (ADLS),
+Google Cloud Storage, and any other fsspec-compatible filesystem.
 
 Usage:
     from pipelines.lib.storage import get_storage
@@ -14,20 +15,28 @@ Usage:
 
     # Azure ADLS
     storage = get_storage("abfss://container@account.dfs.core.windows.net/bronze/")
+
+    # Universal fsspec backend (supports 40+ filesystems)
+    from pipelines.lib.storage import FsspecStorage
+    storage = FsspecStorage("gs://my-bucket/bronze/", token="/path/to/creds.json")
 """
 
-from pipelines.lib.storage.base import StorageBackend, StorageResult
+from pipelines.lib.storage.base import StorageBackend, StorageResult, FileInfo
 from pipelines.lib.storage.local import LocalStorage
 from pipelines.lib.storage.s3 import S3Storage
 from pipelines.lib.storage.adls import ADLSStorage
+from pipelines.lib.storage.fsspec_backend import FsspecStorage, get_fsspec_filesystem
 
 __all__ = [
     "StorageBackend",
     "StorageResult",
+    "FileInfo",
     "LocalStorage",
     "S3Storage",
     "ADLSStorage",
+    "FsspecStorage",
     "get_storage",
+    "get_fsspec_filesystem",
     "parse_uri",
 ]
 

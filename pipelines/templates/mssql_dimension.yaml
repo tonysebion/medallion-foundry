@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=../schema/pipeline.schema.json
+#
+# TEMPLATE: SQL Server Dimension Table (SCD Type 1)
+# ==================================================
+# Use this for dimension tables from SQL Server:
+# - Customer, Product, Account, Employee, etc.
+# - Keeps only the latest version of each record
+#
+# Prerequisites:
+#   export DB_HOST="your-server.database.com"
+#
+# To run:
+#   python -m pipelines ./pipelines/templates/mssql_dimension.yaml --date 2025-01-15
+
+# Optional metadata
+name: mssql_dimension_template
+description: Template for SQL Server dimension tables with SCD Type 1
+
+# Bronze layer - extract from SQL Server
+bronze:
+  system: your_system           # e.g., "crm", "erp", "hr_db"
+  entity: your_table            # e.g., "customers", "products"
+  source_type: database_mssql
+
+  # Database connection (uses environment variables)
+  host: ${DB_HOST}              # Set via: export DB_HOST=your-server.com
+  database: YourDatabase
+
+  # Optional: custom SQL query (uncomment if needed)
+  # query: |
+  #   SELECT CustomerID, Name, Email, Status, LastUpdated
+  #   FROM dbo.Customers
+  #   WHERE IsActive = 1
+
+# Silver layer - curate as SCD Type 1 (current only)
+silver:
+  natural_keys: [id]                # What makes a record unique?
+  change_timestamp: LastUpdated     # When was the record last changed?
+  # history_mode: current_only      # Default - only keep latest version

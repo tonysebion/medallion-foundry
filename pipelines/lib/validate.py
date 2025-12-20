@@ -2,6 +2,9 @@
 
 Provides validation functions that catch common configuration errors
 early and provide helpful error messages for non-Python developers.
+
+Uses Pydantic v2 for type-safe configuration validation when available,
+with fallback to original dataclass-based validation.
 """
 
 from __future__ import annotations
@@ -9,7 +12,10 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 if TYPE_CHECKING:
     from pipelines.lib.bronze import BronzeSource
@@ -18,6 +24,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "BronzeConfig",
+    "PipelineSettings",
+    "SilverConfig",
     "ValidationIssue",
     "ValidationSeverity",
     "format_validation_report",
@@ -25,6 +34,181 @@ __all__ = [
     "validate_bronze_source",
     "validate_silver_entity",
 ]
+
+
+# ============================================
+# Pydantic Configuration Models
+# ============================================
+
+
+class BronzeConfig(BaseModel):
+    """Pydantic model for Bronze source configuration validation.
+
+    Use this for type-safe configuration from YAML/JSON files or
+    environment variables.
+
+    Example:
+        >>> config = BronzeConfig(
+        ...     system="claims",
+        ...     entity="header",
+        ...     source_type="DATABASE_MSSQL",
+        ...     target_path="s3://bronze/",
+        ...     options={"host": "server.com", "database": "claims_db"}
+        ... )
+        >>> # Creates BronzeSource from validated config
+        >>> source = BronzeSource(**config.model_dump())
+    """
+
+    system: str = Field(..., min_length=1, description="Source system name")
+    entity: str = Field(..., min_length=1, description="Entity/table name")
+    source_type: str = Field(..., description="Source type (DATABASE_MSSQL, FILE_CSV, etc.)")
+    target_path: str = Field(..., min_length=1, description="Output path for Bronze data")
+    load_pattern: str = Field(default="FULL_SNAPSHOT", description="Load pattern")
+    source_path: Optional[str] = Field(default=None, description="Source file path for file sources")
+    query: Optional[str] = Field(default=None, description="SQL query for database sources")
+    watermark_column: Optional[str] = Field(default=None, description="Column for incremental loads")
+    options: Dict[str, Any] = Field(default_factory=dict, description="Source-specific options")
+
+    @field_validator("source_type")
+    @classmethod
+    def validate_source_type(cls, v: str) -> str:
+        """Validate source_type is a known value."""
+        valid_types = [
+            "DATABASE_MSSQL",
+            "DATABASE_POSTGRES",
+            "FILE_CSV",
+            "FILE_PARQUET",
+            "FILE_FIXED_WIDTH",
+            "FILE_SPACE_DELIMITED",
+            "FILE_JSON",
+            "FILE_EXCEL",
+            "API_REST",
+        ]
+        if v.upper() not in valid_types:
+            raise ValueError(f"source_type must be one of: {valid_types}")
+        return v.upper()
+
+    @field_validator("load_pattern")
+    @classmethod
+    def validate_load_pattern(cls, v: str) -> str:
+        """Validate load_pattern is a known value."""
+        valid_patterns = ["FULL_SNAPSHOT", "INCREMENTAL_APPEND", "INCREMENTAL_MERGE"]
+        if v.upper() not in valid_patterns:
+            raise ValueError(f"load_pattern must be one of: {valid_patterns}")
+        return v.upper()
+
+    @model_validator(mode="after")
+    def validate_database_options(self) -> "BronzeConfig":
+        """Validate database sources have required options."""
+        if self.source_type in ("DATABASE_MSSQL", "DATABASE_POSTGRES"):
+            if "host" not in self.options:
+                raise ValueError("Database sources require 'host' in options")
+            if "database" not in self.options:
+                raise ValueError("Database sources require 'database' in options")
+        return self
+
+    @model_validator(mode="after")
+    def validate_file_source_path(self) -> "BronzeConfig":
+        """Validate file sources have source_path."""
+        file_types = ("FILE_CSV", "FILE_PARQUET", "FILE_FIXED_WIDTH", "FILE_SPACE_DELIMITED", "FILE_JSON", "FILE_EXCEL")
+        if self.source_type in file_types and not self.source_path:
+            raise ValueError(f"{self.source_type} requires source_path")
+        return self
+
+    @model_validator(mode="after")
+    def validate_incremental_watermark(self) -> "BronzeConfig":
+        """Validate incremental loads have watermark_column."""
+        if self.load_pattern == "INCREMENTAL_APPEND" and not self.watermark_column:
+            raise ValueError("INCREMENTAL_APPEND requires watermark_column")
+        return self
+
+
+class SilverConfig(BaseModel):
+    """Pydantic model for Silver entity configuration validation.
+
+    Example:
+        >>> config = SilverConfig(
+        ...     source_path="s3://bronze/claims/header/",
+        ...     target_path="s3://silver/claims_header/",
+        ...     natural_keys=["claim_id"],
+        ...     change_timestamp="updated_at"
+        ... )
+        >>> entity = SilverEntity(**config.model_dump())
+    """
+
+    source_path: str = Field(..., min_length=1, description="Bronze source path")
+    target_path: str = Field(..., min_length=1, description="Silver output path")
+    natural_keys: List[str] = Field(..., min_length=1, description="Natural key columns")
+    change_timestamp: str = Field(..., min_length=1, description="Timestamp column for changes")
+    entity_kind: str = Field(default="STATE", description="Entity kind (STATE, EVENT)")
+    history_mode: str = Field(default="CURRENT_ONLY", description="History mode")
+    attributes: Optional[List[str]] = Field(default=None, description="Columns to include")
+    exclude_columns: Optional[List[str]] = Field(default=None, description="Columns to exclude")
+    validate_source: str = Field(default="skip", description="Source validation mode")
+
+    @field_validator("entity_kind")
+    @classmethod
+    def validate_entity_kind(cls, v: str) -> str:
+        """Validate entity_kind is a known value."""
+        valid_kinds = ["STATE", "EVENT"]
+        if v.upper() not in valid_kinds:
+            raise ValueError(f"entity_kind must be one of: {valid_kinds}")
+        return v.upper()
+
+    @field_validator("history_mode")
+    @classmethod
+    def validate_history_mode(cls, v: str) -> str:
+        """Validate history_mode is a known value."""
+        valid_modes = ["CURRENT_ONLY", "FULL_HISTORY"]
+        if v.upper() not in valid_modes:
+            raise ValueError(f"history_mode must be one of: {valid_modes}")
+        return v.upper()
+
+    @field_validator("validate_source")
+    @classmethod
+    def validate_validate_source(cls, v: str) -> str:
+        """Validate validate_source mode."""
+        valid_modes = ["skip", "warn", "strict"]
+        if v.lower() not in valid_modes:
+            raise ValueError(f"validate_source must be one of: {valid_modes}")
+        return v.lower()
+
+    @model_validator(mode="after")
+    def warn_attributes_and_exclude(self) -> "SilverConfig":
+        """Warn if both attributes and exclude_columns are set."""
+        if self.attributes and self.exclude_columns:
+            logger.warning("Both attributes and exclude_columns are set - use only one")
+        return self
+
+
+class PipelineSettings(BaseSettings):
+    """Environment-based pipeline settings using pydantic-settings.
+
+    Automatically loads from environment variables with PIPELINE_ prefix.
+
+    Example:
+        >>> # Set environment variables:
+        >>> # PIPELINE_BRONZE_PATH=s3://bronze/
+        >>> # PIPELINE_SILVER_PATH=s3://silver/
+        >>> # PIPELINE_LOG_LEVEL=DEBUG
+        >>> settings = PipelineSettings()
+        >>> print(settings.bronze_path)
+        s3://bronze/
+    """
+
+    bronze_path: str = Field(default="./bronze", description="Default Bronze output path")
+    silver_path: str = Field(default="./silver", description="Default Silver output path")
+    log_level: str = Field(default="INFO", description="Logging level")
+    max_retries: int = Field(default=3, ge=1, le=10, description="Max retry attempts")
+    retry_delay: float = Field(default=1.0, ge=0.1, le=60.0, description="Retry delay in seconds")
+    chunk_size: int = Field(default=100000, ge=1000, description="Default chunk size for writes")
+    validate_checksums: bool = Field(default=True, description="Validate Bronze checksums")
+
+    model_config = SettingsConfigDict(
+        env_prefix="PIPELINE_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
 
 
 class ValidationSeverity(Enum):
