@@ -25,7 +25,13 @@ from pipelines.lib.connections import get_connection
 from pipelines.lib.env import expand_env_vars, expand_options
 from pipelines.lib.io import OutputMetadata, infer_column_types, maybe_dry_run, maybe_skip_if_exists
 from pipelines.lib.storage import get_storage
-from pipelines.lib.state import get_watermark, save_watermark
+from pipelines.lib.state import (
+    delete_watermark,
+    get_watermark,
+    save_full_refresh,
+    save_watermark,
+    should_force_full_refresh,
+)
 from pipelines.lib._path_utils import (
     path_has_data,
     resolve_target_path,
@@ -45,12 +51,22 @@ BronzeOutputMetadata = OutputMetadata
 class SourceType(Enum):
     """Where the data comes from."""
 
+    # File sources
     FILE_CSV = "file_csv"
     FILE_PARQUET = "file_parquet"
     FILE_SPACE_DELIMITED = "file_space_delimited"
     FILE_FIXED_WIDTH = "file_fixed_width"
+    FILE_JSON = "file_json"
+    FILE_JSONL = "file_jsonl"
+    FILE_EXCEL = "file_excel"
+
+    # Database sources
     DATABASE_MSSQL = "database_mssql"
     DATABASE_POSTGRES = "database_postgres"
+    DATABASE_MYSQL = "database_mysql"
+    DATABASE_DB2 = "database_db2"
+
+    # API sources
     API_REST = "api_rest"
 
 
@@ -137,6 +153,13 @@ class BronzeSource:
 
     # Partitioning (Bronze always partitions by load date)
     partition_by: List[str] = field(default_factory=lambda: ["_load_date"])
+
+    # Large data handling
+    chunk_size: Optional[int] = None  # Rows per chunk (None = load all at once)
+
+    # Periodic full refresh (scheduler-agnostic)
+    # When set, automatically forces a full refresh every N days
+    full_refresh_days: Optional[int] = None  # None = never auto-refresh
 
     # Artifact generation options
     write_checksums: bool = True  # Write _checksums.json for data integrity
@@ -231,7 +254,12 @@ class BronzeSource:
         """
         issues: List[str] = []
 
-        if self.source_type in (SourceType.DATABASE_MSSQL, SourceType.DATABASE_POSTGRES):
+        if self.source_type in (
+            SourceType.DATABASE_MSSQL,
+            SourceType.DATABASE_POSTGRES,
+            SourceType.DATABASE_MYSQL,
+            SourceType.DATABASE_DB2,
+        ):
             try:
                 opts = self._get_expanded_options()
                 connection_name = opts.get(
@@ -247,6 +275,9 @@ class BronzeSource:
             SourceType.FILE_PARQUET,
             SourceType.FILE_SPACE_DELIMITED,
             SourceType.FILE_FIXED_WIDTH,
+            SourceType.FILE_JSON,
+            SourceType.FILE_JSONL,
+            SourceType.FILE_EXCEL,
         ):
             source_path = self.source_path
             if run_date:
@@ -300,6 +331,17 @@ class BronzeSource:
         if dry_run_result:
             return dry_run_result
 
+        # Check if periodic full refresh is due
+        is_full_refresh = False
+        if should_force_full_refresh(self.system, self.entity, self.full_refresh_days):
+            logger.info(
+                "Periodic full refresh triggered for %s.%s - clearing watermark",
+                self.system,
+                self.entity,
+            )
+            delete_watermark(self.system, self.entity)
+            is_full_refresh = True
+
         # Get watermark for incremental loads
         last_watermark = None
         if (
@@ -331,6 +373,11 @@ class BronzeSource:
             if new_watermark:
                 save_watermark(self.system, self.entity, str(new_watermark))
                 result["new_watermark"] = str(new_watermark)
+
+        # Record full refresh if it was triggered
+        if is_full_refresh and result.get("row_count", 0) > 0:
+            save_full_refresh(self.system, self.entity)
+            result["full_refresh"] = True
 
         return result
 
@@ -385,9 +432,20 @@ class BronzeSource:
         elif self.source_type == SourceType.FILE_FIXED_WIDTH:
             return self._read_fixed_width(source_path)
 
+        elif self.source_type == SourceType.FILE_JSON:
+            return self._read_json(con, source_path)
+
+        elif self.source_type == SourceType.FILE_JSONL:
+            return self._read_jsonl(con, source_path)
+
+        elif self.source_type == SourceType.FILE_EXCEL:
+            return self._read_excel(source_path)
+
         elif self.source_type in (
             SourceType.DATABASE_MSSQL,
             SourceType.DATABASE_POSTGRES,
+            SourceType.DATABASE_MYSQL,
+            SourceType.DATABASE_DB2,
         ):
             return self._read_database(con, run_date, last_watermark)
 
@@ -494,6 +552,82 @@ class BronzeSource:
             pandas_opts["sep"] = " "
 
         df = pd.read_csv(source_path, **pandas_opts)
+        return ibis.memtable(df)
+
+    def _read_json(self, _con: ibis.BaseBackend, source_path: str) -> ibis.Table:
+        """Read JSON file.
+
+        Options:
+            data_path: Dot-notation path to extract data (e.g., "response.data.items")
+            flatten: If True, flatten nested structures (default: False)
+        """
+        import json
+
+        with open(source_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        # Navigate to nested data if data_path specified
+        data_path = self.options.get("data_path")
+        if data_path:
+            for key in data_path.split("."):
+                if isinstance(data, dict) and key in data:
+                    data = data[key]
+                else:
+                    raise ValueError(f"Path '{data_path}' not found in JSON structure")
+
+        # Ensure we have a list of records
+        if isinstance(data, dict):
+            data = [data]
+        elif not isinstance(data, list):
+            raise ValueError(f"Expected list or dict, got {type(data)}")
+
+        # Flatten nested structures if requested
+        if self.options.get("flatten", False):
+            data = [pd.json_normalize(record).to_dict(orient="records")[0] for record in data]
+
+        return ibis.memtable(data)
+
+    def _read_jsonl(self, _con: ibis.BaseBackend, source_path: str) -> ibis.Table:
+        """Read JSON Lines (newline-delimited JSON) file.
+
+        Each line is a separate JSON object.
+
+        Options:
+            flatten: If True, flatten nested structures (default: False)
+        """
+        import json
+
+        records = []
+        with open(source_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:  # Skip empty lines
+                    records.append(json.loads(line))
+
+        # Flatten nested structures if requested
+        if self.options.get("flatten", False):
+            records = [pd.json_normalize(record).to_dict(orient="records")[0] for record in records]
+
+        return ibis.memtable(records)
+
+    def _read_excel(self, source_path: str) -> ibis.Table:
+        """Read Excel file (.xlsx, .xls).
+
+        Options:
+            sheet: Sheet name or index (default: 0, first sheet)
+            header_row: Row number to use as header (default: 0)
+            skip_rows: Number of rows to skip at top (default: 0)
+        """
+        sheet = self.options.get("sheet", 0)
+        header_row = self.options.get("header_row", 0)
+        skip_rows = self.options.get("skip_rows", 0)
+
+        df = pd.read_excel(
+            source_path,
+            sheet_name=sheet,
+            header=header_row,
+            skiprows=skip_rows if skip_rows else None,
+        )
         return ibis.memtable(df)
 
     def _fetch_api(

@@ -1,4 +1,5 @@
 # Core dependencies - required for all installations
+python-dotenv>=1.0.0
 boto3>=1.26.0
 jmespath>=1.0.0  # Required by boto3
 pandas>=1.5.0

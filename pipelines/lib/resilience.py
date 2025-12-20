@@ -5,19 +5,22 @@ transient failures in database connections, API calls, etc.
 
 Philosophy: Keep BronzeSource and SilverEntity simple. Retry is opt-in
 via decorator when sources are known to be flaky.
+
+Implementation: Uses tenacity library internally for battle-tested retry logic.
 """
 
 from __future__ import annotations
 
 import logging
-import random
 import time
 from functools import wraps
 from typing import Any, Callable, Optional, Tuple, Type, TypeVar
 
+import tenacity
+
 logger = logging.getLogger(__name__)
 
-__all__ = ["with_retry"]
+__all__ = ["with_retry", "RetryConfig", "retry_operation", "CircuitBreaker", "CircuitBreakerOpen"]
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -56,52 +59,63 @@ def with_retry(
         def run(run_date: str):
             return bronze.run(run_date)
     """
+    # Build wait strategy
+    if exponential:
+        # Tenacity exponential: multiplier * 2^(attempt-1)
+        # To match our original: backoff_seconds * 2^(attempt-1)
+        # We use multiplier=backoff_seconds
+        wait_strategy = tenacity.wait_exponential(multiplier=backoff_seconds, min=backoff_seconds)
+    else:
+        wait_strategy = tenacity.wait_fixed(backoff_seconds)
+
+    if jitter:
+        # Add random jitter (0-50% of wait time, matching original behavior)
+        wait_strategy = wait_strategy + tenacity.wait_random(0, backoff_seconds * 0.5)
+
+    # Build retry condition
+    if retry_exceptions:
+        retry_condition = tenacity.retry_if_exception_type(retry_exceptions)
+    else:
+        retry_condition = tenacity.retry_if_exception_type(Exception)
 
     def decorator(fn: F) -> F:
+        fn_logger = logging.getLogger(fn.__module__)
+
+        def before_sleep_handler(retry_state: tenacity.RetryCallState) -> None:
+            """Log retry attempts."""
+            exception = retry_state.outcome.exception() if retry_state.outcome else None
+            fn_logger.warning(
+                "Attempt %d/%d failed: %s. Retrying in %.1fs...",
+                retry_state.attempt_number,
+                max_attempts,
+                exception,
+                retry_state.next_action.sleep if retry_state.next_action else 0,
+            )
+
+        def after_handler(retry_state: tenacity.RetryCallState) -> None:
+            """Log when all retries are exhausted."""
+            if retry_state.outcome and retry_state.outcome.failed:
+                exception = retry_state.outcome.exception()
+                fn_logger.error(
+                    "All %d attempts failed. Last error: %s",
+                    max_attempts,
+                    exception,
+                )
+
+        # Create the tenacity retry decorator
+        tenacity_decorator = tenacity.retry(
+            stop=tenacity.stop_after_attempt(max_attempts),
+            wait=wait_strategy,
+            retry=retry_condition,
+            before_sleep=before_sleep_handler,
+            reraise=True,
+        )
+
         @wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            fn_logger = logging.getLogger(fn.__module__)
-            last_error: Optional[Exception] = None
-
-            for attempt in range(1, max_attempts + 1):
-                try:
-                    return fn(*args, **kwargs)
-                except Exception as e:
-                    # Check if we should retry this exception
-                    if retry_exceptions and not isinstance(e, retry_exceptions):
-                        raise
-
-                    last_error = e
-
-                    if attempt < max_attempts:
-                        # Calculate wait time
-                        if exponential:
-                            wait = backoff_seconds * (2 ** (attempt - 1))
-                        else:
-                            wait = backoff_seconds
-
-                        # Add jitter (0-50% of wait time)
-                        if jitter:
-                            wait = wait * (1 + random.random() * 0.5)
-
-                        fn_logger.warning(
-                            "Attempt %d/%d failed: %s. Retrying in %.1fs...",
-                            attempt,
-                            max_attempts,
-                            e,
-                            wait,
-                        )
-                        time.sleep(wait)
-                    else:
-                        fn_logger.error(
-                            "All %d attempts failed. Last error: %s",
-                            max_attempts,
-                            e,
-                        )
-
-            # Re-raise the last error
-            if last_error:
-                raise last_error
+            # Apply tenacity decorator and call
+            retrying_fn = tenacity_decorator(fn)
+            return retrying_fn(*args, **kwargs)
 
         return wrapper  # type: ignore
 
@@ -166,42 +180,50 @@ def retry_operation(
             "database query"
         )
     """
-    last_error: Optional[Exception] = None
+    # Build wait strategy using tenacity
+    if config.exponential:
+        wait_strategy = tenacity.wait_exponential(
+            multiplier=config.backoff_seconds, min=config.backoff_seconds
+        )
+    else:
+        wait_strategy = tenacity.wait_fixed(config.backoff_seconds)
 
-    for attempt in range(1, config.max_attempts + 1):
-        try:
-            return operation()
-        except Exception as e:
-            last_error = e
+    if config.jitter:
+        wait_strategy = wait_strategy + tenacity.wait_random(0, config.backoff_seconds * 0.5)
 
-            if attempt < config.max_attempts:
-                if config.exponential:
-                    wait = config.backoff_seconds * (2 ** (attempt - 1))
-                else:
-                    wait = config.backoff_seconds
+    def before_sleep_handler(retry_state: tenacity.RetryCallState) -> None:
+        """Log retry attempts."""
+        exception = retry_state.outcome.exception() if retry_state.outcome else None
+        logger.warning(
+            "%s attempt %d/%d failed: %s. Retrying in %.1fs...",
+            operation_name,
+            retry_state.attempt_number,
+            config.max_attempts,
+            exception,
+            retry_state.next_action.sleep if retry_state.next_action else 0,
+        )
 
-                if config.jitter:
-                    wait = wait * (1 + random.random() * 0.5)
+    # Create retryer
+    retryer = tenacity.Retrying(
+        stop=tenacity.stop_after_attempt(config.max_attempts),
+        wait=wait_strategy,
+        retry=tenacity.retry_if_exception_type(Exception),
+        before_sleep=before_sleep_handler,
+        reraise=True,
+    )
 
-                logger.warning(
-                    "%s attempt %d/%d failed: %s. Retrying in %.1fs...",
-                    operation_name,
-                    attempt,
-                    config.max_attempts,
-                    e,
-                    wait,
-                )
-                time.sleep(wait)
-            else:
-                logger.error(
-                    "%s failed after %d attempts: %s",
-                    operation_name,
-                    config.max_attempts,
-                    e,
-                )
-
-    if last_error:
-        raise last_error
+    try:
+        return retryer(operation)
+    except tenacity.RetryError:
+        # This shouldn't happen with reraise=True, but handle it just in case
+        raise
+    except Exception:
+        logger.error(
+            "%s failed after %d attempts",
+            operation_name,
+            config.max_attempts,
+        )
+        raise
 
 
 class CircuitBreaker:

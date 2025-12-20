@@ -4,20 +4,30 @@ Example Pipeline: MSSQL Incremental Load
 Demonstrates incremental loading from a SQL Server database with watermark tracking.
 
 This example shows:
-- Database extraction with MSSQL
-- Incremental load pattern using watermarks
-- Environment variable expansion for secrets
+- Database extraction with MSSQL (SourceType.DATABASE_MSSQL)
+- Incremental load pattern using watermarks (LoadPattern.INCREMENTAL_APPEND)
+- Environment variable expansion for secrets (${DB_HOST} syntax)
 - SCD Type 1 curation
 
-Prerequisites:
-- SQL Server database accessible
-- Environment variables set:
-  - DB_HOST: Database host
-  - DB_USER: Database user
-  - DB_PASSWORD: Database password
+Setup:
+    1. Set environment variables:
+        export DB_HOST=your-server.database.windows.net
+        export DB_USER=your_username
+        export DB_PASSWORD=your_password
 
-To run:
+    2. Ensure the database has an 'order_details' table with an 'UpdatedAt' column
+
+Test connectivity:
+    python -m pipelines test-connection sales_db --host $DB_HOST --database SalesDB
+
+Run:
     python -m pipelines examples.mssql_incremental --date 2025-01-15
+
+Dry run (validate configuration):
+    python -m pipelines examples.mssql_incremental --date 2025-01-15 --dry-run
+
+Check connectivity:
+    python -m pipelines examples.mssql_incremental --date 2025-01-15 --check
 """
 
 from pathlib import Path

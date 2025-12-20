@@ -29,6 +29,10 @@ __all__ = [
     "list_watermarks",
     "clear_all_watermarks",
     "save_watermark",
+    # Full refresh tracking
+    "get_last_full_refresh",
+    "save_full_refresh",
+    "should_force_full_refresh",
 ]
 
 
@@ -413,3 +417,136 @@ def get_watermark_age(system: str, entity: str) -> Optional[float]:
             exc,
         )
         return None
+
+
+# =============================================================================
+# Full Refresh Tracking
+# =============================================================================
+
+
+def _get_full_refresh_path(system: str, entity: str) -> Path:
+    """Get the path for the full refresh state file."""
+    state_dir = _get_state_dir()
+    return state_dir / f"{system}_{entity}_full_refresh.json"
+
+
+def get_last_full_refresh(system: str, entity: str) -> Optional[datetime]:
+    """Get the timestamp of the last full refresh.
+
+    Args:
+        system: Source system name
+        entity: Entity/table name
+
+    Returns:
+        Datetime of last full refresh, or None if never run
+    """
+    path = _get_full_refresh_path(system, entity)
+
+    if not path.exists():
+        return None
+
+    try:
+        data = json.loads(path.read_text())
+        last_full = data.get("last_full_refresh")
+        if last_full:
+            return datetime.fromisoformat(last_full.replace("Z", "+00:00"))
+        return None
+    except (json.JSONDecodeError, ValueError) as exc:
+        logger.warning(
+            "Invalid full refresh file for %s.%s: %s",
+            system,
+            entity,
+            exc,
+        )
+        return None
+
+
+def save_full_refresh(system: str, entity: str) -> None:
+    """Record that a full refresh was performed.
+
+    Args:
+        system: Source system name
+        entity: Entity/table name
+    """
+    state_dir = _get_state_dir()
+    state_dir.mkdir(parents=True, exist_ok=True)
+
+    path = _get_full_refresh_path(system, entity)
+    now = datetime.now(timezone.utc)
+
+    # Load existing data if present to preserve run count
+    run_count = 1
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text())
+            run_count = existing.get("full_refresh_count", 0) + 1
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    data = {
+        "system": system,
+        "entity": entity,
+        "last_full_refresh": now.isoformat(),
+        "full_refresh_count": run_count,
+    }
+
+    path.write_text(json.dumps(data, indent=2))
+    logger.info(
+        "Recorded full refresh for %s.%s at %s (count: %d)",
+        system,
+        entity,
+        now.isoformat(),
+        run_count,
+    )
+
+
+def should_force_full_refresh(
+    system: str,
+    entity: str,
+    full_refresh_days: Optional[int],
+) -> bool:
+    """Check if a full refresh should be forced based on the interval.
+
+    Args:
+        system: Source system name
+        entity: Entity/table name
+        full_refresh_days: Number of days between full refreshes (None = never)
+
+    Returns:
+        True if a full refresh should be forced, False otherwise
+    """
+    if full_refresh_days is None:
+        return False
+
+    last_full = get_last_full_refresh(system, entity)
+
+    if last_full is None:
+        # Never had a full refresh - force one
+        logger.info(
+            "No previous full refresh for %s.%s - forcing full refresh",
+            system,
+            entity,
+        )
+        return True
+
+    now = datetime.now(timezone.utc)
+    days_since = (now - last_full).days
+
+    if days_since >= full_refresh_days:
+        logger.info(
+            "Full refresh due for %s.%s: %d days since last full (threshold: %d)",
+            system,
+            entity,
+            days_since,
+            full_refresh_days,
+        )
+        return True
+
+    logger.debug(
+        "Full refresh not due for %s.%s: %d days since last full (threshold: %d)",
+        system,
+        entity,
+        days_since,
+        full_refresh_days,
+    )
+    return False

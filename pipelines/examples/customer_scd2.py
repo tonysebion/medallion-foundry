@@ -1,20 +1,29 @@
 """
 Example Pipeline: Customer SCD Type 2
 =====================================
-Demonstrates SCD Type 2 (full history) curation.
+Demonstrates SCD Type 2 (full history) curation for tracking changes over time.
 
 This example shows:
-- Loading customer data from CSV
-- SCD Type 2 history with effective dates
+- Loading customer data from CSV (SourceType.FILE_CSV)
+- SCD Type 2 history with effective dates (HistoryMode.FULL_HISTORY)
 - How records get effective_from, effective_to, and is_current columns
 
-To test:
-1. Create sample data:
-   python -c "from pipelines.examples.customer_scd2 import create_sample_data; \
-   create_sample_data()"
+Setup:
+    Option 1 - Generate all sample data:
+        python -m pipelines generate-samples
 
-2. Run pipeline:
-   python -m pipelines examples.customer_scd2 --date 2025-01-15
+    Option 2 - Generate data for this example only:
+        python -c "from pipelines.examples.customer_scd2 import create_sample_data; create_sample_data()"
+
+Run:
+    python -m pipelines examples.customer_scd2 --date 2025-01-15
+
+Output columns in Silver:
+    - customer_id: Natural key
+    - name, email, status: Tracked attributes
+    - effective_from: When this version became valid
+    - effective_to: When this version expired (NULL if current)
+    - is_current: True for the latest version of each customer
 """
 
 import csv

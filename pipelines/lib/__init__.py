@@ -29,7 +29,7 @@ from pipelines.lib.checksum import (
     write_checksum_manifest,
 )
 from pipelines.lib.connections import close_all_connections, get_connection
-from pipelines.lib.env import expand_env_vars, expand_options
+from pipelines.lib.env import expand_env_vars, expand_options, load_env_file
 from pipelines.lib.polybase import (
     PolyBaseConfig,
     generate_external_table_ddl,
@@ -143,6 +143,7 @@ __all__ = [
     # Environment
     "expand_env_vars",
     "expand_options",
+    "load_env_file",
     # Late Data
     "LateDataConfig",
     "LateDataMode",

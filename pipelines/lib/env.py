@@ -1,18 +1,48 @@
 """Environment variable utilities.
 
-Provides expansion of ${VAR_NAME} patterns in configuration values.
+Provides expansion of ${VAR_NAME} patterns in configuration values
+and loading of .env files.
+
+Uses python-dotenv for .env file loading.
 """
 
 from __future__ import annotations
 
 import os
 import re
-from typing import Any, Dict
+from pathlib import Path
+from typing import Any, Dict, Optional, Union
 
-__all__ = ["expand_env_vars", "expand_options"]
+from dotenv import load_dotenv
+
+__all__ = ["expand_env_vars", "expand_options", "load_env_file"]
 
 # Pattern for ${VAR_NAME} or $VAR_NAME
 ENV_VAR_PATTERN = re.compile(r"\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def load_env_file(
+    path: Optional[Union[str, Path]] = None,
+    *,
+    override: bool = False,
+) -> bool:
+    """Load environment variables from a .env file.
+
+    Args:
+        path: Path to .env file. If None, searches for .env in current
+              directory and parent directories.
+        override: If True, override existing environment variables.
+
+    Returns:
+        True if a .env file was found and loaded, False otherwise.
+
+    Example:
+        >>> load_env_file()  # Loads from .env in current dir
+        True
+        >>> load_env_file(".env.production")  # Load specific file
+        True
+    """
+    return load_dotenv(dotenv_path=path, override=override)
 
 
 def expand_env_vars(value: str, *, strict: bool = False) -> str:

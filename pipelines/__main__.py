@@ -648,6 +648,71 @@ def generate_sample_command(pipeline_name: str, rows: int = 100, output_dir: str
     print("=" * 60)
 
 
+def generate_all_samples_command() -> None:
+    """Generate sample data for all examples.
+
+    This runs the existing sample data generation scripts to create
+    test data that the example pipelines can use.
+
+    Usage:
+        python -m pipelines generate-samples
+    """
+    import subprocess
+
+    print()
+    print("=" * 60)
+    print("GENERATING SAMPLE DATA FOR EXAMPLES")
+    print("=" * 60)
+    print()
+
+    scripts_dir = Path(__file__).parent.parent / "scripts"
+
+    # Look for sample generation scripts
+    bronze_script = scripts_dir / "generate_bronze_samples.py"
+    silver_script = scripts_dir / "generate_silver_samples.py"
+
+    scripts_found = []
+    if bronze_script.exists():
+        scripts_found.append(("Bronze samples", bronze_script))
+    if silver_script.exists():
+        scripts_found.append(("Silver samples", silver_script))
+
+    if not scripts_found:
+        print("No sample generation scripts found in scripts/ directory.")
+        print()
+        print("You can generate sample data manually with:")
+        print("  python -m pipelines generate-sample <pipeline_name> --rows 100")
+        print()
+        return
+
+    for name, script in scripts_found:
+        print(f"Generating {name}...")
+        try:
+            result = subprocess.run(
+                [sys.executable, str(script)],
+                capture_output=True,
+                text=True,
+                cwd=str(Path(__file__).parent.parent),
+            )
+            if result.returncode == 0:
+                print(f"  {name} generated successfully")
+            else:
+                print(f"  Warning: {name} generation had issues")
+                if result.stderr:
+                    for line in result.stderr.strip().split("\n")[:5]:
+                        print(f"    {line}")
+        except Exception as e:
+            print(f"  Error running {script.name}: {e}")
+
+    print()
+    print("Sample data generation complete!")
+    print()
+    print("You can now run example pipelines:")
+    print("  python -m pipelines examples.retail_orders --date 2025-01-15")
+    print()
+    print("=" * 60)
+
+
 def new_pipeline_command(pipeline_name: str, source_type: str = "file_csv") -> None:
     """Create a new pipeline from template.
 
@@ -910,6 +975,40 @@ def print_result(result: Dict[str, Any], pipeline_spec: str) -> None:
     print("=" * 60)
 
 
+def print_welcome_message() -> None:
+    """Print friendly welcome message when run with no arguments."""
+    print()
+    print("Bronze-Foundry: Medallion Architecture Pipeline Framework")
+    print("=" * 58)
+    print()
+    print("Quick Start:")
+    print("  python -m pipelines --list              List available pipelines")
+    print("  python -m pipelines <name> --date YYYY-MM-DD    Run a pipeline")
+    print("  python -m pipelines.create              Launch interactive wizard")
+    print()
+    print("Common Commands:")
+    print("  python -m pipelines new <name> --source-type file_csv")
+    print("                                          Create new pipeline from template")
+    print("  python -m pipelines generate-samples    Generate sample data for examples")
+    print("  python -m pipelines inspect-source --file <path>")
+    print("                                          Analyze a data file")
+    print("  python -m pipelines test-connection <name> --host <host>")
+    print("                                          Test database connectivity")
+    print()
+    print("Options:")
+    print("  --dry-run     Validate without executing")
+    print("  --check       Pre-flight connectivity checks")
+    print("  --explain     Show what pipeline would do")
+    print("  --target      Override output path (local dev)")
+    print()
+    print("Try an Example:")
+    print("  python -m pipelines generate-samples")
+    print("  python -m pipelines examples.retail_orders --date 2025-01-15")
+    print()
+    print("Documentation: python -m pipelines --help")
+    print()
+
+
 def main() -> None:
     """Main entry point for the CLI."""
     parser = argparse.ArgumentParser(
@@ -1082,9 +1181,16 @@ Examples:
             inspect_source_command(source_path=args.inspect_file)
             return
 
+        # Handle generate-samples command (shortcut for generating all sample data)
+        if args.pipeline == "generate-samples":
+            generate_all_samples_command()
+            return
+
     # Validate required arguments for running a pipeline
     if not args.pipeline:
-        parser.error("Pipeline name is required (or use --list to see available pipelines)")
+        # Show friendly welcome message when run with no arguments
+        print_welcome_message()
+        return
 
     if not args.date:
         parser.error("--date is required when running a pipeline")

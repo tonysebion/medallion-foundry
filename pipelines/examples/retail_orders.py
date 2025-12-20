@@ -1,20 +1,29 @@
 """
 Example Pipeline: Retail Orders
 ================================
-Demonstrates a complete Bronze → Silver pipeline using local CSV files.
+Demonstrates a complete Bronze -> Silver pipeline using local CSV files.
 
 This example shows:
-- Loading from CSV files
+- Loading from CSV files (SourceType.FILE_CSV)
 - SCD Type 1 (current only) curation
 - Full snapshot load pattern
 
-To test:
-1. Create sample data:
-   python -c "from pipelines.examples.retail_orders import create_sample_data; \
-   create_sample_data()"
+Setup:
+    Option 1 - Generate all sample data:
+        python -m pipelines generate-samples
 
-2. Run pipeline:
-   python -m pipelines examples.retail_orders --date 2025-01-15
+    Option 2 - Generate data for this example only:
+        python -c "from pipelines.examples.retail_orders import create_sample_data; create_sample_data()"
+
+Run:
+    python -m pipelines examples.retail_orders --date 2025-01-15
+
+Dry run (validate without executing):
+    python -m pipelines examples.retail_orders --date 2025-01-15 --dry-run
+
+Output:
+    bronze/system=retail/entity=orders/dt=2025-01-15/
+    silver/retail_orders/
 """
 
 from pathlib import Path
