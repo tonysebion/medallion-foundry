@@ -6,7 +6,6 @@ SCD Type 2 maintains a full history of changes with effective date ranges.
 from pathlib import Path
 
 import pandas as pd
-import pytest
 
 from pipelines.lib.silver import EntityKind, HistoryMode, SilverEntity
 from pipelines.lib.curate import build_history, dedupe_latest

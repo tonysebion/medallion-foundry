@@ -2,10 +2,7 @@
 
 import json
 import logging
-from io import StringIO
-from unittest.mock import patch
 
-import pytest
 
 from pipelines.lib.logging import (
     JSONFormatter,

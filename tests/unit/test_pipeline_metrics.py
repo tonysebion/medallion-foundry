@@ -3,7 +3,6 @@
 import time
 from datetime import datetime, timezone
 
-import pytest
 
 from pipelines.lib.metrics import (
     MetricPoint,
@@ -105,7 +104,7 @@ class TestPipelineMetrics:
             run_date="2025-01-15",
         )
 
-        with metrics.time_phase("extract") as timer:
+        with metrics.time_phase("extract"):
             time.sleep(0.01)
 
         assert len(metrics._phases) == 1

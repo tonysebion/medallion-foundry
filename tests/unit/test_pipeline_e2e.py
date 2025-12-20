@@ -4,11 +4,9 @@ These tests verify complete pipeline runs with synthetic data,
 including idempotency, backfill, and incremental scenarios.
 """
 
-import json
 from pathlib import Path
 
 import pandas as pd
-import pytest
 
 from pipelines.lib.bronze import BronzeSource, LoadPattern, SourceType
 from pipelines.lib.silver import EntityKind, HistoryMode, SilverEntity

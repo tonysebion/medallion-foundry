@@ -10,10 +10,8 @@ Tests the command-line interface including:
 
 import subprocess
 import sys
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
 
 
 class TestCLIHelp:
@@ -178,7 +176,7 @@ class TestCLIRunPipeline:
         # Use SimpleNamespace to avoid MagicMock attribute issues
         mock_module = SimpleNamespace(bronze=mock_bronze)
 
-        result = run_pipeline(
+        run_pipeline(
             mock_module,
             layer="bronze",
             run_date="2025-01-15",
@@ -199,7 +197,7 @@ class TestCLIRunPipeline:
 
         mock_module = SimpleNamespace(silver=mock_silver)
 
-        result = run_pipeline(
+        run_pipeline(
             mock_module,
             layer="silver",
             run_date="2025-01-15",

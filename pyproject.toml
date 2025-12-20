@@ -32,6 +32,8 @@ dependencies = [
     "pyarrow>=10.0.0",
     "pyyaml>=6.0",
     "requests>=2.28.0",
+    "httpx>=0.27.0",
+    "requests-toolbelt>=1.0.0",
     "tenacity>=8.0.0",
     "pydantic>=2.0.0",
 ]
@@ -52,7 +54,6 @@ dev = [
     "flake8>=6.0.0",
     "pre-commit>=3.6.0",
     "moto[s3]>=5.0.0",
-    "httpx>=0.27.0",  # Async HTTP support - included so all tests run
     "import-linter>=2.0",  # Layer architecture enforcement
 ]
 azure = [
@@ -66,9 +67,7 @@ db = [
     "psycopg2-binary>=2.9.0",
     "mysql-connector-python>=8.0.0",
 ]
-async = [
-    "httpx>=0.27.0",
-]
+async = []
 
 [project.urls]
 Homepage = "https://github.com/tonysebion/medallion-foundry"

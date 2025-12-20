@@ -36,16 +36,23 @@ Example:
 
 from __future__ import annotations
 
-import json
 import logging
-from dataclasses import dataclass, field
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
+import httpx
+import tenacity
+from pydantic import BaseModel, ConfigDict, Field
+from requests_toolbelt.utils.user_agent import user_agent
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from pipelines.lib._path_utils import path_has_data, resolve_target_path
 from pipelines.lib.auth import AuthConfig, build_auth_headers
@@ -63,11 +70,21 @@ from pipelines.lib.watermark import get_watermark, save_watermark
 
 logger = logging.getLogger(__name__)
 
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+
+_USER_AGENT = user_agent(
+    "bronze-foundry",
+    "dev",
+    extras=[
+        ("httpx", getattr(httpx, "__version__", "unknown")),
+        ("tenacity", getattr(tenacity, "__version__", "unknown")),
+    ],
+)
+
 __all__ = ["ApiSource", "ApiOutputMetadata"]
 
 
-@dataclass
-class ApiOutputMetadata:
+class ApiOutputMetadata(BaseModel):
     """Metadata for API extraction outputs.
 
     Written alongside data files to track lineage.
@@ -95,65 +112,20 @@ class ApiOutputMetadata:
     total_requests: int = 0
 
     # Files written
-    data_files: List[str] = field(default_factory=list)
+    data_files: List[str] = Field(default_factory=list)
 
     # Format info
     format: str = "parquet"
 
+    model_config = ConfigDict(extra="forbid")
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
-        from dataclasses import asdict
-
-        return asdict(self)
+        return self.model_dump()
 
     def to_json(self) -> str:
         """Convert to JSON string."""
-        return json.dumps(self.to_dict(), indent=2)
-
-
-def _create_session(
-    max_retries: int = 3,
-    backoff_factor: float = 0.5,
-    pool_connections: int = 10,
-    pool_maxsize: int = 10,
-) -> requests.Session:
-    """Create a requests Session with connection pooling and retry logic.
-
-    Args:
-        max_retries: Maximum retry attempts
-        backoff_factor: Backoff multiplier between retries
-        pool_connections: Number of urllib3 connection pools
-        pool_maxsize: Maximum connections per pool
-
-    Returns:
-        Configured requests.Session
-    """
-    session = requests.Session()
-
-    retry_strategy = Retry(
-        total=max_retries,
-        backoff_factor=backoff_factor,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["GET", "HEAD", "OPTIONS"],
-        raise_on_status=False,  # We'll handle status codes ourselves
-    )
-
-    adapter = HTTPAdapter(
-        max_retries=retry_strategy,
-        pool_connections=pool_connections,
-        pool_maxsize=pool_maxsize,
-    )
-
-    session.mount("https://", adapter)
-    session.mount("http://", adapter)
-
-    logger.debug(
-        "Created session with pool_connections=%d, pool_maxsize=%d",
-        pool_connections,
-        pool_maxsize,
-    )
-
-    return session
+        return self.model_dump_json(indent=2)
 
 
 @dataclass
@@ -384,84 +356,49 @@ class ApiSource:
         Returns:
             Tuple of (records, pages_fetched, total_requests)
         """
-        session = _create_session(
-            max_retries=self.max_retries,
-            backoff_factor=self.backoff_factor,
-            pool_connections=self.pool_connections,
-            pool_maxsize=self.pool_maxsize,
-        )
+        headers, auth_tuple = build_auth_headers(self.auth, extra_headers=self.headers)
+        headers.setdefault("User-Agent", _USER_AGENT)
 
-        try:
-            # Build auth headers
-            headers, auth_tuple = build_auth_headers(self.auth, extra_headers=self.headers)
+        endpoint = self._format_endpoint()
 
-            # Build URL
-            endpoint = self.endpoint
-            for key, value in self.path_params.items():
-                endpoint = endpoint.replace(f"{{{key}}}", expand_env_vars(value))
+        base_params = dict(expand_options(self.params))
+        if last_watermark and self.watermark_param:
+            base_params[self.watermark_param] = last_watermark
 
-            url = self.base_url.rstrip("/") + endpoint
-
-            # Build base params
-            base_params = dict(expand_options(self.params))
-            if last_watermark and self.watermark_param:
-                base_params[self.watermark_param] = last_watermark
-
-            # Set up rate limiter
-            limiter = None
-            if self.requests_per_second:
-                limiter = RateLimiter(
-                    self.requests_per_second,
-                    burst_size=self.burst_size,
-                )
-
-            # Set up pagination
-            pagination_config = self.pagination or PaginationConfig(
-                strategy=PaginationStrategy.NONE
+        limiter = None
+        if self.requests_per_second:
+            limiter = RateLimiter(
+                self.requests_per_second,
+                burst_size=self.burst_size,
             )
-            state = build_pagination_state(pagination_config, base_params)
 
-            # Fetch loop
-            all_records: List[Dict[str, Any]] = []
-            pages_fetched = 0
-            total_requests = 0
+        pagination_config = self.pagination or PaginationConfig(
+            strategy=PaginationStrategy.NONE
+        )
+        state = build_pagination_state(pagination_config, base_params)
 
+        all_records: List[Dict[str, Any]] = []
+        pages_fetched = 0
+        total_requests = 0
+
+        with self._create_httpx_client() as client:
             while state.should_fetch_more():
                 if limiter:
                     limiter.acquire()
 
                 params = state.build_params()
-                total_requests += 1
-
-                logger.debug("Fetching %s with params %s", url, params)
-
-                response = session.get(
-                    url,
+                response, attempts = self._fetch_page_with_retry(
+                    client=client,
+                    endpoint=endpoint,
                     headers=headers,
                     params=params,
                     auth=auth_tuple,
-                    timeout=self.timeout,
                 )
-
-                # Handle rate limiting with Retry-After header
-                if response.status_code == 429:
-                    retry_after = response.headers.get("Retry-After")
-                    if retry_after:
-                        import time
-
-                        wait_seconds = float(retry_after)
-                        logger.warning(
-                            "Rate limited. Waiting %s seconds...",
-                            wait_seconds,
-                        )
-                        time.sleep(wait_seconds)
-                        continue
-
-                response.raise_for_status()
+                total_requests += attempts
+                pages_fetched += 1
 
                 data = response.json()
                 records = self._extract_records(data)
-                pages_fetched += 1
 
                 if not records:
                     break
@@ -475,36 +412,30 @@ class ApiSource:
                     len(all_records),
                 )
 
-                # Check max_records limit
                 if state.max_records > 0 and len(all_records) >= state.max_records:
                     all_records = all_records[: state.max_records]
                     logger.info("Reached max_records limit of %d", state.max_records)
                     break
 
-                # Update pagination state
                 if not state.on_response(records, data):
                     break
 
-            # Log if max_pages was reached
-            if (
-                isinstance(state, PagePaginationState)
-                and state.max_pages_limit_hit
-            ):
-                logger.info("Reached max_pages limit of %d", pagination_config.max_pages)
+        if (
+            isinstance(state, PagePaginationState)
+            and state.max_pages_limit_hit
+        ):
+            logger.info("Reached max_pages limit of %d", pagination_config.max_pages)
 
-            logger.info(
-                "Successfully fetched %d records from %s.%s in %d pages (%d requests)",
-                len(all_records),
-                self.system,
-                self.entity,
-                pages_fetched,
-                total_requests,
-            )
+        logger.info(
+            "Successfully fetched %d records from %s.%s in %d pages (%d requests)",
+            len(all_records),
+            self.system,
+            self.entity,
+            pages_fetched,
+            total_requests,
+        )
 
-            return all_records, pages_fetched, total_requests
-
-        finally:
-            session.close()
+        return all_records, pages_fetched, total_requests
 
     def _extract_records(self, data: Any) -> List[Dict[str, Any]]:
         """Extract records from API response.
@@ -677,6 +608,88 @@ class ApiSource:
             })
 
         return columns
+
+    def _format_endpoint(self) -> str:
+        endpoint = self.endpoint
+        for key, value in self.path_params.items():
+            endpoint = endpoint.replace(f"{{{key}}}", expand_env_vars(value))
+        return endpoint
+
+    def _create_httpx_client(self) -> httpx.Client:
+        base_url = self.base_url.rstrip("/")
+        limits = httpx.Limits(
+            max_connections=self.pool_maxsize,
+            max_keepalive_connections=self.pool_connections,
+        )
+        return httpx.Client(
+            base_url=base_url,
+            timeout=self.timeout,
+            limits=limits,
+        )
+
+    def _fetch_page_with_retry(
+        self,
+        *,
+        client: httpx.Client,
+        endpoint: str,
+        headers: Dict[str, str],
+        params: Dict[str, Any],
+        auth: Optional[tuple[str, str]],
+    ) -> tuple[httpx.Response, int]:
+        attempts = 0
+
+        @retry(
+            stop=stop_after_attempt(max(self.max_retries, 1)),
+            wait=wait_exponential(
+                multiplier=self.backoff_factor,
+                min=0.5,
+                max=30,
+            ),
+            retry=retry_if_exception(self._should_retry),
+            reraise=True,
+            before_sleep=before_sleep_log(logger, logging.WARNING),
+        )
+        def do_request() -> httpx.Response:
+            nonlocal attempts
+            attempts += 1
+            logger.debug("Fetching %s with params %s", endpoint, params)
+            response = client.get(
+                endpoint,
+                headers=headers,
+                params=params,
+                auth=auth,
+                timeout=self.timeout,
+            )
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                if exc.response and exc.response.status_code == 429:
+                    self._respect_retry_after(exc.response)
+                raise
+            return response
+
+        return do_request(), attempts
+
+    def _should_retry(self, exc: BaseException) -> bool:
+        if isinstance(exc, httpx.HTTPStatusError):
+            status_code = exc.response.status_code if exc.response else None
+            return status_code in RETRYABLE_STATUS_CODES
+        return isinstance(exc, httpx.RequestError)
+
+    def _respect_retry_after(self, response: httpx.Response) -> None:
+        retry_after = response.headers.get("Retry-After")
+        if not retry_after:
+            return
+        try:
+            wait_seconds = float(retry_after)
+        except (TypeError, ValueError):
+            return
+        if wait_seconds > 0:
+            logger.warning(
+                "Rate limited by API; sleeping %.1f seconds before retrying",
+                wait_seconds,
+            )
+            time.sleep(wait_seconds)
 
 
 def create_api_source_from_options(

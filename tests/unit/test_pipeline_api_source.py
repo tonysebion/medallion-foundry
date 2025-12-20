@@ -5,8 +5,6 @@ and helper functions without making actual HTTP calls.
 """
 
 import json
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
