@@ -105,7 +105,7 @@ if __name__ == "__main__":
 
     try:
         result = run(run_date)
-        print(f"\nResults:")
+        print("\nResults:")
         print(f"  Bronze: {result['bronze'].get('row_count', 0)} rows")
         print(f"  Silver: {result['silver'].get('row_count', 0)} rows")
     except Exception as e:

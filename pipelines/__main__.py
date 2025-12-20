@@ -797,7 +797,6 @@ def inspect_source_command(source_path: str = None, file_type: str = None) -> No
         dtype = df[col].dtype
         null_count = df[col].isna().sum()
         unique_count = df[col].nunique()
-        sample = df[col].dropna().iloc[0] if not df[col].isna().all() else "N/A"
         print(f"  {col:<25} {str(dtype):<15} nulls={null_count:<5} unique={unique_count}")
     print()
 

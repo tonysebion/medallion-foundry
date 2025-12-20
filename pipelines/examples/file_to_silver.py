@@ -170,7 +170,7 @@ if __name__ == "__main__":
     print(f"\nRunning file-to-silver pipeline for {run_date}...")
     result = run(run_date)
 
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  Bronze: {result['bronze'].get('row_count', 0)} rows")
     print(f"  Silver: {result['silver'].get('row_count', 0)} rows")
     if "quality" in result.get("silver", {}):

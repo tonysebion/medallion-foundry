@@ -18,7 +18,6 @@ def test_ruff_check() -> None:
         "-m",
         "ruff",
         "check",
-        "core",
         "pipelines",
         "tests/unit",
         "tests/pattern_verification",

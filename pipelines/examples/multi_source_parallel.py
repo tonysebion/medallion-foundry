@@ -228,7 +228,7 @@ def create_sample_data(run_date: str = "2025-01-15") -> List[Path]:
     df.to_parquet(products_path, index=False)
     paths.append(products_path)
 
-    print(f"Created sample data files:")
+    print("Created sample data files:")
     for path in paths:
         print(f"  {path}")
 

@@ -150,23 +150,20 @@ exclude_lines = [
 ]
 
 [tool.setuptools_scm]
-write_to = "core/_version.py"
+write_to = "pipelines/_version.py"
 version_scheme = "post-release"
 local_scheme = "no-local-version"
 
 # =============================================================================
-# Import Linter - Layer Architecture Enforcement
+# Import Linter - Module Architecture Enforcement
 # =============================================================================
 [tool.importlinter]
-root_package = "core"
+root_package = "pipelines"
 
 [[tool.importlinter.contracts]]
-name = "Layer architecture"
-type = "layers"
-layers = [
-    "core.orchestration",
-    "core.domain",
-    "core.infrastructure",
-    "core.platform",
-    "core.foundation",
+name = "Pipelines module structure"
+type = "independence"
+modules = [
+    "pipelines.examples",
+    "pipelines.templates",
 ]
