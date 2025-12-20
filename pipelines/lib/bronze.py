@@ -62,6 +62,10 @@ class LoadPattern(Enum):
     CDC = "cdc"  # Change data capture deltas
 
 
+# Default target path template - can be overridden
+DEFAULT_BRONZE_TARGET = "./bronze/system={system}/entity={entity}/dt={run_date}/"
+
+
 @dataclass
 class BronzeSource:
     """Declarative Bronze layer source definition.
@@ -71,40 +75,64 @@ class BronzeSource:
     - Add only technical metadata (_extracted_at, _source_file, etc.)
     - Partition by load date for auditability
 
-    Example:
+    Example (simple):
+        # Minimal config - paths auto-generated
+        source = BronzeSource(
+            system="retail",
+            entity="orders",
+            source_type=SourceType.FILE_CSV,
+            source_path="./data/orders_{run_date}.csv",
+        )
+
+    Example (database with top-level params):
         source = BronzeSource(
             system="claims_dw",
             entity="claims_header",
             source_type=SourceType.DATABASE_MSSQL,
-            source_path="",
-            target_path="s3://bronze/system={system}/entity={entity}/dt={run_date}/",
-            options={
-                "connection_name": "claims_db",
-                "host": "claims-server.database.com",
-                "database": "ClaimsDB",
-            },
+            # Top-level database params (simpler than nested options)
+            host="${DB_HOST}",
+            database="ClaimsDB",
+            query="SELECT * FROM dbo.ClaimsHeader",
+            # Incremental load
             load_pattern=LoadPattern.INCREMENTAL_APPEND,
             watermark_column="LastUpdated",
         )
-        result = source.run("2025-01-15")
+
+    Example (explicit target path):
+        source = BronzeSource(
+            system="claims_dw",
+            entity="claims_header",
+            source_type=SourceType.DATABASE_MSSQL,
+            # Explicit path overrides the default
+            target_path="s3://my-bucket/bronze/custom/path/dt={run_date}/",
+            host="${DB_HOST}",
+            database="ClaimsDB",
+        )
     """
 
-    # Identity
-    system: str  # Source system name
-    entity: str  # Table/endpoint name
+    # Identity (required)
+    system: str  # Source system name (e.g., "salesforce", "erp", "legacy")
+    entity: str  # Table/endpoint name (e.g., "customers", "orders")
 
-    # Source location
+    # Source location (required for file sources)
     source_type: SourceType
-    source_path: str  # File path, connection string, or API URL
+    source_path: str = ""  # File path, connection string, or API URL
 
-    # Target
-    target_path: str  # Where to land in Bronze
+    # Target (optional - defaults to ./bronze/system={system}/entity={entity}/dt={run_date}/)
+    target_path: str = ""  # Where to land in Bronze - auto-generated if empty
 
     # Behavior
     load_pattern: LoadPattern = LoadPattern.FULL_SNAPSHOT
     watermark_column: Optional[str] = None  # For incremental loads
 
-    # Source-specific options
+    # Database connection params (convenience - merged into options)
+    # These are simpler than nesting in options dict
+    connection: Optional[str] = None  # Connection name for reuse
+    host: Optional[str] = None  # Database host or env var like ${DB_HOST}
+    database: Optional[str] = None  # Database name
+    query: Optional[str] = None  # Custom SQL query
+
+    # Source-specific options (for advanced cases)
     options: Dict[str, Any] = field(default_factory=dict)
 
     # Partitioning (Bronze always partitions by load date)
@@ -115,7 +143,16 @@ class BronzeSource:
     write_metadata: bool = True  # Write _metadata.json for lineage/PolyBase
 
     def __post_init__(self) -> None:
-        """Validate configuration on instantiation."""
+        """Initialize defaults and validate configuration."""
+        # Apply smart default for target_path if not specified
+        if not self.target_path:
+            self.target_path = DEFAULT_BRONZE_TARGET
+
+        # Merge top-level database params into options
+        # Top-level params take precedence over options dict
+        self._merge_top_level_params()
+
+        # Validate configuration
         try:
             validate_and_raise(source=self)
         except ValueError as exc:
@@ -123,6 +160,29 @@ class BronzeSource:
                 f"BronzeSource configuration errors for {self.system}.{self.entity}:\n"
                 f"{exc}"
             ) from exc
+
+    def _merge_top_level_params(self) -> None:
+        """Merge top-level convenience params into options dict.
+
+        Top-level params (connection, host, database, query) are merged into
+        the options dict for backwards compatibility with existing code.
+        Top-level params take precedence over options dict values.
+        """
+        # Connection name
+        if self.connection is not None:
+            self.options["connection_name"] = self.connection
+
+        # Database host
+        if self.host is not None:
+            self.options["host"] = self.host
+
+        # Database name
+        if self.database is not None:
+            self.options["database"] = self.database
+
+        # Custom query - can be top-level or in options
+        if self.query is not None:
+            self.options["query"] = self.query
 
     def validate(
         self,

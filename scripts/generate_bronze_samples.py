@@ -112,12 +112,14 @@ def write_metadata(
         row_count=len(batch_df),
         columns=columns,
         written_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        system="synthetic",
-        entity=f"pattern_{load_pattern}",
-        source_type=SourceType.FILE_PARQUET.value,
-        load_pattern=PATTERN_LOAD_MAP.get(load_pattern, LoadPattern.CDC).value,
         run_date=run_date.isoformat(),
         data_files=["chunk_0.parquet"],
+        extra={
+            "system": "synthetic",
+            "entity": f"pattern_{load_pattern}",
+            "source_type": SourceType.FILE_PARQUET.value,
+            "load_pattern": PATTERN_LOAD_MAP.get(load_pattern, LoadPattern.CDC).value,
+        },
     )
 
     metadata_dict = metadata.to_dict()

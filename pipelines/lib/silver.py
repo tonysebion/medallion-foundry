@@ -44,6 +44,10 @@ class HistoryMode(Enum):
     FULL_HISTORY = "full_history"  # SCD Type 2 - keep all versions
 
 
+# Default target path template - can be overridden
+DEFAULT_SILVER_TARGET = "./silver/{entity}/"
+
+
 @dataclass
 class SilverEntity:
     """Declarative Silver layer entity definition.
@@ -51,7 +55,14 @@ class SilverEntity:
     Intentionally limited to curation operations only.
     No filtering, no joins, no derived columns - that's Gold layer.
 
-    Example:
+    Example (minimal - used with Pipeline):
+        # When used with Pipeline, source_path is auto-wired from Bronze
+        entity = SilverEntity(
+            natural_keys=["order_id"],
+            change_timestamp="updated_at",
+        )
+
+    Example (standalone with explicit paths):
         entity = SilverEntity(
             source_path="s3://bronze/system=claims_dw/entity=claims_header/dt={run_date}/*.parquet",
             target_path="s3://silver/claims/header/",
@@ -60,18 +71,24 @@ class SilverEntity:
             entity_kind=EntityKind.STATE,
             history_mode=HistoryMode.CURRENT_ONLY,
         )
-        result = entity.run("2025-01-15")
+
+    Example (SCD Type 2 with full history):
+        entity = SilverEntity(
+            natural_keys=["customer_id"],
+            change_timestamp="updated_at",
+            history_mode=HistoryMode.FULL_HISTORY,  # Keep all versions
+        )
     """
 
-    # Source and target paths
-    source_path: str  # Path to Bronze data (supports {run_date} template)
-    target_path: str  # Where to write Silver output
-
-    # Identity
+    # Identity (required)
     natural_keys: List[str]  # What makes a record unique
 
-    # Temporal
+    # Temporal (required)
     change_timestamp: str  # When the source record changed
+
+    # Source and target paths (optional when used with Pipeline)
+    source_path: str = ""  # Path to Bronze data (auto-wired from Pipeline)
+    target_path: str = ""  # Where to write Silver output (auto-generated if empty)
 
     # Schema (optional - defaults to all columns)
     attributes: Optional[List[str]] = None  # Columns to include (None = all)
@@ -91,9 +108,18 @@ class SilverEntity:
     # Validation options
     validate_source: str = "skip"  # "skip", "warn", or "strict"
 
+    # Internal flag to track if this entity is used standalone or with Pipeline
+    _standalone: bool = field(default=True, repr=False)
+
     def __post_init__(self) -> None:
-        """Validate configuration on instantiation."""
-        errors = self._validate()
+        """Validate configuration on instantiation.
+
+        Note: source_path and target_path validation is relaxed because
+        they can be auto-wired when used with Pipeline class.
+        """
+        # Don't validate paths here - they may be set by Pipeline later
+        # Only validate the required semantic fields
+        errors = self._validate(check_paths=False)
         if errors:
             error_msg = "\n".join(f"  - {e}" for e in errors)
             raise ValueError(
@@ -101,15 +127,25 @@ class SilverEntity:
                 "Fix the configuration and try again."
             )
 
-    def _validate(self) -> List[str]:
-        """Validate configuration and return list of errors."""
+    def _validate(self, check_paths: bool = True) -> List[str]:
+        """Validate configuration and return list of errors.
+
+        Args:
+            check_paths: If True, validate source_path and target_path.
+                        Set to False when used with Pipeline (paths auto-wired).
+        """
         errors = []
 
-        if not self.source_path:
-            errors.append("source_path is required")
+        if check_paths:
+            if not self.source_path:
+                errors.append(
+                    "source_path is required (or use with Pipeline to auto-wire from Bronze)"
+                )
 
-        if not self.target_path:
-            errors.append("target_path is required")
+            if not self.target_path:
+                errors.append(
+                    "target_path is required (or use with Pipeline for auto-generation)"
+                )
 
         if not self.natural_keys:
             errors.append(
@@ -210,7 +246,18 @@ class SilverEntity:
 
         Returns:
             Dictionary with curation results including row_count, target path
+
+        Raises:
+            ValueError: If source_path or target_path is not configured
         """
+        # Validate paths at runtime (they may have been set by Pipeline)
+        if not self.source_path:
+            raise ValueError(
+                "source_path is not configured. Either:\n"
+                "  1. Set source_path explicitly, or\n"
+                "  2. Use Pipeline(bronze=..., silver=...) to auto-wire from Bronze"
+            )
+
         source = self.source_path.format(run_date=run_date)
         target = self._resolve_target(target_override, run_date)
 

@@ -7,6 +7,7 @@ Ibis-based medallion architecture pipelines.
 from pipelines.lib.api import ApiOutputMetadata, ApiSource, create_api_source_from_options
 from pipelines.lib.auth import AuthConfig, AuthType, build_auth_headers
 from pipelines.lib.bronze import BronzeOutputMetadata, BronzeSource, LoadPattern, SourceType
+from pipelines.lib.pipeline import Pipeline
 from pipelines.lib.pagination import (
     CursorPaginationState,
     NoPaginationState,
@@ -110,6 +111,8 @@ __all__ = [
     "BronzeSource",
     "LoadPattern",
     "SourceType",
+    # Pipeline
+    "Pipeline",
     # Pagination
     "CursorPaginationState",
     "NoPaginationState",

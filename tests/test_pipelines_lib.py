@@ -770,13 +770,15 @@ class TestApiSource:
             row_count=100,
             columns=[{"name": "id", "type": "int"}],
             written_at="2025-01-15T10:00:00Z",
-            system="test",
-            entity="data",
-            base_url="https://api.example.com",
-            endpoint="/api/data",
             run_date="2025-01-15",
-            pages_fetched=5,
-            total_requests=5,
+            extra={
+                "system": "test",
+                "entity": "data",
+                "base_url": "https://api.example.com",
+                "endpoint": "/api/data",
+                "pages_fetched": 5,
+                "total_requests": 5,
+            },
         )
 
         json_str = metadata.to_json()
