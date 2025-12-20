@@ -30,7 +30,7 @@ class TestRankByKeysBasic:
             {"id": 1, "value": 100, "ts": datetime(2025, 1, 10)},
         ])
 
-        t = con.create_table("test_add_rank", df)
+        t = ibis.memtable(df)
         result = rank_by_keys(t, keys=["id"], order_by="ts")
         result_df = result.execute()
 
@@ -44,7 +44,7 @@ class TestRankByKeysBasic:
             {"id": 1, "value": "mid", "score": 50},
         ])
 
-        t = con.create_table("test_desc", df)
+        t = ibis.memtable(df)
         result = rank_by_keys(t, keys=["id"], order_by="score", descending=True)
         result_df = result.execute()
 
@@ -61,7 +61,7 @@ class TestRankByKeysBasic:
             {"id": 1, "value": "mid", "score": 50},
         ])
 
-        t = con.create_table("test_asc", df)
+        t = ibis.memtable(df)
         result = rank_by_keys(t, keys=["id"], order_by="score", descending=False)
         result_df = result.execute()
 
@@ -79,7 +79,7 @@ class TestRankByKeysBasic:
             {"category": "B", "item": "B2", "score": 25},
         ])
 
-        t = con.create_table("test_partition", df)
+        t = ibis.memtable(df)
         result = rank_by_keys(t, keys=["category"], order_by="score", descending=True)
         result_df = result.execute()
 
@@ -106,7 +106,7 @@ class TestRankByKeysCustomColumnName:
             {"id": 1, "score": 50},
         ])
 
-        t = con.create_table("test_custom_name", df)
+        t = ibis.memtable(df)
         result = rank_by_keys(t, keys=["id"], order_by="score", rank_column="my_rank")
         result_df = result.execute()
 
@@ -126,7 +126,7 @@ class TestRankByKeysCompositeKeys:
             {"region": "EU", "product": "A", "sale": 80, "ts": datetime(2025, 1, 11)},
         ])
 
-        t = con.create_table("test_composite", df)
+        t = ibis.memtable(df)
         result = rank_by_keys(t, keys=["region", "product"], order_by="ts", descending=True)
         result_df = result.execute()
 
@@ -159,7 +159,7 @@ class TestRankByKeysTopN:
             for i in range(1, 11)
         ])
 
-        t = con.create_table("test_top3", df)
+        t = ibis.memtable(df)
         result = rank_by_keys(t, keys=["category"], order_by="score", descending=True)
         result_df = result.execute()
 
@@ -181,11 +181,11 @@ class TestRankByKeysEdgeCases:
     def test_empty_table(self, con):
         """Empty table returns empty result with rank column."""
         df = pd.DataFrame({
-            "id": pd.Series([], dtype=int),
-            "score": pd.Series([], dtype=int)
+            "id": pd.array([], dtype="int64"),
+            "score": pd.array([], dtype="int64")
         })
 
-        t = con.create_table("test_empty", df)
+        t = ibis.memtable(df)
         result = rank_by_keys(t, keys=["id"], order_by="score")
         result_df = result.execute()
 
@@ -200,7 +200,7 @@ class TestRankByKeysEdgeCases:
             {"id": 3, "score": 300},
         ])
 
-        t = con.create_table("test_single_per_key", df)
+        t = ibis.memtable(df)
         result = rank_by_keys(t, keys=["id"], order_by="score")
         result_df = result.execute()
 
@@ -213,7 +213,7 @@ class TestRankByKeysEdgeCases:
             {"id": 1, "col_a": "A", "col_b": 100, "score": 50},
         ])
 
-        t = con.create_table("test_preserve", df)
+        t = ibis.memtable(df)
         result = rank_by_keys(t, keys=["id"], order_by="score")
         result_df = result.execute()
 
@@ -228,7 +228,7 @@ class TestRankByKeysEdgeCases:
             {"id": 1, "item": "C", "score": 100},  # Tie
         ])
 
-        t = con.create_table("test_ties", df)
+        t = ibis.memtable(df)
         result = rank_by_keys(t, keys=["id"], order_by="score")
         result_df = result.execute()
 

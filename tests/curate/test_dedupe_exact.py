@@ -32,7 +32,7 @@ class TestDedupeExactBasic:
             {"id": 2, "value": "B", "amount": 200},
         ])
 
-        t = con.create_table("test_exact", df)
+        t = ibis.memtable(df)
         result = dedupe_exact(t)
         result_df = result.execute()
 
@@ -46,7 +46,7 @@ class TestDedupeExactBasic:
             {"id": 1, "value": "B", "amount": 100},  # Different value - preserved
         ])
 
-        t = con.create_table("test_near", df)
+        t = ibis.memtable(df)
         result = dedupe_exact(t)
         result_df = result.execute()
 
@@ -60,7 +60,7 @@ class TestDedupeExactBasic:
             {"id": 3, "value": "C"},
         ])
 
-        t = con.create_table("test_no_dupes", df)
+        t = ibis.memtable(df)
         result = dedupe_exact(t)
         result_df = result.execute()
 
@@ -79,7 +79,7 @@ class TestDedupeExactMultipleDuplicates:
             {"id": 1, "value": "A"},  # Duplicate 3
         ])
 
-        t = con.create_table("test_multi_dupe", df)
+        t = ibis.memtable(df)
         result = dedupe_exact(t)
         result_df = result.execute()
 
@@ -97,7 +97,7 @@ class TestDedupeExactMultipleDuplicates:
             {"id": 4, "value": "D"},  # Unique
         ])
 
-        t = con.create_table("test_mixed", df)
+        t = ibis.memtable(df)
         result = dedupe_exact(t)
         result_df = result.execute()
 
@@ -115,7 +115,7 @@ class TestDedupeExactDataTypes:
             {"id": 1, "ts": datetime(2025, 1, 15, 10, 0, 1), "value": 100},  # Different ts
         ])
 
-        t = con.create_table("test_ts", df)
+        t = ibis.memtable(df)
         result = dedupe_exact(t)
         result_df = result.execute()
 
@@ -129,7 +129,7 @@ class TestDedupeExactDataTypes:
             {"id": 2, "value": "A"},
         ])
 
-        t = con.create_table("test_nulls", df)
+        t = ibis.memtable(df)
         result = dedupe_exact(t)
         result_df = result.execute()
 
@@ -143,7 +143,7 @@ class TestDedupeExactDataTypes:
             {"id": 1, "score": 1.50001},  # Different
         ])
 
-        t = con.create_table("test_floats", df)
+        t = ibis.memtable(df)
         result = dedupe_exact(t)
         result_df = result.execute()
 
@@ -156,11 +156,11 @@ class TestDedupeExactEdgeCases:
     def test_empty_table(self, con):
         """Empty table returns empty result."""
         df = pd.DataFrame({
-            "id": pd.Series([], dtype=int),
-            "value": pd.Series([], dtype=str)
+            "id": pd.array([], dtype="int64"),
+            "value": pd.array([], dtype="string")
         })
 
-        t = con.create_table("test_empty", df)
+        t = ibis.memtable(df)
         result = dedupe_exact(t)
         result_df = result.execute()
 
@@ -172,7 +172,7 @@ class TestDedupeExactEdgeCases:
             {"id": 1, "value": "A"}
         ])
 
-        t = con.create_table("test_single", df)
+        t = ibis.memtable(df)
         result = dedupe_exact(t)
         result_df = result.execute()
 
@@ -186,7 +186,7 @@ class TestDedupeExactEdgeCases:
             {"a": 1, "b": 2, "c": 3, "d": 4, "e": 6},  # One column different
         ])
 
-        t = con.create_table("test_all_cols", df)
+        t = ibis.memtable(df)
         result = dedupe_exact(t)
         result_df = result.execute()
 
@@ -199,7 +199,7 @@ class TestDedupeExactEdgeCases:
             {"z_col": 1, "a_col": 2, "m_col": 3},  # Duplicate
         ])
 
-        t = con.create_table("test_col_order", df)
+        t = ibis.memtable(df)
         result = dedupe_exact(t)
         result_df = result.execute()
 
@@ -218,7 +218,7 @@ class TestDedupeExactLargeScale:
                 records.append({"id": i, "value": f"val_{i}"})
 
         df = pd.DataFrame(records)
-        t = con.create_table("test_high_dupe", df)
+        t = ibis.memtable(df)
         result = dedupe_exact(t)
         result_df = result.execute()
 
@@ -231,7 +231,7 @@ class TestDedupeExactLargeScale:
             for i in range(1000)
         ])
 
-        t = con.create_table("test_large_no_dupes", df)
+        t = ibis.memtable(df)
         result = dedupe_exact(t)
         result_df = result.execute()
 

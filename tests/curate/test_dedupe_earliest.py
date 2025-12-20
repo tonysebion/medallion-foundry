@@ -33,7 +33,7 @@ class TestDedupeEarliestBasic:
             {"id": 2, "event": "only", "ts": datetime(2025, 1, 12, 10, 0, 0)},
         ])
 
-        t = con.create_table("test_earliest", df)
+        t = ibis.memtable(df)
         result = dedupe_earliest(t, keys=["id"], order_by="ts")
         result_df = result.execute()
 
@@ -58,7 +58,7 @@ class TestDedupeEarliestBasic:
             {"user_id": 2, "action": "login", "ts": datetime(2025, 1, 7)},
         ])
 
-        t = con.create_table("test_unique", df)
+        t = ibis.memtable(df)
         result = dedupe_earliest(t, keys=["user_id"], order_by="ts")
         result_df = result.execute()
 
@@ -83,7 +83,7 @@ class TestDedupeEarliestCompositeKeys:
             {"customer": "C2", "product": "P1", "event": "view", "ts": datetime(2025, 1, 8)},  # First for C2+P1
         ])
 
-        t = con.create_table("test_composite", df)
+        t = ibis.memtable(df)
         result = dedupe_earliest(t, keys=["customer", "product"], order_by="ts")
         result_df = result.execute()
 
@@ -104,7 +104,7 @@ class TestDedupeEarliestEdgeCases:
             {"id": 1, "value": "B", "ts": datetime(2025, 1, 1, 0, 0, 0)},  # Same timestamp
         ])
 
-        t = con.create_table("test_tie", df)
+        t = ibis.memtable(df)
         result = dedupe_earliest(t, keys=["id"], order_by="ts")
         result_df = result.execute()
 
@@ -114,12 +114,12 @@ class TestDedupeEarliestEdgeCases:
     def test_empty_table(self, con):
         """Empty table returns empty result."""
         df = pd.DataFrame({
-            "id": pd.Series([], dtype=int),
-            "value": pd.Series([], dtype=str),
-            "ts": pd.Series([], dtype="datetime64[ns]")
+            "id": pd.array([], dtype="int64"),
+            "value": pd.array([], dtype="string"),
+            "ts": pd.array([], dtype="datetime64[ns]")
         })
 
-        t = con.create_table("test_empty", df)
+        t = ibis.memtable(df)
         result = dedupe_earliest(t, keys=["id"], order_by="ts")
         result_df = result.execute()
 
@@ -132,7 +132,7 @@ class TestDedupeEarliestEdgeCases:
             {"id": 1, "col_a": "B", "col_b": 200, "ts": datetime(2025, 1, 15)},
         ])
 
-        t = con.create_table("test_columns", df)
+        t = ibis.memtable(df)
         result = dedupe_earliest(t, keys=["id"], order_by="ts")
         result_df = result.execute()
 
@@ -157,7 +157,7 @@ class TestDedupeEarliestVsLatest:
             {"id": 1, "version": "newest", "ts": datetime(2025, 1, 30)},
         ])
 
-        t = con.create_table("test_compare", df)
+        t = ibis.memtable(df)
 
         earliest_df = dedupe_earliest(t, keys=["id"], order_by="ts").execute()
         latest_df = dedupe_latest(t, keys=["id"], order_by="ts").execute()

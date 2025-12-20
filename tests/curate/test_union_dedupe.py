@@ -35,8 +35,8 @@ class TestUnionDedupeBasic:
             {"id": 4, "value": "D", "ts": datetime(2025, 1, 15)},
         ])
 
-        t1 = con.create_table("t1", df1)
-        t2 = con.create_table("t2", df2)
+        t1 = ibis.memtable(df1)
+        t2 = ibis.memtable(df2)
 
         result = union_dedupe([t1, t2], keys=["id"], order_by="ts")
         result_df = result.execute()
@@ -53,8 +53,8 @@ class TestUnionDedupeBasic:
             {"id": 1, "value": "new", "ts": datetime(2025, 1, 15)},  # Same key, newer
         ])
 
-        t1 = con.create_table("t1_dup", df1)
-        t2 = con.create_table("t2_dup", df2)
+        t1 = ibis.memtable(df1)
+        t2 = ibis.memtable(df2)
 
         result = union_dedupe([t1, t2], keys=["id"], order_by="ts")
         result_df = result.execute()
@@ -74,9 +74,9 @@ class TestUnionDedupeBasic:
             {"id": 1, "value": "v3", "ts": datetime(2025, 1, 20)},  # Latest
         ])
 
-        t1 = con.create_table("t1_v", df1)
-        t2 = con.create_table("t2_v", df2)
-        t3 = con.create_table("t3_v", df3)
+        t1 = ibis.memtable(df1)
+        t2 = ibis.memtable(df2)
+        t3 = ibis.memtable(df3)
 
         result = union_dedupe([t1, t2, t3], keys=["id"], order_by="ts")
         result_df = result.execute()
@@ -96,7 +96,7 @@ class TestUnionDedupeManyTables:
                 {"id": i * 10 + j, "value": f"t{i}_{j}", "ts": datetime(2025, 1, i + 1)}
                 for j in range(3)
             ])
-            tables.append(con.create_table(f"t_{i}", df))
+            tables.append(ibis.memtable(df))
 
         result = union_dedupe(tables, keys=["id"], order_by="ts")
         result_df = result.execute()
@@ -110,7 +110,7 @@ class TestUnionDedupeManyTables:
             {"id": 1, "value": "B", "ts": datetime(2025, 1, 15)},  # Duplicate key
         ])
 
-        t = con.create_table("t_single", df)
+        t = ibis.memtable(df)
 
         result = union_dedupe([t], keys=["id"], order_by="ts")
         result_df = result.execute()
@@ -132,8 +132,8 @@ class TestUnionDedupeCompositeKeys:
             {"region": "EU", "product": "A", "price": 90, "ts": datetime(2025, 1, 15)},   # New
         ])
 
-        t1 = con.create_table("t1_comp", df1)
-        t2 = con.create_table("t2_comp", df2)
+        t1 = ibis.memtable(df1)
+        t2 = ibis.memtable(df2)
 
         result = union_dedupe([t1, t2], keys=["region", "product"], order_by="ts")
         result_df = result.execute()
@@ -162,8 +162,8 @@ class TestUnionDedupeEdgeCases:
             {"id": 2, "col_a": "B", "col_b": 200, "ts": datetime(2025, 1, 15)},
         ])
 
-        t1 = con.create_table("t1_cols", df1)
-        t2 = con.create_table("t2_cols", df2)
+        t1 = ibis.memtable(df1)
+        t2 = ibis.memtable(df2)
 
         result = union_dedupe([t1, t2], keys=["id"], order_by="ts")
         result_df = result.execute()
@@ -193,9 +193,9 @@ class TestUnionDedupeTypicalUseCase:
             {"order_id": "ORD002", "status": "shipped", "updated_at": datetime(2025, 1, 17, 10, 0, 0)},    # Update
         ])
 
-        t1 = con.create_table("p1", partition_2025_01_15)
-        t2 = con.create_table("p2", partition_2025_01_16)
-        t3 = con.create_table("p3", partition_2025_01_17)
+        t1 = ibis.memtable(partition_2025_01_15)
+        t2 = ibis.memtable(partition_2025_01_16)
+        t3 = ibis.memtable(partition_2025_01_17)
 
         result = union_dedupe([t1, t2, t3], keys=["order_id"], order_by="updated_at")
         result_df = result.execute()

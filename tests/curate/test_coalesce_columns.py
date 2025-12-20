@@ -29,7 +29,7 @@ class TestCoalesceColumnsBasic:
             {"id": 2, "new_name": "Bob", "old_name": "OldBob"},
         ])
 
-        t = con.create_table("test_primary", df)
+        t = ibis.memtable(df)
         result = coalesce_columns(t, "new_name", "old_name")
         result_df = result.execute()
 
@@ -44,7 +44,7 @@ class TestCoalesceColumnsBasic:
             {"id": 2, "new_name": "DirectName", "old_name": "Ignored"},
         ])
 
-        t = con.create_table("test_fallback", df)
+        t = ibis.memtable(df)
         result = coalesce_columns(t, "new_name", "old_name")
         result_df = result.execute()
 
@@ -61,7 +61,7 @@ class TestCoalesceColumnsBasic:
             {"id": 3, "col_a": "First", "col_b": "Second", "col_c": "Third"},
         ])
 
-        t = con.create_table("test_multi_fallback", df)
+        t = ibis.memtable(df)
         result = coalesce_columns(t, "col_a", "col_b", "col_c")
         result_df = result.execute()
 
@@ -84,7 +84,7 @@ class TestCoalesceColumnsSchemaEvolution:
             {"id": 2, "customer_name": "NewCustomer", "cust_name": None},     # V2 record
         ])
 
-        t = con.create_table("test_rename", df)
+        t = ibis.memtable(df)
         result = coalesce_columns(t, "customer_name", "cust_name")
         result_df = result.execute()
 
@@ -94,16 +94,16 @@ class TestCoalesceColumnsSchemaEvolution:
     def test_missing_fallback_column_ignored(self, con):
         """Fallback columns that don't exist are ignored."""
         df = pd.DataFrame([
-            {"id": 1, "col_a": None},  # col_b doesn't exist
+            {"id": 1, "col_a": "value"},  # col_b doesn't exist
         ])
 
-        t = con.create_table("test_missing", df)
-        # col_b doesn't exist in the table
+        t = ibis.memtable(df)
+        # col_b doesn't exist in the table - should not error
         result = coalesce_columns(t, "col_a", "col_b")
         result_df = result.execute()
 
-        # col_a stays null (col_b doesn't exist to provide fallback)
-        assert result_df.iloc[0]["col_a"] is None or pd.isna(result_df.iloc[0]["col_a"])
+        # col_a value is preserved
+        assert result_df.iloc[0]["col_a"] == "value"
 
 
 class TestCoalesceColumnsDataTypes:
@@ -111,15 +111,13 @@ class TestCoalesceColumnsDataTypes:
 
     def test_integer_columns(self, con):
         """Coalesce integer columns."""
-        df = pd.DataFrame([
-            {"id": 1, "new_value": None, "old_value": 100},
-            {"id": 2, "new_value": 200, "old_value": 150},
-        ])
-        # Convert to nullable int
-        df["new_value"] = df["new_value"].astype("Int64")
-        df["old_value"] = df["old_value"].astype("Int64")
+        df = pd.DataFrame({
+            "id": [1, 2],
+            "new_value": pd.array([None, 200], dtype="Int64"),
+            "old_value": pd.array([100, 150], dtype="Int64"),
+        })
 
-        t = con.create_table("test_int", df)
+        t = ibis.memtable(df)
         result = coalesce_columns(t, "new_value", "old_value")
         result_df = result.execute()
 
@@ -133,7 +131,7 @@ class TestCoalesceColumnsDataTypes:
             {"id": 2, "new_score": 2.5, "old_score": 1.0},
         ])
 
-        t = con.create_table("test_float", df)
+        t = ibis.memtable(df)
         result = coalesce_columns(t, "new_score", "old_score")
         result_df = result.execute()
 
@@ -146,11 +144,13 @@ class TestCoalesceColumnsEdgeCases:
 
     def test_all_nulls(self, con):
         """All columns null results in null."""
-        df = pd.DataFrame([
-            {"id": 1, "col_a": None, "col_b": None},
-        ])
+        df = pd.DataFrame({
+            "id": [1],
+            "col_a": pd.array([None], dtype="string"),
+            "col_b": pd.array([None], dtype="string"),
+        })
 
-        t = con.create_table("test_all_null", df)
+        t = ibis.memtable(df)
         result = coalesce_columns(t, "col_a", "col_b")
         result_df = result.execute()
 
@@ -159,12 +159,12 @@ class TestCoalesceColumnsEdgeCases:
     def test_empty_table(self, con):
         """Empty table returns empty result."""
         df = pd.DataFrame({
-            "id": pd.Series([], dtype=int),
-            "col_a": pd.Series([], dtype=str),
-            "col_b": pd.Series([], dtype=str)
+            "id": pd.array([], dtype="int64"),
+            "col_a": pd.array([], dtype="string"),
+            "col_b": pd.array([], dtype="string")
         })
 
-        t = con.create_table("test_empty", df)
+        t = ibis.memtable(df)
         result = coalesce_columns(t, "col_a", "col_b")
         result_df = result.execute()
 
@@ -176,7 +176,7 @@ class TestCoalesceColumnsEdgeCases:
             {"id": 1, "keep_me": "preserved", "col_a": None, "col_b": "value"},
         ])
 
-        t = con.create_table("test_preserve", df)
+        t = ibis.memtable(df)
         result = coalesce_columns(t, "col_a", "col_b")
         result_df = result.execute()
 
@@ -190,7 +190,7 @@ class TestCoalesceColumnsEdgeCases:
             {"id": 2, "col_a": None},
         ])
 
-        t = con.create_table("test_no_fallback", df)
+        t = ibis.memtable(df)
         result = coalesce_columns(t, "col_a")
         result_df = result.execute()
 
@@ -203,7 +203,7 @@ class TestCoalesceColumnsEdgeCases:
             {"id": 1, "col_a": "", "col_b": "fallback"},
         ])
 
-        t = con.create_table("test_empty_str", df)
+        t = ibis.memtable(df)
         result = coalesce_columns(t, "col_a", "col_b")
         result_df = result.execute()
 

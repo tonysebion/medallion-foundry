@@ -32,7 +32,7 @@ class TestBuildHistoryBasic:
             {"id": 1, "status": "active", "ts": datetime(2025, 1, 10)},
         ])
 
-        t = con.create_table("test_columns", df)
+        t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
         result_df = result.execute()
 
@@ -48,7 +48,7 @@ class TestBuildHistoryBasic:
             {"id": 2, "status": "pending", "ts": datetime(2025, 1, 11)},
         ])
 
-        t = con.create_table("test_single", df)
+        t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
         result_df = result.execute()
 
@@ -66,7 +66,7 @@ class TestBuildHistoryBasic:
             {"id": 1, "status": "completed", "ts": datetime(2025, 1, 20, 10, 0, 0)},
         ])
 
-        t = con.create_table("test_sequence", df)
+        t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
         result_df = result.execute().sort_values("ts")
 
@@ -98,7 +98,7 @@ class TestBuildHistoryBasic:
             {"id": 1, "val": "B", "change_ts": datetime(2025, 1, 15)},
         ])
 
-        t = con.create_table("test_from_equals", df)
+        t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="change_ts")
         result_df = result.execute()
 
@@ -123,7 +123,7 @@ class TestBuildHistoryMultipleEntities:
             {"id": 2, "val": "2C", "ts": datetime(2025, 1, 20)},
         ])
 
-        t = con.create_table("test_multi_entity", df)
+        t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
         result_df = result.execute()
 
@@ -152,7 +152,7 @@ class TestBuildHistoryMultipleEntities:
             for v in range(1, 6)
         ])
 
-        t = con.create_table("test_current_unique", df)
+        t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
         result_df = result.execute()
 
@@ -180,7 +180,7 @@ class TestBuildHistoryCompositeKeys:
             {"region": "EU", "product": "A", "price": 95, "ts": datetime(2025, 1, 20)},
         ])
 
-        t = con.create_table("test_composite_hist", df)
+        t = ibis.memtable(df)
         result = build_history(t, keys=["region", "product"], ts_col="ts")
         result_df = result.execute()
 
@@ -207,7 +207,7 @@ class TestBuildHistoryCustomColumnNames:
             {"id": 1, "val": "B", "ts": datetime(2025, 1, 15)},
         ])
 
-        t = con.create_table("test_custom_names", df)
+        t = ibis.memtable(df)
         result = build_history(
             t,
             keys=["id"],
@@ -235,12 +235,12 @@ class TestBuildHistoryEdgeCases:
     def test_empty_table(self, con):
         """Empty table returns empty result with SCD2 columns."""
         df = pd.DataFrame({
-            "id": pd.Series([], dtype=int),
-            "val": pd.Series([], dtype=str),
-            "ts": pd.Series([], dtype="datetime64[ns]")
+            "id": pd.array([], dtype="int64"),
+            "val": pd.array([], dtype="string"),
+            "ts": pd.array([], dtype="datetime64[ns]")
         })
 
-        t = con.create_table("test_empty", df)
+        t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
         result_df = result.execute()
 
@@ -255,7 +255,7 @@ class TestBuildHistoryEdgeCases:
             {"id": 1, "name": "Alice", "age": 30, "city": "NYC", "ts": datetime(2025, 1, 10)},
         ])
 
-        t = con.create_table("test_preserve", df)
+        t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
         result_df = result.execute()
 
@@ -275,7 +275,7 @@ class TestBuildHistoryEdgeCases:
             {"id": 1, "val": "B", "ts": datetime(2025, 1, 15)},  # Same timestamp
         ])
 
-        t = con.create_table("test_same_ts", df)
+        t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
         result_df = result.execute()
 
@@ -291,12 +291,13 @@ class TestBuildHistoryNoGaps:
 
     def test_effective_dates_contiguous(self, con):
         """effective_to of one version equals effective_from of next."""
+        # Use Timedelta to avoid invalid day values
         df = pd.DataFrame([
-            {"id": 1, "version": i, "ts": datetime(2025, 1, i * 5)}
+            {"id": 1, "version": i, "ts": datetime(2025, 1, 1) + pd.Timedelta(days=i * 3)}
             for i in range(1, 10)
         ])
 
-        t = con.create_table("test_contiguous", df)
+        t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
         result_df = result.execute().sort_values("ts")
 

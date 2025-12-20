@@ -41,11 +41,12 @@ def dedupe_latest(t: ibis.Table, keys: List[str], order_by: str) -> ibis.Table:
         >>> t = con.read_parquet("bronze/customers/*.parquet")
         >>> deduped = dedupe_latest(t, ["customer_id"], "updated_at")
     """
+    original_cols = t.columns
     window = ibis.window(group_by=keys, order_by=ibis.desc(order_by))
     return (
         t.mutate(_rn=ibis.row_number().over(window))
         .filter(lambda tbl: tbl._rn == 0)  # row_number() starts at 0 in DuckDB
-        .drop("_rn")
+        .select(*original_cols)  # Use select to drop _rn, works better with lambda filter
     )
 
 
@@ -62,11 +63,12 @@ def dedupe_earliest(t: ibis.Table, keys: List[str], order_by: str) -> ibis.Table
     Returns:
         Table with duplicates removed, keeping earliest record per key
     """
+    original_cols = t.columns
     window = ibis.window(group_by=keys, order_by=order_by)
     return (
         t.mutate(_rn=ibis.row_number().over(window))
         .filter(lambda tbl: tbl._rn == 0)  # row_number() starts at 0 in DuckDB
-        .drop("_rn")
+        .select(*original_cols)  # Use select to drop _rn, works better with lambda filter
     )
 
 

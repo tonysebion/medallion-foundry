@@ -33,7 +33,7 @@ class TestFilterIncrementalBasic:
             {"id": 4, "ts": datetime(2025, 1, 20)},  # After watermark
         ])
 
-        t = con.create_table("test_filter", df)
+        t = ibis.memtable(df)
         result = filter_incremental(t, "ts", "2025-01-15")
         result_df = result.execute()
 
@@ -47,7 +47,7 @@ class TestFilterIncrementalBasic:
             {"id": 2, "ts": datetime(2025, 1, 15, 10, 0, 0)},  # Exact match
         ])
 
-        t = con.create_table("test_equal", df)
+        t = ibis.memtable(df)
         watermark = datetime(2025, 1, 15, 10, 0, 0).isoformat()
         result = filter_incremental(t, "ts", watermark)
         result_df = result.execute()
@@ -62,7 +62,7 @@ class TestFilterIncrementalBasic:
             {"id": 3, "ts": datetime(2025, 1, 22)},
         ])
 
-        t = con.create_table("test_all_after", df)
+        t = ibis.memtable(df)
         result = filter_incremental(t, "ts", "2025-01-15")
         result_df = result.execute()
 
@@ -80,7 +80,7 @@ class TestFilterIncrementalDataTypes:
             {"id": 3, "updated_at": datetime(2025, 1, 20, 12, 0, 0)},
         ])
 
-        t = con.create_table("test_datetime", df)
+        t = ibis.memtable(df)
         result = filter_incremental(t, "updated_at", "2025-01-15T00:00:00")
         result_df = result.execute()
 
@@ -96,8 +96,9 @@ class TestFilterIncrementalDataTypes:
             {"id": 4, "version": 15},
         ])
 
-        t = con.create_table("test_int", df)
-        result = filter_incremental(t, "version", "5")
+        t = ibis.memtable(df)
+        # Use integer comparison
+        result = filter_incremental(t, "version", 5)
         result_df = result.execute()
 
         assert len(result_df) == 2
@@ -111,7 +112,7 @@ class TestFilterIncrementalDataTypes:
             {"id": 3, "batch_id": "batch_010"},
         ])
 
-        t = con.create_table("test_string", df)
+        t = ibis.memtable(df)
         result = filter_incremental(t, "batch_id", "batch_005")
         result_df = result.execute()
 
@@ -129,7 +130,7 @@ class TestFilterIncrementalEdgeCases:
             {"id": 2, "ts": datetime(2025, 1, 5)},
         ])
 
-        t = con.create_table("test_empty_result", df)
+        t = ibis.memtable(df)
         result = filter_incremental(t, "ts", "2025-01-10")
         result_df = result.execute()
 
@@ -138,11 +139,11 @@ class TestFilterIncrementalEdgeCases:
     def test_empty_input_table(self, con):
         """Empty input table returns empty result."""
         df = pd.DataFrame({
-            "id": pd.Series([], dtype=int),
-            "ts": pd.Series([], dtype="datetime64[ns]")
+            "id": pd.array([], dtype="int64"),
+            "ts": pd.array([], dtype="datetime64[ns]")
         })
 
-        t = con.create_table("test_empty_input", df)
+        t = ibis.memtable(df)
         result = filter_incremental(t, "ts", "2025-01-15")
         result_df = result.execute()
 
@@ -154,7 +155,7 @@ class TestFilterIncrementalEdgeCases:
             {"id": 1, "col_a": "A", "col_b": 100, "col_c": 1.5, "ts": datetime(2025, 1, 20)},
         ])
 
-        t = con.create_table("test_columns", df)
+        t = ibis.memtable(df)
         result = filter_incremental(t, "ts", "2025-01-15")
         result_df = result.execute()
 
@@ -173,7 +174,7 @@ class TestFilterIncrementalWithNulls:
             {"id": 3, "ts": datetime(2025, 1, 25)},
         ])
 
-        t = con.create_table("test_nulls", df)
+        t = ibis.memtable(df)
         result = filter_incremental(t, "ts", "2025-01-15")
         result_df = result.execute()
 
@@ -193,7 +194,7 @@ class TestFilterIncrementalLargeScale:
             for i in range(1000)
         ])
 
-        t = con.create_table("test_large", df)
+        t = ibis.memtable(df)
         # Watermark at hour 500
         watermark = (datetime(2025, 1, 1) + pd.Timedelta(hours=499)).isoformat()
         result = filter_incremental(t, "ts", watermark)
