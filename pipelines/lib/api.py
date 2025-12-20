@@ -38,11 +38,13 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
+import requests_toolbelt
 import tenacity
 from pydantic import BaseModel, ConfigDict, Field
 from requests_toolbelt.utils.user_agent import user_agent
@@ -78,6 +80,7 @@ _USER_AGENT = user_agent(
     extras=[
         ("httpx", getattr(httpx, "__version__", "unknown")),
         ("tenacity", getattr(tenacity, "__version__", "unknown")),
+        ("requests-toolbelt", getattr(requests_toolbelt, "__version__", "unknown")),
     ],
 )
 
