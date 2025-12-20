@@ -13,7 +13,6 @@ Silver layer rules:
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -25,8 +24,10 @@ import ibis
 from pipelines.lib.curate import build_history, dedupe_latest
 from pipelines.lib.io import maybe_dry_run
 from pipelines.lib._path_utils import resolve_target_path, storage_path_exists
+from pipelines.lib.observability import get_structlog_logger
 
-logger = logging.getLogger(__name__)
+# Use structlog for structured logging with pipeline context
+logger = get_structlog_logger(__name__)
 
 __all__ = ["EntityKind", "HistoryMode", "SilverEntity"]
 
@@ -168,8 +169,8 @@ class SilverEntity:
         if self.entity_kind == EntityKind.EVENT:
             if self.history_mode == HistoryMode.FULL_HISTORY:
                 logger.warning(
-                    "EVENT entities are immutable - FULL_HISTORY may not be needed. "
-                    "Consider using CURRENT_ONLY."
+                    "silver_event_full_history_warning",
+                    message="EVENT entities are immutable - FULL_HISTORY may not be needed",
                 )
 
         return errors
@@ -285,7 +286,7 @@ class SilverEntity:
         t = self._read_source(con, source)
 
         if t.count().execute() == 0:
-            logger.warning("No rows found in source: %s", source)
+            logger.warning("silver_no_source_rows", source=source)
             return {
                 "row_count": 0,
                 "source": source,
@@ -345,7 +346,7 @@ class SilverEntity:
 
         # Only validate if it's a local path
         if str(source_dir).startswith("s3://"):
-            logger.debug("Skipping checksum validation for S3 source")
+            logger.debug("silver_skip_checksum_validation", reason="s3_source")
             return None
 
         result = validate_bronze_checksums(
@@ -372,7 +373,7 @@ class SilverEntity:
         if "*" in source or "?" in source:
             files = glob_module.glob(source)
             if not files:
-                logger.warning("No files found matching pattern: %s", source)
+                logger.warning("silver_no_files_found", pattern=source)
                 # Return empty table
                 return con.memtable([])
             source = files  # Pass list of files to read_parquet
@@ -405,7 +406,7 @@ class SilverEntity:
             existing = [c for c in ordered_cols if c in t.columns]
             missing = set(ordered_cols) - set(existing)
             if missing:
-                logger.warning("Columns not found in source: %s", missing)
+                logger.warning("silver_missing_columns", columns=list(missing))
             return t.select(*existing)
 
         elif self.exclude_columns:
@@ -462,7 +463,7 @@ class SilverEntity:
         row_count = t.count().execute()
 
         if row_count == 0:
-            logger.warning("No rows to write after curation")
+            logger.warning("silver_no_rows_after_curation", target=target)
             return {
                 "row_count": 0,
                 "target": target,
@@ -479,7 +480,7 @@ class SilverEntity:
                 t.to_parquet(target, **write_opts)
                 written_files.append(target)
 
-            logger.info("Wrote %d rows to %s", row_count, target)
+            logger.info("silver_curation_complete", row_count=row_count, target=target)
 
             return {
                 "row_count": row_count,

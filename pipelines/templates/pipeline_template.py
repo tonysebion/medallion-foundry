@@ -2,6 +2,10 @@
 PIPELINE TEMPLATE: Copy this file and fill in the blanks
 =========================================================
 
+.. deprecated::
+    **YAML is now the recommended format.** See `pipeline_template.yaml` instead.
+    Use Python templates only when you need custom logic or retry decorators.
+
 To run:
     python -m pipelines {system}.{entity} --date 2025-01-15
 

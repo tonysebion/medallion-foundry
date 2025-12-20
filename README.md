@@ -1,15 +1,15 @@
-# medallion-foundry
+# bronze-foundry
 
-`medallion-foundry` is an opinionated Python framework for building Bronze → Silver pipelines that stay light, declarative, and orchestration neutral. You define data sources with `BronzeSource`, curate them with `SilverEntity`, then run everything through the `pipelines` CLI or your own lightweight orchestrator.
+`bronze-foundry` is a YAML-first framework for building Bronze → Silver data pipelines. Define your pipelines in simple YAML files and run them through the CLI - no Python knowledge required. For advanced use cases, Python pipelines are also supported.
 
 ## Highlights
 
-- **Declarative layers** — `pipelines.lib.BronzeSource` lets you land raw data, add telemetry, enforce load patterns, and emit `_metadata.json`/`_checksums.json`. `SilverEntity` deduplicates by natural keys, applies SCD1/SCD2 history, and writes standardized Silver output.
-- **Rich source coverage** — Files (CSV, Parquet, space-delimited, fixed-width), MSSQL/Postgres, and REST APIs all sit behind the same interface, work with reusable pagination & pagination state helpers, and honor retry, rate limiting, and watermark configuration.
-- **Pluggable storage** — Target local paths, S3 buckets, or Azure Blob/ADLS via the storage helpers (`pipelines.lib.storage`), and optionally override `BRONZE_TARGET_ROOT`/`SILVER_TARGET_ROOT` in CI.
-- **Pipeline-first CLI** — `python -m pipelines` discovers everything under `pipelines/`, supports Bronze-only (`:bronze`) and Silver-only (`:silver`) runs, dry runs, pre-flight checks, explanations, and has helpers for testing connections, generating samples, and creating new pipelines.
-- **Sample data & helpers** — Scripts such as `scripts/generate_bronze_samples.py`, `scripts/generate_silver_samples.py`, and `scripts/generate_pattern_test_data.py` recreate canonical test data so you can exercise Bronze→Silver flows locally.
-- **Documentation & quality** — `pipelines/QUICKREF.md`, `docs/index.md`, and `docs/pipelines/GETTING_STARTED.md` walk through usage, plus there are guides for resilience, storage, and operations across `docs/`.
+- **YAML-first configuration** — Define pipelines in declarative YAML files with JSON Schema validation for editor autocomplete. Python is available for advanced use cases requiring custom logic.
+- **Declarative layers** — Bronze lands raw data with telemetry, metadata, and checksums. Silver deduplicates by natural keys and applies SCD1/SCD2 history tracking.
+- **Rich source coverage** — Files (CSV, Parquet, JSON, Excel, fixed-width), databases (MSSQL, Postgres, MySQL, DB2), and REST APIs all use the same interface with pagination, retry, rate limiting, and watermark support.
+- **Pluggable storage** — Target local paths, S3 buckets, or Azure Blob/ADLS via storage helpers.
+- **Pipeline-first CLI** — `python -m pipelines` discovers YAML and Python pipelines, supports Bronze-only/Silver-only runs, dry runs, pre-flight checks, and interactive pipeline creation.
+- **Sample data & helpers** — Scripts recreate canonical test data so you can exercise Bronze→Silver flows locally.
 
 ## Quick start
 
@@ -27,17 +27,17 @@
    python -m pipelines --list
    ```
 
-3. **Run a sample pipeline**
+3. **Run a sample YAML pipeline**
 
    ```powershell
-   python -m pipelines examples.retail_orders --date 2025-01-15
+   python -m pipelines ./pipelines/examples/retail_orders.yaml --date 2025-01-15
    ```
 
 4. **Validate before writing**
 
    ```powershell
-   python -m pipelines examples.retail_orders --date 2025-01-15 --dry-run
-   python -m pipelines examples.retail_orders --date 2025-01-15 --check
+   python -m pipelines ./pipelines/examples/retail_orders.yaml --date 2025-01-15 --dry-run
+   python -m pipelines ./pipelines/examples/retail_orders.yaml --date 2025-01-15 --check
    ```
 
 5. **Generate sample data**
@@ -50,21 +50,51 @@
 6. **Create new pipelines**
 
    ```powershell
-   python -m pipelines create                     # Interactive wizard
-   python -m pipelines new finance.invoices --source-type database_mssql
+   python -m pipelines.create                     # Interactive wizard (generates YAML)
+   python -m pipelines.create --format python    # Generate Python instead
    ```
 
 ## Building a pipeline
 
-Pipelines live under the `pipelines/` package. Use the templates in `pipelines/templates/` or copy the examples in `pipelines/examples/` as starting points. A minimal pipeline imports the core dataclasses:
+Pipelines can be defined in YAML (recommended) or Python. YAML provides editor autocomplete via JSON Schema and doesn't require Python knowledge. Use Python when you need complex transformations, retry decorators, or custom logic.
+
+### YAML Pipeline (Recommended)
+
+```yaml
+# yaml-language-server: $schema=./pipelines/schema/pipeline.schema.json
+name: retail_orders
+description: Load retail orders from CSV and curate with SCD Type 1
+
+bronze:
+  system: retail
+  entity: orders
+  source_type: file_csv
+  source_path: ./data/orders_{run_date}.csv
+
+silver:
+  natural_keys: [order_id]
+  change_timestamp: updated_at
+  attributes:
+    - customer_id
+    - order_total
+    - status
+```
+
+Run with: `python -m pipelines ./my_pipeline.yaml --date 2025-01-15`
+
+### Python Pipeline (Advanced)
+
+Use Python when you need retry logic, custom transformations, or runtime-computed configuration:
 
 ```python
 from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
 from pipelines.lib.silver import SilverEntity, EntityKind, HistoryMode
+from pipelines.lib.resilience import with_retry
 
 bronze = BronzeSource(...)
 silver = SilverEntity(...)
 
+@with_retry(max_attempts=3)  # Retry on transient failures (Python only)
 def run(run_date: str, **kwargs):
     return {
         "bronze": bronze.run(run_date, **kwargs),
@@ -72,27 +102,26 @@ def run(run_date: str, **kwargs):
     }
 ```
 
-`LoadPattern`, `SourceType`, `EntityKind`, and `HistoryMode` are typed enums, and the `pipelines.lib.runner.pipeline` decorator wires consistent logging, timing, and dry-run semantics.
+Templates and examples for both formats are in `pipelines/templates/` and `pipelines/examples/`.
 
 ## CLI at a glance
 
 | Command | Description |
 | --- | --- |
-| `python -m pipelines <module>` | Run both Bronze and Silver. Module names mirror `pipelines/<path>.py`, e.g., `examples.retail_orders`. |
-| `python -m pipelines <module>:bronze` | Run Bronze only. |
-| `python -m pipelines <module>:silver` | Run Silver only. |
+| `python -m pipelines ./pipeline.yaml` | Run a YAML pipeline (Bronze + Silver). |
+| `python -m pipelines <module>` | Run a Python pipeline. Module names mirror `pipelines/<path>.py`. |
+| `python -m pipelines ./pipeline.yaml:bronze` | Run Bronze only. |
+| `python -m pipelines ./pipeline.yaml:silver` | Run Silver only. |
 | `--date YYYY-MM-DD` | Required when executing a pipeline. |
 | `--dry-run` | Skip writes but still validate configuration. |
 | `--check` | Validate configuration + connectivity without running. |
 | `--explain` | Describe the pipeline plan without touching data. |
 | `--target <path>` | Override target roots (uses `BRONZE_TARGET_ROOT` / `SILVER_TARGET_ROOT` semantics). |
 | `-v`, `--json-log`, `--log-file` | Logging controls. |
-| `python -m pipelines --list` | Show every discovered pipeline along with available layers. |
+| `python -m pipelines --list` | Show every discovered pipeline (YAML and Python). |
 | `python -m pipelines test-connection <name>` | Validate a database connection (supports `--host`, `--database`, `--type`). |
 | `python -m pipelines inspect-source --file ./data.csv` | Inspect an input file and suggest natural keys/timestamps. |
-| `python -m pipelines generate-sample <module>` | Generate fake rows for the named pipeline (`--rows`, `--output`). |
-| `python -m pipelines new <module> --source-type ...` | Create a scaffold file with the requested source type. |
-| `python -m pipelines.create` | Launch interactive wizard that prompts for system, entity, source type, and Silver settings. |
+| `python -m pipelines.create` | Interactive wizard (generates YAML by default, use `--format python` for Python). |
 
 ## Sample data and helpers
 

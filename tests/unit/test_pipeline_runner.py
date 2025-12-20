@@ -36,9 +36,7 @@ class DummySilver:
         return {"row_count": 3, "target": f"/silver/{run_date}"}
 
 
-def test_pipeline_decorator_adds_metadata(caplog):
-    caplog.set_level(logging.INFO)
-
+def test_pipeline_decorator_adds_metadata(capsys):
     @pipeline("tests.orders", log_level=logging.INFO)
     def run_bridge(run_date: str) -> dict:
         return {"run_date": run_date}
@@ -50,7 +48,9 @@ def test_pipeline_decorator_adds_metadata(caplog):
 
     dry_result = run_bridge("2025-01-16", dry_run=True)
     assert dry_result["dry_run"] is True
-    assert "DRY RUN" in caplog.text
+    # Structlog outputs to stdout - check for pipeline_dry_run event
+    captured = capsys.readouterr()
+    assert "pipeline_dry_run" in captured.out
 
 
 def test_run_pipeline_success():

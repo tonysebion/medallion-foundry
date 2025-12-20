@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "BronzeConfig",
+    "LoggingConfig",
     "PipelineSettings",
     "SilverConfig",
     "ValidationIssue",
@@ -181,6 +182,55 @@ class SilverConfig(BaseModel):
         return self
 
 
+class LoggingConfig(BaseModel):
+    """Pydantic model for logging configuration.
+
+    Configurable via YAML environment files or pipeline configs.
+    Supports both local file logging and structured JSON output for Splunk.
+
+    Example YAML:
+        logging:
+          level: INFO
+          format: json          # 'json' for Splunk, 'console' for human-readable
+          file: ./logs/pipeline.log  # Optional file output
+          console: true         # Also output to console (default: true)
+
+    Example Python:
+        >>> config = LoggingConfig(level="DEBUG", format="console")
+        >>> from pipelines.lib.observability import setup_structlog
+        >>> setup_structlog(
+        ...     verbose=(config.level == "DEBUG"),
+        ...     json_format=(config.format == "json"),
+        ...     log_file=config.file,
+        ... )
+    """
+
+    level: str = Field(default="INFO", description="Log level (DEBUG, INFO, WARNING, ERROR)")
+    format: str = Field(default="console", description="Output format: 'json' for Splunk, 'console' for human-readable")
+    file: Optional[str] = Field(default=None, description="Optional log file path")
+    console: bool = Field(default=True, description="Output to console (in addition to file)")
+    include_timestamp: bool = Field(default=True, description="Include ISO timestamp in logs")
+    include_source: bool = Field(default=True, description="Include source file/line info")
+
+    @field_validator("level")
+    @classmethod
+    def validate_level(cls, v: str) -> str:
+        """Validate log level is a known value."""
+        valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+        if v.upper() not in valid_levels:
+            raise ValueError(f"level must be one of: {valid_levels}")
+        return v.upper()
+
+    @field_validator("format")
+    @classmethod
+    def validate_format(cls, v: str) -> str:
+        """Validate format is a known value."""
+        valid_formats = ["json", "console", "text"]
+        if v.lower() not in valid_formats:
+            raise ValueError(f"format must be one of: {valid_formats}")
+        return v.lower()
+
+
 class PipelineSettings(BaseSettings):
     """Environment-based pipeline settings using pydantic-settings.
 
@@ -199,6 +249,8 @@ class PipelineSettings(BaseSettings):
     bronze_path: str = Field(default="./bronze", description="Default Bronze output path")
     silver_path: str = Field(default="./silver", description="Default Silver output path")
     log_level: str = Field(default="INFO", description="Logging level")
+    log_format: str = Field(default="console", description="Log format: 'json' or 'console'")
+    log_file: Optional[str] = Field(default=None, description="Optional log file path")
     max_retries: int = Field(default=3, ge=1, le=10, description="Max retry attempts")
     retry_delay: float = Field(default=1.0, ge=0.1, le=60.0, description="Retry delay in seconds")
     chunk_size: int = Field(default=100000, ge=1000, description="Default chunk size for writes")

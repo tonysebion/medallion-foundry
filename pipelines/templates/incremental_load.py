@@ -1,6 +1,11 @@
 """
 TEMPLATE: Incremental Load with Watermark
 ==========================================
+
+.. deprecated::
+    **YAML is now the recommended format.** See `incremental_load.yaml` instead.
+    Use Python templates only when you need custom logic or retry decorators.
+
 Use this for incremental/delta loads:
 - Only fetch new records since last run
 - Uses a watermark column (e.g., LastUpdated) to track progress

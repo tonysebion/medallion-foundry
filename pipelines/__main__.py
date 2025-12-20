@@ -37,14 +37,17 @@ def setup_logging(
 ) -> None:
     """Configure logging for pipeline execution.
 
+    Uses structlog for structured JSON logging compatible with Splunk
+    and other log aggregation systems.
+
     Args:
         verbose: Enable debug-level logging
         json_format: Use JSON output format (for log aggregation)
         log_file: Optional file path to write logs to
     """
-    from pipelines.lib.observability import setup_logging as _setup_logging
+    from pipelines.lib.observability import setup_structlog
 
-    _setup_logging(verbose=verbose, json_format=json_format, log_file=log_file)
+    setup_structlog(verbose=verbose, json_format=json_format, log_file=log_file)
 
 
 logger = logging.getLogger(__name__)
@@ -220,6 +223,7 @@ def run_yaml_pipeline(
     run_date: str,
     dry_run: bool = False,
     target_override: Optional[str] = None,
+    use_yaml_logging: bool = True,
 ) -> Dict[str, Any]:
     """Run a pipeline from a YAML configuration file.
 
@@ -229,6 +233,7 @@ def run_yaml_pipeline(
         run_date: Date for this pipeline run
         dry_run: If True, validate but don't execute
         target_override: Override target path for local development
+        use_yaml_logging: If True and pipeline has logging config, use it
 
     Returns:
         Pipeline result dictionary
@@ -240,6 +245,10 @@ def run_yaml_pipeline(
     except (FileNotFoundError, YAMLConfigError) as e:
         print(f"Error loading YAML pipeline: {e}")
         sys.exit(1)
+
+    # Apply logging config from YAML if present and not overridden by CLI
+    if use_yaml_logging and pipeline.logging_config:
+        pipeline.setup_logging()
 
     kwargs: Dict[str, Any] = {"dry_run": dry_run}
     if target_override:
@@ -1225,7 +1234,8 @@ def print_welcome_message() -> None:
     print()
     print("Quick Start:")
     print("  python -m pipelines --list              List available pipelines")
-    print("  python -m pipelines.create              Launch interactive wizard")
+    print("  python -m pipelines new --tui           Launch interactive TUI wizard")
+    print("  python -m pipelines.create              Launch text-based wizard")
     print()
     print("Run a YAML Pipeline (recommended for non-Python users):")
     print("  python -m pipelines ./path/to/pipeline.yaml --date 2025-01-15")
@@ -1235,8 +1245,9 @@ def print_welcome_message() -> None:
     print("  python -m pipelines <module.name> --date YYYY-MM-DD")
     print()
     print("Common Commands:")
-    print("  python -m pipelines new <name> --source-type file_csv")
-    print("                                          Create new pipeline from template")
+    print("  python -m pipelines new --tui           Interactive TUI for creating pipelines")
+    print("  python -m pipelines edit ./config.yaml  Edit existing YAML in TUI editor")
+    print("  python -m pipelines new <name>          Create pipeline from template")
     print("  python -m pipelines generate-samples    Generate sample data for examples")
     print("  python -m pipelines inspect-source --file <path>")
     print("                                          Analyze a data file")
@@ -1297,12 +1308,23 @@ Examples:
     # Dry run (validate without writing data)
     python -m pipelines ./my_pipeline.yaml --date 2025-01-15 --dry-run
 
+    # Interactive TUI (Terminal User Interface)
+    # -----------------------------------------
+    # Launch TUI wizard to create new pipeline
+    python -m pipelines new --tui
+
+    # Create child pipeline inheriting from parent
+    python -m pipelines new --tui --extends ./base_config.yaml
+
+    # Edit existing YAML in TUI editor
+    python -m pipelines edit ./pipelines/my_pipeline.yaml
+
     # Other Commands
     # --------------
     # Test database connection
     python -m pipelines test-connection claims_db --host myserver.com --database ClaimsDB
 
-    # Create a new pipeline from template
+    # Create a new pipeline from template (non-TUI)
     python -m pipelines new claims.header --source-type database_mssql
 
     # Generate sample test data
@@ -1423,12 +1445,53 @@ Examples:
 
         # Handle new command
         if args.pipeline == "new":
+            # Check for --tui flag
+            if "--tui" in sys.argv:
+                # Launch TUI wizard
+                try:
+                    from pipelines.tui.app import run_create_wizard
+                    # Check for --extends flag
+                    extends_path = None
+                    if "--extends" in sys.argv:
+                        idx = sys.argv.index("--extends")
+                        if idx + 1 < len(sys.argv):
+                            extends_path = sys.argv[idx + 1]
+                    run_create_wizard(parent_path=extends_path)
+                except ImportError as e:
+                    print("ERROR: TUI requires the 'textual' package")
+                    print("Install with: pip install textual>=0.47.0")
+                    print(f"Import error: {e}")
+                    sys.exit(1)
+                return
+
             if not args.extra_args:
                 print("Usage: python -m pipelines new <pipeline_name>")
                 print("  Options: --source-type (file_csv, file_parquet, database_mssql, database_postgres, api_rest)")
+                print("           --tui          Launch interactive TUI wizard")
+                print("           --extends      Parent config for child pipeline (with --tui)")
                 sys.exit(1)
             pipeline_name = args.extra_args[0]
             new_pipeline_command(pipeline_name, source_type=args.source_type)
+            return
+
+        # Handle edit command (TUI editor)
+        if args.pipeline == "edit":
+            if not args.extra_args:
+                print("Usage: python -m pipelines edit <path/to/config.yaml>")
+                print("  Opens the interactive TUI editor for the YAML configuration")
+                sys.exit(1)
+            yaml_path = args.extra_args[0]
+            try:
+                from pipelines.tui.app import run_editor
+                run_editor(yaml_path)
+            except ImportError as e:
+                print("ERROR: TUI requires the 'textual' package")
+                print("Install with: pip install textual>=0.47.0")
+                print(f"Import error: {e}")
+                sys.exit(1)
+            except FileNotFoundError as e:
+                print(f"ERROR: {e}")
+                sys.exit(1)
             return
 
         # Handle inspect-source command
@@ -1454,16 +1517,22 @@ Examples:
     if not args.date:
         parser.error("--date is required when running a pipeline")
 
-    # Setup logging
-    setup_logging(
-        verbose=args.verbose,
-        json_format=args.json_log,
-        log_file=args.log_file,
-    )
-    logger = logging.getLogger("pipelines")
-
     # Parse pipeline specification and determine type (YAML vs Python)
     pipeline_spec, layer = parse_pipeline_spec(args.pipeline)
+
+    # Check if CLI logging flags were explicitly set
+    cli_logging_override = args.verbose or args.json_log or args.log_file
+
+    # Setup logging from CLI flags if provided, otherwise use defaults
+    # YAML pipelines can override with their own config if no CLI flags set
+    if cli_logging_override or not is_yaml_pipeline(args.pipeline):
+        setup_logging(
+            verbose=args.verbose,
+            json_format=args.json_log,
+            log_file=args.log_file,
+        )
+
+    logger = logging.getLogger("pipelines")
 
     # Check if this is a YAML pipeline
     if is_yaml_pipeline(args.pipeline):
@@ -1491,6 +1560,7 @@ Examples:
                 args.date,
                 dry_run=args.dry_run,
                 target_override=args.target_override,
+                use_yaml_logging=not cli_logging_override,
             )
 
             print_result(result, args.pipeline)

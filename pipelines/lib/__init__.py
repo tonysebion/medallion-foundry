@@ -84,6 +84,7 @@ from pipelines.lib.runner import pipeline
 from pipelines.lib.silver import EntityKind, HistoryMode, SilverEntity
 from pipelines.lib.validate import (
     BronzeConfig,
+    LoggingConfig,
     PipelineSettings,
     SilverConfig,
     ValidationIssue,
@@ -213,6 +214,7 @@ __all__ = [
     "SilverEntity",
     # Validate
     "BronzeConfig",
+    "LoggingConfig",
     "PipelineSettings",
     "SilverConfig",
     "ValidationIssue",

@@ -11,7 +11,6 @@ Bronze layer rules:
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -38,8 +37,10 @@ from pipelines.lib._path_utils import (
     storage_path_exists,
 )
 from pipelines.lib.validate import validate_and_raise
+from pipelines.lib.observability import get_structlog_logger
 
-logger = logging.getLogger(__name__)
+# Use structlog for structured logging with pipeline context
+logger = get_structlog_logger(__name__)
 
 __all__ = ["BronzeOutputMetadata", "BronzeSource", "LoadPattern", "SourceType"]
 
@@ -335,9 +336,10 @@ class BronzeSource:
         is_full_refresh = False
         if should_force_full_refresh(self.system, self.entity, self.full_refresh_days):
             logger.info(
-                "Periodic full refresh triggered for %s.%s - clearing watermark",
-                self.system,
-                self.entity,
+                "bronze_full_refresh_triggered",
+                system=self.system,
+                entity=self.entity,
+                reason="periodic_refresh",
             )
             delete_watermark(self.system, self.entity)
             is_full_refresh = True
@@ -351,10 +353,10 @@ class BronzeSource:
             last_watermark = get_watermark(self.system, self.entity)
             if last_watermark:
                 logger.info(
-                    "Incremental load for %s.%s from watermark: %s",
-                    self.system,
-                    self.entity,
-                    last_watermark,
+                    "bronze_incremental_load",
+                    system=self.system,
+                    entity=self.entity,
+                    watermark=last_watermark,
                 )
 
         # Read from source
@@ -698,7 +700,7 @@ class BronzeSource:
         row_count: int = int(count_result.iloc[0] if hasattr(count_result, "iloc") else count_result)  # type: ignore[arg-type]
 
         if row_count == 0:
-            logger.warning("No rows to write for %s.%s", self.system, self.entity)
+            logger.warning("bronze_no_rows", system=self.system, entity=self.entity)
             return {
                 "row_count": 0,
                 "target": target,
@@ -741,7 +743,7 @@ class BronzeSource:
                     extra=bronze_extra,
                 )
                 storage.write_text("_metadata.json", metadata.to_json())
-                logger.debug("Wrote metadata to %s/_metadata.json", target)
+                logger.debug("bronze_metadata_written", target=target)
         else:
             # Local filesystem - write with artifacts
             storage = get_storage(target)
@@ -761,7 +763,7 @@ class BronzeSource:
                     extra=bronze_extra,
                 )
                 storage.write_text("_metadata.json", metadata.to_json())
-                logger.debug("Wrote metadata to %s/_metadata.json", target)
+                logger.debug("bronze_metadata_written", target=target)
 
             # Write checksums
             if self.write_checksums:
@@ -778,11 +780,11 @@ class BronzeSource:
                 )
 
         logger.info(
-            "Wrote %d rows for %s.%s to %s",
-            row_count,
-            self.system,
-            self.entity,
-            target,
+            "bronze_extraction_complete",
+            row_count=row_count,
+            system=self.system,
+            entity=self.entity,
+            target=target,
         )
 
         result: Dict[str, Any] = {
@@ -812,5 +814,5 @@ class BronzeSource:
                 return str(max_val.iloc[0, 0]) if not max_val.empty else None
             return str(max_val) if max_val is not None else None
         except Exception as e:
-            logger.warning("Failed to get max watermark: %s", e)
+            logger.warning("bronze_watermark_failed", error=str(e))
             return None

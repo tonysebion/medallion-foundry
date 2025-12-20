@@ -1,6 +1,11 @@
 """
 TEMPLATE: Fixed-Width File
 ===========================
+
+.. deprecated::
+    **YAML is now the recommended format.** See `fixed_width.yaml` instead.
+    Use Python templates only when you need custom logic or retry decorators.
+
 Use this for files where each column is at a fixed character position:
 - Mainframe reports
 - Bank statements with positional fields

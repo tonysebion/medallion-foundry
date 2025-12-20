@@ -1,6 +1,11 @@
 """
 TEMPLATE: CSV File Full Snapshot
 ================================
+
+.. deprecated::
+    **YAML is now the recommended format.** See `csv_snapshot.yaml` instead.
+    Use Python templates only when you need custom logic or retry decorators.
+
 Use this for CSV files that are full snapshots:
 - Daily export files from legacy systems
 - Files that contain all records each time

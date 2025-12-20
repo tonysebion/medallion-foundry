@@ -11,7 +11,10 @@ import time
 from functools import wraps
 from typing import Any, Callable, Dict, Optional, TypeVar
 
-logger = logging.getLogger(__name__)
+from pipelines.lib.observability import get_structlog_logger
+
+# Use structlog for structured logging
+logger = get_structlog_logger(__name__)
 
 __all__ = ["pipeline"]
 
@@ -43,26 +46,23 @@ def pipeline(
     def decorator(fn: F) -> F:
         @wraps(fn)
         def wrapper(*args: Any, dry_run: bool = False, **kwargs: Any) -> Dict[str, Any]:
-            pipeline_logger = logging.getLogger(f"pipelines.{name}")
+            pipeline_logger = get_structlog_logger(f"pipelines.{name}")
 
             if dry_run:
-                pipeline_logger.log(
-                    log_level, "[DRY RUN] Would execute pipeline: %s", name
-                )
+                pipeline_logger.info("pipeline_dry_run", pipeline=name)
                 return {"dry_run": True, "pipeline": name}
 
             start = time.time()
-            pipeline_logger.log(log_level, "Starting pipeline: %s", name)
+            pipeline_logger.info("pipeline_started", pipeline=name)
 
             try:
                 result = fn(*args, **kwargs)
                 elapsed = time.time() - start
 
-                pipeline_logger.log(
-                    log_level,
-                    "Completed pipeline: %s in %.2fs",
-                    name,
-                    elapsed,
+                pipeline_logger.info(
+                    "pipeline_completed",
+                    pipeline=name,
+                    elapsed_seconds=round(elapsed, 2),
                 )
 
                 # Add timing to result if it's a dict
@@ -75,10 +75,10 @@ def pipeline(
             except Exception as e:
                 elapsed = time.time() - start
                 pipeline_logger.error(
-                    "Pipeline failed: %s after %.2fs - %s",
-                    name,
-                    elapsed,
-                    e,
+                    "pipeline_failed",
+                    pipeline=name,
+                    elapsed_seconds=round(elapsed, 2),
+                    error=str(e),
                 )
                 raise
 

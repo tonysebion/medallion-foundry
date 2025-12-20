@@ -45,6 +45,31 @@ name: your_pipeline_name
 description: Brief description of what this pipeline does
 
 # ============================================================
+# LOGGING: Configure structured logging (optional)
+# ============================================================
+# Uncomment the logging section to override environment defaults
+# logging:
+#   # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+#   level: INFO
+#
+#   # Output format:
+#   # - 'console': Human-readable (good for development)
+#   # - 'json': Structured JSON (for Splunk and log aggregation)
+#   format: console
+#
+#   # Optional: Write logs to a file (in addition to console)
+#   # file: ./logs/pipeline.log
+#
+#   # Output to console? (default: true)
+#   console: true
+#
+#   # Include timestamp in logs? (default: true)
+#   include_timestamp: true
+#
+#   # Include source file:line info? (default: true for dev, false for prod)
+#   include_source: true
+
+# ============================================================
 # BRONZE: Where does the data come from?
 # ============================================================
 bronze:

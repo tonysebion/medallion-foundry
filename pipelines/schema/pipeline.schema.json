@@ -6,6 +6,11 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "extends": {
+      "type": "string",
+      "description": "Path to parent config file for inheritance. Child values override parent values.",
+      "examples": ["./base_config.yaml", "../shared/database_defaults.yaml"]
+    },
     "name": {
       "type": "string",
       "description": "Optional pipeline name (defaults to filename)"
@@ -23,7 +28,8 @@
   },
   "anyOf": [
     { "required": ["bronze"] },
-    { "required": ["silver"] }
+    { "required": ["silver"] },
+    { "required": ["extends"] }
   ],
   "definitions": {
     "bronze": {

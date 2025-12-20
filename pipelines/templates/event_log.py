@@ -1,6 +1,11 @@
 """
 TEMPLATE: Event Log / Fact Table
 =================================
+
+.. deprecated::
+    **YAML is now the recommended format.** See `event_log.yaml` instead.
+    Use Python templates only when you need custom logic or retry decorators.
+
 Use this for immutable event/fact data:
 - Click streams, page views
 - Transaction logs

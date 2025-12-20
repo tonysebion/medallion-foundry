@@ -1,81 +1,202 @@
 # Retry Configuration
 
-Retry behavior is already wired into the Bronze extraction, Silver processor, and storage backends via the resilient execution helpers in `core.platform.resilience`. This guide explains how to customize that behavior so each source type can align with its uptime guarantees, throughput goals, and error budget.
+Retry support is available for handling transient failures in database connections, API calls, and other flaky operations. This guide explains how to add retry logic to your pipelines.
 
-## Why tune retry settings?
+> **Note:** Retry configuration is currently only available for Python pipelines. YAML pipelines do not support retry configuration. If you need retry logic with a YAML pipeline, wrap the call in a Python script.
 
-- **Avoid overwhelming APIs** with retries that pile up after a transient failure.
-- **Stop fast** on non-retryable errors (authentication, bad requests, not found) while retrying the ones that clear up naturally (timeouts, network blips, server errors).
-- **Add jitter and backoff** so retries spread out when a backend is already struggling.
-- **Match storage vs API workloads**: uploads to storage backends typically tolerate more attempts than synchronous API calls.
+## Philosophy
 
-## Runtime configuration
+Bronze-Foundry keeps `BronzeSource` and `SilverEntity` simple and deterministic. Retry logic is **opt-in** via the `@with_retry` decorator when you know a source is flaky.
 
-Each extractor exposes a `retry` block under its `source` definition. The values map directly to `RetryPolicy` in `core/platform/resilience/retry.py`, so the same terminology applies in docs and code:
+## Basic Usage (Python Only)
 
-```yaml
-source:
-  type: api
+```python
+from pipelines.lib.resilience import with_retry
 
-  retry:
-    max_attempts: 8           # Total tries before giving up (default 5)
-    base_delay: 0.5           # Starting backoff delay in seconds
-    max_delay: 10.0           # Upper bound on backoff delay
-    multiplier: 2.0           # Exponential multiplier (default 2.0)
-    jitter: 0.25              # Add +/-25% randomness to avoid thundering herds
-    retry_on_exceptions:
-      - TimeoutError
-      - ConnectionError
-      - asyncio.TimeoutError
+# Simple case - no retry (most sources)
+def run(run_date: str):
+    return bronze.run(run_date)
+
+# Flaky database - add retry
+@with_retry(max_attempts=3)
+def run(run_date: str):
+    return bronze.run(run_date)
+
+# API with rate limiting - longer backoff
+@with_retry(max_attempts=5, backoff_seconds=5.0)
+def run(run_date: str):
+    return bronze.run(run_date)
 ```
 
-- `base_delay`/`max_delay`/`multiplier` compose the classic exponential backoff curve.
-- `jitter` inserts configurable randomness so simultaneous retries don't collide.
-- `retry_on_exceptions` accepts built-in exception names that the extractor should treat as retryable; the implementation resolves them back to exception classes before constructing `RetryPolicy`.
+## Decorator Parameters
 
-If you omit the `retry` block, the default policy still applies (5 attempts, 0.5s → 8.0s). Providing any of these fields overrides only that value while the others fall back to defaults.
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `max_attempts` | 3 | Maximum number of attempts before giving up |
+| `backoff_seconds` | 1.0 | Base delay between retries |
+| `exponential` | True | Use exponential backoff (delay doubles each attempt) |
+| `jitter` | True | Add random jitter to avoid thundering herd |
+| `retry_exceptions` | None | Only retry on these exception types (None = all) |
 
-## Per-source-type tweaks
+## Backoff Behavior
 
-Extractors can switch the retry predicate depending on domain knowledge:
+With default settings (`exponential=True`, `jitter=True`, `backoff_seconds=1.0`):
 
-- **API extractors** call `_should_retry_api` to skip retries on 4xx errors while honoring 429/5xx. You can set more aggressive values (e.g., `max_attempts: 10`) for flaky APIs if they otherwise succeed.
-- **Database extractors** override `_should_retry_db_error` and often retry on transient SQL errors or deadlock notifications. Use `retry_on_exceptions` to include `pyodbc.Error` subclasses.
-- **Storage/upload helpers** (S3/Azure/local) keep their own `_should_retry` helpers; the shared `retry` block still controls the policy.
+| Attempt | Base Delay | With Jitter (example) |
+|---------|------------|----------------------|
+| 1 → 2 | 1.0s | 1.0-1.5s |
+| 2 → 3 | 2.0s | 2.0-3.0s |
+| 3 → 4 | 4.0s | 4.0-6.0s |
 
-Use intent configs to vary retry policies across datasets:
+## Common Patterns
+
+### Database with Transient Failures
+
+```python
+from pipelines.lib.resilience import with_retry
+
+@with_retry(max_attempts=3, backoff_seconds=2.0)
+def run_bronze(run_date: str, **kwargs):
+    """Extract with retry on transient failures."""
+    return bronze.run(run_date, **kwargs)
+```
+
+### Rate-Limited API
+
+```python
+from pipelines.lib.resilience import with_retry
+
+@with_retry(
+    max_attempts=5,
+    backoff_seconds=10.0,  # Start with longer delay
+    retry_exceptions=(ConnectionError, TimeoutError),
+)
+def run_bronze(run_date: str, **kwargs):
+    """Extract from rate-limited API."""
+    return bronze.run(run_date, **kwargs)
+```
+
+### Retry Only Specific Exceptions
+
+```python
+import pyodbc
+from pipelines.lib.resilience import with_retry
+
+@with_retry(
+    max_attempts=3,
+    retry_exceptions=(pyodbc.OperationalError, pyodbc.InterfaceError),
+)
+def run_bronze(run_date: str, **kwargs):
+    """Retry only on transient database errors."""
+    return bronze.run(run_date, **kwargs)
+```
+
+## Alternative: RetryConfig Class
+
+For programmatic retry configuration:
+
+```python
+from pipelines.lib.resilience import RetryConfig, retry_operation
+
+# Predefined configurations
+config = RetryConfig.default()      # 3 attempts, 1s backoff
+config = RetryConfig.aggressive()   # 5 attempts, 5s backoff
+config = RetryConfig.none()         # No retry (fail immediately)
+
+# Custom configuration
+config = RetryConfig(
+    max_attempts=10,
+    backoff_seconds=2.0,
+    exponential=True,
+    jitter=True,
+)
+
+# Use with retry_operation helper
+result = retry_operation(
+    lambda: database.execute(query),
+    config,
+    "database query"  # Operation name for logging
+)
+```
+
+## Circuit Breaker
+
+For services that may be completely unavailable, use the circuit breaker to fail fast:
+
+```python
+from pipelines.lib.resilience import CircuitBreaker, CircuitBreakerOpen
+
+breaker = CircuitBreaker(
+    failure_threshold=5,   # Open circuit after 5 failures
+    recovery_time=60.0,    # Try again after 60 seconds
+)
+
+try:
+    with breaker:
+        result = api.call()
+except CircuitBreakerOpen:
+    # Service is down - use cached data or fail gracefully
+    result = get_cached_data()
+```
+
+## Logging
+
+Retry attempts are logged at WARNING level:
+
+```
+WARNING Attempt 1/3 failed: Connection refused. Retrying in 1.2s...
+WARNING Attempt 2/3 failed: Connection refused. Retrying in 2.4s...
+ERROR All 3 attempts failed. Last error: Connection refused
+```
+
+## YAML Pipeline Workaround
+
+If you need retry with a YAML pipeline, create a wrapper Python script:
+
+```python
+# run_with_retry.py
+from pipelines.lib.config_loader import load_pipeline
+from pipelines.lib.resilience import with_retry
+
+@with_retry(max_attempts=3, backoff_seconds=2.0)
+def run_pipeline(config_path: str, run_date: str):
+    pipeline = load_pipeline(config_path)
+    return pipeline.run(run_date)
+
+if __name__ == "__main__":
+    import sys
+    result = run_pipeline(sys.argv[1], sys.argv[2])
+    print(result)
+```
+
+Then run:
+```bash
+python run_with_retry.py ./my_pipeline.yaml 2025-01-15
+```
+
+## When to Use Retry
+
+| Scenario | Recommendation |
+|----------|---------------|
+| Stable internal database | No retry needed |
+| Cloud database (Azure SQL, RDS) | Add retry (transient network issues) |
+| Rate-limited external API | Add retry with longer backoff |
+| File system operations | Usually no retry needed |
+| Network file shares | Add retry (connection drops) |
+
+## Future: YAML Retry Support
+
+YAML retry configuration may be added in a future version:
 
 ```yaml
+# FUTURE - NOT YET IMPLEMENTED
 bronze:
-  ...
-source:
-  type: api
+  system: sales
+  entity: orders
+  source_type: database_mssql
   retry:
-    max_attempts: 10
-    base_delay: 0.2
-    jitter: 0.3
-
-silver:
-  ...
+    max_attempts: 3
+    backoff_seconds: 2.0
 ```
 
-## Logging and observability
-
-Resilience helpers log each retry attempt at DEBUG level:
-
-```
-DEBUG Waiting 0.75s before retry (attempt 3/7) [...]
-```
-
-If you need richer telemetry, hook into:
-
-- `core.platform.resilience.retry.execute_with_retry`, which accepts an optional `retry_if` predicate per call.
-- `core.platform.resilience.mixins.ResilienceMixin`, which surfaces `RetryPolicy`.
-
-Tune log levels or ship the message to your observability stack so every dataset run reports how many retries it issued and why they eventually succeeded or failed.
-
-## Futures & suggestions
-
-- Consider exposing a `retry.retry_if` config key that accepts named predicates in the future.
-- Allow dataset-specific retry timeouts (e.g., short circuits for fast-fail workflows) by decorating `execute_with_retry`.
-- Combine with rate-limiting (see the API guide) so retries automatically respect downstream throttles.
+Track progress: [GitHub Issue #TBD]

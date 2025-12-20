@@ -1,0 +1,67 @@
+# yaml-language-server: $schema=../schema/pipeline.schema.json
+#
+# Example Pipeline: API with Cursor Pagination
+# =============================================
+# Demonstrates cursor-based pagination (common in modern REST APIs).
+#
+# This example shows:
+# - API key authentication
+# - Cursor-based pagination
+# - JSON path navigation for nested response data
+# - Incremental loads with watermark
+#
+# Setup:
+#   1. Set your API key:
+#       export API_KEY="your_api_key_here"
+#
+# Run:
+#   python -m pipelines ./pipelines/examples/api_with_cursor.yaml --date 2025-01-15
+
+name: api_cursor_example
+description: Extract events from API using cursor pagination
+
+bronze:
+  system: events_api
+  entity: audit_events
+  source_type: api_rest
+
+  # API configuration
+  base_url: https://api.example.com
+  endpoint: /v1/audit/events
+
+  # Authentication - API key in header
+  auth:
+    auth_type: api_key
+    header_name: X-API-Key
+    api_key: ${API_KEY}
+
+  # Cursor-based pagination
+  # Many modern APIs return a cursor in the response that points to the next page
+  pagination:
+    strategy: cursor
+    cursor_param: cursor          # Query param to send cursor
+    cursor_path: meta.next_cursor # Path in JSON response to find next cursor
+    page_size: 100
+
+  # Navigate nested JSON response
+  # If API returns: {"data": {"events": [...]}, "meta": {...}}
+  # Use data_path to extract just the events array
+  data_path: data.events
+
+  # Rate limiting
+  requests_per_second: 10.0
+
+  # Incremental load - only fetch events since last watermark
+  load_pattern: incremental
+  watermark_column: event_timestamp
+  watermark_param: since  # Query param for watermark value
+
+silver:
+  natural_keys: [event_id]
+  change_timestamp: event_timestamp
+  entity_kind: event
+  attributes:
+    - event_type
+    - user_id
+    - resource_id
+    - details

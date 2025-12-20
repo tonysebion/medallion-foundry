@@ -35,6 +35,7 @@ import yaml
 
 from pipelines.lib.bronze import BronzeSource, LoadPattern, SourceType
 from pipelines.lib.silver import EntityKind, HistoryMode, SilverEntity
+from pipelines.lib.validate import LoggingConfig
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +43,10 @@ __all__ = [
     "load_pipeline",
     "load_bronze_from_yaml",
     "load_silver_from_yaml",
+    "load_logging_from_yaml",
     "validate_yaml_config",
     "YAMLConfigError",
+    "load_with_inheritance",
 ]
 
 
@@ -87,6 +90,150 @@ HISTORY_MODE_MAP = {
     "full_history": HistoryMode.FULL_HISTORY,
     "scd2": HistoryMode.FULL_HISTORY,
 }
+
+
+def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+    """Deep merge two dictionaries, with override taking precedence.
+
+    Args:
+        base: Base dictionary (parent config)
+        override: Override dictionary (child config)
+
+    Returns:
+        New dictionary with merged values
+    """
+    result = dict(base)
+
+    for key, value in override.items():
+        if (
+            key in result
+            and isinstance(result[key], dict)
+            and isinstance(value, dict)
+        ):
+            # Recursively merge nested dicts
+            result[key] = _deep_merge(result[key], value)
+        else:
+            # Override the value
+            result[key] = value
+
+    return result
+
+
+def load_with_inheritance(
+    config_path: Union[str, Path],
+) -> tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
+    """Load a YAML config, resolving parent inheritance via 'extends' key.
+
+    Child configs can extend parent configs using:
+        extends: ./base_config.yaml
+
+    The child config is deep-merged with the parent, with child values
+    taking precedence over parent values.
+
+    Args:
+        config_path: Path to the YAML configuration file
+
+    Returns:
+        Tuple of (merged_config, parent_config_or_none)
+
+    Raises:
+        FileNotFoundError: If config or parent file doesn't exist
+        YAMLConfigError: If YAML is invalid
+
+    Example YAML:
+        # child.yaml
+        extends: ./base.yaml
+
+        bronze:
+          entity: specific_table  # Override parent's entity
+          # system, host, database inherited from parent
+    """
+    config_path = Path(config_path)
+
+    if not config_path.exists():
+        raise FileNotFoundError(f"Configuration file not found: {config_path}")
+
+    with open(config_path, "r", encoding="utf-8") as f:
+        try:
+            child_config = yaml.safe_load(f) or {}
+        except yaml.YAMLError as e:
+            raise YAMLConfigError(f"Invalid YAML syntax in {config_path}: {e}")
+
+    if "extends" not in child_config:
+        return child_config, None
+
+    # Resolve parent path relative to child config file
+    parent_ref = child_config["extends"]
+    parent_path = (config_path.parent / parent_ref).resolve()
+
+    if not parent_path.exists():
+        raise FileNotFoundError(
+            f"Parent config not found: {parent_path} "
+            f"(referenced from {config_path})"
+        )
+
+    with open(parent_path, "r", encoding="utf-8") as f:
+        try:
+            parent_config = yaml.safe_load(f) or {}
+        except yaml.YAMLError as e:
+            raise YAMLConfigError(f"Invalid YAML syntax in {parent_path}: {e}")
+
+    # Deep merge: child values override parent values
+    merged = _deep_merge(parent_config, child_config)
+
+    # Remove the 'extends' key from the final merged config
+    merged.pop("extends", None)
+
+    logger.debug(
+        "Loaded config with inheritance",
+        extra={
+            "child_path": str(config_path),
+            "parent_path": str(parent_path),
+        }
+    )
+
+    return merged, parent_config
+
+
+def load_logging_from_yaml(
+    config: Dict[str, Any],
+    config_dir: Optional[Path] = None,
+) -> LoggingConfig:
+    """Create a LoggingConfig from YAML configuration.
+
+    Args:
+        config: Dictionary from parsed YAML (the 'logging' section)
+        config_dir: Directory containing the YAML file (for relative path resolution)
+
+    Returns:
+        Configured LoggingConfig instance
+
+    Example YAML:
+        logging:
+          level: INFO
+          format: json          # 'json' for Splunk, 'console' for human-readable
+          file: ./logs/pipeline.log  # Optional file output
+          console: true         # Also output to console
+    """
+    config_dir = config_dir or Path.cwd()
+
+    # Resolve file path if provided
+    log_file = config.get("file")
+    if log_file:
+        log_file = _resolve_path(log_file, config_dir)
+
+    # Build LoggingConfig using Pydantic validation
+    try:
+        return LoggingConfig(
+            level=config.get("level", "INFO"),
+            format=config.get("format", "console"),
+            file=log_file,
+            console=config.get("console", True),
+            include_timestamp=config.get("include_timestamp", True),
+            include_source=config.get("include_source", True),
+        )
+    except ValueError as e:
+        raise YAMLConfigError(f"Invalid logging configuration: {e}")
 
 
 def _resolve_path(path: str, config_dir: Path) -> str:
@@ -306,6 +453,9 @@ def load_pipeline(
 ) -> "PipelineFromYAML":
     """Load a pipeline from a YAML configuration file.
 
+    Supports parent-child inheritance via the 'extends' key:
+        extends: ./base_config.yaml
+
     Args:
         config_path: Path to the YAML configuration file
 
@@ -319,6 +469,12 @@ def load_pipeline(
     Example:
         pipeline = load_pipeline("./pipelines/retail_orders.yaml")
         result = pipeline.run("2025-01-15")
+
+        # Child config inheriting from parent:
+        # child.yaml:
+        #   extends: ./base.yaml
+        #   bronze:
+        #     entity: specific_table  # Override
     """
     config_path = Path(config_path)
 
@@ -327,14 +483,22 @@ def load_pipeline(
 
     config_dir = config_path.parent.resolve()
 
-    with open(config_path, "r", encoding="utf-8") as f:
-        try:
-            config = yaml.safe_load(f)
-        except yaml.YAMLError as e:
-            raise YAMLConfigError(f"Invalid YAML syntax: {e}")
+    # Load with inheritance support
+    config, parent_config = load_with_inheritance(config_path)
+
+    if parent_config:
+        logger.info(
+            "Loaded config with inheritance from parent",
+            extra={"config_path": str(config_path)}
+        )
 
     if not config:
         raise YAMLConfigError("Empty configuration file")
+
+    # Parse logging section (optional)
+    logging_config = None
+    if "logging" in config:
+        logging_config = load_logging_from_yaml(config["logging"], config_dir)
 
     # Parse bronze section
     bronze = None
@@ -357,6 +521,7 @@ def load_pipeline(
         silver=silver,
         config_path=config_path,
         config=config,
+        logging_config=logging_config,
     )
 
 
@@ -406,11 +571,13 @@ class PipelineFromYAML:
         silver: Optional[SilverEntity],
         config_path: Path,
         config: Dict[str, Any],
+        logging_config: Optional[LoggingConfig] = None,
     ):
         self.bronze = bronze
         self.silver = silver
         self.config_path = config_path
         self.config = config
+        self.logging_config = logging_config
 
         # If both bronze and silver are present, wire them together
         if bronze and silver and not silver.source_path:
@@ -420,6 +587,31 @@ class PipelineFromYAML:
         if bronze and silver and not silver.target_path:
             # Auto-generate Silver target based on Bronze entity
             silver.target_path = f"./silver/{bronze.entity}/"
+
+    def setup_logging(self) -> None:
+        """Configure logging based on the YAML logging config.
+
+        This initializes structlog with settings from the logging section
+        of the pipeline YAML file. Call this before running the pipeline
+        to enable proper structured logging.
+
+        If no logging config is present, this is a no-op.
+
+        Example:
+            pipeline = load_pipeline("./my_pipeline.yaml")
+            pipeline.setup_logging()  # Configure logging from YAML
+            result = pipeline.run("2025-01-15")
+        """
+        if not self.logging_config:
+            return
+
+        from pipelines.lib.observability import setup_structlog
+
+        setup_structlog(
+            verbose=(self.logging_config.level == "DEBUG"),
+            json_format=(self.logging_config.format == "json"),
+            log_file=self.logging_config.file,
+        )
 
     @property
     def name(self) -> str:

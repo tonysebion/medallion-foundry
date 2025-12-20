@@ -1,6 +1,11 @@
 """
 TEMPLATE: SQL Server Dimension Table (SCD Type 1)
 ==================================================
+
+.. deprecated::
+    **YAML is now the recommended format.** See `mssql_dimension.yaml` instead.
+    Use Python templates only when you need custom logic or retry decorators.
+
 Use this for dimension tables from SQL Server:
 - Customer, Product, Account, Employee, etc.
 - Keeps only the latest version of each record
