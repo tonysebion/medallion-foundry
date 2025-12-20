@@ -22,8 +22,9 @@ To run:
 
 from pathlib import Path
 
+from pipelines.lib import Pipeline
 from pipelines.lib.bronze import BronzeSource, LoadPattern, SourceType
-from pipelines.lib.silver import EntityKind, HistoryMode, SilverEntity
+from pipelines.lib.silver import SilverEntity
 from pipelines.lib.resilience import with_retry
 
 # Output paths
@@ -37,13 +38,10 @@ bronze = BronzeSource(
     system="sales_dw",
     entity="order_details",
     source_type=SourceType.DATABASE_MSSQL,
-    # Use environment variable expansion for secrets
-    options={
-        "host": "${DB_HOST}",
-        "database": "SalesDB",
-        "user": "${DB_USER}",
-        "password": "${DB_PASSWORD}",
-    },
+
+    # Database connection using top-level params
+    host="${DB_HOST}",
+    database="SalesDB",
     query="""
         SELECT
             OrderDetailID,
@@ -57,7 +55,8 @@ bronze = BronzeSource(
         WHERE UpdatedAt > :watermark
         ORDER BY UpdatedAt
     """,
-    target_path=str(OUTPUT_DIR / "bronze" / "sales_dw" / "order_details"),
+
+    # Incremental load settings
     load_pattern=LoadPattern.INCREMENTAL_APPEND,
     watermark_column="UpdatedAt",
 )
@@ -67,25 +66,28 @@ bronze = BronzeSource(
 # ============================================
 
 silver = SilverEntity(
-    source_path=str(OUTPUT_DIR / "bronze" / "sales_dw" / "order_details" / "*.parquet"),
-    target_path=str(OUTPUT_DIR / "silver" / "sales" / "order_details"),
     natural_keys=["OrderDetailID"],
     change_timestamp="UpdatedAt",
-    entity_kind=EntityKind.STATE,
-    history_mode=HistoryMode.CURRENT_ONLY,
     attributes=["OrderID", "ProductID", "Quantity", "UnitPrice", "Discount"],
 )
 
+# ============================================
+# PIPELINE with retry support
+# ============================================
 
+pipeline = Pipeline(bronze=bronze, silver=silver)
+
+
+# Add retry wrapper for flaky database connections
 @with_retry(max_attempts=3, backoff_seconds=2.0)
 def run_bronze(run_date: str, **kwargs):
     """Extract order details from SQL Server with retry on transient failures."""
-    return bronze.run(run_date, **kwargs)
+    return pipeline.run_bronze(run_date, **kwargs)
 
 
 def run_silver(run_date: str, **kwargs):
     """Curate Bronze order details to Silver."""
-    return silver.run(run_date, **kwargs)
+    return pipeline.run_silver(run_date, **kwargs)
 
 
 def run(run_date: str, **kwargs):

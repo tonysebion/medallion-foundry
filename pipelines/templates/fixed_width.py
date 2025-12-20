@@ -1,7 +1,7 @@
 """
-Template: Fixed-Width File
-==========================
-Use this template for files where each column is at a fixed character position:
+TEMPLATE: Fixed-Width File
+===========================
+Use this for files where each column is at a fixed character position:
 - Mainframe reports
 - Bank statements with positional fields
 - Legacy feeds with no delimiters
@@ -9,66 +9,52 @@ Use this template for files where each column is at a fixed character position:
 To run: python -m pipelines {system}.{entity} --date 2025-01-15
 """
 
-from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
-from pipelines.lib.silver import SilverEntity, EntityKind, HistoryMode
+from pipelines.lib import Pipeline
+from pipelines.lib.bronze import BronzeSource, SourceType
+from pipelines.lib.silver import EntityKind, SilverEntity
 
-# ============================================
-# BRONZE: Load from fixed-width or character-delimited file
-# ============================================
+# ============================================================
+# BRONZE: Load from fixed-width file
+# ============================================================
 
 bronze = BronzeSource(
-    system="legacy_mainframe",  # <-- CHANGE: Source system name
-    entity="daily_transactions",  # <-- CHANGE: Entity/file name
+    system="your_system",           # e.g., "mainframe", "legacy_bank"
+    entity="your_entity",           # e.g., "daily_transactions", "statements"
     source_type=SourceType.FILE_FIXED_WIDTH,
-    # Path to the file(s)
-    # Use {run_date} for the date in the filename
-    source_path="/data/mainframe/exports/txn_{run_date}.txt",  # <-- CHANGE
+    source_path="./data/{entity}_{run_date}.txt",
+
+    # Fixed-width file configuration
     options={
         "csv_options": {
             # Column names (required for headerless files)
-            "columns": [
-                "txn_id",
-                "account_id",
-                "amount",
-                "txn_date",
-                "description",
-            ],  # <-- CHANGE
-            # Fixed-width hints:
-            # "field_widths": [10, 20, 8, 19, 30],
-            # "column_specs": [(0, 10), (10, 30), (30, 38), (38, 57), (57, 87)],
-            # As a reminder, any whitespace-delimited file can also use
-            # SourceType.FILE_SPACE_DELIMITED with "delimiter" or "delim_whitespace".
+            "columns": ["txn_id", "account_id", "amount", "txn_date", "description"],
+
+            # Define column widths (characters per field)
+            "field_widths": [10, 20, 12, 10, 40],
+
+            # OR use column specifications (start, end positions)
+            # "column_specs": [(0, 10), (10, 30), (30, 42), (42, 52), (52, 92)],
         }
     },
-    target_path="s3://bronze/system={system}/entity={entity}/dt={run_date}/",
-    load_pattern=LoadPattern.FULL_SNAPSHOT,
 )
 
-# ============================================
+# ============================================================
 # SILVER: Curate to clean format
-# ============================================
+# ============================================================
 
 silver = SilverEntity(
-    source_path="s3://bronze/system=legacy_mainframe/entity=daily_transactions/dt={run_date}/*.parquet",
-    target_path="s3://silver/legacy/transactions/",  # <-- CHANGE
-    natural_keys=["txn_id"],  # <-- CHANGE: Primary key
-    change_timestamp="txn_date",  # <-- CHANGE: Timestamp column
-    entity_kind=EntityKind.EVENT,  # Transactions are events
-    history_mode=HistoryMode.CURRENT_ONLY,
-    # Optionally specify columns to include
-    # attributes=["account_id", "amount", "description"],
+    natural_keys=["txn_id"],            # Primary key column
+    change_timestamp="txn_date",        # Timestamp column
+
+    # Transactions/events are immutable
+    entity_kind=EntityKind.EVENT,
 )
 
+# ============================================================
+# PIPELINE
+# ============================================================
 
-def run_bronze(run_date: str, **kwargs):
-    return bronze.run(run_date, **kwargs)
-
-
-def run_silver(run_date: str, **kwargs):
-    return silver.run(run_date, **kwargs)
-
-
-def run(run_date: str, **kwargs):
-    bronze_result = run_bronze(run_date, **kwargs)
-    silver_result = run_silver(run_date, **kwargs)
-    return {"bronze": bronze_result, "silver": silver_result}
+pipeline = Pipeline(bronze=bronze, silver=silver)
+run = pipeline.run
+run_bronze = pipeline.run_bronze
+run_silver = pipeline.run_silver

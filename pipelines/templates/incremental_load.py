@@ -1,69 +1,55 @@
 """
-Template: Incremental Load with Watermark
-=========================================
-Use this template for incremental/delta loads:
+TEMPLATE: Incremental Load with Watermark
+==========================================
+Use this for incremental/delta loads:
 - Only fetch new records since last run
 - Uses a watermark column (e.g., LastUpdated) to track progress
 
 To run: python -m pipelines {system}.{entity} --date 2025-01-15
 """
 
-from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
-from pipelines.lib.silver import SilverEntity, EntityKind, HistoryMode
-from pipelines.lib.resilience import with_retry
+from pipelines.lib import Pipeline
+from pipelines.lib.bronze import BronzeSource, LoadPattern, SourceType
+from pipelines.lib.silver import HistoryMode, SilverEntity
 
-# ============================================
-# BRONZE: Incremental extract
-# ============================================
+# ============================================================
+# BRONZE: Incremental extract from database
+# ============================================================
 
 bronze = BronzeSource(
-    system="orders_db",  # <-- CHANGE: Source system name
-    entity="orders",  # <-- CHANGE: Table name
-    source_type=SourceType.DATABASE_MSSQL,  # <-- CHANGE if needed
-    source_path="",
-    options={
-        "connection_name": "orders_db",  # <-- CHANGE
-        "host": "${ORDERS_DB_HOST}",  # <-- CHANGE
-        "database": "OrdersDB",  # <-- CHANGE
-        # The query should include a placeholder for the watermark
-        "query": """
-            SELECT OrderID, CustomerID, OrderTotal, Status, LastUpdated
-            FROM dbo.Orders
-            WHERE LastUpdated > ?
-        """,  # <-- CHANGE: Add your query with ? for watermark
-    },
-    target_path="s3://bronze/system={system}/entity={entity}/dt={run_date}/",
-    # KEY: Use incremental pattern with watermark
+    system="your_system",           # e.g., "orders_db", "sales_dw"
+    entity="your_entity",           # e.g., "orders", "transactions"
+    source_type=SourceType.DATABASE_MSSQL,
+
+    # Database connection (top-level params)
+    host="${DB_HOST}",              # Use env var for host
+    database="YourDatabase",        # Database name
+    query="""
+        SELECT OrderID, CustomerID, Amount, Status, LastUpdated
+        FROM dbo.Orders
+        WHERE LastUpdated > ?
+    """,                            # Query with ? placeholder for watermark
+
+    # Incremental load settings
     load_pattern=LoadPattern.INCREMENTAL_APPEND,
-    watermark_column="LastUpdated",  # <-- CHANGE: Your timestamp column
+    watermark_column="LastUpdated",  # Column to track for incremental
 )
 
-# ============================================
-# SILVER: Curate with SCD Type 2 history
-# ============================================
+# ============================================================
+# SILVER: Curate with full history (SCD Type 2)
+# ============================================================
 
 silver = SilverEntity(
-    source_path="s3://bronze/system=orders_db/entity=orders/dt={run_date}/*.parquet",
-    target_path="s3://silver/sales/orders/",  # <-- CHANGE
-    natural_keys=["OrderID"],  # <-- CHANGE: Primary key column(s)
-    change_timestamp="LastUpdated",  # <-- CHANGE
-    entity_kind=EntityKind.STATE,
-    # Keep full history for auditing
-    history_mode=HistoryMode.FULL_HISTORY,  # SCD Type 2
+    natural_keys=["OrderID"],           # Primary key column(s)
+    change_timestamp="LastUpdated",     # When was the record changed?
+    history_mode=HistoryMode.FULL_HISTORY,  # Keep all versions (SCD Type 2)
 )
 
+# ============================================================
+# PIPELINE
+# ============================================================
 
-# Optional: Add retry for flaky database connections
-@with_retry(max_attempts=3, backoff_seconds=5.0)
-def run_bronze(run_date: str, **kwargs):
-    return bronze.run(run_date, **kwargs)
-
-
-def run_silver(run_date: str, **kwargs):
-    return silver.run(run_date, **kwargs)
-
-
-def run(run_date: str, **kwargs):
-    bronze_result = run_bronze(run_date, **kwargs)
-    silver_result = run_silver(run_date, **kwargs)
-    return {"bronze": bronze_result, "silver": silver_result}
+pipeline = Pipeline(bronze=bronze, silver=silver)
+run = pipeline.run
+run_bronze = pipeline.run_bronze
+run_silver = pipeline.run_silver

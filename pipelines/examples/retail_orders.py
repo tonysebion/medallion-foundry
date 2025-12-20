@@ -19,24 +19,12 @@ To test:
 
 from pathlib import Path
 
-from pipelines.lib.bronze import BronzeSource, LoadPattern, SourceType
-from pipelines.lib.silver import EntityKind, HistoryMode, SilverEntity
+from pipelines.lib import Pipeline
+from pipelines.lib.bronze import BronzeSource, SourceType
+from pipelines.lib.silver import SilverEntity
 
 # Get the directory where sample data will be stored
 SAMPLE_DIR = Path(__file__).parent / "sample_data"
-
-# Build paths
-_bronze_target = str(
-    SAMPLE_DIR / "bronze" / "system={system}" / "entity={entity}" / "dt={run_date}"
-)
-_silver_source = str(
-    SAMPLE_DIR
-    / "bronze"
-    / "system=retail"
-    / "entity=orders"
-    / "dt={run_date}"
-    / "*.parquet"
-)
 
 # ============================================
 # BRONZE: Load orders from CSV
@@ -47,8 +35,6 @@ bronze = BronzeSource(
     entity="orders",
     source_type=SourceType.FILE_CSV,
     source_path=str(SAMPLE_DIR / "orders_{run_date}.csv"),
-    target_path=_bronze_target,
-    load_pattern=LoadPattern.FULL_SNAPSHOT,
 )
 
 # ============================================
@@ -56,31 +42,19 @@ bronze = BronzeSource(
 # ============================================
 
 silver = SilverEntity(
-    source_path=_silver_source,
-    target_path=str(SAMPLE_DIR / "silver" / "retail" / "orders"),
     natural_keys=["order_id"],
     change_timestamp="updated_at",
-    entity_kind=EntityKind.STATE,
-    history_mode=HistoryMode.CURRENT_ONLY,
     attributes=["customer_id", "order_total", "status"],
 )
 
+# ============================================
+# PIPELINE
+# ============================================
 
-def run_bronze(run_date: str, **kwargs):
-    """Extract orders from CSV to Bronze."""
-    return bronze.run(run_date, **kwargs)
-
-
-def run_silver(run_date: str, **kwargs):
-    """Curate Bronze orders to Silver."""
-    return silver.run(run_date, **kwargs)
-
-
-def run(run_date: str, **kwargs):
-    """Run full pipeline: Bronze → Silver."""
-    bronze_result = run_bronze(run_date, **kwargs)
-    silver_result = run_silver(run_date, **kwargs)
-    return {"bronze": bronze_result, "silver": silver_result}
+pipeline = Pipeline(bronze=bronze, silver=silver)
+run = pipeline.run
+run_bronze = pipeline.run_bronze
+run_silver = pipeline.run_silver
 
 
 def create_sample_data(run_date: str = "2025-01-15") -> Path:

@@ -2,68 +2,61 @@
 
 This directory contains complete, working examples demonstrating how to use and extend medallion-foundry.
 
+## Quick Start: Python Templates
+
+The fastest way to create a new pipeline is to copy a template from `pipelines/templates/`:
+
+```bash
+# Copy a template
+cp pipelines/templates/csv_snapshot.py pipelines/my_team/orders.py
+
+# Edit with your settings
+code pipelines/my_team/orders.py
+
+# Run it
+python -m pipelines my_team.orders --date 2025-01-15
+```
+
+### Available Templates
+
+| Template | Use Case |
+|----------|----------|
+| `pipeline_template.py` | General purpose template with all options |
+| `csv_snapshot.py` | CSV files (full snapshot) |
+| `mssql_dimension.py` | SQL Server dimension tables |
+| `incremental_load.py` | Database with watermark tracking |
+| `event_log.py` | Immutable event/fact data |
+| `fixed_width.py` | Mainframe/legacy fixed-width files |
+
+### Working Examples
+
+See `pipelines/examples/` for complete, runnable examples:
+
+| Example | Description |
+|---------|-------------|
+| `retail_orders.py` | CSV → Bronze → Silver (SCD Type 1) |
+| `customer_scd2.py` | SCD Type 2 with full history |
+| `mssql_incremental.py` | Database incremental load with retry |
+| `github_api.py` | REST API extraction |
+| `file_to_silver.py` | File processing with quality checks |
+| `multi_source_parallel.py` | Parallel extraction from multiple sources |
+
+---
+
 ## Directory Structure
 
 ```
 examples/
-├── configs/                    # Configuration file examples
-│   ├── api_example.yaml       # Basic REST API extraction
-│   ├── db_example.yaml        # SQL database extraction
-│   ├── custom_example.yaml    # Custom Python extractor
-│   ├── enhanced_example.yaml  # Production features (file size, partitioning, parallelism)
-│   └── quick_test.yaml        # 2-minute quick start validation
-│
 ├── extensions/                 # Optional feature extensions
 │   └── azure_storage/         # Azure Blob Storage / ADLS Gen2 support
 │       ├── README.md          # Setup guide
-│       ├── azure_storage.py   # Implementation (~330 lines)
+│       ├── azure_storage.py   # Implementation
 │       └── azure_config.yaml  # Configuration example
 │
 └── custom_extractors/          # Custom data source examples
     ├── __init__.py
     └── salesforce_example.py   # Salesforce extractor template
 ```
-
----
-
-## Configuration Examples
-
-### Basic Configurations (`configs/`)
-
-**`api_example.yaml`** - Simple REST API extraction
-- Bearer token authentication
-- Basic pagination
-- S3 upload
-
-**`db_example.yaml`** - SQL database extraction
-- ODBC connection
-- Incremental loading with cursors
-- Local output only
-
-**`custom_example.yaml`** - Custom Python extractor
-- Shows how to use custom extractors
-- Extensibility example
-
-**`file_example*.yaml`** - Offline/full, CDC, and current+history examples
-- Point to `sampledata/bronze_samples/...`
-- Pair with the patched Silver pipelines in `pipelines/examples/` to test medallion layouts
-- Regenerate the sample inputs with `python scripts/generate_bronze_samples.py --all` (follow with `python scripts/generate_silver_samples.py --all` to refresh curated outputs)
-
-### Advanced Configuration
-
-**`enhanced_example.yaml`** - Production-ready features:
-- ✓ File size optimization (128-512MB for query performance)
-- ✓ Hourly partitioning (multiple daily loads)
-- ✓ Parallel chunk processing (4 workers)
-- ✓ Batch metadata tracking
-
-### Quick Start
-
-**`quick_test.yaml`** - 2-minute validation (no Python experience needed):
-- Minimal setup required
-- Uses public JSONPlaceholder API
-- Local output only (no cloud storage needed)
-- Inline instructions
 
 ---
 
@@ -79,7 +72,7 @@ Complete, production-ready Azure storage backend:
 
 **Files:**
 - `README.md` - Complete setup documentation
-- `azure_storage.py` - Full implementation (~330 lines)
+- `azure_storage.py` - Full implementation
 - `azure_config.yaml` - Example configuration
 
 **Features:**
@@ -91,15 +84,14 @@ Complete, production-ready Azure storage backend:
 **Quick start:**
 ```bash
 # 1. Install dependencies
-pip install -r requirements-azure.txt
+pip install azure-storage-blob azure-identity
 
 # 2. Copy backend to core
-copy docs\examples\extensions\azure_storage\azure_storage.py core\azure_storage.py
+cp docs/examples/extensions/azure_storage/azure_storage.py pipelines/lib/
 
-# 3. Update core/storage.py factory (see extensions/azure_storage/README.md)
-
-# 4. Run with Azure
-python bronze_extract.py --config docs/examples/extensions/azure_storage/azure_config.yaml
+# 3. Run with Azure credentials
+export AZURE_STORAGE_CONNECTION_STRING="..."
+python -m pipelines your_pipeline --date 2025-01-15
 ```
 
 ### Custom Extractors (`custom_extractors/`)
@@ -111,116 +103,74 @@ python bronze_extract.py --config docs/examples/extensions/azure_storage/azure_c
 
 ---
 
-## Using Examples
+## Using Templates
 
 ### 1. Copy and Customize
 
 ```bash
-# Copy example to your configs directory
-copy configs\api_example.yaml ..\\..\\configs\\my_extraction.yaml
+# Copy a template to your team's directory
+cp pipelines/templates/csv_snapshot.py pipelines/my_team/orders.py
 
 # Edit with your settings
-notepad ..\\..\\configs\\my_extraction.yaml
+# Change: system, entity, source_path, natural_keys, change_timestamp
 ```
 
 ### 2. Set Environment Variables
 
-```powershell
-# For API extractions
-$env:EXAMPLE_API_TOKEN = "your-api-token"
+```bash
+# For database extractions
+export DB_HOST="your-database-server"
+export DB_USER="your-username"
+export DB_PASSWORD="your-password"
 
 # For S3 storage
-$env:BRONZE_S3_ENDPOINT = "https://s3.amazonaws.com"
-$env:AWS_ACCESS_KEY_ID = "your-access-key"
-$env:AWS_SECRET_ACCESS_KEY = "your-secret-key"
+export AWS_ACCESS_KEY_ID="your-access-key"
+export AWS_SECRET_ACCESS_KEY="your-secret-key"
 
-# For Azure storage (if using Azure extension)
-$env:AZURE_STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;AccountName=..."
+# For Azure storage
+export AZURE_STORAGE_CONNECTION_STRING="..."
 ```
 
-### 3. Run Extraction
+### 3. Run Pipeline
 
 ```bash
-python bronze_extract.py --config docs/examples/configs/examples/api_example.yaml
+# Full pipeline (Bronze → Silver)
+python -m pipelines my_team.orders --date 2025-01-15
+
+# Bronze only
+python -m pipelines my_team.orders:bronze --date 2025-01-15
+
+# Dry run (validate without executing)
+python -m pipelines my_team.orders --date 2025-01-15 --dry-run
+
+# Pre-flight check
+python -m pipelines my_team.orders --date 2025-01-15 --check
 ```
 
-## Example Outputs
+## Output Structure
 
-All examples write data to:
+All pipelines write data to:
 ```
-output/
-└── system=<system>/
-    └── table=<table>/
-        └── dt=YYYY-MM-DD/
-            ├── part-0001.parquet
-            ├── part-0002.parquet
-            └── _metadata.json
-```
+bronze/system=<system>/entity=<entity>/dt=YYYY-MM-DD/
+├── entity.parquet
+├── _metadata.json
+└── _checksums.json
 
-With storage enabled (S3/Azure), files are uploaded to:
-```
-s3://bucket/prefix/system=<system>/table=<table>/dt=YYYY-MM-DD/
-azure://container/prefix/system=<system>/table=<table>/dt=YYYY-MM-DD/
-```
-
-## Testing Examples
-
-```bash
-# Run with quick test config (no cloud dependencies)
-python bronze_extract.py --config docs/examples/configs/examples/file_example.yaml
-
-# Expected output:
-# - Local files in output/system=jsonplaceholder/table=todos/
-# - No uploads (storage_enabled: false)
-# - 200 sample records from public API
+silver/<entity>/
+├── data.parquet
+├── _metadata.json
+└── _checksums.json
 ```
 
 ## Contributing Examples
 
 Have a useful example? Contributions welcome!
 
-1. Create your example files (config + optional code)
+1. Create your example in `pipelines/examples/`
 2. Add documentation
 3. Test thoroughly
 4. Submit a pull request
 
-## File Organization
-
-```
-docs/examples/
-├── README.md                          # This file - examples directory index
-│
-├── configs/                           # Configuration examples
-│   ├── README.md                     # Config directory organization
-│   ├── examples/                     # Main example configs
-│   │   ├── api_example.yaml          # Basic REST API extraction
-│   │   ├── db_example.yaml           # SQL database extraction
-│   │   ├── file_example.yaml         # File extraction
-│   │   └── custom_example.yaml       # Custom Python extractor
-│   ├── patterns/                     # Load pattern examples
-│   ├── advanced/                     # Specialized features
-│   └── templates/                    # Config templates
-│
-├── extensions/                        # Optional feature extensions
-│   └── azure_storage/                # Azure storage backend
-│       ├── README.md                 # Complete Azure setup guide
-│       ├── azure_storage.py          # Full implementation (~330 lines)
-│       └── azure_config.yaml         # Azure configuration example
-│
-└── custom_extractors/                 # Custom data source examples
-    ├── __init__.py
-    └── salesforce_example.py         # Salesforce extractor template
-```
-
-## Additional Documentation
-
-For more details, see:
-
-- **[Main Documentation](../framework/reference/DOCUMENTATION.md)** - Complete framework documentation
-- **[Storage Backend Architecture](../framework/STORAGE_BACKEND_ARCHITECTURE.md)** - Pluggable storage design
-- **[Extending Extractors](../framework/EXTENDING_EXTRACTORS.md)** - Creating custom data sources
-- **[Enhanced Features](../usage/patterns/ENHANCED_FEATURES.md)** - Advanced production features
-
 ---
 
-Questions? Open an issue at https://github.com/tonysebion/medallion-foundry/issues
+Questions? Open an issue at https://github.com/anthropics/bronze-foundry/issues
