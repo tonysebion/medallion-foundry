@@ -24,7 +24,6 @@ import ibis
 
 from pipelines.lib.curate import build_history, dedupe_latest
 from pipelines.lib._path_utils import resolve_target_path, storage_path_exists
-from pipelines.lib.storage import get_storage
 
 logger = logging.getLogger(__name__)
 
