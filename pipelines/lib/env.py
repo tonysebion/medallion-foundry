@@ -63,14 +63,14 @@ def expand_env_vars(value: str, *, strict: bool = False) -> str:
         'localhost:5432'
     """
 
-    def replacer(match: re.Match) -> str:
+    def replacer(match: re.Match[str]) -> str:
         var_name = match.group(1) or match.group(2)
         env_value = os.environ.get(var_name)
         if env_value is None:
             if strict:
                 raise KeyError(f"Environment variable not set: {var_name}")
             # Return original if not strict
-            return match.group(0)
+            return str(match.group(0))
         return env_value
 
     return ENV_VAR_PATTERN.sub(replacer, value)

@@ -14,9 +14,10 @@ from __future__ import annotations
 import logging
 import time
 from functools import wraps
-from typing import Any, Callable, Optional, Tuple, Type, TypeVar
+from typing import Any, Callable, Literal, Optional, Tuple, Type, TypeVar
 
 import tenacity
+from tenacity.wait import wait_base
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ def with_retry(
             return bronze.run(run_date)
     """
     # Build wait strategy
+    wait_strategy: wait_base
     if exponential:
         # Tenacity exponential: multiplier * 2^(attempt-1)
         # To match our original: backoff_seconds * 2^(attempt-1)
@@ -181,6 +183,7 @@ def retry_operation(
         )
     """
     # Build wait strategy using tenacity
+    wait_strategy: wait_base
     if config.exponential:
         wait_strategy = tenacity.wait_exponential(
             multiplier=config.backoff_seconds, min=config.backoff_seconds
@@ -281,7 +284,7 @@ class CircuitBreaker:
         exc_type: Optional[Type[Exception]],
         exc_val: Optional[Exception],
         exc_tb: Any,
-    ) -> bool:
+    ) -> Literal[False]:
         if exc_type is not None:
             # Failure occurred
             self.failure_count += 1
