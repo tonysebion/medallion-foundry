@@ -6,6 +6,8 @@ Use this for CSV files that are full snapshots:
 - Files that contain all records each time
 
 To run: python -m pipelines {system}.{entity} --date 2025-01-15
+
+File naming: Save as `pipelines/{system}_{entity}.py` or `pipelines/{system}/{entity}.py`
 """
 
 from pipelines.lib import Pipeline

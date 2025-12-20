@@ -417,18 +417,13 @@ class BronzeSource:
 
         query = self.options.get("query")
         if query:
-            # If we have a watermark, inject it into the query
+            # Execute the query first, then apply watermark filter via Ibis
+            # This avoids SQL injection vulnerabilities from string interpolation
+            table = db_con.sql(query)
             if last_watermark and self.watermark_column:
-                if "?" in query:
-                    # Parameterized query
-                    query = query.replace("?", f"'{last_watermark}'")
-                elif "WHERE" in query.upper():
-                    query = f"{query} AND {self.watermark_column} > '{last_watermark}'"
-                else:
-                    query = (
-                        f"{query} WHERE {self.watermark_column} > '{last_watermark}'"
-                    )
-            return db_con.sql(query)
+                # Apply watermark filter using Ibis (safe parameterized approach)
+                table = table.filter(table[self.watermark_column] > last_watermark)
+            return table
         else:
             # Default: SELECT * FROM entity
             table = db_con.table(self.entity)

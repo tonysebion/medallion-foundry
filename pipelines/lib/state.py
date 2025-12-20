@@ -86,11 +86,47 @@ def detect_late_data(
     *,
     max_lateness: Optional[timedelta] = None,
 ) -> LateDataResult:
-    """Detect rows older than the watermark."""
+    """Detect rows older than the watermark (or watermark - max_lateness).
 
+    Args:
+        t: Ibis table to check
+        timestamp_column: Column containing timestamps
+        watermark: Current watermark value (ISO format string or compatible)
+        max_lateness: If provided, records are only considered "late" if they
+                     are older than (watermark - max_lateness). This allows
+                     a grace period for late-arriving data.
+
+    Returns:
+        LateDataResult with counts and timestamps of late records
+    """
     total = t.count().execute()
 
-    late_filter = t[timestamp_column] < watermark
+    # Determine the cutoff timestamp
+    # If max_lateness is specified, we allow records up to that much before the watermark
+    if max_lateness is not None:
+        try:
+            # Parse watermark as datetime to apply max_lateness
+            watermark_dt = datetime.fromisoformat(watermark.replace('Z', '+00:00'))
+            cutoff_dt = watermark_dt - max_lateness
+            cutoff = cutoff_dt.isoformat()
+            logger.debug(
+                "Using max_lateness=%s: cutoff=%s (watermark=%s)",
+                max_lateness,
+                cutoff,
+                watermark,
+            )
+        except (ValueError, TypeError) as e:
+            logger.warning(
+                "Could not parse watermark '%s' for max_lateness calculation: %s. "
+                "Using watermark directly.",
+                watermark,
+                e,
+            )
+            cutoff = watermark
+    else:
+        cutoff = watermark
+
+    late_filter = t[timestamp_column] < cutoff
     late_records = t.filter(late_filter)
     late_count = late_records.count().execute()
 
@@ -119,8 +155,21 @@ def filter_late_data(
     watermark: str,
     config: LateDataConfig,
 ) -> "ibis.Table":
-    """Filter or reject late rows based on configuration."""
+    """Filter or reject late rows based on configuration.
 
+    Args:
+        t: Ibis table to filter
+        timestamp_column: Column containing timestamps
+        watermark: Current watermark value
+        config: Late data handling configuration
+
+    Returns:
+        Filtered table (late records removed if mode is IGNORE or QUARANTINE)
+
+    The max_lateness setting from config is now honored:
+    - Records are only considered "late" if older than (watermark - max_lateness)
+    - This provides a grace period for late-arriving data
+    """
     result = detect_late_data(
         t,
         timestamp_column,
@@ -131,31 +180,86 @@ def filter_late_data(
     if not result.has_late_data:
         return t
 
+    # Calculate the effective cutoff for filtering
+    if config.max_lateness is not None:
+        try:
+            watermark_dt = datetime.fromisoformat(watermark.replace('Z', '+00:00'))
+            cutoff_dt = watermark_dt - config.max_lateness
+            cutoff = cutoff_dt.isoformat()
+        except (ValueError, TypeError):
+            cutoff = watermark
+    else:
+        cutoff = watermark
+
     if config.mode == LateDataMode.IGNORE:
-        return t.filter(t[timestamp_column] >= watermark)
+        return t.filter(t[timestamp_column] >= cutoff)
 
     if config.mode == LateDataMode.WARN:
         logger.warning(
-            "Late data detected: %d records before watermark %s",
+            "Late data detected: %d records before cutoff %s (watermark=%s, max_lateness=%s)",
             result.late_count,
+            cutoff,
             watermark,
+            config.max_lateness,
         )
         return t
 
     if config.mode == LateDataMode.REJECT:
         raise ValueError(
-            f"Late data rejected: {result.late_count} records before watermark {watermark}"
+            f"Late data rejected: {result.late_count} records before cutoff {cutoff}"
         )
 
     if config.mode == LateDataMode.QUARANTINE:
         logger.warning(
-            "Quarantining %d late records (before watermark %s)",
+            "Quarantining %d late records (before cutoff %s)",
             result.late_count,
-            watermark,
+            cutoff,
         )
-        return t.filter(t[timestamp_column] >= watermark)
+        # Write late records to quarantine path if configured
+        if config.quarantine_path:
+            _write_quarantine_records(t, timestamp_column, cutoff, config.quarantine_path)
+        return t.filter(t[timestamp_column] >= cutoff)
 
     return t
+
+
+def _write_quarantine_records(
+    t: "ibis.Table",
+    timestamp_column: str,
+    cutoff: str,
+    quarantine_path: str,
+) -> None:
+    """Write late records to quarantine location.
+
+    Args:
+        t: Full table
+        timestamp_column: Column containing timestamps
+        cutoff: Cutoff timestamp - records before this are quarantined
+        quarantine_path: Path to write quarantined records
+    """
+    try:
+        late_records = t.filter(t[timestamp_column] < cutoff)
+        late_count = late_records.count().execute()
+
+        if late_count == 0:
+            return
+
+        # Create quarantine directory
+        quarantine_dir = Path(quarantine_path)
+        quarantine_dir.mkdir(parents=True, exist_ok=True)
+
+        # Write with timestamp to avoid overwriting
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        output_file = quarantine_dir / f"late_records_{timestamp}.parquet"
+
+        late_records.to_parquet(str(output_file))
+        logger.info(
+            "Wrote %d late records to quarantine: %s",
+            late_count,
+            output_file,
+        )
+    except Exception as e:
+        logger.error("Failed to write quarantine records: %s", e)
 
 
 def get_late_records(

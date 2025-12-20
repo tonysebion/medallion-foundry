@@ -5,7 +5,12 @@ Use this for dimension tables from SQL Server:
 - Customer, Product, Account, Employee, etc.
 - Keeps only the latest version of each record
 
+Prerequisites:
+    export DB_HOST="your-server.database.com"  # Database host
+
 To run: python -m pipelines {system}.{entity} --date 2025-01-15
+
+File naming: Save as `pipelines/{system}_{entity}.py` or `pipelines/{system}/{entity}.py`
 """
 
 from pipelines.lib import Pipeline

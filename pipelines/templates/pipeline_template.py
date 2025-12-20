@@ -10,6 +10,42 @@ To test:
 
 To validate:
     python -m pipelines {system}.{entity} --date 2025-01-15 --check
+
+FILE LOCATION & NAMING
+----------------------
+Place pipeline files in the `pipelines/` directory (not in templates/ or examples/).
+The CLI uses dot notation to find your pipeline:
+
+  Option A: Flat file with underscores
+    File: pipelines/claims_header.py
+    Run:  python -m pipelines claims_header --date 2025-01-15
+
+  Option B: Nested in subdirectory
+    File: pipelines/claims/header.py
+    Run:  python -m pipelines claims.header --date 2025-01-15
+
+SECRETS & ENVIRONMENT VARIABLES
+-------------------------------
+NEVER hardcode passwords, API keys, or tokens in pipeline files.
+Use ${VAR_NAME} syntax - values are expanded at runtime:
+
+    host="${DB_HOST}",
+    password="${DB_PASSWORD}",
+
+Set variables before running:
+    # Linux/Mac
+    export DB_HOST="server.example.com"
+    export DB_PASSWORD="secret"
+
+    # Windows PowerShell
+    $env:DB_HOST = "server.example.com"
+    $env:DB_PASSWORD = "secret"
+
+    # Windows Command Prompt
+    set DB_HOST=server.example.com
+    set DB_PASSWORD=secret
+
+Pipeline fails with clear error if required variables are missing.
 """
 
 from pipelines.lib import Pipeline

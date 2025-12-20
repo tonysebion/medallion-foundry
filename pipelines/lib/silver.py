@@ -390,15 +390,20 @@ class SilverEntity:
         1. If attributes specified, use only those (plus keys and timestamp)
         2. If exclude_columns specified, exclude those
         3. Otherwise, keep all columns
+
+        Column order is preserved: natural_keys first, then change_timestamp,
+        then attributes in their specified order.
         """
         if self.attributes is not None:
             # Explicit allow list - only these columns
-            cols = list(
-                set(self.natural_keys + [self.change_timestamp] + self.attributes)
-            )
-            # Filter to columns that actually exist
-            existing = [c for c in cols if c in t.columns]
-            missing = set(cols) - set(existing)
+            # Use dict.fromkeys to dedupe while preserving order:
+            # natural_keys first, then change_timestamp, then attributes
+            ordered_cols = list(dict.fromkeys(
+                self.natural_keys + [self.change_timestamp] + self.attributes
+            ))
+            # Filter to columns that actually exist, preserving order
+            existing = [c for c in ordered_cols if c in t.columns]
+            missing = set(ordered_cols) - set(existing)
             if missing:
                 logger.warning("Columns not found in source: %s", missing)
             return t.select(*existing)

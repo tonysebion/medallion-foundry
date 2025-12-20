@@ -55,12 +55,14 @@ docs-serve:  ## Serve documentation locally
 	$(PYTHON) -m mkdocs serve
 
 clean:  ## Clean temporary files and caches
-	# OS-agnostic clean commands
-	find . -name "*.pyc" -delete || true
-	rm -rf __pycache__ .pytest_cache .mypy_cache .ruff_cache .coverage htmlcov site || true
+	# Cross-platform Python-based cleanup
+	$(PYTHON) -c "import shutil; import pathlib; [p.unlink() for p in pathlib.Path('.').rglob('*.pyc')]" || true
+	$(PYTHON) -c "import shutil; import pathlib; [shutil.rmtree(d, ignore_errors=True) for d in ['__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache', 'htmlcov', 'site']]" || true
+	$(PYTHON) -c "import pathlib; p = pathlib.Path('.coverage'); p.unlink() if p.exists() else None" || true
+	$(PYTHON) -c "import shutil; import pathlib; [shutil.rmtree(str(d), ignore_errors=True) for d in pathlib.Path('.').rglob('__pycache__')]" || true
 
 clean-output:  ## Clean output directories
-	rm -rf output silver_output || true
+	$(PYTHON) -c "import shutil; [shutil.rmtree(d, ignore_errors=True) for d in ['output', 'silver_output']]" || true
 
 pre-commit-install:  ## Install pre-commit hooks
 	$(PIP) install pre-commit

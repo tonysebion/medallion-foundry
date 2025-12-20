@@ -42,11 +42,18 @@ def setup_logging(
     _setup_logging(verbose=verbose, json_format=json_format, log_file=log_file)
 
 
+logger = logging.getLogger(__name__)
+
+
 def discover_pipelines() -> List[Dict[str, Any]]:
     """Discover available pipelines in the pipelines directory.
 
     Returns:
         List of dicts with pipeline info: name, path, has_bronze, has_silver
+
+    Note:
+        Import errors are logged as warnings rather than silently swallowed,
+        so developers can diagnose why a pipeline isn't appearing in --list.
     """
     pipelines_dir = Path(__file__).parent
     pipelines: List[Dict[str, Any]] = []
@@ -89,9 +96,23 @@ def discover_pipelines() -> List[Dict[str, Any]]:
                 "has_run": has_run,
                 "description": doc,
             })
-        except Exception:
-            # Skip modules that can't be loaded
-            pass
+        except ImportError as e:
+            # Log import errors so developers know why a pipeline isn't listed
+            logger.warning(
+                "Failed to import pipeline '%s' from %s: %s",
+                module_name,
+                rel_path,
+                e,
+            )
+        except Exception as e:
+            # Log unexpected errors with more detail
+            logger.warning(
+                "Unexpected error loading pipeline '%s' from %s: %s (%s)",
+                module_name,
+                rel_path,
+                e,
+                type(e).__name__,
+            )
 
     return sorted(pipelines, key=lambda p: p["name"])
 

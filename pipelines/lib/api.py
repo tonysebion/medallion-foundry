@@ -424,7 +424,14 @@ class ApiSource:
             return []
 
     def _compute_max_watermark(self, records: List[Dict[str, Any]]) -> Optional[str]:
-        """Compute the maximum watermark value from records."""
+        """Compute the maximum watermark value from records.
+
+        Handles different value types appropriately:
+        - datetime objects: compared directly
+        - ISO 8601 strings: parsed to datetime for comparison
+        - numeric values: compared numerically
+        - other strings: compared lexicographically (fallback)
+        """
         if not self.watermark_column:
             return None
 
@@ -438,7 +445,42 @@ class ApiSource:
             return None
 
         try:
-            # Convert all to strings for comparison
+            # Try to determine the type and compare appropriately
+            sample = watermark_values[0]
+
+            # If already datetime, compare directly
+            if isinstance(sample, datetime):
+                max_val = max(watermark_values)
+                return max_val.isoformat() if hasattr(max_val, 'isoformat') else str(max_val)
+
+            # If numeric, compare numerically
+            if isinstance(sample, (int, float)):
+                return str(max(watermark_values))
+
+            # If string, try to parse as ISO 8601 datetime
+            if isinstance(sample, str):
+                # Try parsing as datetime for proper temporal comparison
+                try:
+                    parsed_values = []
+                    for v in watermark_values:
+                        # Handle various ISO formats
+                        v_str = str(v)
+                        # Try fromisoformat (handles most ISO 8601 formats)
+                        try:
+                            parsed = datetime.fromisoformat(v_str.replace('Z', '+00:00'))
+                        except ValueError:
+                            # Try parsing date-only format
+                            parsed = datetime.strptime(v_str[:10], '%Y-%m-%d')
+                        parsed_values.append((parsed, v_str))
+
+                    # Find max by parsed datetime, return original string
+                    max_parsed, max_original = max(parsed_values, key=lambda x: x[0])
+                    return max_original
+                except (ValueError, TypeError):
+                    # Fall back to string comparison if parsing fails
+                    pass
+
+            # Fallback: convert to strings and compare
             str_values = [str(v) for v in watermark_values]
             return max(str_values)
         except (TypeError, ValueError) as e:

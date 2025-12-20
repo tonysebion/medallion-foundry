@@ -11,6 +11,8 @@ Events are immutable - once recorded, they don't change.
 Silver just deduplicates exact duplicates.
 
 To run: python -m pipelines {system}.{entity} --date 2025-01-15
+
+File naming: Save as `pipelines/{system}_{entity}.py` or `pipelines/{system}/{entity}.py`
 """
 
 from pipelines.lib import Pipeline

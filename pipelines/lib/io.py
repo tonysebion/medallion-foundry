@@ -513,18 +513,25 @@ def _infer_column_types_from_ibis(
 
 
 def _infer_column_types_from_records(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Infer column types from a list of records (dicts)."""
+    """Infer column types from a list of records (dicts).
+
+    Column order is preserved based on first appearance across records,
+    rather than being sorted alphabetically.
+    """
     if not records:
         return []
 
-    # Collect all keys
-    all_keys: set[str] = set()
+    # Collect all keys while preserving insertion order (first-seen order)
+    # Using dict.fromkeys() to dedupe while preserving order
+    all_keys: Dict[str, None] = {}
     for record in records:
-        all_keys.update(record.keys())
+        for key in record.keys():
+            if key not in all_keys:
+                all_keys[key] = None
 
     # Infer types from first non-null value
     columns = []
-    for key in sorted(all_keys):
+    for key in all_keys:
         sample_value = None
         for record in records:
             if key in record and record[key] is not None:

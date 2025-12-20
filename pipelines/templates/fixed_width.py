@@ -7,6 +7,8 @@ Use this for files where each column is at a fixed character position:
 - Legacy feeds with no delimiters
 
 To run: python -m pipelines {system}.{entity} --date 2025-01-15
+
+File naming: Save as `pipelines/{system}_{entity}.py` or `pipelines/{system}/{entity}.py`
 """
 
 from pipelines.lib import Pipeline
