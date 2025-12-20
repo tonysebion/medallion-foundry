@@ -1408,6 +1408,16 @@ Examples:
         help="File path for inspect-source command",
     )
     parser.add_argument(
+        "--tui",
+        action="store_true",
+        help="Launch interactive TUI wizard (for 'new' command)",
+    )
+    parser.add_argument(
+        "--extends",
+        dest="extends_path",
+        help="Parent config path for child pipeline (with --tui)",
+    )
+    parser.add_argument(
         "extra_args",
         nargs="*",
         help=argparse.SUPPRESS,  # Hidden - for command arguments
@@ -1446,17 +1456,11 @@ Examples:
         # Handle new command
         if args.pipeline == "new":
             # Check for --tui flag
-            if "--tui" in sys.argv:
+            if args.tui:
                 # Launch TUI wizard
                 try:
                     from pipelines.tui.app import run_create_wizard
-                    # Check for --extends flag
-                    extends_path = None
-                    if "--extends" in sys.argv:
-                        idx = sys.argv.index("--extends")
-                        if idx + 1 < len(sys.argv):
-                            extends_path = sys.argv[idx + 1]
-                    run_create_wizard(parent_path=extends_path)
+                    run_create_wizard(parent_path=args.extends_path)
                 except ImportError as e:
                     print("ERROR: TUI requires the 'textual' package")
                     print("Install with: pip install textual>=0.47.0")

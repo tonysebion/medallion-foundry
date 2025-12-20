@@ -1,0 +1,41 @@
+# yaml-language-server: $schema=../schema/pipeline.schema.json
+#
+# Example Pipeline: File to Silver with SCD2 History
+# ===================================================
+# Demonstrates processing Parquet files through Bronze to Silver.
+#
+# This example shows:
+# - Loading from Parquet files
+# - Full snapshot processing
+# - SCD Type 2 (full history) tracking
+#
+# NOTE: This YAML version provides basic processing. For data quality
+# validation, use the Python version which demonstrates check_quality().
+#
+# See: file_to_silver.py for data quality example
+#
+# Run:
+#   python -m pipelines ./pipelines/examples/file_to_silver.yaml --date 2025-01-15
+
+name: file_to_silver
+description: Process Parquet files with SCD Type 2 history
+
+bronze:
+  system: inventory
+  entity: products
+  source_type: file_parquet
+  source_path: ./input/products/*.parquet
+  load_pattern: full_snapshot
+
+silver:
+  natural_keys: [product_id]
+  change_timestamp: updated_at
+  entity_kind: state
+  # SCD Type 2: Maintains full history with effective_from/effective_to dates
+  history_mode: full_history
+  attributes:
+    - name
+    - category
+    - price
+    - stock_quantity
+    - supplier_id

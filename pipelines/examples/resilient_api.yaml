@@ -1,0 +1,62 @@
+# yaml-language-server: $schema=../schema/pipeline.schema.json
+#
+# Example Pipeline: API Extraction (Basic)
+# =========================================
+# Demonstrates API extraction with authentication and pagination.
+#
+# NOTE: This YAML version provides basic API extraction. For resilience
+# features like retry decorators and circuit breakers, use the Python version.
+#
+# See: resilient_api.py for retry/circuit breaker example
+#
+# Setup:
+#   export API_TOKEN="your_api_token"
+#
+# Run:
+#   python -m pipelines ./pipelines/examples/resilient_api.yaml --date 2025-01-15
+
+name: resilient_api
+description: Extract contacts from API with auth and pagination
+
+bronze:
+  system: crm
+  entity: contacts
+  source_type: api_rest
+
+  base_url: https://api.example.com
+  endpoint: /v2/contacts
+
+  # Bearer token authentication
+  auth:
+    auth_type: bearer
+    token: ${API_TOKEN}
+
+  # Cursor-based pagination
+  pagination:
+    strategy: cursor
+    cursor_param: cursor
+    cursor_path: meta.next_cursor
+    page_size: 100
+
+  # Rate limiting
+  requests_per_second: 10.0
+
+  # Navigate into nested JSON response
+  data_path: data.contacts
+
+  # Incremental loading
+  load_pattern: incremental
+  watermark_column: updated_at
+  watermark_param: modified_since
+
+silver:
+  natural_keys: [contact_id]
+  change_timestamp: updated_at
+  entity_kind: state
+  history_mode: current_only
+  attributes:
+    - email
+    - first_name
+    - last_name
+    - company
+    - status

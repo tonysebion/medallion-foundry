@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=../schema/pipeline.schema.json
+#
+# Example Pipeline: Multi-Source (Simplified)
+# ============================================
+# Demonstrates extracting from multiple sources.
+#
+# NOTE: This YAML version processes a single source. For true parallel
+# processing of multiple sources, use the Python version which leverages
+# concurrent.futures for thread-based parallelism.
+#
+# See: multi_source_parallel.py for parallel processing example
+#
+# Run:
+#   python -m pipelines ./pipelines/examples/multi_source_parallel.yaml --date 2025-01-15
+
+name: multi_source_customers
+description: Extract customers from CSV (simplified single-source version)
+
+bronze:
+  system: ecommerce
+  entity: customers
+  source_type: file_csv
+  source_path: ./input/customers/customers_{run_date}.csv
+
+silver:
+  natural_keys: [customer_id]
+  change_timestamp: updated_at
+  entity_kind: state
+  history_mode: current_only
+  attributes:
+    - name
+    - email
+    - tier
