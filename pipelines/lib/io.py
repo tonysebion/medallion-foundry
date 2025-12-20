@@ -11,7 +11,7 @@ import logging
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     import ibis
@@ -26,6 +26,8 @@ __all__ = [
     "get_latest_partition",
     "infer_column_types",
     "list_partitions",
+    "maybe_dry_run",
+    "maybe_skip_if_exists",
     "read_bronze",
     "write_partitioned",
     "write_silver",
@@ -702,3 +704,75 @@ def write_silver_with_artifacts(
     logger.info("Wrote %d rows to %s with artifacts", row_count, path)
 
     return metadata
+
+
+# --- Run helpers (consolidated from run_helpers.py) ---
+
+ExistsFn = Callable[[], bool]
+
+
+def maybe_skip_if_exists(
+    *,
+    skip_if_exists: bool,
+    exists_fn: ExistsFn,
+    target: str,
+    logger: logging.Logger,
+    context: Optional[str] = None,
+    reason: str = "already_exists",
+) -> Optional[Dict[str, Any]]:
+    """Return skip metadata when data already exists.
+
+    Args:
+        skip_if_exists: Whether skip-if-exists check is enabled
+        exists_fn: Callable that returns True if target data exists
+        target: Target path for logging
+        logger: Logger instance
+        context: Optional context label for logging (default: "pipeline")
+        reason: Skip reason for metadata (default: "already_exists")
+
+    Returns:
+        Skip metadata dict if skipped, None otherwise
+    """
+    if not skip_if_exists:
+        return None
+
+    if exists_fn():
+        label = context or "pipeline"
+        logger.info("Skipping %s - data already exists at %s", label, target)
+        return {"skipped": True, "reason": reason, "target": target}
+
+    return None
+
+
+def maybe_dry_run(
+    *,
+    dry_run: bool,
+    logger: logging.Logger,
+    message: str,
+    message_args: Tuple[Any, ...] = (),
+    message_kwargs: Optional[Dict[str, Any]] = None,
+    target: str,
+    extra: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
+    """Return dry-run metadata when dry_run flag is set.
+
+    Args:
+        dry_run: Whether dry-run mode is enabled
+        logger: Logger instance
+        message: Log message format string
+        message_args: Positional args for message formatting
+        message_kwargs: Keyword args for message formatting
+        target: Target path for metadata
+        extra: Extra fields to include in metadata
+
+    Returns:
+        Dry-run metadata dict if dry-run mode, None otherwise
+    """
+    if not dry_run:
+        return None
+
+    logger.info(message, *message_args, **(message_kwargs or {}))
+    result: Dict[str, Any] = {"dry_run": True, "target": target}
+    if extra:
+        result.update(extra)
+    return result

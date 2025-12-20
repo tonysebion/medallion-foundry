@@ -10,10 +10,11 @@ the same database.
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any, Dict, TYPE_CHECKING, Union
 
 import ibis
+
+from pipelines.lib.env import expand_env_vars
 
 if TYPE_CHECKING:
     from pipelines.lib.bronze import SourceType
@@ -78,10 +79,10 @@ def _create_mssql_connection(options: Dict[str, Any]) -> ibis.BaseBackend:
 
     Supports environment variable substitution for credentials.
     """
-    host = _resolve_env(options.get("host", ""))
-    database = _resolve_env(options.get("database", ""))
-    user = _resolve_env(options.get("user", ""))
-    password = _resolve_env(options.get("password", ""))
+    host = expand_env_vars(options.get("host", ""))
+    database = expand_env_vars(options.get("database", ""))
+    user = expand_env_vars(options.get("user", ""))
+    password = expand_env_vars(options.get("password", ""))
     port = options.get("port", 1433)
 
     # Build connection string for pyodbc
@@ -114,10 +115,10 @@ def _create_postgres_connection(options: Dict[str, Any]) -> ibis.BaseBackend:
 
     Supports environment variable substitution for credentials.
     """
-    host = _resolve_env(options.get("host", "localhost"))
-    database = _resolve_env(options.get("database", ""))
-    user = _resolve_env(options.get("user", ""))
-    password = _resolve_env(options.get("password", ""))
+    host = expand_env_vars(options.get("host", "localhost"))
+    database = expand_env_vars(options.get("database", ""))
+    user = expand_env_vars(options.get("user", ""))
+    password = expand_env_vars(options.get("password", ""))
     port = options.get("port", 5432)
 
     try:
@@ -137,31 +138,6 @@ def _create_postgres_connection(options: Dict[str, Any]) -> ibis.BaseBackend:
             "PostgreSQL support requires ibis-framework[postgres]. "
             "Install with: pip install ibis-framework[postgres]"
         )
-
-
-def _resolve_env(value: str) -> str:
-    """Resolve environment variable references in connection strings.
-
-    Supports ${VAR_NAME} syntax for environment variable substitution.
-
-    Args:
-        value: String that may contain ${VAR_NAME} patterns
-
-    Returns:
-        String with environment variables resolved
-    """
-    if not value:
-        return value
-
-    if value.startswith("${") and value.endswith("}"):
-        env_var = value[2:-1]
-        resolved = os.environ.get(env_var)
-        if resolved is None:
-            logger.warning("Environment variable not set: %s", env_var)
-            return ""
-        return resolved
-
-    return value
 
 
 def close_connection(connection_name: str) -> None:

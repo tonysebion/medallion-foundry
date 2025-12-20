@@ -378,31 +378,31 @@ class TestConnections:
         assert get_connection_count() == 0
         assert list_connections() == []
 
-    def test_resolve_env_substitutes_variables(self):
+    def test_expand_env_vars_substitutes_variables(self):
         """Should substitute environment variables."""
         import os
-        from pipelines.lib.connections import _resolve_env
+        from pipelines.lib.env import expand_env_vars
 
         os.environ["TEST_VAR"] = "test_value"
 
-        result = _resolve_env("${TEST_VAR}")
+        result = expand_env_vars("${TEST_VAR}")
         assert result == "test_value"
 
         # Clean up
         del os.environ["TEST_VAR"]
 
-    def test_resolve_env_returns_empty_for_missing(self):
-        """Should return empty string for missing env vars."""
-        from pipelines.lib.connections import _resolve_env
+    def test_expand_env_vars_returns_original_for_missing(self):
+        """Should return original pattern for missing env vars (non-strict mode)."""
+        from pipelines.lib.env import expand_env_vars
 
-        result = _resolve_env("${NONEXISTENT_VAR_12345}")
-        assert result == ""
+        result = expand_env_vars("${NONEXISTENT_VAR_12345}")
+        assert result == "${NONEXISTENT_VAR_12345}"
 
-    def test_resolve_env_returns_literal_for_non_var(self):
+    def test_expand_env_vars_returns_literal_for_non_var(self):
         """Should return literal value when not an env var pattern."""
-        from pipelines.lib.connections import _resolve_env
+        from pipelines.lib.env import expand_env_vars
 
-        result = _resolve_env("literal_value")
+        result = expand_env_vars("literal_value")
         assert result == "literal_value"
 
 

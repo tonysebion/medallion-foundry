@@ -59,7 +59,7 @@ from pipelines.lib._path_utils import path_has_data, resolve_target_path
 from pipelines.lib.auth import AuthConfig, build_auth_headers
 from pipelines.lib.checksum import write_checksum_manifest
 from pipelines.lib.env import expand_env_vars, expand_options
-from pipelines.lib.io import OutputMetadata, infer_column_types
+from pipelines.lib.io import OutputMetadata, infer_column_types, maybe_dry_run, maybe_skip_if_exists
 from pipelines.lib.pagination import (
     PagePaginationState,
     PaginationConfig,
@@ -68,7 +68,6 @@ from pipelines.lib.pagination import (
     build_pagination_state,
 )
 from pipelines.lib.rate_limiter import RateLimiter
-from pipelines.lib.run_helpers import maybe_dry_run, maybe_skip_if_exists
 from pipelines.lib.state import get_watermark, save_watermark
 
 logger = logging.getLogger(__name__)

@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional
 import ibis
 
 from pipelines.lib.curate import build_history, dedupe_latest
-from pipelines.lib.run_helpers import maybe_dry_run
+from pipelines.lib.io import maybe_dry_run
 from pipelines.lib._path_utils import resolve_target_path, storage_path_exists
 
 logger = logging.getLogger(__name__)

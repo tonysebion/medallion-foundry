@@ -23,10 +23,9 @@ import pandas as pd
 
 from pipelines.lib.connections import get_connection
 from pipelines.lib.env import expand_env_vars, expand_options
-from pipelines.lib.io import OutputMetadata, infer_column_types
+from pipelines.lib.io import OutputMetadata, infer_column_types, maybe_dry_run, maybe_skip_if_exists
 from pipelines.lib.storage import get_storage
 from pipelines.lib.state import get_watermark, save_watermark
-from pipelines.lib.run_helpers import maybe_dry_run, maybe_skip_if_exists
 from pipelines.lib._path_utils import (
     path_has_data,
     resolve_target_path,

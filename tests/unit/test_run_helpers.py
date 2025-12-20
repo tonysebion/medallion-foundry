@@ -1,8 +1,8 @@
-"""Tests for the shared pipeline run helpers."""
+"""Tests for the shared pipeline run helpers (now in io.py)."""
 
 import logging
 
-from pipelines.lib.run_helpers import maybe_dry_run, maybe_skip_if_exists
+from pipelines.lib.io import maybe_dry_run, maybe_skip_if_exists
 
 
 def test_maybe_skip_if_exists_without_flag():
