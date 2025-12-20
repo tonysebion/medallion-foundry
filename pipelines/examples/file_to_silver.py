@@ -78,14 +78,11 @@ def run_silver(run_date: str, **kwargs):
     """Curate Bronze products to Silver with quality checks."""
     result = silver.run(run_date, **kwargs)
 
-    # Optional: run quality checks on the output
-    # (In production, you might integrate this into the SilverEntity)
-    if "table" in result and result.get("row_count", 0) > 0:
-        import ibis
-
-        # Load the output for quality validation
+    if result.get("row_count", 0) > 0:
         output_path = Path(silver.target_path) / "data.parquet"
         if output_path.exists():
+            import ibis
+
             conn = ibis.duckdb.connect()
             table = conn.read_parquet(str(output_path))
             quality_result = check_quality(table, quality_rules, fail_on_error=False)

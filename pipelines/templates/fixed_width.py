@@ -1,10 +1,10 @@
 """
-Template: Space-Delimited File
-==============================
-Use this template for space-separated or fixed-width files from legacy systems:
-- Mainframe exports
-- Log files
-- Space-separated data files
+Template: Fixed-Width File
+==========================
+Use this template for files where each column is at a fixed character position:
+- Mainframe reports
+- Bank statements with positional fields
+- Legacy feeds with no delimiters
 
 To run: python -m pipelines {system}.{entity} --date 2025-01-15
 """
@@ -13,13 +13,13 @@ from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
 from pipelines.lib.silver import SilverEntity, EntityKind, HistoryMode
 
 # ============================================
-# BRONZE: Load from space-delimited file
+# BRONZE: Load from fixed-width or character-delimited file
 # ============================================
 
 bronze = BronzeSource(
     system="legacy_mainframe",  # <-- CHANGE: Source system name
     entity="daily_transactions",  # <-- CHANGE: Entity/file name
-    source_type=SourceType.FILE_SPACE_DELIMITED,
+    source_type=SourceType.FILE_FIXED_WIDTH,
     # Path to the file(s)
     # Use {run_date} for the date in the filename
     source_path="/data/mainframe/exports/txn_{run_date}.txt",  # <-- CHANGE
@@ -33,9 +33,11 @@ bronze = BronzeSource(
                 "txn_date",
                 "description",
             ],  # <-- CHANGE
-            # Other options:
-            # "header": False,  # File has no header row
-            # "skip_rows": 2,  # Skip first 2 rows
+            # Fixed-width hints:
+            # "field_widths": [10, 20, 8, 19, 30],
+            # "column_specs": [(0, 10), (10, 30), (30, 38), (38, 57), (57, 87)],
+            # As a reminder, any whitespace-delimited file can also use
+            # SourceType.FILE_SPACE_DELIMITED with "delimiter" or "delim_whitespace".
         }
     },
     target_path="s3://bronze/system={system}/entity={entity}/dt={run_date}/",

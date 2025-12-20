@@ -357,11 +357,23 @@ class BronzeSource:
             return con.read_parquet(source_path)
 
         elif self.source_type == SourceType.FILE_SPACE_DELIMITED:
-            csv_opts = {"delim": " ", **self.options.get("csv_options", {})}
-            return con.read_csv(source_path, **csv_opts)
+            csv_opts = dict(self.options.get("csv_options", {}))
+            fixed_width_keys = (
+                "widths",
+                "field_widths",
+                "column_widths",
+                "colspecs",
+                "column_specs",
+                "column_specifications",
+            )
+            if any(key in csv_opts for key in fixed_width_keys) or any(
+                key in self.options for key in fixed_width_keys
+            ):
+                return self._read_fixed_width(source_path)
+            return self._read_space_delimited(source_path)
 
         elif self.source_type == SourceType.FILE_FIXED_WIDTH:
-            return self._read_fixed_width(con, run_date)
+            return self._read_fixed_width(source_path)
 
         elif self.source_type in (
             SourceType.DATABASE_MSSQL,
@@ -414,24 +426,75 @@ class BronzeSource:
                 table = table.filter(table[self.watermark_column] > last_watermark)
             return table
 
-    def _read_fixed_width(self, con: ibis.BaseBackend, run_date: str) -> ibis.Table:
-        """Read fixed-width file with column positions.
+    def _read_fixed_width(self, source_path: str) -> ibis.Table:
+        """Read fixed-width files using explicit column spans."""
+        csv_opts: Dict[str, Any] = dict(self.options.get("csv_options", {}))
 
-        Requires options:
-            - columns: list of column names
-            - widths: list of column widths (integers)
-        """
-        source_path = self.source_path.format(run_date=run_date)
-        columns = self.options.get("columns", [])
-        widths = self.options.get("widths", [])
+        def _pick(*keys: str) -> Optional[Any]:
+            """Return the first match from csv_options or top-level options."""
+            for key in keys:
+                if key in csv_opts:
+                    return csv_opts.pop(key)
+                if key in self.options:
+                    return self.options[key]
+            return None
 
-        if not columns or not widths:
+        columns = _pick("columns", "column_names", "col_names") or []
+        widths = _pick("widths", "field_widths", "column_widths")
+        colspecs = _pick("colspecs", "column_specs", "column_specifications")
+
+        if widths is None and colspecs is None:
             raise ValueError(
-                "Fixed-width files require 'columns' and 'widths' in options"
+                "Fixed-width files require 'widths', 'field_widths', or 'colspecs' in options"
             )
 
-        # Use pandas to read fixed-width, then convert to Ibis
-        df = pd.read_fwf(source_path, widths=widths, names=columns)
+        pandas_opts: Dict[str, Any] = {}
+        pandas_opts.update(csv_opts)
+
+        if widths is not None:
+            pandas_opts["widths"] = widths
+        if colspecs is not None:
+            pandas_opts["colspecs"] = colspecs
+        if columns:
+            pandas_opts["names"] = columns
+
+        df = pd.read_fwf(source_path, **pandas_opts)
+        return ibis.memtable(df)
+
+    def _read_space_delimited(self, source_path: str) -> ibis.Table:
+        """Read files where columns are separated by whitespace."""
+        csv_opts = dict(self.options.get("csv_options", {}))
+
+        column_names = csv_opts.pop("columns", None) or csv_opts.pop(
+            "column_names", None
+        ) or csv_opts.pop("col_names", None)
+        # Allow overriding delimiter/sep via options
+        delimiter = csv_opts.pop("delimiter", None)
+        sep = csv_opts.pop("sep", None)
+        treat_whitespace = csv_opts.pop("delim_whitespace", True)
+
+        pandas_opts: Dict[str, Any] = {"engine": "python"}
+        pandas_opts.update(csv_opts)
+
+        if column_names:
+            pandas_opts["names"] = column_names
+
+        column_names = csv_opts.pop("columns", None) or csv_opts.pop(
+            "column_names", None
+        ) or csv_opts.pop("col_names", None)
+        if column_names:
+            pandas_opts["names"] = column_names
+
+        if delimiter is not None:
+            pandas_opts["sep"] = delimiter
+        elif sep is not None:
+            pandas_opts["sep"] = sep
+        elif treat_whitespace:
+            pandas_opts["sep"] = r"\s+"
+        elif "sep" not in pandas_opts:
+            pandas_opts["sep"] = " "
+
+        df = pd.read_csv(source_path, **pandas_opts)
         return ibis.memtable(df)
 
     def _fetch_api(

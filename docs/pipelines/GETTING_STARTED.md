@@ -145,23 +145,28 @@ bronze = BronzeSource(
 )
 ```
 
-### Space-Delimited File
+### Character-Delimited File
 
 ```python
-bronze = BronzeSource(
-    system="legacy",
-    entity="transactions",
-    source_type=SourceType.FILE_SPACE_DELIMITED,
-    source_path="/mnt/mainframe/txn_{run_date}.txt",
-    options={
-        "csv_options": {
-            "columns": ["txn_id", "account", "amount", "date"],
-            "header": False,
-        }
-    },
-    load_pattern=LoadPattern.FULL_SNAPSHOT,
+  bronze = BronzeSource(
+      system="legacy",
+      entity="transactions",
+      source_type=SourceType.FILE_SPACE_DELIMITED,
+      source_path="/mnt/mainframe/txn_{run_date}.txt",
+      options={
+      "csv_options": {
+          "column_names": ["txn_id", "account", "amount", "date"],
+          # Alternatively use "columns" or "col_names".
+          "field_widths": [10, 20, 8, 10],
+          "header": False,
+      }
+  },
+  load_pattern=LoadPattern.FULL_SNAPSHOT,
 )
 ```
+  You can also provide `colspecs`/`column_specs` to define start/end positions directly, or use `"columns"`/`"column_names"` interchangeably for the header list.
+
+For strictly positional (fixed-width) sources, choose `SourceType.FILE_FIXED_WIDTH` and supply `field_widths` or `colspecs` along with the column names (see `pipelines/templates/fixed_width.py` for an example).
 
 ### REST API
 
