@@ -102,6 +102,8 @@ class PipelineState:
         Returns:
             PipelineState populated from the YAML file
         """
+        import yaml
+
         from pipelines.tui.utils.inheritance import (
             identify_field_sources,
             load_with_inheritance,
@@ -110,8 +112,17 @@ class PipelineState:
         # Load the config with parent inheritance resolved
         merged_config, parent_config = load_with_inheritance(path)
 
+        # Load the child config separately to identify field sources
+        with open(path, encoding="utf-8") as f:
+            child_config = yaml.safe_load(f) or {}
+
         # Identify which fields came from parent vs child
-        field_sources = identify_field_sources(merged_config, parent_config)
+        if parent_config:
+            field_sources = identify_field_sources(
+                parent_config, child_config, merged_config
+            )
+        else:
+            field_sources = {}
 
         state = cls()
         state.yaml_path = path

@@ -60,16 +60,18 @@ class PipelineConfigApp(App):
 
     def on_mount(self) -> None:
         """Handle app mount - show initial screen."""
+        from pipelines.tui.models import PipelineState
+        from pipelines.tui.screens.pipeline_editor import PipelineEditorScreen
+
         if self.mode == "edit" and self.yaml_path:
-            # Go directly to editor
-            from pipelines.tui.screens.editor import EditorScreen
-
-            self.push_screen(EditorScreen(yaml_path=self.yaml_path))
+            # Go directly to editor with loaded state
+            state = PipelineState.from_yaml(Path(self.yaml_path))
+            self.push_screen(PipelineEditorScreen(state=state, yaml_path=Path(self.yaml_path)))
         elif self.mode == "create" and self.parent_path:
-            # Go to bronze wizard with parent
-            from pipelines.tui.screens.bronze_wizard import BronzeWizardScreen
-
-            self.push_screen(BronzeWizardScreen(parent_path=self.parent_path))
+            # Create new pipeline with parent inheritance
+            state = PipelineState.from_schema_defaults()
+            state.set_parent_config(Path(self.parent_path))
+            self.push_screen(PipelineEditorScreen(state=state))
         else:
             # Show welcome screen
             self.push_screen(WelcomeScreen())
