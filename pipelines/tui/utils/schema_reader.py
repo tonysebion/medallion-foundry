@@ -5,6 +5,7 @@ Reads the pipeline.schema.json file to provide:
 - Enum values for dropdowns
 - Default values for form fields
 - Examples for placeholder text
+- Nested field support (auth.*, pagination.*)
 """
 
 from __future__ import annotations
@@ -16,6 +17,28 @@ from typing import Any
 
 # Path to the JSON Schema file
 SCHEMA_PATH = Path(__file__).parent.parent.parent / "schema" / "pipeline.schema.json"
+
+# Mapping of flat field names to their nested schema locations
+NESTED_FIELD_MAPPINGS: dict[str, tuple[str, str]] = {
+    # Auth fields (auth.*)
+    "auth_type": ("auth", "auth_type"),
+    "token": ("auth", "token"),
+    "api_key": ("auth", "api_key"),
+    "api_key_header": ("auth", "api_key_header"),
+    "username": ("auth", "username"),
+    "password": ("auth", "password"),
+    # Pagination fields (pagination.*)
+    "pagination_strategy": ("pagination", "strategy"),
+    "page_size": ("pagination", "page_size"),
+    "offset_param": ("pagination", "offset_param"),
+    "limit_param": ("pagination", "limit_param"),
+    "page_param": ("pagination", "page_param"),
+    "page_size_param": ("pagination", "page_size_param"),
+    "cursor_param": ("pagination", "cursor_param"),
+    "cursor_path": ("pagination", "cursor_path"),
+    "max_pages": ("pagination", "max_pages"),
+    "max_records": ("pagination", "max_records"),
+}
 
 
 @lru_cache(maxsize=1)
@@ -30,9 +53,11 @@ def _load_schema() -> dict[str, Any]:
 def get_field_metadata(section: str, field: str) -> dict[str, Any]:
     """Get metadata for a specific field.
 
+    Supports both top-level fields and nested fields (auth.*, pagination.*).
+
     Args:
         section: "bronze" or "silver"
-        field: Field name (e.g., "source_type", "natural_keys")
+        field: Field name (e.g., "source_type", "auth_type", "pagination_strategy")
 
     Returns:
         Dict with keys: description, examples, enum, default, type, required
@@ -41,7 +66,15 @@ def get_field_metadata(section: str, field: str) -> dict[str, Any]:
     definitions = schema.get("definitions", {})
     section_schema = definitions.get(section, {})
     properties = section_schema.get("properties", {})
-    field_schema = properties.get(field, {})
+
+    # Check if this is a nested field
+    if field in NESTED_FIELD_MAPPINGS:
+        parent_key, child_key = NESTED_FIELD_MAPPINGS[field]
+        parent_schema = properties.get(parent_key, {})
+        nested_properties = parent_schema.get("properties", {})
+        field_schema = nested_properties.get(child_key, {})
+    else:
+        field_schema = properties.get(field, {})
 
     # Handle oneOf (like natural_keys which can be string or array)
     if "oneOf" in field_schema:
@@ -194,6 +227,15 @@ def validate_field_type(section: str, field: str, value: Any) -> str | None:
         except (ValueError, TypeError):
             return f"{field} must be an integer"
 
+    if field_type == "number":
+        try:
+            float_val = float(value)
+            minimum = metadata.get("minimum")
+            if minimum is not None and float_val < minimum:
+                return f"{field} must be at least {minimum}"
+        except (ValueError, TypeError):
+            return f"{field} must be a number"
+
     if field_type == "boolean":
         if not isinstance(value, bool) and value not in ("true", "false", "True", "False"):
             return f"{field} must be true or false"
@@ -207,3 +249,50 @@ def validate_field_type(section: str, field: str, value: Any) -> str | None:
         return f"{field} must be one of: {', '.join(enum_values)}"
 
     return None
+
+
+def get_api_auth_fields() -> list[str]:
+    """Get all authentication field names."""
+    return [
+        "auth_type",
+        "token",
+        "api_key",
+        "api_key_header",
+        "username",
+        "password",
+    ]
+
+
+def get_api_pagination_fields() -> list[str]:
+    """Get all pagination field names."""
+    return [
+        "pagination_strategy",
+        "page_size",
+        "offset_param",
+        "limit_param",
+        "page_param",
+        "page_size_param",
+        "cursor_param",
+        "cursor_path",
+        "max_pages",
+        "max_records",
+    ]
+
+
+def get_nested_field_parent(field: str) -> str | None:
+    """Get the parent object key for a nested field.
+
+    Args:
+        field: Field name (e.g., "token", "page_size")
+
+    Returns:
+        Parent key ("auth" or "pagination") or None if not nested
+    """
+    if field in NESTED_FIELD_MAPPINGS:
+        return NESTED_FIELD_MAPPINGS[field][0]
+    return None
+
+
+def is_nested_field(field: str) -> bool:
+    """Check if a field is nested under auth or pagination."""
+    return field in NESTED_FIELD_MAPPINGS

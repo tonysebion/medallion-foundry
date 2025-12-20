@@ -177,6 +177,168 @@
               "description": "Column names for fixed-width or space-delimited files"
             }
           }
+        },
+        "base_url": {
+          "type": "string",
+          "description": "Base URL for REST API (e.g., 'https://api.example.com'). Required when source_type is api_rest.",
+          "examples": ["https://api.example.com", "https://api.github.com"]
+        },
+        "endpoint": {
+          "type": "string",
+          "description": "API endpoint path (e.g., '/v1/orders'). Required when source_type is api_rest.",
+          "examples": ["/v1/orders", "/users/{user}/repos", "/api/customers"]
+        },
+        "data_path": {
+          "type": "string",
+          "description": "Dot-notation path to records in API response (e.g., 'data.items')",
+          "examples": ["data.items", "results", "response.records"]
+        },
+        "auth": {
+          "type": "object",
+          "description": "Authentication configuration for API requests",
+          "properties": {
+            "auth_type": {
+              "type": "string",
+              "description": "Authentication method",
+              "enum": ["none", "bearer", "api_key", "basic"],
+              "default": "none"
+            },
+            "token": {
+              "type": "string",
+              "description": "Bearer token (for auth_type=bearer). Use ${VAR_NAME} for environment variables.",
+              "examples": ["${API_TOKEN}", "${GITHUB_TOKEN}"]
+            },
+            "api_key": {
+              "type": "string",
+              "description": "API key value (for auth_type=api_key). Use ${VAR_NAME} for environment variables.",
+              "examples": ["${API_KEY}"]
+            },
+            "api_key_header": {
+              "type": "string",
+              "description": "Header name for API key (for auth_type=api_key)",
+              "default": "X-API-Key",
+              "examples": ["X-API-Key", "Authorization", "Api-Key"]
+            },
+            "username": {
+              "type": "string",
+              "description": "Username (for auth_type=basic). Use ${VAR_NAME} for environment variables.",
+              "examples": ["${API_USERNAME}"]
+            },
+            "password": {
+              "type": "string",
+              "description": "Password (for auth_type=basic). Use ${VAR_NAME} for environment variables.",
+              "examples": ["${API_PASSWORD}"]
+            }
+          }
+        },
+        "pagination": {
+          "type": "object",
+          "description": "Pagination configuration for API requests",
+          "properties": {
+            "strategy": {
+              "type": "string",
+              "description": "Pagination strategy",
+              "enum": ["none", "offset", "page", "cursor"],
+              "default": "none"
+            },
+            "page_size": {
+              "type": "integer",
+              "description": "Number of records per page",
+              "default": 100,
+              "minimum": 1,
+              "examples": [50, 100, 1000]
+            },
+            "offset_param": {
+              "type": "string",
+              "description": "Query parameter name for offset (for strategy=offset)",
+              "default": "offset",
+              "examples": ["offset", "skip", "start"]
+            },
+            "limit_param": {
+              "type": "string",
+              "description": "Query parameter name for limit (for strategy=offset)",
+              "default": "limit",
+              "examples": ["limit", "count", "size"]
+            },
+            "page_param": {
+              "type": "string",
+              "description": "Query parameter name for page number (for strategy=page)",
+              "default": "page",
+              "examples": ["page", "pageNumber", "p"]
+            },
+            "page_size_param": {
+              "type": "string",
+              "description": "Query parameter name for page size (for strategy=page)",
+              "default": "page_size",
+              "examples": ["page_size", "pageSize", "per_page", "limit"]
+            },
+            "cursor_param": {
+              "type": "string",
+              "description": "Query parameter name to send cursor (for strategy=cursor)",
+              "default": "cursor",
+              "examples": ["cursor", "after", "next_token"]
+            },
+            "cursor_path": {
+              "type": "string",
+              "description": "Dot-notation path to next cursor in API response (for strategy=cursor)",
+              "examples": ["meta.next_cursor", "pagination.next", "next_page_token"]
+            },
+            "max_pages": {
+              "type": "integer",
+              "description": "Maximum number of pages to fetch (null = no limit)",
+              "minimum": 1,
+              "examples": [10, 100]
+            },
+            "max_records": {
+              "type": "integer",
+              "description": "Maximum total records to fetch (null = no limit)",
+              "minimum": 1,
+              "examples": [1000, 10000]
+            }
+          }
+        },
+        "requests_per_second": {
+          "type": "number",
+          "description": "Rate limit for API requests (requests per second)",
+          "minimum": 0.1,
+          "examples": [1.0, 5.0, 10.0]
+        },
+        "timeout": {
+          "type": "number",
+          "description": "Request timeout in seconds",
+          "default": 30.0,
+          "minimum": 1,
+          "examples": [30, 60, 120]
+        },
+        "max_retries": {
+          "type": "integer",
+          "description": "Maximum number of retry attempts for failed requests",
+          "default": 3,
+          "minimum": 0,
+          "examples": [3, 5]
+        },
+        "headers": {
+          "type": "object",
+          "description": "Additional HTTP headers to send with API requests",
+          "additionalProperties": { "type": "string" },
+          "examples": [{"Accept": "application/json", "X-Custom-Header": "value"}]
+        },
+        "params": {
+          "type": "object",
+          "description": "Additional query parameters to send with API requests",
+          "additionalProperties": { "type": "string" },
+          "examples": [{"format": "json", "include_deleted": "false"}]
+        },
+        "path_params": {
+          "type": "object",
+          "description": "URL path parameter substitutions (e.g., {user} in /users/{user}/repos)",
+          "additionalProperties": { "type": "string" },
+          "examples": [{"user": "anthropics", "repo": "claude-code"}]
+        },
+        "watermark_param": {
+          "type": "string",
+          "description": "Query parameter name for watermark value (for incremental API loads)",
+          "examples": ["since", "updated_after", "from_date"]
         }
       }
     },

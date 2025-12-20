@@ -9,21 +9,25 @@ from textual.containers import Center, Vertical
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Static
 
+from pipelines.tui.models import PipelineState
+from pipelines.tui.widgets import FileBrowserModal
+
 
 class WelcomeScreen(Screen):
     """Initial screen for selecting operation mode.
 
-    Options:
-    - Create new pipeline
-    - Edit existing pipeline
-    - Create child pipeline (inheriting from parent)
+    Simplified to two options:
+    - Create new pipeline (opens editor with defaults)
+    - Edit existing pipeline (opens file browser, then editor)
+
+    Note: "Create Child Pipeline" is now available as "Add Parent Config"
+    within the pipeline editor itself.
     """
 
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("n", "new_pipeline", "New"),
         ("e", "edit_pipeline", "Edit"),
-        ("c", "child_pipeline", "Child"),
     ]
 
     DEFAULT_CSS = """
@@ -32,9 +36,9 @@ class WelcomeScreen(Screen):
     }
 
     WelcomeScreen .welcome-container {
-        width: 60;
+        width: 70;
         height: auto;
-        padding: 2;
+        padding: 2 3;
         border: round $primary;
         background: $surface;
     }
@@ -52,13 +56,20 @@ class WelcomeScreen(Screen):
         margin-bottom: 2;
     }
 
+    WelcomeScreen .tagline {
+        text-align: center;
+        color: $success;
+        text-style: italic;
+        margin-bottom: 2;
+    }
+
     WelcomeScreen .button-container {
         align: center middle;
         height: auto;
     }
 
     WelcomeScreen Button {
-        width: 40;
+        width: 50;
         margin: 1;
     }
 
@@ -66,6 +77,23 @@ class WelcomeScreen(Screen):
         text-align: center;
         color: $text-muted;
         margin-top: 2;
+    }
+
+    WelcomeScreen .features {
+        margin-top: 2;
+        padding: 1;
+        border: round $secondary;
+    }
+
+    WelcomeScreen .features-title {
+        text-style: bold;
+        color: $secondary;
+        margin-bottom: 1;
+    }
+
+    WelcomeScreen .feature-item {
+        color: $text;
+        margin-left: 2;
     }
     """
 
@@ -82,6 +110,10 @@ class WelcomeScreen(Screen):
                     "Create and edit pipeline YAML configurations",
                     classes="subtitle",
                 )
+                yield Static(
+                    "Making medallion data pipelines accessible to everyone",
+                    classes="tagline",
+                )
 
                 with Vertical(classes="button-container"):
                     yield Button(
@@ -94,16 +126,21 @@ class WelcomeScreen(Screen):
                         id="btn_edit",
                         variant="default",
                     )
-                    yield Button(
-                        "Create Child Pipeline",
-                        id="btn_child",
-                        variant="default",
-                    )
 
                 yield Static(
-                    "Press [b]N[/b] for New, [b]E[/b] for Edit, [b]C[/b] for Child, [b]Q[/b] to Quit",
+                    "Press [b]N[/b] for New, [b]E[/b] for Edit, [b]Q[/b] to Quit",
                     classes="description",
                 )
+
+                # Features highlight
+                with Vertical(classes="features"):
+                    yield Static("What's New:", classes="features-title")
+                    yield Static("- Beginner/Advanced mode toggle", classes="feature-item")
+                    yield Static("- Visual inheritance indicators", classes="feature-item")
+                    yield Static("- Environment variable picker for secrets", classes="feature-item")
+                    yield Static("- Full API configuration support", classes="feature-item")
+                    yield Static("- Real-time YAML preview", classes="feature-item")
+
         yield Footer()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -112,177 +149,45 @@ class WelcomeScreen(Screen):
             self.action_new_pipeline()
         elif event.button.id == "btn_edit":
             self.action_edit_pipeline()
-        elif event.button.id == "btn_child":
-            self.action_child_pipeline()
 
     def action_new_pipeline(self) -> None:
-        """Start creating a new pipeline."""
-        from pipelines.tui.screens.bronze_wizard import BronzeWizardScreen
+        """Start creating a new pipeline.
 
-        self.app.push_screen(BronzeWizardScreen())
+        Opens the consolidated editor with default state.
+        """
+        from pipelines.tui.screens.pipeline_editor import PipelineEditorScreen
+
+        state = PipelineState.from_schema_defaults()
+        self.app.push_screen(PipelineEditorScreen(state=state))
 
     def action_edit_pipeline(self) -> None:
-        """Open file picker to edit existing pipeline."""
-        # For now, push to a file input screen
-        # TODO: Implement proper file picker
-        self.app.push_screen(FilePickerScreen(mode="edit"))
+        """Open file browser to select existing pipeline.
 
-    def action_child_pipeline(self) -> None:
-        """Open file picker to select parent for child pipeline."""
-        self.app.push_screen(FilePickerScreen(mode="child"))
+        Uses the new FileBrowserModal for real filesystem navigation.
+        """
+        def on_file_selected(path: Path) -> None:
+            from pipelines.tui.screens.pipeline_editor import PipelineEditorScreen
+
+            try:
+                state = PipelineState.from_yaml(path)
+                self.app.push_screen(PipelineEditorScreen(state=state, yaml_path=path))
+            except Exception as e:
+                self.notify(f"Failed to load pipeline: {e}", severity="error")
+
+        # Start from pipelines directory if it exists
+        start_path = Path.cwd() / "pipelines"
+        if not start_path.exists():
+            start_path = Path.cwd()
+
+        self.app.push_screen(
+            FileBrowserModal(
+                extensions=[".yaml", ".yml"],
+                title="Select Pipeline Configuration",
+                start_path=start_path,
+                on_select=on_file_selected,
+            )
+        )
 
     def action_quit(self) -> None:
         """Quit the application."""
         self.app.exit()
-
-
-class FilePickerScreen(Screen):
-    """Simple file path input screen.
-
-    TODO: Replace with proper file browser widget.
-    """
-
-    BINDINGS = [
-        ("escape", "go_back", "Back"),
-        ("enter", "submit", "Submit"),
-    ]
-
-    DEFAULT_CSS = """
-    FilePickerScreen {
-        align: center middle;
-    }
-
-    FilePickerScreen .picker-container {
-        width: 70;
-        height: auto;
-        padding: 2;
-        border: round $primary;
-        background: $surface;
-    }
-
-    FilePickerScreen .title {
-        text-align: center;
-        text-style: bold;
-        margin-bottom: 1;
-    }
-
-    FilePickerScreen .instruction {
-        color: $text-muted;
-        margin-bottom: 1;
-    }
-
-    FilePickerScreen Input {
-        width: 100%;
-        margin-bottom: 1;
-    }
-
-    FilePickerScreen .error {
-        color: $error;
-        margin-bottom: 1;
-    }
-
-    FilePickerScreen .button-row {
-        height: auto;
-        align: center middle;
-    }
-
-    FilePickerScreen Button {
-        margin: 0 1;
-    }
-    """
-
-    def __init__(
-        self,
-        mode: str = "edit",
-        name: str | None = None,
-        id: str | None = None,
-        classes: str | None = None,
-    ) -> None:
-        """Initialize the file picker.
-
-        Args:
-            mode: "edit" for editing, "child" for creating child pipeline
-            name: Screen name
-            id: Screen ID
-            classes: CSS classes
-        """
-        super().__init__(name=name, id=id, classes=classes)
-        self.mode = mode
-
-    def compose(self) -> ComposeResult:
-        """Compose the file picker layout."""
-        from textual.widgets import Input
-        from textual.containers import Horizontal
-
-        yield Header()
-        with Center():
-            with Vertical(classes="picker-container"):
-                if self.mode == "edit":
-                    yield Static("Edit Existing Pipeline", classes="title")
-                    yield Static(
-                        "Enter the path to the YAML configuration file:",
-                        classes="instruction",
-                    )
-                else:
-                    yield Static("Create Child Pipeline", classes="title")
-                    yield Static(
-                        "Enter the path to the parent YAML configuration file:",
-                        classes="instruction",
-                    )
-
-                yield Input(
-                    placeholder="./pipelines/my_pipeline.yaml",
-                    id="file_path_input",
-                )
-                yield Static("", classes="error", id="error_message")
-
-                with Horizontal(classes="button-row"):
-                    yield Button("Cancel", id="btn_cancel", variant="default")
-                    yield Button("Continue", id="btn_continue", variant="primary")
-        yield Footer()
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button clicks."""
-        if event.button.id == "btn_cancel":
-            self.action_go_back()
-        elif event.button.id == "btn_continue":
-            self.action_submit()
-
-    def action_go_back(self) -> None:
-        """Go back to welcome screen."""
-        self.app.pop_screen()
-
-    def action_submit(self) -> None:
-        """Submit the file path."""
-        from textual.widgets import Input
-
-        input_widget = self.query_one("#file_path_input", Input)
-        file_path = input_widget.value.strip()
-
-        if not file_path:
-            self._show_error("Please enter a file path")
-            return
-
-        path = Path(file_path)
-        if not path.exists():
-            self._show_error(f"File not found: {file_path}")
-            return
-
-        if path.suffix.lower() not in (".yaml", ".yml"):
-            self._show_error("File must be a YAML file (.yaml or .yml)")
-            return
-
-        if self.mode == "edit":
-            from pipelines.tui.screens.editor import EditorScreen
-
-            self.app.switch_screen(EditorScreen(yaml_path=str(path)))
-        else:
-            # Child mode - go to bronze wizard with parent
-            from pipelines.tui.screens.bronze_wizard import BronzeWizardScreen
-
-            self.app.switch_screen(BronzeWizardScreen(parent_path=str(path)))
-
-    def _show_error(self, message: str) -> None:
-        """Display an error message."""
-        error_widget = self.query_one("#error_message", Static)
-        error_widget.update(message)
