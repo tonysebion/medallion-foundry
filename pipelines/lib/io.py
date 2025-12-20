@@ -225,17 +225,19 @@ def write_silver(
     else:
         raise ValueError(f"Unsupported format: {format}")
 
-    # Create metadata
-    metadata = WriteMetadata(
+    # Create metadata - use OutputMetadata with extra for optional fields
+    metadata = OutputMetadata(
         row_count=row_count,
-        columns=columns,
+        columns=[{"name": c} for c in columns],  # Convert to list of dicts
         written_at=now,
-        source_path=source_path,
-        pipeline_name=pipeline_name,
         run_date=run_date,
         format=format,
         compression=compression if format == "parquet" else None,
-        partition_by=partition_by,
+        extra={
+            "source_path": source_path,
+            "pipeline_name": pipeline_name,
+            "partition_by": partition_by,
+        },
     )
 
     # Write metadata file

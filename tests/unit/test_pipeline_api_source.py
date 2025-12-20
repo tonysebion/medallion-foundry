@@ -274,7 +274,11 @@ class TestApiSourceFromOptions:
 
 
 class TestApiOutputMetadata:
-    """Tests for API output metadata."""
+    """Tests for API output metadata.
+
+    Note: ApiOutputMetadata is now an alias for OutputMetadata.
+    API-specific fields go in the 'extra' dict.
+    """
 
     def test_serialization(self):
         """Metadata should serialize to JSON correctly."""
@@ -282,13 +286,15 @@ class TestApiOutputMetadata:
             row_count=100,
             columns=[{"name": "id", "type": "int64"}],
             written_at="2025-01-15T10:00:00Z",
-            system="test",
-            entity="items",
-            base_url="https://api.example.com",
-            endpoint="/items",
             run_date="2025-01-15",
-            pages_fetched=5,
-            total_requests=5,
+            extra={
+                "system": "test",
+                "entity": "items",
+                "base_url": "https://api.example.com",
+                "endpoint": "/items",
+                "pages_fetched": 5,
+                "total_requests": 5,
+            },
         )
 
         json_str = metadata.to_json()
@@ -299,18 +305,20 @@ class TestApiOutputMetadata:
         assert data["pages_fetched"] == 5
 
     def test_to_dict(self):
-        """to_dict should return all fields."""
+        """to_dict should return all fields flattened."""
         metadata = ApiOutputMetadata(
             row_count=10,
             columns=[],
             written_at="2025-01-15",
-            system="test",
-            entity="items",
-            base_url="https://api.example.com",
-            endpoint="/items",
             run_date="2025-01-15",
-            pages_fetched=1,
-            total_requests=1,
+            extra={
+                "system": "test",
+                "entity": "items",
+                "base_url": "https://api.example.com",
+                "endpoint": "/items",
+                "pages_fetched": 1,
+                "total_requests": 1,
+            },
         )
 
         d = metadata.to_dict()
@@ -325,22 +333,24 @@ class TestApiOutputMetadata:
             row_count=50,
             columns=[{"name": "id"}],
             written_at="2025-01-15",
-            system="test",
-            entity="items",
-            base_url="https://api.example.com",
-            endpoint="/items",
             run_date="2025-01-15",
-            pages_fetched=2,
-            total_requests=2,
+            extra={
+                "system": "test",
+                "entity": "items",
+                "base_url": "https://api.example.com",
+                "endpoint": "/items",
+                "pages_fetched": 2,
+                "total_requests": 2,
+            },
         )
 
         d = metadata.to_dict()
 
-        # Can create new metadata from dict
-        new_metadata = ApiOutputMetadata(**d)
+        # Can create new metadata from dict (unknown fields go to extra)
+        new_metadata = ApiOutputMetadata.from_dict(d)
 
         assert new_metadata.row_count == 50
-        assert new_metadata.pages_fetched == 2
+        assert new_metadata.extra["pages_fetched"] == 2
 
 
 class TestApiSourceConfiguration:
