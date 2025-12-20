@@ -33,11 +33,6 @@ class ValidatedInput(Vertical):
         margin-bottom: 0;
     }
 
-    ValidatedInput .field-label.required::after {
-        content: " *";
-        color: $error;
-    }
-
     ValidatedInput Input {
         width: 100%;
     }
@@ -125,8 +120,9 @@ class ValidatedInput(Vertical):
 
     def compose(self) -> ComposeResult:
         """Compose the widget layout."""
-        label_classes = "field-label required" if self.required else "field-label"
-        yield Label(self.label_text, classes=label_classes)
+        # Add asterisk to label for required fields
+        label_display = f"{self.label_text} [red]*[/red]" if self.required else self.label_text
+        yield Label(label_display, classes="field-label")
         yield Input(
             value=self.default,
             placeholder=self.placeholder,

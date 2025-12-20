@@ -1,9 +1,13 @@
 """Pipeline templates for common patterns.
 
-Copy the appropriate template and fill in the blanks:
+YAML templates (recommended):
+- pipeline_template.yaml: General purpose (start here)
+- csv_snapshot.yaml: CSV file full snapshot
+- mssql_dimension.yaml: SQL Server dimension table
+- incremental_load.yaml: Incremental load with watermark
+- event_log.yaml: Event/fact table processing
+- fixed_width.yaml: Fixed-width file processing
+- api_rest.yaml: REST API extraction
 
-- pipeline_template.py: General purpose (start here)
-- mssql_dimension.py: SQL Server dimension table
-- csv_snapshot.py: CSV file full snapshot
-- incremental_load.py: Incremental load with watermark
+Copy the appropriate template, rename it, and fill in the blanks.
 """

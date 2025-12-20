@@ -30,11 +30,6 @@ class EnumSelect(Vertical):
         margin-bottom: 0;
     }
 
-    EnumSelect .field-label.required::after {
-        content: " *";
-        color: $error;
-    }
-
     EnumSelect Select {
         width: 100%;
     }
@@ -99,8 +94,9 @@ class EnumSelect(Vertical):
 
     def compose(self) -> ComposeResult:
         """Compose the widget layout."""
-        label_classes = "field-label required" if self.required else "field-label"
-        yield Label(self.label_text, classes=label_classes)
+        # Add asterisk to label for required fields
+        label_display = f"{self.label_text} [red]*[/red]" if self.required else self.label_text
+        yield Label(label_display, classes="field-label")
 
         # Build options list
         select_options: list[tuple[str, str]] = []

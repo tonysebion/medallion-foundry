@@ -1,0 +1,3 @@
+-r requirements.txt
+
+textual>=0.47.0  # TUI framework for interactive pipeline configuration

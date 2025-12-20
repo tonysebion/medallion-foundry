@@ -147,16 +147,6 @@ python run_tests.py --ruff
 ruff check core extractors tests bronze_extract.py
 ```
 
-### Linting (flake8)
-
-```bash
-# Run flake8 linting only
-python run_tests.py --flake8
-
-# Or run flake8 directly
-python -m flake8 --max-line-length=120 .
-```
-
 ### Pre-commit hooks
 
 If you'd like to run the style checks locally on commit, enable pre-commit hooks with:
@@ -180,17 +170,16 @@ We added a workflow to run the full test-and-style suite on PRs and pushes:
 
   - `.github/workflows/test-and-style.yml` — runs `python run_tests.py --all-checks`.
 
-This runs tests, type checking, ruff, black and flake8 and enforces the same checks you run locally.
+This runs tests, type checking, and ruff (linting + formatting) and enforces the same checks you run locally.
 
-
-### Code Formatting (black)
+### Code Formatting (ruff)
 
 ```bash
 # Check formatting
-python run_tests.py --black-check
+ruff format --check .
 
 # Auto-format code
-black core extractors tests bronze_extract.py
+ruff format .
 ```
 
 ## CI/CD Integration
@@ -429,5 +418,4 @@ Add ignore rules to `mypy.ini` for third-party packages without type stubs.
 - [pytest Documentation](https://docs.pytest.org/)
 - [pytest-cov Documentation](https://pytest-cov.readthedocs.io/)
 - [mypy Documentation](https://mypy.readthedocs.io/)
-- [ruff Documentation](https://beta.ruff.rs/docs/)
-- [black Documentation](https://black.readthedocs.io/)
+- [ruff Documentation](https://docs.astral.sh/ruff/)
