@@ -8,7 +8,7 @@ import pytest
 
 from pipelines.lib.bronze import BronzeSource, LoadPattern, SourceType
 from pipelines.lib.silver import EntityKind, HistoryMode, SilverEntity
-from pipelines.lib.watermark import get_watermark
+from pipelines.lib.state import get_watermark
 
 
 def _create_csv_input(tmp_path: Path, run_date: str, rows: list[dict[str, object]]) -> str:

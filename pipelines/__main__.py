@@ -37,7 +37,7 @@ def setup_logging(
         json_format: Use JSON output format (for log aggregation)
         log_file: Optional file path to write logs to
     """
-    from pipelines.lib.logging import setup_logging as _setup_logging
+    from pipelines.lib.observability import setup_logging as _setup_logging
 
     _setup_logging(verbose=verbose, json_format=json_format, log_file=log_file)
 

@@ -25,7 +25,8 @@ from pipelines.lib.connections import get_connection
 from pipelines.lib.env import expand_env_vars, expand_options
 from pipelines.lib.io import OutputMetadata, infer_column_types
 from pipelines.lib.storage import get_storage
-from pipelines.lib.watermark import get_watermark, save_watermark
+from pipelines.lib.state import get_watermark, save_watermark
+from pipelines.lib.run_helpers import maybe_dry_run, maybe_skip_if_exists
 from pipelines.lib._path_utils import (
     path_has_data,
     resolve_target_path,
@@ -279,27 +280,26 @@ class BronzeSource:
         """
         target = self._resolve_target(run_date, target_override)
 
-        if skip_if_exists and self._already_ran(target):
-            logger.info(
-                "Skipping %s.%s - data already exists at %s",
-                self.system,
-                self.entity,
-                target,
-            )
-            return {"skipped": True, "reason": "already_exists", "target": target}
+        skip_result = maybe_skip_if_exists(
+            skip_if_exists=skip_if_exists,
+            exists_fn=lambda: self._already_ran(target),
+            target=target,
+            logger=logger,
+            context=f"{self.system}.{self.entity}",
+        )
+        if skip_result:
+            return skip_result
 
-        if dry_run:
-            logger.info(
-                "[DRY RUN] Would extract %s.%s to %s",
-                self.system,
-                self.entity,
-                target,
-            )
-            return {
-                "dry_run": True,
-                "target": target,
-                "source_type": self.source_type.value,
-            }
+        dry_run_result = maybe_dry_run(
+            dry_run=dry_run,
+            logger=logger,
+            message="[DRY RUN] Would extract %s.%s to %s",
+            message_args=(self.system, self.entity, target),
+            target=target,
+            extra={"source_type": self.source_type.value},
+        )
+        if dry_run_result:
+            return dry_run_result
 
         # Get watermark for incremental loads
         last_watermark = None

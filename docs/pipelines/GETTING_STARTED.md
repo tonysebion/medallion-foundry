@@ -330,7 +330,7 @@ rm .state/retail_orders_watermark.json
 Or programmatically:
 
 ```python
-from pipelines.lib.watermark import delete_watermark
+from pipelines.lib.state import delete_watermark
 delete_watermark("retail", "orders")
 ```
 

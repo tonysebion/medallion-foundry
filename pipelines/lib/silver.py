@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional
 import ibis
 
 from pipelines.lib.curate import build_history, dedupe_latest
+from pipelines.lib.run_helpers import maybe_dry_run
 from pipelines.lib._path_utils import resolve_target_path, storage_path_exists
 
 logger = logging.getLogger(__name__)
@@ -261,15 +262,20 @@ class SilverEntity:
         source = self.source_path.format(run_date=run_date)
         target = self._resolve_target(target_override, run_date)
 
-        if dry_run:
-            logger.info("[DRY RUN] Would curate %s to %s", source, target)
-            return {
-                "dry_run": True,
+        dry_run_result = maybe_dry_run(
+            dry_run=dry_run,
+            logger=logger,
+            message="[DRY RUN] Would curate %s to %s",
+            message_args=(source, target),
+            target=target,
+            extra={
                 "source": source,
-                "target": target,
                 "entity_kind": self.entity_kind.value,
                 "history_mode": self.history_mode.value,
-            }
+            },
+        )
+        if dry_run_result:
+            return dry_run_result
 
         # Validate Bronze source checksums (if configured)
         validation_result = self._validate_source(source)

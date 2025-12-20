@@ -15,16 +15,16 @@ class TestWatermark:
 
     def test_get_watermark_returns_none_when_not_exists(self, tmp_path):
         """Should return None when no watermark file exists."""
-        with patch("pipelines.lib.watermark._get_state_dir", return_value=tmp_path):
-            from pipelines.lib.watermark import get_watermark
+        with patch("pipelines.lib.state._get_state_dir", return_value=tmp_path):
+            from pipelines.lib.state import get_watermark
 
             result = get_watermark("test_system", "test_entity")
             assert result is None
 
     def test_save_and_get_watermark(self, tmp_path):
         """Should save and retrieve watermark value."""
-        with patch("pipelines.lib.watermark._get_state_dir", return_value=tmp_path):
-            from pipelines.lib.watermark import get_watermark, save_watermark
+        with patch("pipelines.lib.state._get_state_dir", return_value=tmp_path):
+            from pipelines.lib.state import get_watermark, save_watermark
 
             save_watermark("test_system", "test_entity", "2025-01-15T10:00:00")
             result = get_watermark("test_system", "test_entity")
@@ -33,8 +33,8 @@ class TestWatermark:
 
     def test_delete_watermark(self, tmp_path):
         """Should delete watermark and return True."""
-        with patch("pipelines.lib.watermark._get_state_dir", return_value=tmp_path):
-            from pipelines.lib.watermark import (
+        with patch("pipelines.lib.state._get_state_dir", return_value=tmp_path):
+            from pipelines.lib.state import (
                 delete_watermark,
                 get_watermark,
                 save_watermark,
@@ -48,16 +48,16 @@ class TestWatermark:
 
     def test_delete_watermark_returns_false_when_not_exists(self, tmp_path):
         """Should return False when watermark doesn't exist."""
-        with patch("pipelines.lib.watermark._get_state_dir", return_value=tmp_path):
-            from pipelines.lib.watermark import delete_watermark
+        with patch("pipelines.lib.state._get_state_dir", return_value=tmp_path):
+            from pipelines.lib.state import delete_watermark
 
             result = delete_watermark("nonexistent", "entity")
             assert result is False
 
     def test_list_watermarks(self, tmp_path):
         """Should list all stored watermarks."""
-        with patch("pipelines.lib.watermark._get_state_dir", return_value=tmp_path):
-            from pipelines.lib.watermark import list_watermarks, save_watermark
+        with patch("pipelines.lib.state._get_state_dir", return_value=tmp_path):
+            from pipelines.lib.state import list_watermarks, save_watermark
 
             save_watermark("system1", "entity1", "value1")
             save_watermark("system2", "entity2", "value2")
@@ -70,8 +70,8 @@ class TestWatermark:
 
     def test_clear_all_watermarks(self, tmp_path):
         """Should clear all watermarks and return count."""
-        with patch("pipelines.lib.watermark._get_state_dir", return_value=tmp_path):
-            from pipelines.lib.watermark import (
+        with patch("pipelines.lib.state._get_state_dir", return_value=tmp_path):
+            from pipelines.lib.state import (
                 clear_all_watermarks,
                 list_watermarks,
                 save_watermark,

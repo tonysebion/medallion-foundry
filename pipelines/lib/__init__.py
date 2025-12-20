@@ -30,13 +30,6 @@ from pipelines.lib.checksum import (
 )
 from pipelines.lib.connections import close_all_connections, get_connection
 from pipelines.lib.env import expand_env_vars, expand_options
-from pipelines.lib.late_data import (
-    LateDataConfig,
-    LateDataMode,
-    LateDataResult,
-    detect_late_data,
-    filter_late_data,
-)
 from pipelines.lib.polybase import (
     PolyBaseConfig,
     generate_external_table_ddl,
@@ -95,7 +88,20 @@ from pipelines.lib.validate import (
     validate_bronze_source,
     validate_silver_entity,
 )
-from pipelines.lib.watermark import delete_watermark, get_watermark, save_watermark
+from pipelines.lib.state import (
+    LateDataConfig,
+    LateDataMode,
+    LateDataResult,
+    clear_all_watermarks,
+    delete_watermark,
+    detect_late_data,
+    filter_late_data,
+    get_late_records,
+    get_watermark,
+    get_watermark_age,
+    list_watermarks,
+    save_watermark,
+)
 
 __all__ = [
     # API
@@ -143,6 +149,7 @@ __all__ = [
     "LateDataResult",
     "detect_late_data",
     "filter_late_data",
+    "get_late_records",
     # PolyBase
     "PolyBaseConfig",
     "generate_external_table_ddl",
@@ -204,6 +211,9 @@ __all__ = [
     "validate_bronze_source",
     "validate_silver_entity",
     # Watermark
+    "clear_all_watermarks",
+    "list_watermarks",
+    "get_watermark_age",
     "delete_watermark",
     "get_watermark",
     "save_watermark",

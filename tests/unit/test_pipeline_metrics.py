@@ -4,7 +4,7 @@ import time
 from datetime import datetime, timezone
 
 
-from pipelines.lib.metrics import (
+from pipelines.lib.observability import (
     MetricPoint,
     MetricsCollector,
     PhaseTimer,

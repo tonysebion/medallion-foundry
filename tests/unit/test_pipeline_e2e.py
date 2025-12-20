@@ -209,7 +209,7 @@ class TestIncrementalPipeline:
         assert "new_watermark" in result1
 
         # Verify watermark was saved
-        from pipelines.lib.watermark import get_watermark
+        from pipelines.lib.state import get_watermark
 
         watermark = get_watermark("events", "clicks")
         assert watermark is not None
@@ -222,7 +222,7 @@ class TestIncrementalPipeline:
         monkeypatch.setenv("PIPELINE_STATE_DIR", str(state_dir))
 
         # Pre-set watermark
-        from pipelines.lib.watermark import save_watermark
+        from pipelines.lib.state import save_watermark
 
         save_watermark("events", "orders", "2025-01-15T12:00:00")
 

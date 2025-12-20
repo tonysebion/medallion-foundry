@@ -4,7 +4,7 @@ import json
 import logging
 
 
-from pipelines.lib.logging import (
+from pipelines.lib.observability import (
     JSONFormatter,
     PipelineLogger,
     get_pipeline_logger,

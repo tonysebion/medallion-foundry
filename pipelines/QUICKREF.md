@@ -129,7 +129,7 @@ python -m pipelines claims.header --date 2025-01-15
 Delete the watermark to start from scratch:
 
 ```python
-from pipelines.lib.watermark import delete_watermark
+from pipelines.lib.state import delete_watermark
 delete_watermark("claims_dw", "claims_header")
 ```
 

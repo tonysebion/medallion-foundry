@@ -41,7 +41,7 @@ Run pipelines safely without touching production data by layering validation, dr
   ```
 - Reset incremental state when needed:
   ```python
-  from pipelines.lib.watermark import delete_watermark
+  from pipelines.lib.state import delete_watermark
   delete_watermark("my_system", "my_entity")
   ```
 - After Bronze succeeds, run Silver in isolation:

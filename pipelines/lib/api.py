@@ -68,7 +68,8 @@ from pipelines.lib.pagination import (
     build_pagination_state,
 )
 from pipelines.lib.rate_limiter import RateLimiter
-from pipelines.lib.watermark import get_watermark, save_watermark
+from pipelines.lib.run_helpers import maybe_dry_run, maybe_skip_if_exists
+from pipelines.lib.state import get_watermark, save_watermark
 
 logger = logging.getLogger(__name__)
 
@@ -220,30 +221,26 @@ class ApiSource:
         """
         target = self._resolve_target(run_date, target_override)
 
-        if skip_if_exists and self._already_exists(target):
-            logger.info(
-                "Skipping %s.%s - data already exists at %s",
-                self.system,
-                self.entity,
-                target,
-            )
-            return {"skipped": True, "reason": "already_exists", "target": target}
+        skip_result = maybe_skip_if_exists(
+            skip_if_exists=skip_if_exists,
+            exists_fn=lambda: self._already_exists(target),
+            target=target,
+            logger=logger,
+            context=f"{self.system}.{self.entity}",
+        )
+        if skip_result:
+            return skip_result
 
-        if dry_run:
-            logger.info(
-                "[DRY RUN] Would extract %s.%s from %s%s to %s",
-                self.system,
-                self.entity,
-                self.base_url,
-                self.endpoint,
-                target,
-            )
-            return {
-                "dry_run": True,
-                "target": target,
-                "base_url": self.base_url,
-                "endpoint": self.endpoint,
-            }
+        dry_run_result = maybe_dry_run(
+            dry_run=dry_run,
+            logger=logger,
+            message="[DRY RUN] Would extract %s.%s from %s%s to %s",
+            message_args=(self.system, self.entity, self.base_url, self.endpoint, target),
+            target=target,
+            extra={"base_url": self.base_url, "endpoint": self.endpoint},
+        )
+        if dry_run_result:
+            return dry_run_result
 
         # Get watermark for incremental loads
         last_watermark = None

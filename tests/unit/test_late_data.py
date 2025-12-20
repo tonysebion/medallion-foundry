@@ -5,7 +5,7 @@ import ibis
 import pandas as pd
 import pytest
 
-from pipelines.lib.late_data import (
+from pipelines.lib.state import (
     LateDataConfig,
     LateDataMode,
     LateDataResult,
