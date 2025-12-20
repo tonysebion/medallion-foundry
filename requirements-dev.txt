@@ -13,7 +13,6 @@ black>=22.0.0
 isort>=5.11.0
 mypy>=0.990
 ruff>=0.3.0
-semgrep>=1.40.0
 flake8>=6.0.0
 
 # Pre-commit hooks

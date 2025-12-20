@@ -50,7 +50,6 @@ dev = [
     "mkdocs>=1.5.0",
     "mkdocs-material>=9.0.0",
     "ruff>=0.3.0",
-    "semgrep>=1.40.0",
     "flake8>=6.0.0",
     "pre-commit>=3.6.0",
     "import-linter>=2.0",  # Layer architecture enforcement

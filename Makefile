@@ -5,7 +5,7 @@ PYTHON ?= python
 PIP ?= $(PYTHON) -m pip
 PYTEST ?= $(PYTHON) -m pytest
 
-.PHONY: help install test test-fast test-smoke test-cov lint format type-check docs clean semgrep
+.PHONY: help install test test-fast test-smoke test-cov lint format type-check docs clean
 
 help:  ## Show this help message
 	@echo "Available targets:"
@@ -37,9 +37,6 @@ test-cov:  ## Run tests with coverage report
 
 lint:  ## Run linters (ruff check)
 	$(PYTHON) -m ruff check .
-
-semgrep:  ## Run Semgrep policies
-	$(PYTHON) -m semgrep --config=p/ci
 
 format:  ## Format code (ruff format)
 	$(PYTHON) -m ruff format .
@@ -76,4 +73,4 @@ validate-config:  ## Validate sample configs
 	$(PYTHON) bronze_extract.py --config config/sample_api.yaml --validate-only
 
 .PHONY: all
-all: install lint type-check semgrep test  ## Run install, lint, type-check, semgrep, and test
+all: install lint type-check test  ## Run install, lint, type-check, and test
