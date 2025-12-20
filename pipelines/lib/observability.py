@@ -14,7 +14,6 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from functools import wraps
 from typing import Any, Dict, Generator, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -283,9 +282,9 @@ class JSONFormatter(logging.Formatter):
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
 
-        for field in self.include_fields:
-            if hasattr(record, field):
-                payload[field] = getattr(record, field)
+        for field_name in self.include_fields:
+            if hasattr(record, field_name):
+                payload[field_name] = getattr(record, field_name)
 
         extra_attrs = {
             k: v

@@ -53,8 +53,26 @@ DEFAULT_OUTPUT_DIR = project_root / "sampledata" / "silver_samples"
 DEFAULT_SEED = 42
 
 # Silver processing configurations for each Bronze pattern
+#
+# PATTERN COVERAGE MATRIX (Bronze × Silver EntityKind × HistoryMode):
+# ============================================================================
+# | Bronze Pattern      | EVENT          | STATE (SCD1)   | STATE (SCD2)    |
+# |---------------------|----------------|----------------|-----------------|
+# | FULL_SNAPSHOT       | pattern1 ✓     | pattern8 ✓     | pattern9 ✓      |
+# | INCREMENTAL_APPEND  | pattern2 ✓     | pattern6 ✓     | pattern7 ✓      |
+# | CDC (incr_merge)    | pattern10 ✓    | pattern4 ✓     | pattern5 ✓      |
+# | CDC (curr_history)  | (use pattern10)| (use pattern4) | pattern3 ✓      |
+# ============================================================================
+#
+# All 9 logical Bronze→Silver combinations are covered (3 Bronze × 3 Silver modes).
+# Note: current_history is a specialized CDC variant for pre-built SCD2 sources.
+#
 SILVER_CONFIGS = {
-    # pattern1: full_events - Full periodic snapshots from source, treating each batch as complete
+    # =========================================================================
+    # FULL_SNAPSHOT Bronze Pattern (complete data replacement each extraction)
+    # =========================================================================
+    #
+    # pattern1: snapshot_events - Treat each snapshot as immutable event log
     "pattern1_full_events": {
         "bronze_pattern": "snapshot",
         "entity_kind": "event",
@@ -64,47 +82,41 @@ SILVER_CONFIGS = {
         "natural_keys": ["record_id"],
         "event_ts_column": "created_at",
     },
-    # pattern2: cdc_events - Change data capture events, append only
+    # pattern8: snapshot_state_scd1 - Keep only latest snapshot as current state
+    "pattern8_snapshot_state_scd1": {
+        "bronze_pattern": "snapshot",
+        "entity_kind": "state",
+        "history_mode": "scd1",
+        "input_mode": None,
+        "description": "Full snapshot as current state - overwrites previous, no history",
+        "natural_keys": ["record_id"],
+        "change_ts_column": "created_at",
+    },
+    # pattern9: snapshot_state_scd2 - Track changes between snapshots with history
+    "pattern9_snapshot_state_scd2": {
+        "bronze_pattern": "snapshot",
+        "entity_kind": "state",
+        "history_mode": "scd2",
+        "input_mode": None,
+        "description": "Full snapshot with SCD2 history - tracks changes between snapshots",
+        "natural_keys": ["record_id"],
+        "change_ts_column": "created_at",
+    },
+    # =========================================================================
+    # INCREMENTAL_APPEND Bronze Pattern (append-only new records)
+    # =========================================================================
+    #
+    # pattern2: incremental_events - Append-only event log
     "pattern2_cdc_events": {
         "bronze_pattern": "incremental_append",
         "entity_kind": "event",
         "history_mode": None,
         "input_mode": "append_log",
-        "description": "CDC events - append new events, no deduplication",
+        "description": "Incremental events - append new events, no deduplication",
         "natural_keys": ["record_id"],
         "event_ts_column": "created_at",
     },
-    # pattern3: scd_state - State tracking with SCD Type 2 history
-    "pattern3_scd_state": {
-        "bronze_pattern": "current_history",
-        "entity_kind": "state",
-        "history_mode": "scd2",
-        "input_mode": None,
-        "description": "SCD Type 2 state - full history with effective dates",
-        "natural_keys": ["entity_id"],
-        "change_ts_column": "effective_from",
-    },
-    # pattern4: hybrid_cdc_point - CDC with point-in-time deduplication
-    "pattern4_hybrid_cdc_point": {
-        "bronze_pattern": "incremental_merge",
-        "entity_kind": "state",
-        "history_mode": "scd1",
-        "input_mode": None,
-        "description": "CDC with deduplication - latest version per key",
-        "natural_keys": ["record_id"],
-        "change_ts_column": "updated_at",
-    },
-    # pattern5: hybrid_cdc_cumulative - CDC with cumulative history
-    "pattern5_hybrid_cdc_cumulative": {
-        "bronze_pattern": "incremental_merge",
-        "entity_kind": "state",
-        "history_mode": "scd2",
-        "input_mode": None,
-        "description": "CDC with full history tracking",
-        "natural_keys": ["record_id"],
-        "change_ts_column": "updated_at",
-    },
-    # pattern6: hybrid_incremental_point - Incremental append with point-in-time
+    # pattern6: incremental_state_scd1 - Dedupe incremental to latest state
     "pattern6_hybrid_incremental_point": {
         "bronze_pattern": "incremental_append",
         "entity_kind": "state",
@@ -114,7 +126,7 @@ SILVER_CONFIGS = {
         "natural_keys": ["record_id"],
         "change_ts_column": "updated_at",
     },
-    # pattern7: hybrid_incremental_cumulative - Incremental append with cumulative
+    # pattern7: incremental_state_scd2 - Build history from incremental appends
     "pattern7_hybrid_incremental_cumulative": {
         "bronze_pattern": "incremental_append",
         "entity_kind": "state",
@@ -123,6 +135,54 @@ SILVER_CONFIGS = {
         "description": "Incremental append as state with full history",
         "natural_keys": ["record_id"],
         "change_ts_column": "updated_at",
+    },
+    # =========================================================================
+    # CDC Bronze Pattern (change data capture with I/U/D operations)
+    # =========================================================================
+    #
+    # pattern10: cdc_events - Treat CDC operations as immutable event log
+    "pattern10_cdc_events": {
+        "bronze_pattern": "incremental_merge",
+        "entity_kind": "event",
+        "history_mode": None,
+        "input_mode": "append_log",
+        "description": "CDC operations as events - each I/U/D is an immutable event",
+        "natural_keys": ["record_id"],
+        "event_ts_column": "updated_at",
+    },
+    # pattern4: cdc_state_scd1 - Apply CDC to get current state only
+    "pattern4_hybrid_cdc_point": {
+        "bronze_pattern": "incremental_merge",
+        "entity_kind": "state",
+        "history_mode": "scd1",
+        "input_mode": None,
+        "description": "CDC with deduplication - latest version per key",
+        "natural_keys": ["record_id"],
+        "change_ts_column": "updated_at",
+    },
+    # pattern5: cdc_state_scd2 - Build full history from CDC stream
+    "pattern5_hybrid_cdc_cumulative": {
+        "bronze_pattern": "incremental_merge",
+        "entity_kind": "state",
+        "history_mode": "scd2",
+        "input_mode": None,
+        "description": "CDC with full history tracking",
+        "natural_keys": ["record_id"],
+        "change_ts_column": "updated_at",
+    },
+    # =========================================================================
+    # SPECIALIZED: current_history Bronze Pattern (pre-built SCD2 source)
+    # =========================================================================
+    #
+    # pattern3: Pre-built SCD2 from source system with effective dates
+    "pattern3_scd_state": {
+        "bronze_pattern": "current_history",
+        "entity_kind": "state",
+        "history_mode": "scd2",
+        "input_mode": None,
+        "description": "SCD Type 2 state - full history with effective dates",
+        "natural_keys": ["entity_id"],
+        "change_ts_column": "effective_from",
     },
 }
 

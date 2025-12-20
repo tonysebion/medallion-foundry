@@ -37,25 +37,41 @@ BRONZE_PATTERN_TO_LOAD_PATTERN = {
     "current_history": "cdc",  # LoadPattern.CDC.value
 }
 
+# All 10 Silver patterns covering the full Bronze→Silver combination matrix
+# See scripts/generate_silver_samples.py for the complete pattern documentation
 SILVER_PATTERNS = [
-    "pattern1_full_events",
-    "pattern2_cdc_events",
-    "pattern3_scd_state",
-    "pattern4_hybrid_cdc_point",
-    "pattern5_hybrid_cdc_cumulative",
-    "pattern6_hybrid_incremental_point",
-    "pattern7_hybrid_incremental_cumulative",
+    # FULL_SNAPSHOT Bronze patterns
+    "pattern1_full_events",           # snapshot → EVENT
+    "pattern8_snapshot_state_scd1",   # snapshot → STATE (SCD1)
+    "pattern9_snapshot_state_scd2",   # snapshot → STATE (SCD2)
+    # INCREMENTAL_APPEND Bronze patterns
+    "pattern2_cdc_events",            # incremental_append → EVENT
+    "pattern6_hybrid_incremental_point",       # incremental_append → STATE (SCD1)
+    "pattern7_hybrid_incremental_cumulative",  # incremental_append → STATE (SCD2)
+    # CDC (incremental_merge) Bronze patterns
+    "pattern10_cdc_events",           # cdc → EVENT
+    "pattern4_hybrid_cdc_point",      # cdc → STATE (SCD1)
+    "pattern5_hybrid_cdc_cumulative", # cdc → STATE (SCD2)
+    # SPECIALIZED: Pre-built SCD2 source
+    "pattern3_scd_state",             # current_history → STATE (SCD2)
 ]
 
 # Expected Silver pattern -> Bronze pattern mapping
 SILVER_TO_BRONZE = {
+    # FULL_SNAPSHOT patterns
     "pattern1_full_events": "snapshot",
+    "pattern8_snapshot_state_scd1": "snapshot",
+    "pattern9_snapshot_state_scd2": "snapshot",
+    # INCREMENTAL_APPEND patterns
     "pattern2_cdc_events": "incremental_append",
-    "pattern3_scd_state": "current_history",
-    "pattern4_hybrid_cdc_point": "incremental_merge",
-    "pattern5_hybrid_cdc_cumulative": "incremental_merge",
     "pattern6_hybrid_incremental_point": "incremental_append",
     "pattern7_hybrid_incremental_cumulative": "incremental_append",
+    # CDC patterns
+    "pattern10_cdc_events": "incremental_merge",
+    "pattern4_hybrid_cdc_point": "incremental_merge",
+    "pattern5_hybrid_cdc_cumulative": "incremental_merge",
+    # Specialized
+    "pattern3_scd_state": "current_history",
 }
 
 
@@ -411,6 +427,7 @@ class TestPatternSpecificBehavior:
             "pattern3_scd_state",
             "pattern5_hybrid_cdc_cumulative",
             "pattern7_hybrid_incremental_cumulative",
+            "pattern9_snapshot_state_scd2",  # NEW: snapshot → STATE (SCD2)
         ]
 
         for pattern in scd2_patterns:
@@ -430,6 +447,7 @@ class TestPatternSpecificBehavior:
         scd1_patterns = [
             "pattern4_hybrid_cdc_point",
             "pattern6_hybrid_incremental_point",
+            "pattern8_snapshot_state_scd1",  # NEW: snapshot → STATE (SCD1)
         ]
 
         for pattern in scd1_patterns:
@@ -449,6 +467,7 @@ class TestPatternSpecificBehavior:
         event_patterns = [
             "pattern1_full_events",
             "pattern2_cdc_events",
+            "pattern10_cdc_events",  # NEW: CDC → EVENT
         ]
 
         for pattern in event_patterns:
