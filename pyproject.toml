@@ -79,41 +79,11 @@ Changelog = "https://github.com/tonysebion/medallion-foundry/blob/main/CHANGELOG
 
 [tool.setuptools]
 packages = [
-    "core",
-    "core.foundation",
-    "core.foundation.primitives",
-    "core.foundation.state",
-    "core.foundation.catalog",
-    "core.platform",
-    "core.platform.resilience",
-    "core.platform.observability",
-    "core.platform.om",
-    "core.infrastructure",
-    "core.infrastructure.config",
-    "core.infrastructure.config.models",
-    "core.infrastructure.io",
-    "core.infrastructure.io.storage",
-    "core.infrastructure.io.http",
-    "core.infrastructure.io.extractors",
-    "core.infrastructure.runtime",
-    "core.infrastructure.runtime.paths",
-    "core.infrastructure.runtime.config",
-    "core.domain",
-    "core.domain.adapters",
-    "core.domain.adapters.extractors",
-    "core.domain.adapters.quality",
-    "core.domain.adapters.schema",
-    "core.domain.adapters.polybase",
-    "core.domain.services",
-    "core.domain.services.pipelines",
-    "core.domain.services.pipelines.bronze",
-    "core.domain.catalog",
-    "core.orchestration",
-    "core.orchestration.runner",
-    "core._compat",
-    # Pipelines - Ibis-based pipeline framework (recommended for new development)
     "pipelines",
     "pipelines.lib",
+    "pipelines.lib.storage",
+    "pipelines.examples",
+    "pipelines.templates",
 ]
 
 [tool.setuptools.package-data]
@@ -166,7 +136,7 @@ module = [
 ignore_missing_imports = true
 
 [tool.coverage.run]
-source = ["core", "extractors", "pipelines"]
+source = ["pipelines"]
 omit = ["tests/*", "*/test_*"]
 
 [tool.coverage.report]

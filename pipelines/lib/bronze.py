@@ -25,7 +25,11 @@ from pipelines.lib.connections import get_connection
 from pipelines.lib.env import expand_env_vars, expand_options
 from pipelines.lib.storage import get_storage
 from pipelines.lib.watermark import get_watermark, save_watermark
-from pipelines.lib._path_utils import path_has_data, resolve_target_path
+from pipelines.lib._path_utils import (
+    path_has_data,
+    resolve_target_path,
+    storage_path_exists,
+)
 from pipelines.lib.validate import validate_and_raise
 
 logger = logging.getLogger(__name__)
@@ -238,31 +242,10 @@ class BronzeSource:
                 source_path = source_path.format(run_date=run_date)
 
             if "{run_date}" not in self.source_path or run_date:
-                if not self._path_exists(source_path):
+                if not storage_path_exists(source_path):
                     issues.append(f"Source path not found: {source_path}")
 
         return issues
-
-    def _path_exists(self, path: str) -> bool:
-        """Check if a path exists using storage backend."""
-        try:
-            # For glob patterns in local paths, use the parent directory
-            if "*" in path or "?" in path:
-                # Extract base directory before wildcards
-                base_path = path.split("*")[0].split("?")[0].rstrip("/\\")
-                if not base_path:
-                    base_path = "."
-                storage = get_storage(base_path)
-                # Check if any files match the pattern
-                pattern = Path(path).name if "/" in path or "\\" in path else path
-                return storage.exists(pattern)
-            else:
-                # For exact paths, check directly
-                storage = get_storage(str(Path(path).parent) if Path(path).suffix else path)
-                relative = Path(path).name if Path(path).suffix else ""
-                return storage.exists(relative) if relative else True
-        except Exception:
-            return False
 
     def run(
         self,

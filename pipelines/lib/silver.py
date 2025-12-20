@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional
 import ibis
 
 from pipelines.lib.curate import build_history, dedupe_latest
-from pipelines.lib._path_utils import resolve_target_path
+from pipelines.lib._path_utils import resolve_target_path, storage_path_exists
 from pipelines.lib.storage import get_storage
 
 logger = logging.getLogger(__name__)
@@ -187,34 +187,13 @@ class SilverEntity:
 
         source_path = self.source_path.format(run_date=run_date)
 
-        if not self._path_exists(source_path):
+        if not storage_path_exists(source_path):
             issues.append(
                 f"Source data not found: {source_path}\n"
                 "  Run the Bronze layer first to generate source data."
             )
 
         return issues
-
-    def _path_exists(self, path: str) -> bool:
-        """Check if a path exists using storage backend."""
-        try:
-            # For glob patterns, extract base directory and pattern
-            if "*" in path or "?" in path:
-                # Extract base directory before wildcards
-                base_path = path.split("*")[0].split("?")[0].rstrip("/\\")
-                if not base_path:
-                    base_path = "."
-                storage = get_storage(base_path)
-                # Check if any files match the pattern
-                pattern = Path(path).name if "/" in path or "\\" in path else path
-                return storage.exists(pattern)
-            else:
-                # For exact paths, check directly
-                storage = get_storage(str(Path(path).parent) if Path(path).suffix else path)
-                relative = Path(path).name if Path(path).suffix else ""
-                return storage.exists(relative) if relative else True
-        except Exception:
-            return False
 
     def run(
         self,

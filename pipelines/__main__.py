@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from pipelines.lib.connections import close_all_connections
+from pipelines.lib._path_utils import storage_path_exists
 
 
 def setup_logging(
@@ -433,31 +434,7 @@ def _check_bronze_connectivity(bronze: Any) -> bool:
 
 def _check_path_exists(path: str) -> bool:
     """Check if a path exists (local or cloud)."""
-    from pathlib import Path
-
-    if path.startswith("s3://"):
-        try:
-            import fsspec
-
-            fs = fsspec.filesystem("s3")
-            return fs.exists(path)
-        except Exception:
-            return False
-    elif path.startswith(("abfss://", "wasbs://")):
-        try:
-            import fsspec
-
-            fs = fsspec.filesystem("abfs")
-            return fs.exists(path)
-        except Exception:
-            return False
-    else:
-        # Local path - handle glob patterns
-        if "*" in path:
-            import glob
-
-            return len(glob.glob(path)) > 0
-        return Path(path).exists()
+    return storage_path_exists(path)
 
 
 def test_connection_command(connection_name: str, args: Any) -> None:

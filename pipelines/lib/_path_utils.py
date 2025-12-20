@@ -12,10 +12,15 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from pipelines.lib.storage import get_storage
+
 logger = logging.getLogger(__name__)
 
-__all__ = ["resolve_target_path", "path_has_data"]
-
+__all__ = [
+    "resolve_target_path",
+    "path_has_data",
+    "storage_path_exists",
+]
 
 def resolve_target_path(
     template: str,
@@ -74,3 +79,23 @@ def path_has_data(path: str) -> bool:
     if path.startswith("s3://"):
         return _s3_has_data(path)
     return _local_has_data(path)
+
+
+def storage_path_exists(path: str) -> bool:
+    """Return True if the storage path or glob matches any files."""
+    try:
+        if "*" in path or "?" in path:
+            base_path = path.split("*")[0].split("?")[0].rstrip("/\\")
+            if not base_path:
+                base_path = "."
+            storage = get_storage(base_path)
+            pattern = Path(path).name if "/" in path or "\\" in path else path
+            return storage.exists(pattern)
+
+        storage = get_storage(
+            str(Path(path).parent) if Path(path).suffix else path
+        )
+        relative = Path(path).name if Path(path).suffix else ""
+        return storage.exists(relative) if relative else True
+    except Exception:
+        return False
