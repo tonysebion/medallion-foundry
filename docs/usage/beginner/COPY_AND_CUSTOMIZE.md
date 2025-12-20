@@ -241,6 +241,6 @@ run:
 
 ## Need Help?
 
-- **Pattern Selection**: `docs/usage/patterns/QUICK_REFERENCE.md`
+- **Pattern Selection**: [Pattern Picker](../../framework/reference/QUICK_REFERENCE.md#pattern-picker)
 - **Detailed Config Reference**: `docs/framework/reference/CONFIG_REFERENCE.md`
 - **Onboarding Guide**: `docs/usage/onboarding/intent-owner-guide.md`

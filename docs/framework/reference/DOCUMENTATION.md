@@ -3,11 +3,9 @@
 Complete documentation for medallion-foundry - a production-ready, config-driven Python framework for landing data from APIs, databases, or custom sources into Bronze layer with pluggable storage backends (S3, Azure, local filesystem).
 
 > **📚 Documentation Navigation:**
-> - **README.md** - Project overview and key features
-> - **README.md** - Quick start for first-time users
+> - **README.md** - Project overview and quick start
 > - **docs/framework/reference/QUICK_REFERENCE.md** - Command reference and common patterns
 > - **docs/setup/INSTALLATION.md** - Detailed installation instructions
-> - **docs/framework/operations/CONTRIBUTING.md** - Guidelines for contributors
 > - **docs/framework/operations/TESTING.md** - Testing guide and CI/CD setup
 > - **This file (DOCUMENTATION.md)** - Comprehensive reference documentation
 

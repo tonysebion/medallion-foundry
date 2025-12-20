@@ -72,7 +72,7 @@ nav:
       - New Dataset Checklist: usage/onboarding/new_dataset_checklist.md
       - Bronze Readiness Checklist: usage/onboarding/bronze_readiness_checklist.md
     - Patterns:
-      - Pattern Picker: usage/patterns/QUICK_REFERENCE.md
+      - Pattern Picker: framework/reference/QUICK_REFERENCE.md#pattern-picker
       - Extraction Guidance: usage/patterns/EXTRACTION_GUIDANCE.md
       - Enhanced Features: usage/patterns/ENHANCED_FEATURES.md
       - Silver Models Explained: usage/patterns/silver-models-explained.md

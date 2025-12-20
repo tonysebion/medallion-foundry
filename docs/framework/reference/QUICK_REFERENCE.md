@@ -50,6 +50,47 @@ bronze-extract \
 
 ---
 
+## Pattern Picker
+
+Start by matching your data, cadence, and storage to a Bronze/Silver pattern combination that fits your scenario.
+
+### 1. What is your raw data like?
+
+| Data Type | Bronze Pattern | Silver Model | Common Use Case |
+|-----------|----------------|--------------|-----------------|
+| Complete snapshots | `full` | `periodic_snapshot`, `full_merge_dedupe`, `scd_type_1` | Daily exports or catalog tables |
+| Change events only | `cdc` | `incremental_merge`, `full_merge_dedupe` | Audit logs, event streams |
+| Current state + history | `current_history` | `scd_type_2`, `incremental_merge` | Slowly changing dimensions |
+| Hybrid reference + deltas | `cdc` (hybrid point/cumulative) | `incremental_merge` | Master/reference data with updates |
+| Latest values only | `cdc` (incremental point/cumulative) | `scd_type_1`, `full_merge_dedupe` | Status tables, settings |
+
+### 2. How often does it land?
+
+| Frequency | Recommendation | Config flag |
+|-----------|----------------|-------------|
+| Daily/weekly | Full snapshots | `load_pattern: full` |
+| Hourly/streaming | CDC | `load_pattern: cdc` |
+| On-demand/backfills | Choose pattern based on data type above | |
+
+### 3. Where does the source live?
+
+| Storage | Example config | Notes |
+|---------|----------------|-------|
+| Local files | `docs/examples/configs/examples/file_example.yaml` | Fastest feedback loop |
+| S3/Azure | `docs/examples/configs/examples/api_example.yaml` | Cloud-ready credentials and storage |
+| Database | `docs/examples/configs/examples/db_example.yaml` | Direct table extraction |
+
+### Quick Recommendations
+
+- **Beginners**: start with `load_pattern: full` and `silver.model: periodic_snapshot`, then tune natural keys and history columns.
+- **APIs**: prefer `load_pattern: cdc` plus `incremental_merge` when deltas are available.
+- **Databases**: use `current_history`/`scd_type_2` for master data, or `cdc` + `full_merge_dedupe` for status tables.
+- **Files**: snapshot files map cleanly to `full`, logs to `cdc` + `incremental_merge`.
+
+Browse `docs/examples/configs/patterns/` for full Bronze+Silver examples, or run `python -m pipelines examples.retail_orders --date 2025-01-15` for a working demo. If you still need direction, inspect the configs under `docs/examples/configs/examples/` and copy the Bronze/Silver pairing that matches your source.
+
+---
+
 ## 📋 Configuration Cheat Sheet
 
 ### Partition Strategies

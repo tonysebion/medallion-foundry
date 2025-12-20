@@ -20,12 +20,12 @@
 ## ⚙️ **Production Setup**
 
 - **[Intent Owner Guide](onboarding/intent-owner-guide.md)** - Define datasets and ownership
-- **[Quick Reference](patterns/QUICK_REFERENCE.md)** - Choose the right extraction strategy
+- **[Quick Reference](../framework/reference/QUICK_REFERENCE.md#pattern-picker)** - Choose the right extraction strategy
 - **[Config Doctor](../framework/operations/CONFIG_DOCTOR.md)** - Pre-flight validation
 
 ## 🔍 **Find the Right Pattern**
 
-- **[Quick Reference](patterns/QUICK_REFERENCE.md)** - Common scenarios and solutions
+- **[Quick Reference](../framework/reference/QUICK_REFERENCE.md#pattern-picker)** - Common scenarios and solutions
 - **[Enhanced Features](patterns/ENHANCED_FEATURES.md)** - Advanced configuration options
 
 ## 🆘 **Troubleshooting**
