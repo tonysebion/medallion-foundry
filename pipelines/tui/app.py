@@ -21,6 +21,7 @@ from prompt_toolkit.layout import (
     BufferControl,
     ScrollablePane,
 )
+from prompt_toolkit.layout.containers import ScrollOffsets
 from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.layout.controls import UIControl, UIContent
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
@@ -97,8 +98,16 @@ STYLE = Style.from_dict({
 })
 
 
-class FileBrowserControl(UIControl):
-    """Interactive file browser control for selecting YAML files."""
+class BaseFileBrowserControl(UIControl):
+    """Base class for interactive file browser controls.
+
+    Subclasses override _filter_file() to customize which files are shown,
+    and _get_file_icon() to customize the file icon.
+    """
+
+    # Override in subclasses
+    HEADER_ICON = "📂"
+    FILE_ICON = "📄"
 
     def __init__(
         self,
@@ -114,6 +123,18 @@ class FileBrowserControl(UIControl):
         self._hover_idx: int | None = None
         self._refresh_items()
 
+    def _filter_file(self, item: Path) -> bool:
+        """Return True if this file should be shown. Override in subclasses."""
+        return True
+
+    def _get_file_display(self, item: Path) -> str:
+        """Get display string for a file. Override for custom formatting."""
+        return f"{self.FILE_ICON} {item.name}"
+
+    def _get_header_lines(self) -> list[tuple[str, str]]:
+        """Get header lines. Override to add extra header content."""
+        return []
+
     def _refresh_items(self) -> None:
         """Refresh the file/folder list."""
         self.items = []
@@ -122,13 +143,13 @@ class FileBrowserControl(UIControl):
             if self.current_path.parent != self.current_path:
                 self.items.append(self.current_path.parent)
 
-            # Get directories first, then YAML files
+            # Get directories first, then filtered files
             dirs = []
             files = []
             for item in sorted(self.current_path.iterdir()):
                 if item.is_dir() and not item.name.startswith('.'):
                     dirs.append(item)
-                elif item.is_file() and item.suffix.lower() in ('.yaml', '.yml'):
+                elif item.is_file() and self._filter_file(item):
                     files.append(item)
 
             self.items.extend(dirs)
@@ -137,9 +158,13 @@ class FileBrowserControl(UIControl):
             pass
         self.selected_idx = 0
 
+    def _get_header_offset(self) -> int:
+        """Number of header lines before items. Override if adding extra headers."""
+        return 2  # Icon + path line, then divider
+
     def create_content(self, width: int, height: int) -> UIContent:
-        # Header showing current path
-        header = f"  📂 {self.current_path}"
+        header = f"  {self.HEADER_ICON} {self.current_path}"
+        header_offset = self._get_header_offset()
 
         def get_line(i: int) -> list[tuple[str, str]]:
             if i == 0:
@@ -147,7 +172,7 @@ class FileBrowserControl(UIControl):
             if i == 1:
                 return [("class:file-browser.divider", "─" * (width - 2))]
 
-            item_idx = i - 2
+            item_idx = i - header_offset
             if item_idx >= len(self.items):
                 return []
 
@@ -161,7 +186,7 @@ class FileBrowserControl(UIControl):
             elif item.is_dir():
                 display = f"📁 {item.name}/"
             else:
-                display = f"📄 {item.name}"
+                display = self._get_file_display(item)
 
             # Truncate if needed
             display = display[:width - 4]
@@ -176,10 +201,10 @@ class FileBrowserControl(UIControl):
             else:
                 return [("class:file-browser.file", f"   {display}")]
 
-        return UIContent(get_line=get_line, line_count=len(self.items) + 2)
+        return UIContent(get_line=get_line, line_count=len(self.items) + header_offset)
 
     def mouse_handler(self, mouse_event: MouseEvent) -> None:
-        item_idx = mouse_event.position.y - 2  # Account for header
+        item_idx = mouse_event.position.y - self._get_header_offset()
         if 0 <= item_idx < len(self.items):
             if mouse_event.event_type == MouseEventType.MOUSE_UP:
                 self.selected_idx = item_idx
@@ -232,8 +257,21 @@ class FileBrowserControl(UIControl):
         return kb
 
 
-class EnvFileBrowserControl(UIControl):
-    """Interactive file browser control for selecting .env files."""
+class FileBrowserControl(BaseFileBrowserControl):
+    """File browser for selecting YAML configuration files."""
+
+    HEADER_ICON = "📂"
+    FILE_ICON = "📄"
+
+    def _filter_file(self, item: Path) -> bool:
+        return item.suffix.lower() in ('.yaml', '.yml')
+
+
+class EnvFileBrowserControl(BaseFileBrowserControl):
+    """File browser for selecting .env files."""
+
+    HEADER_ICON = "🔐"
+    FILE_ICON = "🔐"
 
     def __init__(
         self,
@@ -242,48 +280,32 @@ class EnvFileBrowserControl(UIControl):
         initial_path: Path | None = None,
         discovered_files: list[Path] | None = None,
     ):
-        self.on_select = on_select
-        self.on_cancel = on_cancel
-        self.current_path = initial_path or Path.cwd()
-        self.items: list[Path] = []
-        self.selected_idx = 0
-        self._hover_idx: int | None = None
         self._discovered_files = discovered_files or []
-        self._refresh_items()
+        super().__init__(on_select, on_cancel, initial_path)
 
-    def _refresh_items(self) -> None:
-        """Refresh the file/folder list."""
-        self.items = []
-        try:
-            # Add parent directory option
-            if self.current_path.parent != self.current_path:
-                self.items.append(self.current_path.parent)
+    def _filter_file(self, item: Path) -> bool:
+        return (
+            item.name == ".env"
+            or item.name.endswith(".env")
+            or item.name.startswith(".env.")
+        )
 
-            # Get directories first, then .env files
-            dirs = []
-            files = []
-            for item in sorted(self.current_path.iterdir()):
-                if item.is_dir() and not item.name.startswith('.'):
-                    dirs.append(item)
-                elif item.is_file() and (
-                    item.name == ".env"
-                    or item.name.endswith(".env")
-                    or item.name.startswith(".env.")
-                ):
-                    files.append(item)
+    def _get_file_display(self, item: Path) -> str:
+        is_discovered = item.resolve() in [p.resolve() for p in self._discovered_files]
+        star = "★ " if is_discovered else ""
+        return f"{self.FILE_ICON} {star}{item.name}"
 
-            self.items.extend(dirs)
-            self.items.extend(files)
-        except PermissionError:
-            pass
-        self.selected_idx = 0
+    def _get_header_offset(self) -> int:
+        # Extra line for discovered hint if present
+        return 3 if self._discovered_files else 2
 
     def create_content(self, width: int, height: int) -> UIContent:
-        # Header showing current path and discovered files hint
-        header = f"  🔐 {self.current_path}"
+        header = f"  {self.HEADER_ICON} {self.current_path}"
         discovered_hint = ""
         if self._discovered_files:
             discovered_hint = f"  ({len(self._discovered_files)} found in project)"
+
+        header_offset = self._get_header_offset()
 
         def get_line(i: int) -> list[tuple[str, str]]:
             if i == 0:
@@ -295,14 +317,13 @@ class EnvFileBrowserControl(UIControl):
             if i == 2 and discovered_hint:
                 return [("class:file-browser.divider", "─" * (width - 2))]
 
-            item_idx = i - (3 if discovered_hint else 2)
+            item_idx = i - header_offset
             if item_idx >= len(self.items):
                 return []
 
             item = self.items[item_idx]
             is_selected = item_idx == self.selected_idx
             is_hovered = item_idx == self._hover_idx
-            is_discovered = item.resolve() in [p.resolve() for p in self._discovered_files]
 
             # Build display name
             if item == self.current_path.parent:
@@ -310,9 +331,7 @@ class EnvFileBrowserControl(UIControl):
             elif item.is_dir():
                 display = f"📁 {item.name}/"
             else:
-                # Add star for discovered files
-                star = "★ " if is_discovered else ""
-                display = f"🔐 {star}{item.name}"
+                display = self._get_file_display(item)
 
             # Truncate if needed
             display = display[:width - 4]
@@ -327,62 +346,7 @@ class EnvFileBrowserControl(UIControl):
             else:
                 return [("class:file-browser.file", f"   {display}")]
 
-        line_count = len(self.items) + (3 if discovered_hint else 2)
-        return UIContent(get_line=get_line, line_count=line_count)
-
-    def mouse_handler(self, mouse_event: MouseEvent) -> None:
-        discovered_hint = bool(self._discovered_files)
-        item_idx = mouse_event.position.y - (3 if discovered_hint else 2)
-        if 0 <= item_idx < len(self.items):
-            if mouse_event.event_type == MouseEventType.MOUSE_UP:
-                self.selected_idx = item_idx
-                self._activate_selected()
-            elif mouse_event.event_type == MouseEventType.MOUSE_MOVE:
-                self._hover_idx = item_idx
-        else:
-            self._hover_idx = None
-
-    def _activate_selected(self) -> None:
-        """Activate the currently selected item."""
-        if 0 <= self.selected_idx < len(self.items):
-            item = self.items[self.selected_idx]
-            if item.is_dir():
-                self.current_path = item
-                self._refresh_items()
-            else:
-                self.on_select(item)
-
-    def is_focusable(self) -> bool:
-        return True
-
-    def get_key_bindings(self) -> KeyBindings:
-        kb = KeyBindings()
-
-        @kb.add("up")
-        def move_up(event: Any) -> None:
-            if self.items:
-                self.selected_idx = (self.selected_idx - 1) % len(self.items)
-
-        @kb.add("down")
-        def move_down(event: Any) -> None:
-            if self.items:
-                self.selected_idx = (self.selected_idx + 1) % len(self.items)
-
-        @kb.add("enter")
-        def select(event: Any) -> None:
-            self._activate_selected()
-
-        @kb.add("escape")
-        def cancel(event: Any) -> None:
-            self.on_cancel()
-
-        @kb.add("backspace")
-        def go_up(event: Any) -> None:
-            if self.current_path.parent != self.current_path:
-                self.current_path = self.current_path.parent
-                self._refresh_items()
-
-        return kb
+        return UIContent(get_line=get_line, line_count=len(self.items) + header_offset)
 
 
 class ClickableBufferControl(BufferControl):
@@ -893,6 +857,8 @@ class PipelineConfigApp:
         self._search_text = ""
         self._search_buffer = Buffer(name="search")
         self._search_buffer.on_text_changed += self._on_search_changed
+        # Persistent ScrollablePane to maintain scroll position across layout refreshes
+        self._scrollable_pane: ScrollablePane | None = None
 
     def run(self) -> None:
         """Run the full-screen application."""
@@ -1735,6 +1701,22 @@ class PipelineConfigApp:
         # Build form sections
         form_content = self._build_form_content()
 
+        # Create or update the ScrollablePane for the form
+        # We keep the same ScrollablePane instance to preserve scroll position
+        form_hsplit = HSplit(form_content)
+        if self._scrollable_pane is None:
+            # First time - create with scroll offsets to keep focused field in middle
+            self._scrollable_pane = ScrollablePane(
+                form_hsplit,
+                show_scrollbar=True,
+                # Keep focused element in middle 50% of screen
+                # Large offsets push the focused element toward the center
+                scroll_offsets=ScrollOffsets(top=8, bottom=8),
+            )
+        else:
+            # Update content while preserving scroll position
+            self._scrollable_pane.content = form_hsplit
+
         # YAML preview
         yaml_preview = TextArea(
             text=self._generate_yaml_preview(),
@@ -1916,12 +1898,9 @@ class PipelineConfigApp:
         if self.yaml_preview_collapsed:
             # YAML preview hidden - form takes full width
             main_content = VSplit([
-                # Left side: form
+                # Left side: form (uses persistent ScrollablePane)
                 Frame(
-                    body=ScrollablePane(
-                        HSplit(form_content),
-                        show_scrollbar=True,
-                    ),
+                    body=self._scrollable_pane,
                     title=self._get_editor_title(),
                     width=D(weight=1),
                 ),
@@ -1963,12 +1942,9 @@ class PipelineConfigApp:
             # Main layout: form on left, preview+errors on right
             # Form gets 65% width, YAML preview gets 35%
             main_content = VSplit([
-                # Left side: form (larger weight = more space)
+                # Left side: form (uses persistent ScrollablePane)
                 Frame(
-                    body=ScrollablePane(
-                        HSplit(form_content),
-                        show_scrollbar=True,
-                    ),
+                    body=self._scrollable_pane,
                     title=self._get_editor_title(),
                     width=D(weight=65),
                 ),
@@ -2005,15 +1981,29 @@ class PipelineConfigApp:
 
         # Check if file browser is active
         if self.file_browser_active and self.file_browser:
-            # Show file browser as overlay
-            file_browser_frame = Frame(
-                body=Window(
-                    content=self.file_browser,
-                    style="class:file-browser",
+            # Create back button
+            back_button = Window(
+                content=ClickableButton(
+                    "← Back to Editor",
+                    self._close_file_browser,
+                    style="class:button",
                 ),
-                title="📂 Select YAML File",
+                height=1,
+            )
+            # Show file browser as overlay with back button
+            file_browser_frame = Frame(
+                body=HSplit([
+                    Window(
+                        content=self.file_browser,
+                        style="class:file-browser",
+                        height=D(min=12, max=22),  # Constrain height so button is visible
+                    ),
+                    Window(height=1),  # Spacer
+                    back_button,
+                ]),
+                title="📂 Select YAML File  (Esc to cancel)",
                 width=D(min=50, max=80),
-                height=D(min=15, max=25),
+                height=D(min=18, max=28),
             )
             # Center the file browser in a FloatContainer-like layout
             main_with_browser = VSplit([
@@ -2033,15 +2023,29 @@ class PipelineConfigApp:
 
         # Check if env file browser is active
         if self.env_browser_active and self.env_browser:
-            # Show env file browser as overlay
-            env_browser_frame = Frame(
-                body=Window(
-                    content=self.env_browser,
-                    style="class:file-browser",
+            # Create back button
+            env_back_button = Window(
+                content=ClickableButton(
+                    "← Back to Editor",
+                    self._close_env_browser,
+                    style="class:button",
                 ),
-                title="🔐 Select Environment File",
+                height=1,
+            )
+            # Show env file browser as overlay with back button
+            env_browser_frame = Frame(
+                body=HSplit([
+                    Window(
+                        content=self.env_browser,
+                        style="class:file-browser",
+                        height=D(min=12, max=22),  # Constrain height so button is visible
+                    ),
+                    Window(height=1),  # Spacer
+                    env_back_button,
+                ]),
+                title="🔐 Select Environment File  (Esc to cancel)",
                 width=D(min=50, max=80),
-                height=D(min=15, max=25),
+                height=D(min=18, max=28),
             )
             # Center the env browser in a FloatContainer-like layout
             main_with_browser = VSplit([
@@ -2248,8 +2252,24 @@ class PipelineConfigApp:
 
     def _on_field_click(self, field_idx: int) -> None:
         """Handle click on a field label."""
+        # Collapse any expanded dropdown EXCEPT the one we're clicking on
+        self._collapse_all_dropdowns(except_field_idx=field_idx)
         self.current_field_idx = field_idx
         self._refresh_layout()
+
+    def _collapse_all_dropdowns(self, except_field_idx: int | None = None) -> None:
+        """Collapse all expanded dropdown menus.
+
+        Args:
+            except_field_idx: If provided, don't collapse the dropdown at this field index
+        """
+        visible_fields = self._get_visible_fields()
+        for i, field in enumerate(visible_fields):
+            if except_field_idx is not None and i == except_field_idx:
+                continue  # Don't collapse the dropdown we're clicking on
+            if field.field_type == "enum" and hasattr(field, '_dropdown') and field._dropdown:
+                if field._dropdown.is_expanded():
+                    field._dropdown.collapse()
 
     def _on_dropdown_select(self, field: Field, value: str) -> None:
         """Handle selection of a dropdown option."""
@@ -2495,16 +2515,19 @@ class PipelineConfigApp:
 
         @kb.add("escape")
         def clear_search_(event):
-            """Clear search and return to first field."""
+            """Clear search, collapse dropdowns, and return to first field."""
+            # Always collapse any expanded dropdowns
+            self._collapse_all_dropdowns()
             if self._search_text:
                 self._search_buffer.text = ""
                 self._search_text = ""
                 self.current_field_idx = 0
-                self._refresh_layout()
+            self._refresh_layout()
 
         @kb.add("tab")
         def next_field_(event):
             """Move to next field."""
+            self._collapse_all_dropdowns()
             visible = self._get_visible_fields()
             if visible:
                 self.current_field_idx = (self.current_field_idx + 1) % len(visible)
@@ -2513,6 +2536,7 @@ class PipelineConfigApp:
         @kb.add("s-tab")
         def prev_field_(event):
             """Move to previous field."""
+            self._collapse_all_dropdowns()
             visible = self._get_visible_fields()
             if visible:
                 self.current_field_idx = (self.current_field_idx - 1) % len(visible)

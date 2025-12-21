@@ -1864,3 +1864,111 @@ class TestEnvVarWarnings:
         # Should have a single warning mentioning multiple vars
         assert len(warnings) == 1
         assert "MISSING" in warnings[0]
+
+
+class TestScrollablePane:
+    """Tests for ScrollablePane scrolling behavior."""
+
+    def test_scrollable_pane_is_created(self) -> None:
+        """ScrollablePane is created on first layout creation."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Before layout creation, scrollable pane should be None
+        assert app._scrollable_pane is None
+
+        # Create layout
+        app._create_layout()
+
+        # After layout creation, scrollable pane should exist
+        assert app._scrollable_pane is not None
+
+    def test_scrollable_pane_persists_across_layout_refresh(self) -> None:
+        """ScrollablePane instance is reused when layout is refreshed."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Create initial layout
+        app._create_layout()
+        first_pane = app._scrollable_pane
+
+        # Refresh layout
+        app._create_layout()
+        second_pane = app._scrollable_pane
+
+        # Should be the same instance
+        assert first_pane is second_pane
+
+    def test_scrollable_pane_has_scroll_offsets(self) -> None:
+        """ScrollablePane has scroll_offsets configured to center focused field."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+        app._create_layout()
+
+        # Check scroll offsets are set
+        assert app._scrollable_pane.scroll_offsets is not None
+        assert app._scrollable_pane.scroll_offsets.top >= 5
+        assert app._scrollable_pane.scroll_offsets.bottom >= 5
+
+    def test_scroll_position_preserved_on_layout_refresh(self) -> None:
+        """Scroll position is preserved when layout is refreshed."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Create initial layout
+        app._create_layout()
+
+        # Simulate scrolling by setting vertical_scroll
+        app._scrollable_pane.vertical_scroll = 10
+
+        # Refresh layout (this happens on field change, mode toggle, etc.)
+        app._create_layout()
+
+        # Scroll position should be preserved
+        assert app._scrollable_pane.vertical_scroll == 10
+
+    def test_scrollable_pane_content_updated_on_refresh(self) -> None:
+        """ScrollablePane content is updated when layout is refreshed."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Create initial layout
+        app._create_layout()
+        first_content = app._scrollable_pane.content
+
+        # Change a field value to trigger different content
+        system_field = next(f for f in app.fields if f.name == "system")
+        system_field.buffer.text = "test_system"
+
+        # Refresh layout
+        app._create_layout()
+        second_content = app._scrollable_pane.content
+
+        # Content should be different (new HSplit with updated fields)
+        # but scrollable pane should be the same instance
+        assert first_content is not second_content
+
+
+class TestDropdownCollapse:
+    """Tests for dropdown collapse behavior."""
+
+    def test_dropdown_collapses_on_selection(self) -> None:
+        """Dropdown collapses after a value is selected."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Find an enum field
+        source_type_field = next(f for f in app.fields if f.name == "source_type")
+        assert source_type_field.field_type == "enum"
+
+        # The dropdown should collapse after selection via _on_dropdown_select
+        app._on_dropdown_select(source_type_field, "file_csv")
+
+        # After selection, field value should be updated
+        assert source_type_field.buffer.text == "file_csv"

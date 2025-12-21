@@ -495,6 +495,8 @@ def _get_schema_default(section: str, field_name: str) -> Any:
 
 def _get_nested_value(config: dict[str, Any], field_name: str) -> Any:
     """Get a value from config, handling nested fields like auth.token."""
+    from pipelines.tui.constants import NESTED_FIELD_MAPPINGS
+
     if "." in field_name:
         parts = field_name.split(".", 1)
         nested = config.get(parts[0], {})
@@ -503,28 +505,8 @@ def _get_nested_value(config: dict[str, Any], field_name: str) -> Any:
         return None
 
     # Handle fields that might be in nested structures
-    # Map flat field names to their nested locations
-    nested_mappings = {
-        "auth_type": ("auth", "auth_type"),
-        "token": ("auth", "token"),
-        "api_key": ("auth", "api_key"),
-        "api_key_header": ("auth", "api_key_header"),
-        "username": ("auth", "username"),
-        "password": ("auth", "password"),
-        "pagination_strategy": ("pagination", "strategy"),
-        "page_size": ("pagination", "page_size"),
-        "offset_param": ("pagination", "offset_param"),
-        "limit_param": ("pagination", "limit_param"),
-        "page_param": ("pagination", "page_param"),
-        "page_size_param": ("pagination", "page_size_param"),
-        "cursor_param": ("pagination", "cursor_param"),
-        "cursor_path": ("pagination", "cursor_path"),
-        "max_pages": ("pagination", "max_pages"),
-        "max_records": ("pagination", "max_records"),
-    }
-
-    if field_name in nested_mappings:
-        parent_key, child_key = nested_mappings[field_name]
+    if field_name in NESTED_FIELD_MAPPINGS:
+        parent_key, child_key = NESTED_FIELD_MAPPINGS[field_name]
         nested = config.get(parent_key, {})
         if isinstance(nested, dict):
             return nested.get(child_key)

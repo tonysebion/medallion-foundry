@@ -1,16 +1,10 @@
-"""Parent-child YAML configuration inheritance.
+"""Parent-child YAML configuration inheritance helpers for TUI.
 
-Supports extending parent configurations via the 'extends' key:
+This module provides TUI-specific utilities for working with inherited configs.
+Core inheritance logic is delegated to pipelines.lib.config_loader.
 
-    # child.yaml
-    extends: ./base.yaml
-
-    bronze:
-      entity: specific_table  # Override parent's entity
-      # system, host, database inherited from parent
-
-The child config is deep-merged with the parent, with child values
-taking precedence over parent values.
+For loading and merging configs:
+    from pipelines.lib.config_loader import load_with_inheritance
 """
 
 from __future__ import annotations
@@ -20,53 +14,8 @@ from typing import Any
 
 import yaml
 
-
-def load_with_inheritance(
-    config_path: Path | str,
-) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """Load a YAML config, resolving parent inheritance.
-
-    Args:
-        config_path: Path to the YAML configuration file
-
-    Returns:
-        Tuple of (merged_config, parent_config_or_none)
-
-    Raises:
-        FileNotFoundError: If config or parent file doesn't exist
-        ValueError: If parent path is invalid
-    """
-    config_path = Path(config_path)
-
-    if not config_path.exists():
-        raise FileNotFoundError(f"Configuration file not found: {config_path}")
-
-    with open(config_path, encoding="utf-8") as f:
-        child_config = yaml.safe_load(f) or {}
-
-    if "extends" not in child_config:
-        return child_config, None
-
-    # Resolve parent path relative to child config file
-    parent_ref = child_config["extends"]
-    parent_path = (config_path.parent / parent_ref).resolve()
-
-    if not parent_path.exists():
-        raise FileNotFoundError(
-            f"Parent config not found: {parent_path} "
-            f"(referenced from {config_path})"
-        )
-
-    with open(parent_path, encoding="utf-8") as f:
-        parent_config = yaml.safe_load(f) or {}
-
-    # Deep merge: child values override parent values
-    merged = deep_merge(parent_config, child_config)
-
-    # Remove the 'extends' key from the final merged config
-    merged.pop("extends", None)
-
-    return merged, parent_config
+# Re-export core inheritance functions from lib for backwards compatibility
+from pipelines.lib.config_loader import load_with_inheritance  # noqa: F401
 
 
 def deep_merge(
@@ -75,19 +24,17 @@ def deep_merge(
 ) -> dict[str, Any]:
     """Deep merge two dictionaries, with override taking precedence.
 
+    Re-exported from lib/config_loader for backwards compatibility.
+    Prefer importing from pipelines.lib.config_loader directly.
+
     Args:
         base: Base dictionary (parent config)
         override: Override dictionary (child config)
 
     Returns:
         New dictionary with merged values
-
-    Example:
-        >>> base = {"bronze": {"system": "a", "entity": "b"}}
-        >>> override = {"bronze": {"entity": "c"}}
-        >>> deep_merge(base, override)
-        {"bronze": {"system": "a", "entity": "c"}}
     """
+    # Use the same algorithm as lib/config_loader._deep_merge
     result = dict(base)
 
     for key, value in override.items():
@@ -96,10 +43,8 @@ def deep_merge(
             and isinstance(result[key], dict)
             and isinstance(value, dict)
         ):
-            # Recursively merge nested dicts
             result[key] = deep_merge(result[key], value)
         else:
-            # Override the value
             result[key] = value
 
     return result
