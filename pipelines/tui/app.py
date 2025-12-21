@@ -82,6 +82,10 @@ STYLE = Style.from_dict({
     # Error panel
     "error-panel": "bg:#1c1c1c #ff6666",
     "error-panel.ok": "bg:#1c1c1c #00ff00",
+    "error-panel.header": "bg:#1c1c1c #ff6666 bold",
+    # Warning panel styles
+    "warning-panel": "bg:#1c1c1c #ffcc00",
+    "warning-panel.header": "bg:#1c1c1c #ffcc00 bold",
     # File browser styles
     "file-browser": "bg:#262626",
     "file-browser.header": "bold #00d7ff",
@@ -176,6 +180,159 @@ class FileBrowserControl(UIControl):
 
     def mouse_handler(self, mouse_event: MouseEvent) -> None:
         item_idx = mouse_event.position.y - 2  # Account for header
+        if 0 <= item_idx < len(self.items):
+            if mouse_event.event_type == MouseEventType.MOUSE_UP:
+                self.selected_idx = item_idx
+                self._activate_selected()
+            elif mouse_event.event_type == MouseEventType.MOUSE_MOVE:
+                self._hover_idx = item_idx
+        else:
+            self._hover_idx = None
+
+    def _activate_selected(self) -> None:
+        """Activate the currently selected item."""
+        if 0 <= self.selected_idx < len(self.items):
+            item = self.items[self.selected_idx]
+            if item.is_dir():
+                self.current_path = item
+                self._refresh_items()
+            else:
+                self.on_select(item)
+
+    def is_focusable(self) -> bool:
+        return True
+
+    def get_key_bindings(self) -> KeyBindings:
+        kb = KeyBindings()
+
+        @kb.add("up")
+        def move_up(event: Any) -> None:
+            if self.items:
+                self.selected_idx = (self.selected_idx - 1) % len(self.items)
+
+        @kb.add("down")
+        def move_down(event: Any) -> None:
+            if self.items:
+                self.selected_idx = (self.selected_idx + 1) % len(self.items)
+
+        @kb.add("enter")
+        def select(event: Any) -> None:
+            self._activate_selected()
+
+        @kb.add("escape")
+        def cancel(event: Any) -> None:
+            self.on_cancel()
+
+        @kb.add("backspace")
+        def go_up(event: Any) -> None:
+            if self.current_path.parent != self.current_path:
+                self.current_path = self.current_path.parent
+                self._refresh_items()
+
+        return kb
+
+
+class EnvFileBrowserControl(UIControl):
+    """Interactive file browser control for selecting .env files."""
+
+    def __init__(
+        self,
+        on_select: Callable[[Path], None],
+        on_cancel: Callable[[], None],
+        initial_path: Path | None = None,
+        discovered_files: list[Path] | None = None,
+    ):
+        self.on_select = on_select
+        self.on_cancel = on_cancel
+        self.current_path = initial_path or Path.cwd()
+        self.items: list[Path] = []
+        self.selected_idx = 0
+        self._hover_idx: int | None = None
+        self._discovered_files = discovered_files or []
+        self._refresh_items()
+
+    def _refresh_items(self) -> None:
+        """Refresh the file/folder list."""
+        self.items = []
+        try:
+            # Add parent directory option
+            if self.current_path.parent != self.current_path:
+                self.items.append(self.current_path.parent)
+
+            # Get directories first, then .env files
+            dirs = []
+            files = []
+            for item in sorted(self.current_path.iterdir()):
+                if item.is_dir() and not item.name.startswith('.'):
+                    dirs.append(item)
+                elif item.is_file() and (
+                    item.name == ".env"
+                    or item.name.endswith(".env")
+                    or item.name.startswith(".env.")
+                ):
+                    files.append(item)
+
+            self.items.extend(dirs)
+            self.items.extend(files)
+        except PermissionError:
+            pass
+        self.selected_idx = 0
+
+    def create_content(self, width: int, height: int) -> UIContent:
+        # Header showing current path and discovered files hint
+        header = f"  🔐 {self.current_path}"
+        discovered_hint = ""
+        if self._discovered_files:
+            discovered_hint = f"  ({len(self._discovered_files)} found in project)"
+
+        def get_line(i: int) -> list[tuple[str, str]]:
+            if i == 0:
+                return [("class:file-browser.header bold", header[:width])]
+            if i == 1:
+                if discovered_hint:
+                    return [("class:field-help", discovered_hint[:width])]
+                return [("class:file-browser.divider", "─" * (width - 2))]
+            if i == 2 and discovered_hint:
+                return [("class:file-browser.divider", "─" * (width - 2))]
+
+            item_idx = i - (3 if discovered_hint else 2)
+            if item_idx >= len(self.items):
+                return []
+
+            item = self.items[item_idx]
+            is_selected = item_idx == self.selected_idx
+            is_hovered = item_idx == self._hover_idx
+            is_discovered = item.resolve() in [p.resolve() for p in self._discovered_files]
+
+            # Build display name
+            if item == self.current_path.parent:
+                display = "📁 .."
+            elif item.is_dir():
+                display = f"📁 {item.name}/"
+            else:
+                # Add star for discovered files
+                star = "★ " if is_discovered else ""
+                display = f"🔐 {star}{item.name}"
+
+            # Truncate if needed
+            display = display[:width - 4]
+
+            # Determine style
+            if is_selected:
+                return [("class:file-browser.selected", f" ▸ {display}")]
+            elif is_hovered:
+                return [("class:file-browser.hover", f"   {display}")]
+            elif item.is_dir():
+                return [("class:file-browser.dir", f"   {display}")]
+            else:
+                return [("class:file-browser.file", f"   {display}")]
+
+        line_count = len(self.items) + (3 if discovered_hint else 2)
+        return UIContent(get_line=get_line, line_count=line_count)
+
+    def mouse_handler(self, mouse_event: MouseEvent) -> None:
+        discovered_hint = bool(self._discovered_files)
+        item_idx = mouse_event.position.y - (3 if discovered_hint else 2)
         if 0 <= item_idx < len(self.items):
             if mouse_event.event_type == MouseEventType.MOUSE_UP:
                 self.selected_idx = item_idx
@@ -709,6 +866,9 @@ class PipelineConfigApp:
         self.yaml_preview_area: TextArea | None = None
         self.file_browser_active = False
         self.file_browser: FileBrowserControl | None = None
+        # Env file browser state
+        self.env_browser_active = False
+        self.env_browser: EnvFileBrowserControl | None = None
         # Section collapse state
         self.sections_collapsed: dict[str, bool] = {
             "metadata": False,
@@ -1654,6 +1814,23 @@ class PipelineConfigApp:
                 width=D(min=14, max=18),
             )
 
+        # Env file button - shows "Set Env" or "Clear Env" based on state
+        if self.state.loaded_env_files:
+            env_count = len(self.state.loaded_env_files)
+            env_button = Window(
+                content=ClickableButton(f"🔐 Env ({env_count})", self._show_env_browser),
+                style="class:title",
+                height=1,
+                width=D(min=12, max=16),
+            )
+        else:
+            env_button = Window(
+                content=ClickableButton("🔐 Set Env", self._show_env_browser),
+                style="class:title",
+                height=1,
+                width=D(min=12, max=14),
+            )
+
         # YAML preview toggle button
         yaml_toggle_text = "◀ YAML" if not self.yaml_preview_collapsed else "▶ YAML"
         yaml_toggle_button = Window(
@@ -1690,6 +1867,8 @@ class PipelineConfigApp:
             mode_button,
             Window(width=1, style="class:title"),
             parent_button,
+            Window(width=1, style="class:title"),
+            env_button,
             Window(width=1, style="class:title"),
             yaml_toggle_button,
             Window(width=1, style="class:title"),
@@ -1759,10 +1938,15 @@ class PipelineConfigApp:
             ])
         else:
             # Right side panel: YAML preview + validation errors
+            # Calculate dynamic heights based on warnings count
+            warning_count = len(self.validation_errors) + len(self.validation_warnings)
+            validation_height = min(12, max(4, warning_count + 3))
+
             right_panel = HSplit([
                 Frame(
                     body=yaml_preview,
                     title=self._get_yaml_preview_title(),
+                    height=D(weight=1),  # Take remaining space after validation
                 ),
                 Frame(
                     body=Window(
@@ -1771,24 +1955,25 @@ class PipelineConfigApp:
                         wrap_lines=True,  # Wrap long error messages
                     ),
                     title="Validation",
-                    # Expand to fit errors: 1 line per error + 2 for padding, capped at 15
-                    height=D(min=3, max=min(15, max(3, len(self.validation_errors) + 2))),
+                    # Dynamic height based on errors/warnings, capped
+                    height=D(min=4, max=validation_height),
                 ),
             ])
 
             # Main layout: form on left, preview+errors on right
+            # Form gets 65% width, YAML preview gets 35%
             main_content = VSplit([
-                # Left side: form
+                # Left side: form (larger weight = more space)
                 Frame(
                     body=ScrollablePane(
                         HSplit(form_content),
                         show_scrollbar=True,
                     ),
                     title=self._get_editor_title(),
-                    width=D(weight=3),
+                    width=D(weight=65),
                 ),
-                # Right side: preview + errors
-                right_panel,
+                # Right side: preview + errors (smaller weight = less space)
+                HSplit([right_panel], width=D(weight=35, min=40, max=60)),
             ])
 
         # Check if confirmation dialog is active
@@ -1834,6 +2019,34 @@ class PipelineConfigApp:
             main_with_browser = VSplit([
                 Window(width=D(weight=1)),  # Left spacer
                 file_browser_frame,
+                Window(width=D(weight=1)),  # Right spacer
+            ])
+            return Layout(
+                HSplit([
+                    title_bar,
+                    Window(height=D(weight=1)),  # Top spacer
+                    main_with_browser,
+                    Window(height=D(weight=1)),  # Bottom spacer
+                    status_bar,
+                ])
+            )
+
+        # Check if env file browser is active
+        if self.env_browser_active and self.env_browser:
+            # Show env file browser as overlay
+            env_browser_frame = Frame(
+                body=Window(
+                    content=self.env_browser,
+                    style="class:file-browser",
+                ),
+                title="🔐 Select Environment File",
+                width=D(min=50, max=80),
+                height=D(min=15, max=25),
+            )
+            # Center the env browser in a FloatContainer-like layout
+            main_with_browser = VSplit([
+                Window(width=D(weight=1)),  # Left spacer
+                env_browser_frame,
                 Window(width=D(weight=1)),  # Right spacer
             ])
             return Layout(
@@ -2572,6 +2785,44 @@ class PipelineConfigApp:
         self.status_message = "File selection cancelled"
         self._refresh_layout()
 
+    def _show_env_browser(self) -> None:
+        """Show file browser to select an environment file."""
+        # Discover env files to highlight in the browser
+        discovered = self.state.discover_env_files() if self.state else []
+        self.env_browser = EnvFileBrowserControl(
+            on_select=self._on_env_file_selected,
+            on_cancel=self._close_env_browser,
+            initial_path=Path.cwd(),
+            discovered_files=discovered,
+        )
+        self.env_browser_active = True
+        self.status_message = "Select .env file: ↑↓ Navigate | Enter: Select | Esc: Cancel"
+        self._refresh_layout()
+
+    def _on_env_file_selected(self, path: Path) -> None:
+        """Handle env file selection."""
+        self.env_browser_active = False
+        self.env_browser = None
+
+        try:
+            # Load the env file
+            new_vars = self.state.load_env_file(str(path))
+            if new_vars:
+                self.status_message = f"Loaded {path.name}: {len(new_vars)} new vars available"
+            else:
+                self.status_message = f"Loaded {path.name} (no new vars)"
+            self._refresh_layout()
+        except Exception as e:
+            self.status_message = f"Failed to load env file: {e}"
+            self._refresh_layout()
+
+    def _close_env_browser(self) -> None:
+        """Close the env file browser without selecting."""
+        self.env_browser_active = False
+        self.env_browser = None
+        self.status_message = "Env file selection cancelled"
+        self._refresh_layout()
+
     def _load_yaml_file(self, path: Path) -> None:
         """Load a YAML file into the editor."""
         try:
@@ -2629,6 +2880,57 @@ class PipelineConfigApp:
             warnings.append(
                 "History mode: Events are immutable, so 'full_history' (SCD2) "
                 "doesn't make sense. Consider 'current_only' for events."
+            )
+
+        # Check for undefined environment variables
+        warnings.extend(self._get_env_var_warnings())
+
+        return warnings
+
+    def _get_env_var_warnings(self) -> list[str]:
+        """Check for environment variable issues in field values."""
+        import re
+        warnings: list[str] = []
+        env_var_pattern = re.compile(r'\$\{([A-Za-z_][A-Za-z0-9_]*)\}')
+
+        # Track fields using env vars and which vars are missing
+        fields_with_env_vars = []
+        missing_vars: set[str] = set()
+
+        for field in self.fields:
+            value = field.buffer.text
+            if not value:
+                continue
+
+            matches = env_var_pattern.findall(value)
+            if matches:
+                fields_with_env_vars.append(field.name)
+                for var_name in matches:
+                    if var_name not in self.state.available_env_vars:
+                        missing_vars.add(var_name)
+
+        # Warn about missing env vars
+        if missing_vars:
+            if len(missing_vars) == 1:
+                var_name = next(iter(missing_vars))
+                warnings.append(
+                    f"Environment: ${{{var_name}}} not found. "
+                    "Use 'Set Env' button to load a .env file."
+                )
+            else:
+                var_list = ", ".join(f"${{{v}}}" for v in sorted(missing_vars)[:3])
+                if len(missing_vars) > 3:
+                    var_list += f" (+{len(missing_vars) - 3} more)"
+                warnings.append(
+                    f"Environment: {var_list} not found. "
+                    "Use 'Set Env' button to load a .env file."
+                )
+
+        # Subtle hint if using env vars but no env file loaded
+        elif fields_with_env_vars and not self.state.loaded_env_files:
+            warnings.append(
+                "Hint: Using env vars but no .env file loaded. "
+                "Consider using 'Set Env' to verify vars are defined."
             )
 
         return warnings

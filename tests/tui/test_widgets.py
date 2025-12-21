@@ -1730,3 +1730,137 @@ class TestYAMLPreviewRunCommands:
 
         yaml_preview = app._generate_yaml_preview()
         assert "# Run both layers" in yaml_preview
+
+
+class TestEnvFileBrowser:
+    """Tests for environment file browser and env var warnings."""
+
+    def test_env_browser_attribute_exists(self) -> None:
+        """App has env_browser_active attribute."""
+        app = PipelineConfigApp()
+        assert hasattr(app, "env_browser_active")
+        assert app.env_browser_active is False
+
+    def test_env_browser_attribute_initialized(self) -> None:
+        """App has env_browser initialized to None."""
+        app = PipelineConfigApp()
+        assert hasattr(app, "env_browser")
+        assert app.env_browser is None
+
+    def test_show_env_browser_sets_active(self) -> None:
+        """Showing env browser sets active flag."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Mock _refresh_layout to avoid full UI refresh
+        app._refresh_layout = lambda: None
+
+        app._show_env_browser()
+        assert app.env_browser_active is True
+        assert app.env_browser is not None
+
+    def test_close_env_browser_clears_active(self) -> None:
+        """Closing env browser clears active flag."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Mock _refresh_layout
+        app._refresh_layout = lambda: None
+
+        app._show_env_browser()
+        app._close_env_browser()
+        assert app.env_browser_active is False
+        assert app.env_browser is None
+
+
+class TestEnvVarWarnings:
+    """Tests for environment variable warnings."""
+
+    def test_missing_env_var_warning(self) -> None:
+        """Warning shown when env var not found in environment."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set a field to use an env var that doesn't exist
+        token_field = next((f for f in app.fields if f.name == "token"), None)
+        if token_field:
+            token_field.buffer.text = "${NONEXISTENT_TOKEN}"
+
+        warnings = app._get_env_var_warnings()
+        assert any("NONEXISTENT_TOKEN" in w for w in warnings)
+
+    def test_no_warning_when_env_var_exists(self) -> None:
+        """No warning when env var exists in environment."""
+        import os
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set env var in available_env_vars
+        app.state.available_env_vars.add("MY_TEST_VAR")
+
+        # Set a field to use the var
+        host_field = next((f for f in app.fields if f.name == "host"), None)
+        if host_field:
+            host_field.buffer.text = "${MY_TEST_VAR}"
+
+        warnings = app._get_env_var_warnings()
+        assert not any("MY_TEST_VAR" in w for w in warnings)
+
+    def test_hint_when_using_env_vars_without_file(self) -> None:
+        """Hint shown when using env vars but no env file loaded."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Ensure no env files loaded
+        app.state.loaded_env_files = []
+
+        # Use a var that exists (so no "missing" warning)
+        app.state.available_env_vars.add("EXISTING_VAR")
+        host_field = next((f for f in app.fields if f.name == "host"), None)
+        if host_field:
+            host_field.buffer.text = "${EXISTING_VAR}"
+
+        warnings = app._get_env_var_warnings()
+        assert any("no .env file loaded" in w.lower() for w in warnings)
+
+    def test_no_hint_when_env_file_loaded(self) -> None:
+        """No hint when an env file is loaded."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Mark an env file as loaded
+        app.state.loaded_env_files = [".env"]
+        app.state.available_env_vars.add("EXISTING_VAR")
+
+        host_field = next((f for f in app.fields if f.name == "host"), None)
+        if host_field:
+            host_field.buffer.text = "${EXISTING_VAR}"
+
+        warnings = app._get_env_var_warnings()
+        assert not any("no .env file loaded" in w.lower() for w in warnings)
+
+    def test_multiple_missing_vars_warning(self) -> None:
+        """Warning shows multiple missing vars."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set multiple fields with missing env vars
+        host_field = next((f for f in app.fields if f.name == "host"), None)
+        if host_field:
+            host_field.buffer.text = "${MISSING_HOST}"
+
+        password_field = next((f for f in app.fields if f.name == "password"), None)
+        if password_field:
+            password_field.buffer.text = "${MISSING_PASSWORD}"
+
+        warnings = app._get_env_var_warnings()
+        # Should have a single warning mentioning multiple vars
+        assert len(warnings) == 1
+        assert "MISSING" in warnings[0]
