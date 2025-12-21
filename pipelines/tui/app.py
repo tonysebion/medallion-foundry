@@ -136,7 +136,6 @@ class FileBrowserControl(UIControl):
     def create_content(self, width: int, height: int) -> UIContent:
         # Header showing current path
         header = f"  📂 {self.current_path}"
-        max_display = min(height - 3, len(self.items))
 
         def get_line(i: int) -> list[tuple[str, str]]:
             if i == 0:
@@ -476,7 +475,6 @@ class DropdownMenu(UIControl):
 
     def _select_and_collapse(self, value: str) -> None:
         """Select a value and collapse the dropdown."""
-        old_value = self.field.buffer.text
         self.field.buffer.text = value
         self._expanded = False
         self.on_select(self.field, value)
@@ -718,6 +716,7 @@ class PipelineConfigApp:
             "silver": False,
         }
         self.validation_errors: list[str] = []
+        self.validation_warnings: list[str] = []
         # Track unsaved changes
         self._has_unsaved_changes = False
         self._last_saved_yaml = ""
@@ -1010,6 +1009,95 @@ class PipelineConfigApp:
                     app._get_field_value("pagination_strategy") not in ("none", "")
                 ),
             ),
+            Field(
+                "max_records", "Max Records", "bronze",
+                help_text="Maximum total records to fetch (leave empty for no limit)",
+                default=str(self.state.get_bronze_value("max_records") or ""),
+                visible_when=lambda app: (
+                    app._get_field_value("source_type") == "api_rest" and
+                    app._get_field_value("pagination_strategy") not in ("none", "")
+                ),
+            ),
+            # Pagination parameter customization (advanced)
+            Field(
+                "offset_param", "Offset Param", "bronze",
+                help_text="Query param name for offset (default: offset)",
+                default=self.state.get_bronze_value("offset_param") or "offset",
+                visible_when=lambda app: (
+                    app._get_field_value("source_type") == "api_rest" and
+                    app._get_field_value("pagination_strategy") == "offset"
+                ),
+            ),
+            Field(
+                "limit_param", "Limit Param", "bronze",
+                help_text="Query param name for limit (default: limit)",
+                default=self.state.get_bronze_value("limit_param") or "limit",
+                visible_when=lambda app: (
+                    app._get_field_value("source_type") == "api_rest" and
+                    app._get_field_value("pagination_strategy") == "offset"
+                ),
+            ),
+            Field(
+                "page_param", "Page Param", "bronze",
+                help_text="Query param name for page number (default: page)",
+                default=self.state.get_bronze_value("page_param") or "page",
+                visible_when=lambda app: (
+                    app._get_field_value("source_type") == "api_rest" and
+                    app._get_field_value("pagination_strategy") == "page"
+                ),
+            ),
+            Field(
+                "page_size_param", "Page Size Param", "bronze",
+                help_text="Query param name for page size (default: page_size)",
+                default=self.state.get_bronze_value("page_size_param") or "page_size",
+                visible_when=lambda app: (
+                    app._get_field_value("source_type") == "api_rest" and
+                    app._get_field_value("pagination_strategy") == "page"
+                ),
+            ),
+            Field(
+                "cursor_param", "Cursor Param", "bronze",
+                help_text="Query param name for cursor (default: cursor)",
+                default=self.state.get_bronze_value("cursor_param") or "cursor",
+                visible_when=lambda app: (
+                    app._get_field_value("source_type") == "api_rest" and
+                    app._get_field_value("pagination_strategy") == "cursor"
+                ),
+            ),
+            # API rate limiting and reliability
+            Field(
+                "requests_per_second", "Requests/Second", "bronze",
+                help_text="Rate limit for API calls (default: unlimited). Recommended for production.",
+                default=str(self.state.get_bronze_value("requests_per_second") or ""),
+                visible_when=lambda app: app._get_field_value("source_type") == "api_rest",
+            ),
+            Field(
+                "timeout", "Timeout (seconds)", "bronze",
+                help_text="Request timeout in seconds (default: 30, rarely changed)",
+                default=str(self.state.get_bronze_value("timeout") or "30"),
+                visible_when=lambda app: app._get_field_value("source_type") == "api_rest",
+            ),
+            Field(
+                "max_retries", "Max Retries", "bronze",
+                help_text="Number of retry attempts on failure (default: 3, rarely changed)",
+                default=str(self.state.get_bronze_value("max_retries") or "3"),
+                visible_when=lambda app: app._get_field_value("source_type") == "api_rest",
+            ),
+            # API custom headers and params
+            Field(
+                "headers", "Custom Headers", "bronze",
+                help_text="Additional HTTP headers (JSON format: {\"X-Custom\": \"value\"})",
+                default=self.state.get_bronze_value("headers") or "",
+                visible_when=lambda app: app._get_field_value("source_type") == "api_rest",
+                multiline=True,
+            ),
+            Field(
+                "params", "Query Parameters", "bronze",
+                help_text="Additional query params (JSON format: {\"include\": \"metadata\"})",
+                default=self.state.get_bronze_value("params") or "",
+                visible_when=lambda app: app._get_field_value("source_type") == "api_rest",
+                multiline=True,
+            ),
             # Load pattern - essential for understanding how the pipeline works
             Field(
                 "load_pattern", "Load Pattern", "bronze",
@@ -1029,6 +1117,83 @@ class PipelineConfigApp:
                 default=self.state.get_bronze_value("watermark_column") or "",
                 visible_when=lambda app: app._get_field_value("load_pattern") in ("incremental", "cdc", "incremental_append"),
                 is_basic=True,  # Show when load_pattern requires it
+            ),
+            Field(
+                "watermark_param", "Watermark Param", "bronze",
+                help_text="API query param for watermark value (e.g., since, updated_after)",
+                default=self.state.get_bronze_value("watermark_param") or "",
+                visible_when=lambda app: (
+                    app._get_field_value("source_type") == "api_rest" and
+                    app._get_field_value("load_pattern") in ("incremental", "cdc", "incremental_append")
+                ),
+            ),
+            Field(
+                "full_refresh_days", "Full Refresh Days", "bronze",
+                help_text="Force full refresh every N days (leave empty for never)",
+                default=str(self.state.get_bronze_value("full_refresh_days") or ""),
+                visible_when=lambda app: app._get_field_value("load_pattern") in ("incremental", "cdc", "incremental_append"),
+            ),
+            # Output options (advanced)
+            Field(
+                "target_path", "Target Path", "bronze",
+                help_text="Override output directory (default: ./bronze/system={system}/entity={entity}/dt={run_date}/)",
+                default=self.state.get_bronze_value("target_path") or "",
+            ),
+            # CSV/Delimited file options
+            Field(
+                "csv_delimiter", "Delimiter", "bronze",
+                help_text="Column delimiter (default: comma for CSV, space for space-delimited)",
+                default=self.state.get_bronze_value("csv_delimiter") or "",
+                visible_when=lambda app: app._get_field_value("source_type") in ("file_csv", "file_space_delimited"),
+            ),
+            Field(
+                "csv_header", "Has Header", "bronze",
+                field_type="enum",
+                enum_options=[
+                    ("true", "Yes - first row is column names"),
+                    ("false", "No - no header row"),
+                ],
+                help_text="Whether file has a header row with column names",
+                default=self.state.get_bronze_value("csv_header") or "true",
+                visible_when=lambda app: app._get_field_value("source_type") in ("file_csv", "file_space_delimited"),
+            ),
+            Field(
+                "csv_skip_rows", "Skip Rows", "bronze",
+                help_text="Number of rows to skip at top of file (default: 0)",
+                default=str(self.state.get_bronze_value("csv_skip_rows") or ""),
+                visible_when=lambda app: app._get_field_value("source_type") in ("file_csv", "file_excel"),
+            ),
+            # Excel options
+            Field(
+                "sheet", "Sheet", "bronze",
+                help_text="Sheet name or index (default: first sheet, index 0)",
+                default=self.state.get_bronze_value("sheet") or "",
+                visible_when=lambda app: app._get_field_value("source_type") == "file_excel",
+            ),
+            # JSON options
+            Field(
+                "flatten", "Flatten JSON", "bronze",
+                field_type="enum",
+                enum_options=[
+                    ("false", "No - keep nested structure"),
+                    ("true", "Yes - flatten nested objects"),
+                ],
+                help_text="Flatten nested JSON structures into columns",
+                default=self.state.get_bronze_value("flatten") or "false",
+                visible_when=lambda app: app._get_field_value("source_type") in ("file_json", "file_jsonl"),
+            ),
+            # Fixed-width options
+            Field(
+                "widths", "Column Widths", "bronze",
+                help_text="Column widths (comma-separated, e.g., 10,20,15,30)",
+                default=self._list_to_str(self.state.get_bronze_value("widths")),
+                visible_when=lambda app: app._get_field_value("source_type") == "file_fixed_width",
+            ),
+            Field(
+                "columns", "Column Names", "bronze",
+                help_text="Column names (comma-separated, must match widths count)",
+                default=self._list_to_str(self.state.get_bronze_value("columns")),
+                visible_when=lambda app: app._get_field_value("source_type") in ("file_fixed_width", "file_space_delimited"),
             ),
         ])
 
@@ -1070,6 +1235,86 @@ class PipelineConfigApp:
                 help_text="SCD1=overwrite, SCD2=version history (state entities only)",
                 default=self.state.get_silver_value("history_mode") or "current_only",
                 is_basic=True,  # Essential for understanding history tracking
+            ),
+            # Column selection (mutually exclusive)
+            Field(
+                "column_mode", "Column Selection", "silver",
+                field_type="enum",
+                enum_options=[
+                    ("all", "All Columns (include everything)"),
+                    ("include", "Include Only (specify which columns to keep)"),
+                    ("exclude", "Exclude (specify which columns to remove)"),
+                ],
+                help_text="Choose how to select columns for the Silver layer",
+                default=self._get_column_mode_default(),
+            ),
+            Field(
+                "attributes", "Include Columns", "silver",
+                field_type="list",
+                help_text="Columns to include (comma-separated). Only these will appear in Silver.",
+                default=self._list_to_str(self.state.get_silver_value("attributes")),
+                visible_when=lambda app: app._get_field_value("column_mode") == "include",
+            ),
+            Field(
+                "exclude_columns", "Exclude Columns", "silver",
+                field_type="list",
+                help_text="Columns to exclude (comma-separated). All others will appear in Silver.",
+                default=self._list_to_str(self.state.get_silver_value("exclude_columns")),
+                visible_when=lambda app: app._get_field_value("column_mode") == "exclude",
+            ),
+            # Output options
+            Field(
+                "validate_source", "Validate Source", "silver",
+                field_type="enum",
+                enum_options=[
+                    ("skip", "Skip (fastest, no validation)"),
+                    ("warn", "Warn (log warning if checksums fail)"),
+                    ("strict", "Strict (fail if checksums don't match)"),
+                ],
+                help_text="Validate Bronze checksums before processing. Default: skip (rarely changed)",
+                default=self.state.get_silver_value("validate_source") or "skip",
+            ),
+            Field(
+                "output_formats", "Output Format", "silver",
+                field_type="enum",
+                enum_options=[
+                    ("parquet", "Parquet (recommended - typed, compressed, fast)"),
+                    ("csv", "CSV (loses types, slower queries)"),
+                    ("both", "Both (Parquet + CSV)"),
+                ],
+                help_text="Output file format. Parquet is strongly recommended.",
+                default=self._get_output_format_default(),
+            ),
+            Field(
+                "parquet_compression", "Compression", "silver",
+                field_type="enum",
+                enum_options=[
+                    ("zstd", "ZSTD (recommended - best compression/speed balance)"),
+                    ("snappy", "Snappy (fast but poor compression)"),
+                    ("gzip", "GZIP (good compression, slower)"),
+                    ("lz4", "LZ4 (very fast, moderate compression)"),
+                    ("none", "None (no compression)"),
+                ],
+                help_text="Parquet compression. ZSTD recommended over Snappy for better compression.",
+                default=self.state.get_silver_value("parquet_compression") or "snappy",
+                visible_when=lambda app: app._get_field_value("output_formats") in ("parquet", "both"),
+            ),
+            # Output paths (advanced)
+            Field(
+                "silver_source_path", "Source Path", "silver",
+                help_text="Override Bronze source path (default: auto-wired from Bronze)",
+                default=self.state.get_silver_value("source_path") or "",
+            ),
+            Field(
+                "silver_target_path", "Target Path", "silver",
+                help_text="Override output directory (default: ./silver/{entity}/)",
+                default=self.state.get_silver_value("target_path") or "",
+            ),
+            Field(
+                "silver_partition_by", "Partition By", "silver",
+                field_type="list",
+                help_text="Columns to partition output by (comma-separated, advanced)",
+                default=self._list_to_str(self.state.get_silver_value("partition_by")),
             ),
         ])
 
@@ -1288,6 +1533,26 @@ class PipelineConfigApp:
         if value:
             return str(value)
         return ""
+
+    def _get_column_mode_default(self) -> str:
+        """Determine column_mode based on existing attributes/exclude_columns values."""
+        if self.state.get_silver_value("attributes"):
+            return "include"
+        elif self.state.get_silver_value("exclude_columns"):
+            return "exclude"
+        return "all"
+
+    def _get_output_format_default(self) -> str:
+        """Determine output_formats default from state."""
+        value = self.state.get_silver_value("output_formats")
+        if isinstance(value, list):
+            if "parquet" in value and "csv" in value:
+                return "both"
+            elif "csv" in value:
+                return "csv"
+        elif value == "csv":
+            return "csv"
+        return "parquet"
 
     def _get_visible_fields(self) -> list[Field]:
         """Get list of currently visible fields, filtered by search."""
@@ -1786,9 +2051,71 @@ class PipelineConfigApp:
         """Generate YAML preview from current field values."""
         self._sync_fields_to_state()
         try:
-            return self.state.to_yaml()
+            orphaned = self._get_orphaned_fields()
+            return self.state.to_yaml(orphaned_fields=orphaned)
         except Exception as e:
             return f"# Error generating YAML: {e}"
+
+    def _get_orphaned_fields(self) -> list:
+        """Detect fields that have values but are not currently visible.
+
+        Returns:
+            List of OrphanedField objects for fields with values that aren't active
+        """
+        from pipelines.tui.utils.yaml_generator import OrphanedField
+
+        orphaned: list[OrphanedField] = []
+
+        # Map of visibility conditions to human-readable reasons
+        orphan_reasons = {
+            # Pagination fields
+            "cursor_path": "not used with current pagination strategy",
+            "cursor_param": "not used with current pagination strategy",
+            "offset_param": "not used with offset pagination",
+            "limit_param": "not used with offset pagination",
+            "page_param": "not used with page pagination",
+            "page_size_param": "not used with page pagination",
+            # Auth fields
+            "token": "not used with current auth type",
+            "api_key": "not used with current auth type",
+            "api_key_header": "not used with current auth type",
+            "username": "not used with current auth type",
+            "password": "not used with current auth type",
+            # Source type specific
+            "source_path": "not used with current source type",
+            "host": "not used with current source type",
+            "database": "not used with current source type",
+            "query": "not used with current source type",
+            "base_url": "not used with current source type",
+            "endpoint": "not used with current source type",
+            # Column selection
+            "attributes": "column mode is not 'include'",
+            "exclude_columns": "column mode is not 'exclude'",
+            # Load pattern
+            "watermark_column": "not used with full_snapshot load pattern",
+            "full_refresh_days": "not used with full_snapshot load pattern",
+        }
+
+        for field in self.fields:
+            # Skip if field is visible
+            if field.is_visible(self):
+                continue
+
+            # Skip if field has no value
+            value = field.buffer.text.strip()
+            if not value:
+                continue
+
+            # This field has a value but is not visible - it's orphaned
+            reason = orphan_reasons.get(field.name, "not applicable with current settings")
+            orphaned.append(OrphanedField(
+                name=field.name,
+                value=value,
+                section=field.section,
+                reason=reason,
+            ))
+
+        return orphaned
 
     def _sync_fields_to_state(self) -> None:
         """Sync field buffer values to state."""
@@ -2266,27 +2593,73 @@ class PipelineConfigApp:
             self.status_message = f"Load failed: {e}"
 
     def _update_validation(self) -> None:
-        """Update validation errors list and dynamic required fields."""
+        """Update validation errors and warnings lists."""
         self._sync_fields_to_state()
 
         # Update dynamic required fields - delegate to _update_field_requirements
         self._update_field_requirements()
 
         self.validation_errors = self.state.validate() if self.state else []
+        self.validation_warnings = self._get_best_practice_warnings()
+
+    def _get_best_practice_warnings(self) -> list[str]:
+        """Get best practice warnings based on current configuration."""
+        warnings: list[str] = []
+
+        # Check for snappy compression (recommend zstd instead)
+        compression = self._get_field_value("parquet_compression")
+        if compression == "snappy":
+            warnings.append(
+                "Compression: Snappy is fast but has poor compression ratio. "
+                "Consider 'zstd' for better compression with similar speed."
+            )
+
+        # Check for CSV output (recommend parquet)
+        output_format = self._get_field_value("output_formats")
+        if output_format in ("csv", "both"):
+            warnings.append(
+                "Output format: CSV loses type information and is slower to query. "
+                "Use Parquet unless downstream systems require CSV."
+            )
+
+        # Check for full_history mode with event entities (doesn't make sense)
+        entity_kind = self._get_field_value("entity_kind")
+        history_mode = self._get_field_value("history_mode")
+        if entity_kind == "event" and history_mode == "full_history":
+            warnings.append(
+                "History mode: Events are immutable, so 'full_history' (SCD2) "
+                "doesn't make sense. Consider 'current_only' for events."
+            )
+
+        return warnings
 
     def _get_errors_content(self) -> FormattedText:
-        """Get formatted validation errors content."""
+        """Get formatted validation errors and warnings content."""
+        parts: list[tuple[str, str]] = []
+
+        # Show errors first
+        if self.validation_errors:
+            parts.append(("class:error-panel.header", "  Errors:\n"))
+            for error in self.validation_errors[:3]:  # Show max 3 errors
+                parts.append(("class:error-panel", f"    • {error}\n"))
+            if len(self.validation_errors) > 3:
+                parts.append(("class:error-panel", f"    ... and {len(self.validation_errors) - 3} more\n"))
+            parts.append(("", "\n"))
+
+        # Show warnings
+        if self.validation_warnings:
+            parts.append(("class:warning-panel.header", "  Warnings:\n"))
+            for warning in self.validation_warnings[:3]:  # Show max 3 warnings
+                parts.append(("class:warning-panel", f"    ⚠ {warning}\n"))
+            if len(self.validation_warnings) > 3:
+                parts.append(("class:warning-panel", f"    ... and {len(self.validation_warnings) - 3} more\n"))
+
+        # Show success if no errors (warnings are ok)
         if not self.validation_errors:
-            return FormattedText([
-                ("class:error-panel.ok", "  ✓ No validation errors")
-            ])
-
-        parts = []
-        for i, error in enumerate(self.validation_errors[:5]):  # Show max 5 errors
-            parts.append(("class:error-panel", f"  • {error}\n"))
-
-        if len(self.validation_errors) > 5:
-            parts.append(("class:error-panel", f"  ... and {len(self.validation_errors) - 5} more"))
+            if self.validation_warnings:
+                parts.insert(0, ("class:error-panel.ok", "  ✓ Valid (with warnings)\n\n"))
+            else:
+                parts.append(("class:error-panel.ok", "  ✓ No validation errors"))
 
         return FormattedText(parts)
 

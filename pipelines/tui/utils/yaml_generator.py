@@ -6,7 +6,18 @@ with comments, schema reference, and consistent structure.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
+
+
+@dataclass
+class OrphanedField:
+    """A field that has a value but is not currently active/visible."""
+
+    name: str
+    value: Any
+    section: str  # "bronze" or "silver"
+    reason: str  # Why this field is orphaned (e.g., "not used with offset pagination")
 
 
 def generate_yaml(
@@ -15,6 +26,7 @@ def generate_yaml(
     include_schema_ref: bool = True,
     include_comments: bool = True,
     parent_path: str | None = None,
+    orphaned_fields: list[OrphanedField] | None = None,
 ) -> str:
     """Generate YAML configuration string from form data.
 
@@ -23,6 +35,7 @@ def generate_yaml(
         include_schema_ref: Include yaml-language-server schema reference
         include_comments: Include helpful comments
         parent_path: If set, add extends: directive for inheritance
+        orphaned_fields: Fields that have values but aren't currently active
 
     Returns:
         Formatted YAML string
@@ -33,7 +46,7 @@ def generate_yaml(
     if include_schema_ref:
         lines.append("# yaml-language-server: $schema=../schema/pipeline.schema.json")
 
-    # Header comments
+    # Header comments with run commands
     if include_comments:
         name = config.get("name", "pipeline")
         lines.append("#")
@@ -41,7 +54,12 @@ def generate_yaml(
         if config.get("description"):
             lines.append(f"# {config['description']}")
         lines.append("#")
-        lines.append(f"# To run: python -m pipelines ./{name}.yaml --date 2025-01-15")
+        lines.append("# Run commands:")
+        lines.append(f"#   python -m pipelines ./{name}.yaml --date 2025-01-15           # Run both layers")
+        lines.append(f"#   python -m pipelines ./{name}.yaml:bronze --date 2025-01-15    # Bronze only")
+        lines.append(f"#   python -m pipelines ./{name}.yaml:silver --date 2025-01-15    # Silver only")
+        lines.append(f"#   python -m pipelines ./{name}.yaml --dry-run                   # Validate only")
+        lines.append("#")
         lines.append("")
 
     # Parent inheritance
@@ -63,6 +81,16 @@ def generate_yaml(
             lines.append("# Bronze layer - raw data extraction")
         lines.append("bronze:")
         lines.extend(_format_bronze(config["bronze"]))
+
+        # Add orphaned bronze fields as comments
+        bronze_orphans = [o for o in (orphaned_fields or []) if o.section == "bronze"]
+        if bronze_orphans:
+            lines.append("")
+            lines.append("  # Unused fields (preserved for reference):")
+            for orphan in bronze_orphans:
+                value_str = _format_value_for_comment(orphan.value)
+                lines.append(f"  # {orphan.name}: {value_str}  # ({orphan.reason})")
+
         lines.append("")
 
     # Silver section
@@ -71,9 +99,28 @@ def generate_yaml(
             lines.append("# Silver layer - data curation")
         lines.append("silver:")
         lines.extend(_format_silver(config["silver"]))
+
+        # Add orphaned silver fields as comments
+        silver_orphans = [o for o in (orphaned_fields or []) if o.section == "silver"]
+        if silver_orphans:
+            lines.append("")
+            lines.append("  # Unused fields (preserved for reference):")
+            for orphan in silver_orphans:
+                value_str = _format_value_for_comment(orphan.value)
+                lines.append(f"  # {orphan.name}: {value_str}  # ({orphan.reason})")
+
         lines.append("")
 
     return "\n".join(lines)
+
+
+def _format_value_for_comment(value: Any) -> str:
+    """Format a value for inclusion in a YAML comment."""
+    if isinstance(value, list):
+        return "[" + ", ".join(str(v) for v in value) + "]"
+    if isinstance(value, str) and ("\n" in value or len(value) > 50):
+        return f'"{value[:47]}..."'  # Truncate long strings
+    return str(value)
 
 
 def _format_bronze(bronze: dict[str, Any]) -> list[str]:

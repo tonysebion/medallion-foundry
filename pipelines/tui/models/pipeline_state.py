@@ -340,17 +340,21 @@ class PipelineState:
 
         return config
 
-    def to_yaml(self) -> str:
+    def to_yaml(self, orphaned_fields: list | None = None) -> str:
         """Generate YAML string from current state.
 
         Uses the existing yaml_generator to ensure consistent output format.
+
+        Args:
+            orphaned_fields: Optional list of OrphanedField objects for fields
+                            that have values but aren't currently active
         """
         from pipelines.tui.utils.yaml_generator import generate_yaml
 
         config = self.to_config_dict()
         # Pass extends separately for proper YAML formatting
         parent_path = config.pop("extends", None)
-        return generate_yaml(config, parent_path=parent_path)
+        return generate_yaml(config, parent_path=parent_path, orphaned_fields=orphaned_fields)
 
     def load_env_file(self, path: str) -> set[str]:
         """Load environment variables from a .env file.

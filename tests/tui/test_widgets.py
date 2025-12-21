@@ -1356,3 +1356,377 @@ class TestValidationPanelScaling:
 
         # Should have no validation errors
         assert len(app.validation_errors) == 0
+
+
+class TestNewBronzeFields:
+    """Tests for newly added Bronze fields."""
+
+    def test_api_rate_limiting_field_visible_for_api(self) -> None:
+        """Rate limiting field only visible for API source (in Advanced mode)."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+        app.advanced_mode = True  # New fields are in Advanced mode
+
+        rate_field = next((f for f in app.fields if f.name == "requests_per_second"), None)
+        assert rate_field is not None
+
+        # Set source to API
+        source_type_field = next(f for f in app.fields if f.name == "source_type")
+        source_type_field.buffer.text = "api_rest"
+        assert rate_field.is_visible(app) is True
+
+        # Set source to file
+        source_type_field.buffer.text = "file_csv"
+        assert rate_field.is_visible(app) is False
+
+    def test_timeout_field_visible_for_api(self) -> None:
+        """Timeout field only visible for API source (in Advanced mode)."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+        app.advanced_mode = True  # New fields are in Advanced mode
+
+        timeout_field = next((f for f in app.fields if f.name == "timeout"), None)
+        assert timeout_field is not None
+
+        source_type_field = next(f for f in app.fields if f.name == "source_type")
+        source_type_field.buffer.text = "api_rest"
+        assert timeout_field.is_visible(app) is True
+
+    def test_csv_delimiter_field_visible_for_csv(self) -> None:
+        """CSV delimiter field visible for CSV and space-delimited sources (in Advanced mode)."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+        app.advanced_mode = True  # New fields are in Advanced mode
+
+        delimiter_field = next((f for f in app.fields if f.name == "csv_delimiter"), None)
+        assert delimiter_field is not None
+
+        source_type_field = next(f for f in app.fields if f.name == "source_type")
+        source_type_field.buffer.text = "file_csv"
+        assert delimiter_field.is_visible(app) is True
+
+        source_type_field.buffer.text = "file_space_delimited"
+        assert delimiter_field.is_visible(app) is True
+
+        source_type_field.buffer.text = "file_parquet"
+        assert delimiter_field.is_visible(app) is False
+
+    def test_sheet_field_visible_for_excel(self) -> None:
+        """Sheet field only visible for Excel source (in Advanced mode)."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+        app.advanced_mode = True  # New fields are in Advanced mode
+
+        sheet_field = next((f for f in app.fields if f.name == "sheet"), None)
+        assert sheet_field is not None
+
+        source_type_field = next(f for f in app.fields if f.name == "source_type")
+        source_type_field.buffer.text = "file_excel"
+        assert sheet_field.is_visible(app) is True
+
+        source_type_field.buffer.text = "file_csv"
+        assert sheet_field.is_visible(app) is False
+
+    def test_pagination_param_fields_visible_for_offset(self) -> None:
+        """Offset/limit param fields visible for offset pagination (in Advanced mode)."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+        app.advanced_mode = True  # New fields are in Advanced mode
+
+        offset_param_field = next((f for f in app.fields if f.name == "offset_param"), None)
+        limit_param_field = next((f for f in app.fields if f.name == "limit_param"), None)
+        assert offset_param_field is not None
+        assert limit_param_field is not None
+
+        # Set source to API
+        source_type_field = next(f for f in app.fields if f.name == "source_type")
+        source_type_field.buffer.text = "api_rest"
+
+        # Set pagination to offset
+        pagination_field = next(f for f in app.fields if f.name == "pagination_strategy")
+        pagination_field.buffer.text = "offset"
+        assert offset_param_field.is_visible(app) is True
+        assert limit_param_field.is_visible(app) is True
+
+        # Set pagination to cursor - offset fields should hide
+        pagination_field.buffer.text = "cursor"
+        assert offset_param_field.is_visible(app) is False
+        assert limit_param_field.is_visible(app) is False
+
+
+class TestSilverColumnMode:
+    """Tests for Silver column mode toggle (attributes vs exclude_columns)."""
+
+    def test_column_mode_field_exists(self) -> None:
+        """Column mode field exists in silver section."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        column_mode_field = next((f for f in app.fields if f.name == "column_mode"), None)
+        assert column_mode_field is not None
+        assert column_mode_field.section == "silver"
+        assert column_mode_field.field_type == "enum"
+
+    def test_attributes_visible_when_column_mode_include(self) -> None:
+        """Attributes field visible when column_mode is 'include'."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+        app.advanced_mode = True
+
+        attributes_field = next((f for f in app.fields if f.name == "attributes"), None)
+        column_mode_field = next(f for f in app.fields if f.name == "column_mode")
+
+        column_mode_field.buffer.text = "include"
+        assert attributes_field.is_visible(app) is True
+
+        column_mode_field.buffer.text = "all"
+        assert attributes_field.is_visible(app) is False
+
+    def test_exclude_columns_visible_when_column_mode_exclude(self) -> None:
+        """Exclude columns field visible when column_mode is 'exclude'."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+        app.advanced_mode = True
+
+        exclude_field = next((f for f in app.fields if f.name == "exclude_columns"), None)
+        column_mode_field = next(f for f in app.fields if f.name == "column_mode")
+
+        column_mode_field.buffer.text = "exclude"
+        assert exclude_field.is_visible(app) is True
+
+        column_mode_field.buffer.text = "all"
+        assert exclude_field.is_visible(app) is False
+
+    def test_column_mode_mutual_exclusion(self) -> None:
+        """Only one of attributes/exclude_columns visible at a time."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+        app.advanced_mode = True
+
+        attributes_field = next(f for f in app.fields if f.name == "attributes")
+        exclude_field = next(f for f in app.fields if f.name == "exclude_columns")
+        column_mode_field = next(f for f in app.fields if f.name == "column_mode")
+
+        # Include mode
+        column_mode_field.buffer.text = "include"
+        assert attributes_field.is_visible(app) is True
+        assert exclude_field.is_visible(app) is False
+
+        # Exclude mode
+        column_mode_field.buffer.text = "exclude"
+        assert attributes_field.is_visible(app) is False
+        assert exclude_field.is_visible(app) is True
+
+        # All mode - neither visible
+        column_mode_field.buffer.text = "all"
+        assert attributes_field.is_visible(app) is False
+        assert exclude_field.is_visible(app) is False
+
+
+class TestBestPracticeWarnings:
+    """Tests for best practice warnings (snappy compression, CSV output)."""
+
+    def test_snappy_compression_warning(self) -> None:
+        """Warning shown when snappy compression selected."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+        app.advanced_mode = True
+
+        # Set compression to snappy
+        compression_field = next((f for f in app.fields if f.name == "parquet_compression"), None)
+        if compression_field:
+            compression_field.buffer.text = "snappy"
+
+        warnings = app._get_best_practice_warnings()
+        assert any("snappy" in w.lower() or "compression" in w.lower() for w in warnings)
+
+    def test_no_warning_for_zstd_compression(self) -> None:
+        """No compression warning when zstd selected."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+        app.advanced_mode = True
+
+        # Set compression to zstd
+        compression_field = next((f for f in app.fields if f.name == "parquet_compression"), None)
+        if compression_field:
+            compression_field.buffer.text = "zstd"
+
+        warnings = app._get_best_practice_warnings()
+        assert not any("compression" in w.lower() for w in warnings)
+
+    def test_csv_output_warning(self) -> None:
+        """Warning shown when CSV output format selected."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+        app.advanced_mode = True
+
+        # Set output to CSV
+        output_field = next((f for f in app.fields if f.name == "output_formats"), None)
+        if output_field:
+            output_field.buffer.text = "csv"
+
+        warnings = app._get_best_practice_warnings()
+        assert any("csv" in w.lower() for w in warnings)
+
+    def test_event_with_full_history_warning(self) -> None:
+        """Warning shown for event entity with full_history mode."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+        app.advanced_mode = True
+
+        # Set entity_kind to event
+        entity_field = next(f for f in app.fields if f.name == "entity_kind")
+        entity_field.buffer.text = "event"
+
+        # Set history_mode to full_history
+        history_field = next(f for f in app.fields if f.name == "history_mode")
+        history_field.buffer.text = "full_history"
+
+        warnings = app._get_best_practice_warnings()
+        assert any("event" in w.lower() and "history" in w.lower() for w in warnings)
+
+
+class TestOrphanedFields:
+    """Tests for orphaned field detection and preservation."""
+
+    def test_orphaned_field_detection(self) -> None:
+        """Orphaned fields detected when visibility changes."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+        app.advanced_mode = True
+
+        # Set cursor pagination and fill cursor_path
+        source_type_field = next(f for f in app.fields if f.name == "source_type")
+        source_type_field.buffer.text = "api_rest"
+
+        pagination_field = next(f for f in app.fields if f.name == "pagination_strategy")
+        pagination_field.buffer.text = "cursor"
+
+        cursor_path_field = next(f for f in app.fields if f.name == "cursor_path")
+        cursor_path_field.buffer.text = "meta.next_cursor"
+
+        # Cursor path should be visible
+        assert cursor_path_field.is_visible(app) is True
+
+        # Now change to offset pagination
+        pagination_field.buffer.text = "offset"
+
+        # Cursor path should be hidden but have value
+        assert cursor_path_field.is_visible(app) is False
+        assert cursor_path_field.buffer.text == "meta.next_cursor"
+
+        # Check orphaned fields are detected
+        orphaned = app._get_orphaned_fields()
+        orphan_names = [o.name for o in orphaned]
+        assert "cursor_path" in orphan_names
+
+    def test_orphaned_field_has_reason(self) -> None:
+        """Orphaned fields have human-readable reason."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+        app.advanced_mode = True
+
+        # Set up orphaned field scenario
+        source_type_field = next(f for f in app.fields if f.name == "source_type")
+        source_type_field.buffer.text = "api_rest"
+
+        pagination_field = next(f for f in app.fields if f.name == "pagination_strategy")
+        pagination_field.buffer.text = "cursor"
+
+        cursor_path_field = next(f for f in app.fields if f.name == "cursor_path")
+        cursor_path_field.buffer.text = "meta.next_cursor"
+
+        # Switch to offset
+        pagination_field.buffer.text = "offset"
+
+        orphaned = app._get_orphaned_fields()
+        cursor_orphan = next((o for o in orphaned if o.name == "cursor_path"), None)
+        assert cursor_orphan is not None
+        assert len(cursor_orphan.reason) > 0
+
+    def test_empty_fields_not_orphaned(self) -> None:
+        """Empty fields are not detected as orphaned."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+        app.advanced_mode = True
+
+        # Set cursor pagination but don't fill cursor_path
+        source_type_field = next(f for f in app.fields if f.name == "source_type")
+        source_type_field.buffer.text = "api_rest"
+
+        pagination_field = next(f for f in app.fields if f.name == "pagination_strategy")
+        pagination_field.buffer.text = "cursor"
+
+        cursor_path_field = next(f for f in app.fields if f.name == "cursor_path")
+        cursor_path_field.buffer.text = ""  # Empty
+
+        # Switch to offset
+        pagination_field.buffer.text = "offset"
+
+        orphaned = app._get_orphaned_fields()
+        orphan_names = [o.name for o in orphaned]
+        assert "cursor_path" not in orphan_names
+
+
+class TestYAMLPreviewRunCommands:
+    """Tests for run commands in YAML preview header."""
+
+    def test_yaml_preview_contains_run_commands(self) -> None:
+        """YAML preview contains run command examples."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set up minimal valid config
+        for field in app.fields:
+            if field.name == "name":
+                field.buffer.text = "test_pipeline"
+            elif field.name == "system":
+                field.buffer.text = "retail"
+            elif field.name == "entity":
+                field.buffer.text = "orders"
+            elif field.name == "source_type":
+                field.buffer.text = "file_csv"
+            elif field.name == "source_path":
+                field.buffer.text = "./data/orders.csv"
+            elif field.name == "natural_keys":
+                field.buffer.text = "order_id"
+            elif field.name == "change_timestamp":
+                field.buffer.text = "updated_at"
+
+        yaml_preview = app._generate_yaml_preview()
+
+        # Check for run commands
+        assert "python -m pipelines" in yaml_preview
+        assert ":bronze" in yaml_preview
+        assert ":silver" in yaml_preview
+        assert "--dry-run" in yaml_preview
+
+    def test_yaml_preview_contains_both_layers_command(self) -> None:
+        """YAML preview contains command to run both layers."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        for field in app.fields:
+            if field.name == "name":
+                field.buffer.text = "my_pipeline"
+
+        yaml_preview = app._generate_yaml_preview()
+        assert "# Run both layers" in yaml_preview
