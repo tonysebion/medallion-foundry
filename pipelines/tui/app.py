@@ -35,7 +35,7 @@ from prompt_toolkit.formatted_text import HTML, FormattedText
 from pipelines.tui.models import PipelineState
 from pipelines.tui.models.field_metadata import get_dynamic_required_fields
 from pipelines.tui.settings import get_settings
-from pipelines.tui.utils.schema_reader import get_field_placeholder
+from pipelines.tui.utils.schema_reader import get_enum_options, get_field_placeholder
 
 
 # Application style
@@ -950,20 +950,7 @@ class PipelineConfigApp:
                 "source_type", "Source Type", "bronze",
                 required=True,
                 field_type="enum",
-                enum_options=[
-                    ("file_csv", "CSV File"),
-                    ("file_parquet", "Parquet File"),
-                    ("file_json", "JSON File"),
-                    ("file_jsonl", "JSON Lines"),
-                    ("file_excel", "Excel File"),
-                    ("file_fixed_width", "Fixed Width"),
-                    ("file_space_delimited", "Space Delimited"),
-                    ("database_mssql", "SQL Server"),
-                    ("database_postgres", "PostgreSQL"),
-                    ("database_mysql", "MySQL"),
-                    ("database_db2", "DB2"),
-                    ("api_rest", "REST API"),
-                ],
+                enum_options=get_enum_options("bronze", "source_type"),
                 help_text="Type of data source",
                 default=self.state.get_bronze_value("source_type") or "file_csv",
                 is_basic=True,
@@ -1050,12 +1037,7 @@ class PipelineConfigApp:
             Field(
                 "auth_type", "Authentication", "bronze",
                 field_type="enum",
-                enum_options=[
-                    ("none", "None"),
-                    ("bearer", "Bearer Token"),
-                    ("api_key", "API Key"),
-                    ("basic", "Basic Auth"),
-                ],
+                enum_options=get_enum_options("bronze", "auth_type"),
                 help_text="How to authenticate with the API",
                 default=self.state.get_bronze_value("auth_type") or "none",
                 visible_when=lambda app: app._get_field_value("source_type") == "api_rest",
@@ -1128,12 +1110,7 @@ class PipelineConfigApp:
             Field(
                 "pagination_strategy", "Pagination", "bronze",
                 field_type="enum",
-                enum_options=[
-                    ("none", "None (single request)"),
-                    ("offset", "Offset/Limit"),
-                    ("page", "Page Number"),
-                    ("cursor", "Cursor-based"),
-                ],
+                enum_options=get_enum_options("bronze", "pagination_strategy"),
                 help_text="How to paginate through API results",
                 default=self.state.get_bronze_value("pagination_strategy") or "none",
                 visible_when=lambda app: app._get_field_value("source_type") == "api_rest",
@@ -1258,11 +1235,7 @@ class PipelineConfigApp:
             Field(
                 "load_pattern", "Load Pattern", "bronze",
                 field_type="enum",
-                enum_options=[
-                    ("full_snapshot", "Full Snapshot (replace all each run)"),
-                    ("incremental", "Incremental (append new via watermark)"),
-                    ("cdc", "CDC (capture inserts, updates, deletes)"),
-                ],
+                enum_options=get_enum_options("bronze", "load_pattern"),
                 help_text="How to load data from source",
                 default=self.state.get_bronze_value("load_pattern") or "full_snapshot",
                 is_basic=True,  # Always show - essential for understanding the pipeline
@@ -1375,10 +1348,7 @@ class PipelineConfigApp:
             Field(
                 "entity_kind", "Entity Kind", "silver",
                 field_type="enum",
-                enum_options=[
-                    ("state", "State (dimension - customers, products, accounts)"),
-                    ("event", "Event (fact - orders, transactions, logs)"),
-                ],
+                enum_options=get_enum_options("silver", "entity_kind"),
                 help_text="State=slowly changing entities, Event=immutable records",
                 default=self.state.get_silver_value("entity_kind") or "state",
                 is_basic=True,  # Essential for understanding the data model
@@ -1386,10 +1356,7 @@ class PipelineConfigApp:
             Field(
                 "history_mode", "History Mode", "silver",
                 field_type="enum",
-                enum_options=[
-                    ("current_only", "Current Only (SCD1 - keep latest)"),
-                    ("full_history", "Full History (SCD2 - track all changes)"),
-                ],
+                enum_options=get_enum_options("silver", "history_mode"),
                 help_text="SCD1=overwrite, SCD2=version history (state entities only)",
                 default=self.state.get_silver_value("history_mode") or "current_only",
                 is_basic=True,  # Essential for understanding history tracking
@@ -1424,11 +1391,7 @@ class PipelineConfigApp:
             Field(
                 "validate_source", "Validate Source", "silver",
                 field_type="enum",
-                enum_options=[
-                    ("skip", "Skip (fastest, no validation)"),
-                    ("warn", "Warn (log warning if checksums fail)"),
-                    ("strict", "Strict (fail if checksums don't match)"),
-                ],
+                enum_options=get_enum_options("silver", "validate_source"),
                 help_text="Validate Bronze checksums before processing. Default: skip (rarely changed)",
                 default=self.state.get_silver_value("validate_source") or "skip",
             ),
@@ -1446,13 +1409,7 @@ class PipelineConfigApp:
             Field(
                 "parquet_compression", "Compression", "silver",
                 field_type="enum",
-                enum_options=[
-                    ("zstd", "ZSTD (recommended - best compression/speed balance)"),
-                    ("snappy", "Snappy (fast but poor compression)"),
-                    ("gzip", "GZIP (good compression, slower)"),
-                    ("lz4", "LZ4 (very fast, moderate compression)"),
-                    ("none", "None (no compression)"),
-                ],
+                enum_options=get_enum_options("silver", "parquet_compression"),
                 help_text="Parquet compression. ZSTD recommended over Snappy for better compression.",
                 default=self.state.get_silver_value("parquet_compression") or "snappy",
                 visible_when=lambda app: app._get_field_value("output_formats") in ("parquet", "both"),

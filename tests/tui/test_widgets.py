@@ -1337,9 +1337,10 @@ class TestValidationPanelScaling:
         app.state.set_bronze_value("source_type", "file_csv")
         app.state.set_bronze_value("source_path", "./data/orders.csv")
         app.state.set_silver_value("natural_keys", ["order_id"])
-        app.state.set_silver_value("change_timestamp", "updated_at")
+        app.state.set_silver_value("change_timestamp", "last_modified")
 
         # Also update the field buffers to match state (app reads from buffers)
+        # Clear placeholder flag when setting real values
         for field in app.fields:
             if field.name == "system":
                 field.buffer.text = "retail"
@@ -1352,7 +1353,8 @@ class TestValidationPanelScaling:
             elif field.name == "natural_keys":
                 field.buffer.text = "order_id"
             elif field.name == "change_timestamp":
-                field.buffer.text = "updated_at"
+                field.buffer.text = "last_modified"  # Use different value than placeholder
+                field._is_placeholder_value = False
 
         app._update_validation()
 
@@ -1821,7 +1823,12 @@ class TestEnvVarWarnings:
         # Ensure no env files loaded
         app.state.loaded_env_files = []
 
-        # Use a var that exists (so no "missing" warning)
+        # Clear all placeholder env vars first (they can interfere with this test)
+        for field in app.fields:
+            if "${" in (field.buffer.text or ""):
+                field.buffer.text = ""
+
+        # Add var that exists to avoid "missing" warning
         app.state.available_env_vars.add("EXISTING_VAR")
         host_field = next((f for f in app.fields if f.name == "host"), None)
         if host_field:

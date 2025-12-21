@@ -92,7 +92,30 @@ def get_enum_options(section: str, field: str) -> list[tuple[str, str]]:
     metadata = get_field_metadata(section, field)
     enum_values = metadata.get("enum", [])
 
-    # Create human-readable labels
+    # Field-specific labels for context-aware display
+    field_labels: dict[str, dict[str, str]] = {
+        "auth_type": {
+            "none": "None",
+            "bearer": "Bearer Token",
+            "api_key": "API Key",
+            "basic": "Basic Auth",
+        },
+        "pagination_strategy": {
+            "none": "None (single request)",
+            "offset": "Offset/Limit",
+            "page": "Page Number",
+            "cursor": "Cursor-based",
+        },
+        "parquet_compression": {
+            "snappy": "Snappy (fast, moderate compression)",
+            "gzip": "GZip (slow, high compression)",
+            "zstd": "ZStandard (recommended - balanced)",
+            "lz4": "LZ4 (fastest, low compression)",
+            "none": "None (no compression)",
+        },
+    }
+
+    # Generic labels shared across fields
     labels = {
         # Source types
         "file_csv": "CSV File",
@@ -120,19 +143,23 @@ def get_enum_options(section: str, field: str) -> list[tuple[str, str]]:
         "scd1": "SCD Type 1 (keep latest)",
         "full_history": "Full History (SCD Type 2)",
         "scd2": "SCD Type 2 (keep all versions)",
-        # Compression
-        "snappy": "Snappy (fast, moderate compression)",
-        "gzip": "GZip (slow, high compression)",
-        "zstd": "ZStandard (balanced)",
-        "lz4": "LZ4 (fastest, low compression)",
-        "none": "None (no compression)",
         # Validation
         "skip": "Skip (no validation)",
         "warn": "Warn (log warning, continue)",
         "strict": "Strict (fail on error)",
     }
 
-    return [(v, labels.get(v, v.replace("_", " ").title())) for v in enum_values]
+    # Use field-specific labels if available, otherwise fall back to generic
+    specific = field_labels.get(field, {})
+
+    def get_label(v: str) -> str:
+        if v in specific:
+            return specific[v]
+        if v in labels:
+            return labels[v]
+        return v.replace("_", " ").title()
+
+    return [(v, get_label(v)) for v in enum_values]
 
 
 def get_all_bronze_fields() -> list[str]:
