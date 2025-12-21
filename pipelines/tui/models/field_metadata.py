@@ -38,6 +38,7 @@ ALL_BRONZE_FIELDS: list[str] = [
     "host",
     "database",
     "query",
+    "incremental_query",
     "connection",
     # API source
     "base_url",

@@ -1061,3 +1061,298 @@ class TestPaginationVisibility:
 
         # cursor_path SHOULD be visible for cursor pagination
         assert "cursor_path" in visible_names
+
+
+class TestInheritance:
+    """Tests for parent-child configuration inheritance.
+
+    These tests verify that:
+    - extends field is correctly placed in YAML output
+    - Parent values are inherited correctly
+    - Child overrides work properly
+    - Field sources are tracked correctly
+    """
+
+    def test_yaml_output_includes_extends(self) -> None:
+        """YAML output includes extends field when parent is set."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+
+        # Set parent path
+        app.state.extends = "./base.yaml"
+        app.state.name = "child_pipeline"
+        app.state.set_bronze_value("system", "retail")
+        app.state.set_bronze_value("entity", "orders")
+        app.state.set_bronze_value("source_type", "file_csv")
+
+        yaml_content = app.state.to_yaml()
+
+        # extends should appear near the top
+        assert "extends:" in yaml_content
+        assert "./base.yaml" in yaml_content
+
+    def test_clear_parent_removes_extends(self) -> None:
+        """Clearing parent config removes extends from state."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set and then clear parent
+        app.state.extends = "./base.yaml"
+        app._clear_parent_config()
+
+        assert app.state.extends is None
+        yaml_content = app.state.to_yaml()
+        assert "extends:" not in yaml_content
+
+    def test_editor_title_shows_current_file_only(self) -> None:
+        """Editor title shows current file, not parent."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app.yaml_path = "./pipelines/my_pipeline.yaml"
+        app.state.extends = "./base.yaml"
+
+        title = app._get_editor_title()
+
+        # Should show current file, not parent
+        assert "my_pipeline.yaml" in title
+        assert "base.yaml" not in title
+
+    def test_yaml_preview_title_shows_parent_info(self) -> None:
+        """YAML preview title shows parent info when inheriting."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app.state.extends = "./base.yaml"
+
+        title = app._get_yaml_preview_title()
+
+        # Should indicate inheritance
+        assert "extends" in title.lower()
+        assert "base.yaml" in title
+
+    def test_yaml_preview_title_simple_when_no_parent(self) -> None:
+        """YAML preview title is simple when no parent."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app.state.extends = None
+
+        title = app._get_yaml_preview_title()
+
+        # Should be simple without extends info
+        assert title == "YAML Preview"
+
+    def test_basic_fields_always_visible(self) -> None:
+        """Essential fields are visible in basic mode even when empty."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app.advanced_mode = False  # Basic mode
+        app._create_fields()
+
+        visible = app._get_visible_fields()
+        visible_names = [f.name for f in visible]
+
+        # Essential bronze fields
+        assert "system" in visible_names
+        assert "entity" in visible_names
+        assert "source_type" in visible_names
+        assert "load_pattern" in visible_names
+
+        # Essential silver fields
+        assert "natural_keys" in visible_names
+        assert "change_timestamp" in visible_names
+        assert "entity_kind" in visible_names
+        assert "history_mode" in visible_names
+
+
+class TestDatabaseQueries:
+    """Tests for database query field handling."""
+
+    def test_full_query_required_for_database(self) -> None:
+        """Full query is required for database sources."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set source type to database
+        source_type = next(f for f in app.fields if f.name == "source_type")
+        source_type.buffer.text = "database_mssql"
+        app._sync_fields_to_state()
+
+        required = get_dynamic_required_fields(app.state)
+        assert "query" in required["bronze"]
+
+    def test_incremental_query_visible_for_incremental_load(self) -> None:
+        """Incremental query field visible for incremental load patterns."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app.advanced_mode = True
+        app._create_fields()
+
+        # Set database source and incremental load
+        source_type = next(f for f in app.fields if f.name == "source_type")
+        source_type.buffer.text = "database_mssql"
+        load_pattern = next(f for f in app.fields if f.name == "load_pattern")
+        load_pattern.buffer.text = "incremental"
+
+        visible = app._get_visible_fields()
+        visible_names = [f.name for f in visible]
+
+        assert "query" in visible_names
+        assert "incremental_query" in visible_names
+
+    def test_incremental_query_hidden_for_full_snapshot(self) -> None:
+        """Incremental query hidden for full snapshot load pattern."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app.advanced_mode = True
+        app._create_fields()
+
+        # Set database source and full snapshot load
+        source_type = next(f for f in app.fields if f.name == "source_type")
+        source_type.buffer.text = "database_mssql"
+        load_pattern = next(f for f in app.fields if f.name == "load_pattern")
+        load_pattern.buffer.text = "full_snapshot"
+
+        visible = app._get_visible_fields()
+        visible_names = [f.name for f in visible]
+
+        assert "query" in visible_names
+        assert "incremental_query" not in visible_names
+
+    def test_query_field_is_multiline(self) -> None:
+        """Query field supports multiline editing."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        query_field = next(f for f in app.fields if f.name == "query")
+        assert query_field.multiline is True
+
+    def test_incremental_query_field_is_multiline(self) -> None:
+        """Incremental query field also supports multiline editing."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        inc_query_field = next(f for f in app.fields if f.name == "incremental_query")
+        assert inc_query_field.multiline is True
+
+
+class TestYAMLPreviewToggle:
+    """Tests for YAML preview panel collapsible functionality."""
+
+    def test_yaml_preview_initially_expanded(self) -> None:
+        """YAML preview is expanded by default."""
+        app = PipelineConfigApp()
+        assert app.yaml_preview_collapsed is False
+
+    def test_toggle_yaml_preview_collapses(self) -> None:
+        """Toggling YAML preview changes collapsed state."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+
+        app._toggle_yaml_preview()
+
+        assert app.yaml_preview_collapsed is True
+        assert "hidden" in app.status_message.lower()
+
+    def test_toggle_yaml_preview_expands(self) -> None:
+        """Toggling collapsed preview expands it."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app.yaml_preview_collapsed = True
+
+        app._toggle_yaml_preview()
+
+        assert app.yaml_preview_collapsed is False
+        assert "shown" in app.status_message.lower()
+
+
+class TestFieldMultiline:
+    """Tests for multiline field handling."""
+
+    def test_field_multiline_default_false(self) -> None:
+        """Field multiline defaults to False."""
+        field = Field("test", "Test", "bronze")
+        assert field.multiline is False
+
+    def test_field_multiline_true_creates_multiline_buffer(self) -> None:
+        """Field with multiline=True creates multiline buffer."""
+        field = Field("query", "Query", "bronze", multiline=True)
+        assert field.multiline is True
+        # Buffer.multiline is a filter object in prompt_toolkit, not a boolean
+        # Check that the filter evaluates to True
+        assert field.buffer.multiline()
+
+    def test_regular_field_has_single_line_buffer(self) -> None:
+        """Regular field has single-line buffer."""
+        field = Field("system", "System", "bronze")
+        # Buffer.multiline is a filter object in prompt_toolkit
+        # Check that the filter evaluates to False
+        assert not field.buffer.multiline()
+
+
+class TestFormContentPadding:
+    """Tests for form content scroll padding."""
+
+    def test_form_content_has_scroll_padding(self) -> None:
+        """Form content includes padding for scrolling."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        content = app._build_form_content()
+
+        # Count empty Window elements at the end (padding)
+        # The content should have padding windows added
+        assert len(content) > len(app._get_visible_fields())
+
+
+class TestValidationPanelScaling:
+    """Tests for validation panel behavior."""
+
+    def test_validation_errors_list_populated(self) -> None:
+        """Validation errors list is populated after _update_validation."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # State has missing required fields, should have errors
+        app._update_validation()
+
+        # Should have some validation errors (missing system, entity, etc.)
+        assert len(app.validation_errors) > 0
+
+    def test_validation_errors_cleared_when_valid(self) -> None:
+        """Validation errors are cleared when state is valid."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set all required fields in the state
+        app.state.set_bronze_value("system", "retail")
+        app.state.set_bronze_value("entity", "orders")
+        app.state.set_bronze_value("source_type", "file_csv")
+        app.state.set_bronze_value("source_path", "./data/orders.csv")
+        app.state.set_silver_value("natural_keys", ["order_id"])
+        app.state.set_silver_value("change_timestamp", "updated_at")
+
+        # Also update the field buffers to match state (app reads from buffers)
+        for field in app.fields:
+            if field.name == "system":
+                field.buffer.text = "retail"
+            elif field.name == "entity":
+                field.buffer.text = "orders"
+            elif field.name == "source_type":
+                field.buffer.text = "file_csv"
+            elif field.name == "source_path":
+                field.buffer.text = "./data/orders.csv"
+            elif field.name == "natural_keys":
+                field.buffer.text = "order_id"
+            elif field.name == "change_timestamp":
+                field.buffer.text = "updated_at"
+
+        app._update_validation()
+
+        # Should have no validation errors
+        assert len(app.validation_errors) == 0

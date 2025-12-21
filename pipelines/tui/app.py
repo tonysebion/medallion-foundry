@@ -570,12 +570,13 @@ class Field:
         required: bool = False,
         help_text: str = "",
         is_sensitive: bool = False,
-        field_type: str = "text",  # text, enum, list
+        field_type: str = "text",  # text, enum, list, multiline
         enum_options: list[tuple[str, str]] | None = None,
         default: str = "",
         source: str = "default",
         visible_when: Callable[["PipelineConfigApp"], bool] | None = None,
         is_basic: bool = False,  # Show in Basic mode
+        multiline: bool = False,  # Expand when focused (for SQL queries)
     ):
         self.name = name
         self.label = label
@@ -589,7 +590,8 @@ class Field:
         self.source = source
         self.visible_when = visible_when
         self.is_basic = is_basic
-        self.buffer = Buffer(name=name)
+        self.multiline = multiline
+        self.buffer = Buffer(name=name, multiline=multiline)
         self.buffer.text = default
 
     def is_visible(self, app: "PipelineConfigApp") -> bool:
@@ -719,6 +721,8 @@ class PipelineConfigApp:
         # Track unsaved changes
         self._has_unsaved_changes = False
         self._last_saved_yaml = ""
+        # YAML preview panel collapse state
+        self.yaml_preview_collapsed = False
         # Confirmation dialog state
         self._confirm_dialog: ConfirmDialog | None = None
         self._confirm_dialog_active = False
@@ -839,12 +843,24 @@ class PipelineConfigApp:
                 is_basic=True,
             ),
             Field(
-                "query", "Query", "bronze",
+                "query", "Full Query", "bronze",
                 required=True,
-                help_text="SQL query (use {run_date} for date filter)",
+                help_text="SQL query for full snapshot (all records). Use {run_date} for date placeholders.",
                 default=self.state.get_bronze_value("query") or "",
                 visible_when=lambda app: app._get_field_value("source_type").startswith("database_"),
                 is_basic=True,
+                multiline=True,
+            ),
+            Field(
+                "incremental_query", "Incremental Query", "bronze",
+                help_text="SQL query for incremental loads. Use {watermark} for last processed value. Falls back to full query if not provided.",
+                default=self.state.get_bronze_value("incremental_query") or "",
+                visible_when=lambda app: (
+                    app._get_field_value("source_type").startswith("database_") and
+                    app._get_field_value("load_pattern") in ("incremental", "cdc", "incremental_append")
+                ),
+                is_basic=True,
+                multiline=True,
             ),
             Field(
                 "db_username", "Username", "bronze",
@@ -994,7 +1010,7 @@ class PipelineConfigApp:
                     app._get_field_value("pagination_strategy") not in ("none", "")
                 ),
             ),
-            # Load pattern
+            # Load pattern - essential for understanding how the pipeline works
             Field(
                 "load_pattern", "Load Pattern", "bronze",
                 field_type="enum",
@@ -1005,12 +1021,14 @@ class PipelineConfigApp:
                 ],
                 help_text="How to load data from source",
                 default=self.state.get_bronze_value("load_pattern") or "full_snapshot",
+                is_basic=True,  # Always show - essential for understanding the pipeline
             ),
             Field(
                 "watermark_column", "Watermark Column", "bronze",
                 help_text="Column to track for incremental/CDC loads (e.g., updated_at, modified_date)",
                 default=self.state.get_bronze_value("watermark_column") or "",
                 visible_when=lambda app: app._get_field_value("load_pattern") in ("incremental", "cdc", "incremental_append"),
+                is_basic=True,  # Show when load_pattern requires it
             ),
         ])
 
@@ -1040,6 +1058,7 @@ class PipelineConfigApp:
                 ],
                 help_text="State=slowly changing entities, Event=immutable records",
                 default=self.state.get_silver_value("entity_kind") or "state",
+                is_basic=True,  # Essential for understanding the data model
             ),
             Field(
                 "history_mode", "History Mode", "silver",
@@ -1050,6 +1069,7 @@ class PipelineConfigApp:
                 ],
                 help_text="SCD1=overwrite, SCD2=version history (state entities only)",
                 default=self.state.get_silver_value("history_mode") or "current_only",
+                is_basic=True,  # Essential for understanding history tracking
             ),
         ])
 
@@ -1353,13 +1373,29 @@ class PipelineConfigApp:
                 width=22,
             )
 
-        # Parent config button
-        parent_text = "📁 Parent" if not self.state.extends else f"📁 {Path(self.state.extends).name}"
-        parent_button = Window(
-            content=ClickableButton(parent_text, self._show_parent_browser),
+        # Parent config button - shows "Set Parent" or "Clear Parent" based on state
+        if self.state.extends:
+            parent_button = Window(
+                content=ClickableButton("📁 Clear Parent", self._clear_parent_config),
+                style="class:title",
+                height=1,
+                width=D(min=16, max=20),
+            )
+        else:
+            parent_button = Window(
+                content=ClickableButton("📁 Set Parent", self._show_parent_browser),
+                style="class:title",
+                height=1,
+                width=D(min=14, max=18),
+            )
+
+        # YAML preview toggle button
+        yaml_toggle_text = "◀ YAML" if not self.yaml_preview_collapsed else "▶ YAML"
+        yaml_toggle_button = Window(
+            content=ClickableButton(yaml_toggle_text, self._toggle_yaml_preview),
             style="class:title",
             height=1,
-            width=D(min=12, max=25),
+            width=10,
         )
 
         load_button = Window(
@@ -1389,6 +1425,8 @@ class PipelineConfigApp:
             mode_button,
             Window(width=1, style="class:title"),
             parent_button,
+            Window(width=1, style="class:title"),
+            yaml_toggle_button,
             Window(width=1, style="class:title"),
             load_button,
             Window(width=1, style="class:title"),
@@ -1430,36 +1468,63 @@ class PipelineConfigApp:
         self._update_validation()
         errors_content = self._get_errors_content()
 
-        # Right side panel: YAML preview + validation errors
-        right_panel = HSplit([
-            Frame(
-                body=yaml_preview,
-                title="YAML Preview",
-            ),
-            Frame(
-                body=Window(
-                    content=FormattedTextControl(errors_content),
-                    style="class:error-panel",
+        # Build main content based on YAML preview collapsed state
+        if self.yaml_preview_collapsed:
+            # YAML preview hidden - form takes full width
+            main_content = VSplit([
+                # Left side: form
+                Frame(
+                    body=ScrollablePane(
+                        HSplit(form_content),
+                        show_scrollbar=True,
+                    ),
+                    title=self._get_editor_title(),
+                    width=D(weight=1),
                 ),
-                title="Validation",
-                height=D(min=3, max=8),
-            ),
-        ])
+                # Right side: just validation errors (narrow)
+                Frame(
+                    body=Window(
+                        content=FormattedTextControl(errors_content),
+                        style="class:error-panel",
+                        wrap_lines=True,  # Wrap long error messages
+                    ),
+                    title="Validation",
+                    width=D(min=25, max=35),
+                ),
+            ])
+        else:
+            # Right side panel: YAML preview + validation errors
+            right_panel = HSplit([
+                Frame(
+                    body=yaml_preview,
+                    title=self._get_yaml_preview_title(),
+                ),
+                Frame(
+                    body=Window(
+                        content=FormattedTextControl(errors_content),
+                        style="class:error-panel",
+                        wrap_lines=True,  # Wrap long error messages
+                    ),
+                    title="Validation",
+                    # Expand to fit errors: 1 line per error + 2 for padding, capped at 15
+                    height=D(min=3, max=min(15, max(3, len(self.validation_errors) + 2))),
+                ),
+            ])
 
-        # Main layout: form on left, preview+errors on right
-        main_content = VSplit([
-            # Left side: form
-            Frame(
-                body=ScrollablePane(
-                    HSplit(form_content),
-                    show_scrollbar=True,
+            # Main layout: form on left, preview+errors on right
+            main_content = VSplit([
+                # Left side: form
+                Frame(
+                    body=ScrollablePane(
+                        HSplit(form_content),
+                        show_scrollbar=True,
+                    ),
+                    title=self._get_editor_title(),
+                    width=D(weight=3),
                 ),
-                title="Configuration",
-                width=D(weight=3),
-            ),
-            # Right side: preview + errors
-            right_panel,
-        ])
+                # Right side: preview + errors
+                right_panel,
+            ])
 
         # Check if confirmation dialog is active
         if self._confirm_dialog_active and self._confirm_dialog:
@@ -1570,6 +1635,11 @@ class PipelineConfigApp:
             content.append(self._create_field_row(field, field_counter))
             field_counter += 1
 
+        # Add padding at bottom for scrolling (half-screen worth of space)
+        # This allows fields at the bottom to be scrolled to the middle of the screen
+        for _ in range(15):  # ~15 lines of padding
+            content.append(Window(height=1))
+
         return content
 
     def _create_field_row(self, field: Field, idx: int) -> HSplit:
@@ -1647,11 +1717,21 @@ class PipelineConfigApp:
                 width=D(min=min_width, weight=2),
             )
         else:
-            # Non-enum field - create label with height 1
+            # Determine height for multiline fields (expand when focused)
+            if field.multiline and is_focused:
+                # Expanded multiline - show 6 lines when focused for SQL editing
+                field_height = 6
+            elif field.multiline:
+                # Collapsed multiline - show 2 lines to hint at content
+                field_height = 2
+            else:
+                field_height = 1
+
+            # Non-enum field - create label
             label = Window(
                 content=ClickableFieldLabel(label_parts, idx, self._on_field_click),
                 width=D(min=20, max=25),
-                height=1,
+                height=1,  # Label stays single line
             )
 
             # Text input with click handler to update focus
@@ -1663,34 +1743,30 @@ class PipelineConfigApp:
             value = Window(
                 content=buffer_control,
                 style=value_style,
-                height=1,
+                height=field_height,
                 cursorline=is_focused,
                 width=D(weight=3) if is_focused else D(weight=1),
+                wrap_lines=field.multiline,  # Word wrap for multiline
             )
 
-        # Inline help text shown next to the focused field
-        # Show validation error instead of help if field is invalid
-        if is_focused:
+        # For multiline/focused fields, show help above the field instead of beside it
+        # This prevents the help text from squeezing the field width
+        if is_focused and (field.help_text or not is_valid):
             if not is_valid:
-                help_content = FormattedText([("class:error", f"  ← {validation_error}")])
-            elif field.help_text:
-                help_content = FormattedText([("class:field-help.inline", f"  ← {field.help_text}")])
+                help_content = FormattedText([("class:error", f"  ⚠ {validation_error}")])
             else:
-                help_content = None
+                help_content = FormattedText([("class:field-help.inline", f"  💡 {field.help_text}")])
 
-            if help_content:
-                help_text = Window(
-                    content=FormattedTextControl(help_content),
-                    height=1,
-                    dont_extend_width=False,
-                )
-                row = VSplit([label, value, help_text], padding=1)
-            else:
-                row = VSplit([label, value], padding=1)
+            help_line = Window(
+                content=FormattedTextControl(help_content),
+                height=1,
+                wrap_lines=True,  # Wrap long help text
+            )
+            row = VSplit([label, value], padding=1)
+            return HSplit([help_line, row], padding=0)
         else:
             row = VSplit([label, value], padding=1)
-
-        return HSplit([row], padding=0)
+            return HSplit([row], padding=0)
 
     def _on_field_click(self, field_idx: int) -> None:
         """Handle click on a field label."""
@@ -2077,6 +2153,43 @@ class PipelineConfigApp:
         """Toggle collapse state of a section."""
         self.sections_collapsed[section] = not self.sections_collapsed.get(section, False)
         self._refresh_layout()
+
+    def _toggle_yaml_preview(self) -> None:
+        """Toggle YAML preview panel visibility."""
+        self.yaml_preview_collapsed = not self.yaml_preview_collapsed
+        self.status_message = "YAML preview " + ("hidden" if self.yaml_preview_collapsed else "shown")
+        self._refresh_layout()
+
+    def _clear_parent_config(self) -> None:
+        """Clear the parent configuration (remove inheritance)."""
+        self.state.extends = None
+        self.state.parent_config = None
+
+        # Reset field sources to local/default
+        for field_name, field_val in self.state.bronze.items():
+            if field_val.source.value == "parent":
+                field_val.source = field_val.source.__class__("default")
+            field_val.parent_value = None
+
+        for field_name, field_val in self.state.silver.items():
+            if field_val.source.value == "parent":
+                field_val.source = field_val.source.__class__("default")
+            field_val.parent_value = None
+
+        self.status_message = "Parent config cleared"
+        self._refresh_layout()
+
+    def _get_editor_title(self) -> str:
+        """Get the title for the editor frame (shows current file only)."""
+        if self.yaml_path:
+            return f"Configuration - {Path(self.yaml_path).name}"
+        return "Configuration - New Pipeline"
+
+    def _get_yaml_preview_title(self) -> str:
+        """Get the title for the YAML preview (shows parent info if inherited)."""
+        if self.state.extends:
+            return f"YAML Preview (extends: {Path(self.state.extends).name})"
+        return "YAML Preview"
 
     def _show_parent_browser(self) -> None:
         """Show file browser to select a parent YAML file for inheritance."""

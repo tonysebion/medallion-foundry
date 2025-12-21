@@ -348,7 +348,9 @@ class PipelineState:
         from pipelines.tui.utils.yaml_generator import generate_yaml
 
         config = self.to_config_dict()
-        return generate_yaml(config)
+        # Pass extends separately for proper YAML formatting
+        parent_path = config.pop("extends", None)
+        return generate_yaml(config, parent_path=parent_path)
 
     def load_env_file(self, path: str) -> set[str]:
         """Load environment variables from a .env file.
