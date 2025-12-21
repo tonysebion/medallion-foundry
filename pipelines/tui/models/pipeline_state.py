@@ -133,65 +133,21 @@ class PipelineState:
         state.extends = merged_config.get("extends")
         state.parent_config = parent_config
 
-        # Populate bronze fields
-        bronze_config = merged_config.get("bronze", {})
-        for field_name in ALL_BRONZE_FIELDS:
-            value = _get_nested_value(bronze_config, field_name)
-            source_key = f"bronze.{field_name}"
-
-            if source_key in field_sources:
-                source = (
-                    FieldSource.PARENT
-                    if field_sources[source_key] == "parent"
-                    else FieldSource.LOCAL
-                )
-            elif value is not None and value != "":
-                source = FieldSource.LOCAL
-            else:
-                source = FieldSource.DEFAULT
-
-            parent_value = None
-            if parent_config:
-                parent_bronze = parent_config.get("bronze", {})
-                parent_value = _get_nested_value(parent_bronze, field_name)
-
-            state.bronze[field_name] = FieldValue(
-                name=field_name,
-                value=value if value is not None else "",
-                source=source,
-                is_sensitive=field_name in SENSITIVE_FIELDS,
-                parent_value=parent_value,
-            )
-
-        # Populate silver fields
-        silver_config = merged_config.get("silver", {})
-        for field_name in ALL_SILVER_FIELDS:
-            value = _get_nested_value(silver_config, field_name)
-            source_key = f"silver.{field_name}"
-
-            if source_key in field_sources:
-                source = (
-                    FieldSource.PARENT
-                    if field_sources[source_key] == "parent"
-                    else FieldSource.LOCAL
-                )
-            elif value is not None and value != "":
-                source = FieldSource.LOCAL
-            else:
-                source = FieldSource.DEFAULT
-
-            parent_value = None
-            if parent_config:
-                parent_silver = parent_config.get("silver", {})
-                parent_value = _get_nested_value(parent_silver, field_name)
-
-            state.silver[field_name] = FieldValue(
-                name=field_name,
-                value=value if value is not None else "",
-                source=source,
-                is_sensitive=field_name in SENSITIVE_FIELDS,
-                parent_value=parent_value,
-            )
+        # Populate bronze and silver fields
+        state.bronze = _load_section_fields(
+            section_name="bronze",
+            merged_config=merged_config,
+            parent_config=parent_config,
+            field_sources=field_sources,
+            field_list=ALL_BRONZE_FIELDS,
+        )
+        state.silver = _load_section_fields(
+            section_name="silver",
+            merged_config=merged_config,
+            parent_config=parent_config,
+            field_sources=field_sources,
+            field_list=ALL_SILVER_FIELDS,
+        )
 
         # Populate available env vars
         state.available_env_vars = set(os.environ.keys())
@@ -527,3 +483,56 @@ def _flatten_config(config: dict[str, Any], prefix: str = "") -> dict[str, Any]:
             result[key] = value
 
     return result
+
+
+def _load_section_fields(
+    section_name: str,
+    merged_config: dict[str, Any],
+    parent_config: dict[str, Any] | None,
+    field_sources: dict[str, str],
+    field_list: list[str],
+) -> dict[str, FieldValue]:
+    """Load field values for a section (bronze or silver).
+
+    Consolidates the repeated logic for loading bronze and silver fields.
+
+    Args:
+        section_name: "bronze" or "silver"
+        merged_config: The merged configuration (parent + child)
+        parent_config: The parent configuration (if any)
+        field_sources: Dict mapping field paths to "parent" or "child"
+        field_list: List of field names to load
+
+    Returns:
+        Dict mapping field names to FieldValue objects
+    """
+    fields: dict[str, FieldValue] = {}
+    section_config = merged_config.get(section_name, {})
+    parent_section = parent_config.get(section_name, {}) if parent_config else {}
+
+    for field_name in field_list:
+        value = _get_nested_value(section_config, field_name)
+        source_key = f"{section_name}.{field_name}"
+
+        if source_key in field_sources:
+            source = (
+                FieldSource.PARENT
+                if field_sources[source_key] == "parent"
+                else FieldSource.LOCAL
+            )
+        elif value is not None and value != "":
+            source = FieldSource.LOCAL
+        else:
+            source = FieldSource.DEFAULT
+
+        parent_value = _get_nested_value(parent_section, field_name) if parent_config else None
+
+        fields[field_name] = FieldValue(
+            name=field_name,
+            value=value if value is not None else "",
+            source=source,
+            is_sensitive=field_name in SENSITIVE_FIELDS,
+            parent_value=parent_value,
+        )
+
+    return fields

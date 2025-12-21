@@ -34,6 +34,8 @@ from prompt_toolkit.formatted_text import HTML, FormattedText
 
 from pipelines.tui.models import PipelineState
 from pipelines.tui.models.field_metadata import get_dynamic_required_fields
+from pipelines.tui.settings import get_settings
+from pipelines.tui.utils.schema_reader import get_field_placeholder
 
 
 # Application style
@@ -52,6 +54,7 @@ STYLE = Style.from_dict({
     "field-input.overridden": "bg:#1e1e1e #ff9900",  # Overridden value - orange
     "field-input.invalid": "bg:#3a1515 #ff6666",  # Invalid value - red tint
     "field-input.invalid-focused": "bg:#4a2020 #ff6666",  # Invalid focused - darker red
+    "field-input.placeholder": "bg:#1e1e1e #606060 italic",  # Placeholder text - grayed italic
     "field-help": "#808080 italic",
     "field-help.inline": "#6a9955 italic",
     "inherited": "italic #6699ff",
@@ -284,10 +287,14 @@ class EnvFileBrowserControl(BaseFileBrowserControl):
         super().__init__(on_select, on_cancel, initial_path)
 
     def _filter_file(self, item: Path) -> bool:
+        name = item.name.lower()
         return (
-            item.name == ".env"
-            or item.name.endswith(".env")
-            or item.name.startswith(".env.")
+            name == ".env"
+            or name.endswith(".env")      # production.env, local.env
+            or name.startswith(".env.")   # .env.local, .env.development
+            or name == ".envrc"           # direnv
+            or name.startswith("env.")    # env.local (without dot prefix)
+            or "environment" in name      # .environment, environment.local
         )
 
     def _get_file_display(self, item: Path) -> str:
@@ -696,6 +703,7 @@ class Field:
         visible_when: Callable[["PipelineConfigApp"], bool] | None = None,
         is_basic: bool = False,  # Show in Basic mode
         multiline: bool = False,  # Expand when focused (for SQL queries)
+        placeholder: str = "",  # Suggested value shown in empty fields
     ):
         self.name = name
         self.label = label
@@ -710,8 +718,21 @@ class Field:
         self.visible_when = visible_when
         self.is_basic = is_basic
         self.multiline = multiline
+        self.placeholder = placeholder
         self.buffer = Buffer(name=name, multiline=multiline)
-        self.buffer.text = default
+        # If no default value but we have a placeholder, show it as initial value
+        if default:
+            self.buffer.text = default
+        elif placeholder:
+            self.buffer.text = placeholder
+        else:
+            self.buffer.text = ""
+        # Track if the current value is the placeholder (for styling)
+        self._is_placeholder_value = not default and bool(placeholder)
+
+    def is_showing_placeholder(self) -> bool:
+        """Check if field is currently showing the placeholder value."""
+        return self._is_placeholder_value and self.buffer.text == self.placeholder
 
     def is_visible(self, app: "PipelineConfigApp") -> bool:
         """Check if this field should be visible."""
@@ -914,6 +935,7 @@ class PipelineConfigApp:
                 default=self.state.get_bronze_value("system") or "",
                 source=self._get_source("bronze", "system"),
                 is_basic=True,
+                placeholder=get_field_placeholder("system") or "",
             ),
             Field(
                 "entity", "Entity", "bronze",
@@ -922,6 +944,7 @@ class PipelineConfigApp:
                 default=self.state.get_bronze_value("entity") or "",
                 source=self._get_source("bronze", "entity"),
                 is_basic=True,
+                placeholder=get_field_placeholder("entity") or "",
             ),
             Field(
                 "source_type", "Source Type", "bronze",
@@ -951,6 +974,7 @@ class PipelineConfigApp:
                 default=self.state.get_bronze_value("source_path") or "",
                 visible_when=lambda app: app._get_field_value("source_type").startswith("file_"),
                 is_basic=True,
+                placeholder=get_field_placeholder("source_path") or "",
             ),
             Field(
                 "host", "Host", "bronze",
@@ -959,6 +983,7 @@ class PipelineConfigApp:
                 default=self.state.get_bronze_value("host") or "",
                 visible_when=lambda app: app._get_field_value("source_type").startswith("database_"),
                 is_basic=True,
+                placeholder=get_field_placeholder("host") or "",
             ),
             Field(
                 "database", "Database", "bronze",
@@ -966,6 +991,7 @@ class PipelineConfigApp:
                 default=self.state.get_bronze_value("database") or "",
                 visible_when=lambda app: app._get_field_value("source_type").startswith("database_"),
                 is_basic=True,
+                placeholder=get_field_placeholder("database") or "",
             ),
             Field(
                 "query", "Full Query", "bronze",
@@ -1010,6 +1036,7 @@ class PipelineConfigApp:
                 default=self.state.get_bronze_value("base_url") or "",
                 visible_when=lambda app: app._get_field_value("source_type") == "api_rest",
                 is_basic=True,
+                placeholder=get_field_placeholder("base_url") or "",
             ),
             Field(
                 "endpoint", "Endpoint", "bronze",
@@ -1018,6 +1045,7 @@ class PipelineConfigApp:
                 default=self.state.get_bronze_value("endpoint") or "",
                 visible_when=lambda app: app._get_field_value("source_type") == "api_rest",
                 is_basic=True,
+                placeholder=get_field_placeholder("endpoint") or "",
             ),
             Field(
                 "auth_type", "Authentication", "bronze",
@@ -1043,6 +1071,7 @@ class PipelineConfigApp:
                     app._get_field_value("auth_type") == "bearer"
                 ),
                 is_basic=True,
+                placeholder=get_field_placeholder("token") or "",
             ),
             Field(
                 "api_key", "API Key", "bronze",
@@ -1054,6 +1083,7 @@ class PipelineConfigApp:
                     app._get_field_value("auth_type") == "api_key"
                 ),
                 is_basic=True,
+                placeholder=get_field_placeholder("api_key") or "",
             ),
             Field(
                 "api_key_header", "API Key Header", "bronze",
@@ -1332,6 +1362,7 @@ class PipelineConfigApp:
                 help_text="Columns that uniquely identify a record (comma-separated)",
                 default=self._list_to_str(self.state.get_silver_value("natural_keys")),
                 is_basic=True,
+                placeholder=get_field_placeholder("natural_keys") or "",
             ),
             Field(
                 "change_timestamp", "Change Timestamp", "silver",
@@ -1339,6 +1370,7 @@ class PipelineConfigApp:
                 help_text="Column that tracks when records changed",
                 default=self.state.get_silver_value("change_timestamp") or "",
                 is_basic=True,
+                placeholder=get_field_placeholder("change_timestamp") or "",
             ),
             Field(
                 "entity_kind", "Entity Kind", "silver",
@@ -2151,11 +2183,14 @@ class PipelineConfigApp:
         if field.is_sensitive:
             label_parts.append(("class:sensitive", "[${...}] "))
 
-        # Value display with styling based on source and validity
+        # Value display with styling based on source, validity, and placeholder
+        is_placeholder = field.is_showing_placeholder() if hasattr(field, 'is_showing_placeholder') else False
         if not is_valid:
             value_style = "class:field-input.invalid-focused" if is_focused else "class:field-input.invalid"
         elif is_focused:
             value_style = "class:field-input.focused"
+        elif is_placeholder:
+            value_style = "class:field-input.placeholder"
         elif field_source == "parent":
             value_style = "class:field-input.inherited"
         elif field_source == "override":
@@ -2354,6 +2389,10 @@ class PipelineConfigApp:
         """Sync field buffer values to state."""
         for field in self.fields:
             value = field.buffer.text.strip()
+
+            # Don't sync placeholder values to state - they're just visual hints
+            if hasattr(field, 'is_showing_placeholder') and field.is_showing_placeholder():
+                value = ""
 
             if field.name == "name":
                 self.state.name = value
@@ -2634,7 +2673,8 @@ class PipelineConfigApp:
             else:
                 save_path = existing_path
         else:
-            save_path = Path.cwd() / "pipelines" / f"{name}.yaml"
+            settings = get_settings()
+            save_path = settings.get_config_dir() / f"{name}.yaml"
 
         # Save
         try:
@@ -2757,10 +2797,15 @@ class PipelineConfigApp:
 
     def _show_parent_browser(self) -> None:
         """Show file browser to select a parent YAML file for inheritance."""
+        settings = get_settings()
+        initial_dir = settings.get_parent_config_dir()
+        # Fall back to cwd if configured dir doesn't exist
+        if not initial_dir.exists():
+            initial_dir = Path.cwd()
         self.file_browser = FileBrowserControl(
             on_select=self._on_parent_selected,
             on_cancel=self._close_file_browser,
-            initial_path=Path.cwd(),
+            initial_path=initial_dir,
         )
         self.file_browser_active = True
         self.status_message = "Select parent config: ↑↓ Navigate | Enter: Select | Esc: Cancel"
@@ -2787,10 +2832,15 @@ class PipelineConfigApp:
 
     def _show_file_browser(self) -> None:
         """Show interactive file browser to load a YAML file."""
+        settings = get_settings()
+        initial_dir = settings.get_edit_config_dir()
+        # Fall back to cwd if configured dir doesn't exist
+        if not initial_dir.exists():
+            initial_dir = Path.cwd()
         self.file_browser = FileBrowserControl(
             on_select=self._on_file_selected,
             on_cancel=self._close_file_browser,
-            initial_path=Path.cwd(),
+            initial_path=initial_dir,
         )
         self.file_browser_active = True
         self.status_message = "↑↓: Navigate | Enter: Select | Backspace: Go up | Esc: Cancel"
@@ -2813,10 +2863,17 @@ class PipelineConfigApp:
         """Show file browser to select an environment file."""
         # Discover env files to highlight in the browser
         discovered = self.state.discover_env_files() if self.state else []
+        # Start in first configured env directory that exists, or cwd
+        settings = get_settings()
+        initial_dir = Path.cwd()
+        for env_dir in settings.get_env_dirs():
+            if env_dir.exists():
+                initial_dir = env_dir
+                break
         self.env_browser = EnvFileBrowserControl(
             on_select=self._on_env_file_selected,
             on_cancel=self._close_env_browser,
-            initial_path=Path.cwd(),
+            initial_path=initial_dir,
             discovered_files=discovered,
         )
         self.env_browser_active = True
@@ -2913,9 +2970,9 @@ class PipelineConfigApp:
 
     def _get_env_var_warnings(self) -> list[str]:
         """Check for environment variable issues in field values."""
-        import re
+        from pipelines.lib.env import ENV_VAR_PATTERN
+
         warnings: list[str] = []
-        env_var_pattern = re.compile(r'\$\{([A-Za-z_][A-Za-z0-9_]*)\}')
 
         # Track fields using env vars and which vars are missing
         fields_with_env_vars = []
@@ -2926,10 +2983,13 @@ class PipelineConfigApp:
             if not value:
                 continue
 
-            matches = env_var_pattern.findall(value)
+            # Find all env var references (${VAR} or $VAR)
+            matches = ENV_VAR_PATTERN.findall(value)
             if matches:
                 fields_with_env_vars.append(field.name)
-                for var_name in matches:
+                for match in matches:
+                    # ENV_VAR_PATTERN returns (group1, group2) tuples
+                    var_name = match[0] or match[1]
                     if var_name not in self.state.available_env_vars:
                         missing_vars.add(var_name)
 

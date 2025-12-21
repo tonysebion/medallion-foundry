@@ -125,59 +125,51 @@ def _format_value_for_comment(value: Any) -> str:
 
 def _format_bronze(bronze: dict[str, Any]) -> list[str]:
     """Format bronze section fields."""
+    from pipelines.tui.utils.schema_reader import SCHEMA_DEFAULTS
+
+    bronze_defaults = SCHEMA_DEFAULTS.get("bronze", {})
+
+    # Field definitions: (key, format_type)
+    # format_type: "simple", "path" (needs quoting), "multiline", "skip_default"
+    BRONZE_FIELDS = [
+        # Required fields first
+        ("system", "simple"),
+        ("entity", "simple"),
+        ("source_type", "simple"),
+        # Paths
+        ("source_path", "path"),
+        ("target_path", "path"),
+        # Database
+        ("host", "simple"),
+        ("database", "simple"),
+        ("query", "multiline"),
+        # Load pattern
+        ("load_pattern", "skip_default"),
+        # Incremental
+        ("watermark_column", "simple"),
+        ("full_refresh_days", "simple"),
+        # Options
+        ("chunk_size", "simple"),
+    ]
+
     lines: list[str] = []
+    for key, fmt_type in BRONZE_FIELDS:
+        value = bronze.get(key)
+        if not value:
+            continue
+        if fmt_type == "skip_default" and value == bronze_defaults.get(key):
+            continue
 
-    # Required fields first
-    if bronze.get("system"):
-        lines.append(f"  system: {bronze['system']}")
-    if bronze.get("entity"):
-        lines.append(f"  entity: {bronze['entity']}")
-    if bronze.get("source_type"):
-        lines.append(f"  source_type: {bronze['source_type']}")
-
-    # Source path (quote if contains special chars)
-    if bronze.get("source_path"):
-        path = bronze["source_path"]
-        if _needs_quoting(path):
-            lines.append(f'  source_path: "{path}"')
+        if fmt_type == "multiline":
+            lines.append(f"  {key}: |")
+            for line in str(value).split("\n"):
+                lines.append(f"    {line}")
+        elif fmt_type == "path" and _needs_quoting(str(value)):
+            lines.append(f'  {key}: "{value}"')
         else:
-            lines.append(f"  source_path: {path}")
+            lines.append(f"  {key}: {value}")
 
-    # Target path
-    if bronze.get("target_path"):
-        path = bronze["target_path"]
-        if _needs_quoting(path):
-            lines.append(f'  target_path: "{path}"')
-        else:
-            lines.append(f"  target_path: {path}")
-
-    # Database connection
-    if bronze.get("host"):
-        lines.append(f"  host: {bronze['host']}")
-    if bronze.get("database"):
-        lines.append(f"  database: {bronze['database']}")
-    if bronze.get("query"):
-        lines.append("  query: |")
-        for line in bronze["query"].split("\n"):
-            lines.append(f"    {line}")
-
-    # Load pattern (only if not default)
-    if bronze.get("load_pattern") and bronze["load_pattern"] != "full_snapshot":
-        lines.append(f"  load_pattern: {bronze['load_pattern']}")
-
-    # Watermark
-    if bronze.get("watermark_column"):
-        lines.append(f"  watermark_column: {bronze['watermark_column']}")
-
-    # Full refresh
-    if bronze.get("full_refresh_days"):
-        lines.append(f"  full_refresh_days: {bronze['full_refresh_days']}")
-
-    # Chunk size
-    if bronze.get("chunk_size"):
-        lines.append(f"  chunk_size: {bronze['chunk_size']}")
-
-    # Options
+    # Options dict handled separately
     if bronze.get("options"):
         lines.extend(_format_options(bronze["options"]))
 
@@ -186,74 +178,57 @@ def _format_bronze(bronze: dict[str, Any]) -> list[str]:
 
 def _format_silver(silver: dict[str, Any]) -> list[str]:
     """Format silver section fields."""
+    from pipelines.tui.utils.schema_reader import SCHEMA_DEFAULTS
+
+    silver_defaults = SCHEMA_DEFAULTS.get("silver", {})
+
+    # Field definitions: (key, format_type)
+    # format_type: "simple", "path", "list", "keys_list", "skip_default"
+    SILVER_FIELDS = [
+        # Required
+        ("natural_keys", "keys_list"),
+        ("change_timestamp", "simple"),
+        # Paths
+        ("source_path", "path"),
+        ("target_path", "path"),
+        # Entity config
+        ("entity_kind", "skip_default"),
+        ("history_mode", "skip_default"),
+        # Column selection
+        ("attributes", "list"),
+        ("exclude_columns", "list"),
+        ("partition_by", "list"),
+        # Output options
+        ("parquet_compression", "skip_default"),
+        ("validate_source", "skip_default"),
+    ]
+
     lines: list[str] = []
+    for key, fmt_type in SILVER_FIELDS:
+        value = silver.get(key)
+        if not value:
+            continue
+        if fmt_type == "skip_default" and value == silver_defaults.get(key):
+            continue
 
-    # Natural keys (required)
-    if silver.get("natural_keys"):
-        keys = silver["natural_keys"]
-        if isinstance(keys, list):
+        if fmt_type == "keys_list":
+            # Special handling for natural_keys (single-line for 1 item)
+            keys = value if isinstance(value, list) else [value]
             if len(keys) == 1:
-                lines.append(f"  natural_keys: [{keys[0]}]")
+                lines.append(f"  {key}: [{keys[0]}]")
             else:
-                lines.append("  natural_keys:")
-                for key in keys:
-                    lines.append(f"    - {key}")
+                lines.append(f"  {key}:")
+                for k in keys:
+                    lines.append(f"    - {k}")
+        elif fmt_type == "list":
+            items = value if isinstance(value, list) else [value]
+            lines.append(f"  {key}:")
+            for item in items:
+                lines.append(f"    - {item}")
+        elif fmt_type == "path" and _needs_quoting(str(value)):
+            lines.append(f'  {key}: "{value}"')
         else:
-            lines.append(f"  natural_keys: [{keys}]")
-
-    # Change timestamp (required)
-    if silver.get("change_timestamp"):
-        lines.append(f"  change_timestamp: {silver['change_timestamp']}")
-
-    # Source path
-    if silver.get("source_path"):
-        path = silver["source_path"]
-        if _needs_quoting(path):
-            lines.append(f'  source_path: "{path}"')
-        else:
-            lines.append(f"  source_path: {path}")
-
-    # Target path
-    if silver.get("target_path"):
-        path = silver["target_path"]
-        if _needs_quoting(path):
-            lines.append(f'  target_path: "{path}"')
-        else:
-            lines.append(f"  target_path: {path}")
-
-    # Entity kind (only if not default)
-    if silver.get("entity_kind") and silver["entity_kind"] != "state":
-        lines.append(f"  entity_kind: {silver['entity_kind']}")
-
-    # History mode (only if not default)
-    if silver.get("history_mode") and silver["history_mode"] != "current_only":
-        lines.append(f"  history_mode: {silver['history_mode']}")
-
-    # Attributes
-    if silver.get("attributes"):
-        lines.append("  attributes:")
-        for attr in silver["attributes"]:
-            lines.append(f"    - {attr}")
-
-    # Exclude columns
-    if silver.get("exclude_columns"):
-        lines.append("  exclude_columns:")
-        for col in silver["exclude_columns"]:
-            lines.append(f"    - {col}")
-
-    # Partition by
-    if silver.get("partition_by"):
-        lines.append("  partition_by:")
-        for col in silver["partition_by"]:
-            lines.append(f"    - {col}")
-
-    # Compression (only if not default)
-    if silver.get("parquet_compression") and silver["parquet_compression"] != "snappy":
-        lines.append(f"  parquet_compression: {silver['parquet_compression']}")
-
-    # Validate source (only if not default)
-    if silver.get("validate_source") and silver["validate_source"] != "skip":
-        lines.append(f"  validate_source: {silver['validate_source']}")
+            lines.append(f"  {key}: {value}")
 
     return lines
 

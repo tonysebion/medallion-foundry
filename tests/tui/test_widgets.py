@@ -479,12 +479,13 @@ class TestUndoRedo:
 
         # Find system field and modify it
         system_field = next(f for f in app.fields if f.name == "system")
+        original_value = system_field.buffer.text  # May be placeholder
         system_field.buffer.text = "test_system"
 
         # The change should be recorded
         assert len(app._undo_stack) == 1
         assert app._undo_stack[0][0] == "system"  # field_name
-        assert app._undo_stack[0][1] == ""  # old_value
+        assert app._undo_stack[0][1] == original_value  # old_value (placeholder or empty)
         assert app._undo_stack[0][2] == "test_system"  # new_value
 
     def test_undo_restores_value(self) -> None:
@@ -495,13 +496,14 @@ class TestUndoRedo:
 
         # Modify field
         system_field = next(f for f in app.fields if f.name == "system")
+        original_value = system_field.buffer.text  # May be placeholder
         system_field.buffer.text = "test_system"
 
         # Undo
         app._undo()
 
-        # Value should be restored
-        assert system_field.buffer.text == ""
+        # Value should be restored (to original, which may be placeholder)
+        assert system_field.buffer.text == original_value
         assert len(app._undo_stack) == 0
         assert len(app._redo_stack) == 1
 

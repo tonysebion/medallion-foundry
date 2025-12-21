@@ -126,6 +126,60 @@ ALWAYS_REQUIRED: dict[str, list[str]] = {
 }
 
 
+def _get_auth_visibility(is_api: bool, auth_type: str | None) -> dict[str, bool]:
+    """Get visibility for authentication fields.
+
+    Args:
+        is_api: Whether source type is API
+        auth_type: Current auth type selection
+
+    Returns:
+        Dict of auth field names to visibility
+    """
+    return {
+        "auth_type": is_api,
+        "token": is_api and auth_type == "bearer",
+        "api_key": is_api and auth_type == "api_key",
+        "api_key_header": is_api and auth_type == "api_key",
+        "username": is_api and auth_type == "basic",
+        "password": is_api and auth_type == "basic",
+    }
+
+
+def _get_pagination_visibility(
+    is_api: bool, pagination_strategy: str | None
+) -> dict[str, bool]:
+    """Get visibility for pagination fields.
+
+    Args:
+        is_api: Whether source type is API
+        pagination_strategy: Current pagination strategy selection
+
+    Returns:
+        Dict of pagination field names to visibility
+    """
+    has_pagination = pagination_strategy and pagination_strategy != "none"
+    is_offset = pagination_strategy == "offset"
+    is_page = pagination_strategy == "page"
+    is_cursor = pagination_strategy == "cursor"
+
+    return {
+        "pagination_strategy": is_api,
+        "page_size": is_api and has_pagination,
+        "max_pages": is_api and has_pagination,
+        "max_records": is_api and has_pagination,
+        # Offset pagination
+        "offset_param": is_api and is_offset,
+        "limit_param": is_api and is_offset,
+        # Page pagination
+        "page_param": is_api and is_page,
+        "page_size_param": is_api and is_page,
+        # Cursor pagination
+        "cursor_param": is_api and is_cursor,
+        "cursor_path": is_api and is_cursor,
+    }
+
+
 def get_conditional_visibility(state: "PipelineState") -> dict[str, bool]:
     """Get visibility status for all conditional fields based on current state.
 
@@ -137,6 +191,14 @@ def get_conditional_visibility(state: "PipelineState") -> dict[str, bool]:
     Returns:
         Dict of field_name -> is_visible
     """
+    from pipelines.tui.constants import (
+        is_api_source,
+        is_csv_source,
+        is_database_source,
+        is_file_source,
+        is_json_source,
+    )
+
     visibility: dict[str, bool] = {}
 
     # Get current bronze values
@@ -145,19 +207,21 @@ def get_conditional_visibility(state: "PipelineState") -> dict[str, bool]:
     auth_type = state.get_bronze_value("auth_type")
     pagination_strategy = state.get_bronze_value("pagination_strategy")
 
+    # Source type checks
+    is_file = is_file_source(source_type)
+    is_database = is_database_source(source_type)
+    is_api = is_api_source(source_type)
+
     # File source fields
-    is_file = source_type.startswith("file_") if source_type else False
     visibility["source_path"] = is_file or not source_type  # Show by default
 
     # Database source fields
-    is_database = source_type.startswith("database_") if source_type else False
     visibility["host"] = is_database
     visibility["database"] = is_database
     visibility["query"] = is_database
     visibility["connection"] = is_database
 
     # API source fields
-    is_api = source_type == "api_rest" if source_type else False
     visibility["base_url"] = is_api
     visibility["endpoint"] = is_api
     visibility["data_path"] = is_api
@@ -168,35 +232,9 @@ def get_conditional_visibility(state: "PipelineState") -> dict[str, bool]:
     visibility["params"] = is_api
     visibility["path_params"] = is_api
 
-    # API auth fields (only when API is selected)
-    visibility["auth_type"] = is_api
-    visibility["token"] = is_api and auth_type == "bearer"
-    visibility["api_key"] = is_api and auth_type == "api_key"
-    visibility["api_key_header"] = is_api and auth_type == "api_key"
-    visibility["username"] = is_api and auth_type == "basic"
-    visibility["password"] = is_api and auth_type == "basic"
-
-    # API pagination fields (only when API is selected)
-    visibility["pagination_strategy"] = is_api
-    has_pagination = pagination_strategy and pagination_strategy != "none"
-    visibility["page_size"] = is_api and has_pagination
-    visibility["max_pages"] = is_api and has_pagination
-    visibility["max_records"] = is_api and has_pagination
-
-    # Offset pagination
-    is_offset = pagination_strategy == "offset"
-    visibility["offset_param"] = is_api and is_offset
-    visibility["limit_param"] = is_api and is_offset
-
-    # Page pagination
-    is_page = pagination_strategy == "page"
-    visibility["page_param"] = is_api and is_page
-    visibility["page_size_param"] = is_api and is_page
-
-    # Cursor pagination
-    is_cursor = pagination_strategy == "cursor"
-    visibility["cursor_param"] = is_api and is_cursor
-    visibility["cursor_path"] = is_api and is_cursor
+    # Add auth and pagination visibility from helpers
+    visibility.update(_get_auth_visibility(is_api, auth_type))
+    visibility.update(_get_pagination_visibility(is_api, pagination_strategy))
 
     # Load pattern fields
     is_incremental = load_pattern in ("incremental", "incremental_append", "cdc")
@@ -205,17 +243,15 @@ def get_conditional_visibility(state: "PipelineState") -> dict[str, bool]:
     visibility["full_refresh_days"] = is_incremental
 
     # CSV-specific options
-    is_csv = source_type in ("file_csv", "file_space_delimited")
-    visibility["csv_delimiter"] = is_csv
-    visibility["csv_header"] = is_csv
-    visibility["csv_skip_rows"] = is_csv
+    visibility["csv_delimiter"] = is_csv_source(source_type)
+    visibility["csv_header"] = is_csv_source(source_type)
+    visibility["csv_skip_rows"] = is_csv_source(source_type)
 
     # Excel-specific
     visibility["sheet"] = source_type == "file_excel"
 
     # JSON-specific
-    is_json = source_type in ("file_json", "file_jsonl")
-    visibility["flatten"] = is_json
+    visibility["flatten"] = is_json_source(source_type)
 
     # Fixed-width specific
     is_fixed = source_type == "file_fixed_width"
@@ -223,6 +259,38 @@ def get_conditional_visibility(state: "PipelineState") -> dict[str, bool]:
     visibility["columns"] = is_fixed or source_type == "file_space_delimited"
 
     return visibility
+
+
+def _get_auth_required_fields(auth_type: str | None) -> list[str]:
+    """Get required fields based on auth type.
+
+    Args:
+        auth_type: Current auth type selection
+
+    Returns:
+        List of required field names for the auth type
+    """
+    if auth_type == "bearer":
+        return ["token"]
+    elif auth_type == "api_key":
+        return ["api_key"]
+    elif auth_type == "basic":
+        return ["username", "password"]
+    return []
+
+
+def _get_pagination_required_fields(pagination_strategy: str | None) -> list[str]:
+    """Get required fields based on pagination strategy.
+
+    Args:
+        pagination_strategy: Current pagination strategy selection
+
+    Returns:
+        List of required field names for the pagination strategy
+    """
+    if pagination_strategy == "cursor":
+        return ["cursor_path"]  # Must know where next cursor is in response
+    return []
 
 
 def get_dynamic_required_fields(state: "PipelineState") -> dict[str, list[str]]:
@@ -240,6 +308,8 @@ def get_dynamic_required_fields(state: "PipelineState") -> dict[str, list[str]]:
     Returns:
         Dict with "bronze" and "silver" keys, each containing list of required field names
     """
+    from pipelines.tui.constants import is_api_source, is_database_source, is_file_source
+
     bronze_required = list(ALWAYS_REQUIRED["bronze"])
     silver_required = list(ALWAYS_REQUIRED["silver"])
 
@@ -247,35 +317,27 @@ def get_dynamic_required_fields(state: "PipelineState") -> dict[str, list[str]]:
     source_type = state.get_bronze_value("source_type")
     load_pattern = state.get_bronze_value("load_pattern")
     auth_type = state.get_bronze_value("auth_type")
+    pagination_strategy = state.get_bronze_value("pagination_strategy")
 
     # API source requirements
-    if source_type == "api_rest":
+    if is_api_source(source_type):
         bronze_required.extend(["base_url", "endpoint"])
 
     # Database source requirements
-    if source_type and source_type.startswith("database_"):
+    if is_database_source(source_type):
         bronze_required.extend(["host", "database", "query"])
 
     # File source requirements
-    if source_type and source_type.startswith("file_"):
+    if is_file_source(source_type):
         bronze_required.append("source_path")
 
     # Incremental/CDC load requirements
     if load_pattern in ("incremental", "incremental_append", "cdc"):
         bronze_required.append("watermark_column")
 
-    # Auth requirements
-    if auth_type == "bearer":
-        bronze_required.append("token")
-    elif auth_type == "api_key":
-        bronze_required.append("api_key")
-    elif auth_type == "basic":
-        bronze_required.extend(["username", "password"])
-
-    # Pagination requirements
-    pagination_strategy = state.get_bronze_value("pagination_strategy")
-    if pagination_strategy == "cursor":
-        bronze_required.append("cursor_path")  # Must know where next cursor is in response
+    # Add auth and pagination requirements from helpers
+    bronze_required.extend(_get_auth_required_fields(auth_type))
+    bronze_required.extend(_get_pagination_required_fields(pagination_strategy))
 
     return {
         "bronze": bronze_required,

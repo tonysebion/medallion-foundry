@@ -37,3 +37,32 @@ AUTH_FIELDS = frozenset(
 PAGINATION_FIELDS = frozenset(
     field for field, (parent, _) in NESTED_FIELD_MAPPINGS.items() if parent == "pagination"
 )
+
+
+# =============================================================================
+# Source Type Helpers
+# =============================================================================
+
+def is_file_source(source_type: str | None) -> bool:
+    """Check if source type is a file-based source."""
+    return bool(source_type and source_type.startswith("file_"))
+
+
+def is_database_source(source_type: str | None) -> bool:
+    """Check if source type is a database source."""
+    return bool(source_type and source_type.startswith("database_"))
+
+
+def is_api_source(source_type: str | None) -> bool:
+    """Check if source type is a REST API source."""
+    return source_type == "api_rest"
+
+
+def is_csv_source(source_type: str | None) -> bool:
+    """Check if source type is CSV or space-delimited."""
+    return source_type in ("file_csv", "file_space_delimited")
+
+
+def is_json_source(source_type: str | None) -> bool:
+    """Check if source type is JSON or JSONL."""
+    return source_type in ("file_json", "file_jsonl")
