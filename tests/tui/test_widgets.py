@@ -14,6 +14,7 @@ import pytest
 
 from pipelines.tui.app import PipelineConfigApp, Field
 from pipelines.tui.models import PipelineState, FieldSource
+from pipelines.tui.models.field_metadata import get_dynamic_required_fields
 
 
 class TestField:
@@ -37,10 +38,11 @@ class TestField:
         assert field.buffer.text == "my_pipeline"
 
     def test_field_visibility_always_visible(self) -> None:
-        """Field without visible_when is always visible."""
-        field = Field("system", "System", "bronze")
+        """Field without visible_when is always visible in advanced mode."""
+        field = Field("system", "System", "bronze", is_basic=True)
         app = PipelineConfigApp()
         app.state = PipelineState.from_schema_defaults()
+        app.advanced_mode = True  # Need advanced mode or is_basic=True
         assert field.is_visible(app) is True
 
     def test_field_visibility_conditional(self) -> None:
@@ -178,6 +180,7 @@ class TestFieldVisibility:
         """File source shows file-specific fields."""
         app = PipelineConfigApp()
         app.state = PipelineState.from_schema_defaults()
+        app.advanced_mode = True  # Enable advanced mode to see all fields
         app._create_fields()
 
         # Set source type to file_csv
@@ -195,6 +198,7 @@ class TestFieldVisibility:
         """Database source shows database-specific fields."""
         app = PipelineConfigApp()
         app.state = PipelineState.from_schema_defaults()
+        app.advanced_mode = True  # Enable advanced mode to see all fields
         app._create_fields()
 
         # Set source type to database_mssql
@@ -214,6 +218,7 @@ class TestFieldVisibility:
         """API source shows API-specific fields."""
         app = PipelineConfigApp()
         app.state = PipelineState.from_schema_defaults()
+        app.advanced_mode = True  # Enable advanced mode to see all fields
         app._create_fields()
 
         # Set source type to api_rest
@@ -233,6 +238,7 @@ class TestFieldVisibility:
         """Bearer auth shows token field."""
         app = PipelineConfigApp()
         app.state = PipelineState.from_schema_defaults()
+        app.advanced_mode = True  # Enable advanced mode to see all fields
         app._create_fields()
 
         # Set source type to api_rest and auth to bearer
@@ -250,6 +256,7 @@ class TestFieldVisibility:
         """Incremental load pattern shows watermark field."""
         app = PipelineConfigApp()
         app.state = PipelineState.from_schema_defaults()
+        app.advanced_mode = True  # Enable advanced mode to see all fields
         app._create_fields()
 
         # Set load pattern to incremental
@@ -452,3 +459,605 @@ class TestAPIConfiguration:
 
         assert app.state.get_bronze_value("pagination_strategy") == "offset"
         assert app.state.get_bronze_value("page_size") == "100"
+
+
+class TestUndoRedo:
+    """Tests for undo/redo functionality."""
+
+    def test_undo_stack_initially_empty(self) -> None:
+        """Undo stack is empty initially."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        assert len(app._undo_stack) == 0
+        assert len(app._redo_stack) == 0
+
+    def test_undo_records_changes(self) -> None:
+        """Field changes are recorded in undo stack."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Find system field and modify it
+        system_field = next(f for f in app.fields if f.name == "system")
+        system_field.buffer.text = "test_system"
+
+        # The change should be recorded
+        assert len(app._undo_stack) == 1
+        assert app._undo_stack[0][0] == "system"  # field_name
+        assert app._undo_stack[0][1] == ""  # old_value
+        assert app._undo_stack[0][2] == "test_system"  # new_value
+
+    def test_undo_restores_value(self) -> None:
+        """Undo restores previous value."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Modify field
+        system_field = next(f for f in app.fields if f.name == "system")
+        system_field.buffer.text = "test_system"
+
+        # Undo
+        app._undo()
+
+        # Value should be restored
+        assert system_field.buffer.text == ""
+        assert len(app._undo_stack) == 0
+        assert len(app._redo_stack) == 1
+
+    def test_redo_restores_undone_value(self) -> None:
+        """Redo restores undone value."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Modify field
+        system_field = next(f for f in app.fields if f.name == "system")
+        system_field.buffer.text = "test_system"
+
+        # Undo then redo
+        app._undo()
+        app._redo()
+
+        # Value should be restored
+        assert system_field.buffer.text == "test_system"
+        assert len(app._undo_stack) == 1
+        assert len(app._redo_stack) == 0
+
+
+class TestSearchFilter:
+    """Tests for search/filter functionality."""
+
+    def test_search_initially_empty(self) -> None:
+        """Search text is empty initially."""
+        app = PipelineConfigApp()
+        assert app._search_text == ""
+
+    def test_search_filters_fields(self) -> None:
+        """Search filters visible fields."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app.advanced_mode = True  # Search only works in advanced mode
+        app._create_fields()
+
+        # Get all visible fields
+        all_visible = app._get_visible_fields()
+        initial_count = len(all_visible)
+
+        # Set search text
+        app._search_text = "system"
+        filtered = app._get_visible_fields()
+
+        # Should have fewer fields
+        assert len(filtered) < initial_count
+        # All filtered fields should contain "system"
+        for field in filtered:
+            assert "system" in field.name.lower() or "system" in field.label.lower() or "system" in field.help_text.lower()
+
+    def test_search_disabled_in_basic_mode(self) -> None:
+        """Search is ignored in basic mode."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app.advanced_mode = False  # Basic mode
+        app._create_fields()
+
+        # Get all visible fields
+        all_visible = app._get_visible_fields()
+        initial_count = len(all_visible)
+
+        # Set search text
+        app._search_text = "xyz_nonexistent"
+        filtered = app._get_visible_fields()
+
+        # In basic mode, search should not filter
+        assert len(filtered) == initial_count
+
+
+class TestUnsavedChanges:
+    """Tests for unsaved changes tracking."""
+
+    def test_no_unsaved_changes_initially(self) -> None:
+        """No unsaved changes initially."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        assert app._has_unsaved_changes is False
+
+    def test_unsaved_changes_after_edit(self) -> None:
+        """Unsaved changes tracked after edit."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Modify field
+        system_field = next(f for f in app.fields if f.name == "system")
+        system_field.buffer.text = "test_system"
+
+        # Should have unsaved changes
+        assert app._has_unsaved_changes is True
+
+
+class TestFieldValidation:
+    """Tests for inline field validation."""
+
+    def test_required_field_validation(self) -> None:
+        """Required fields fail validation when empty."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # System field is required
+        system_field = next(f for f in app.fields if f.name == "system")
+        system_field.required = True
+        system_field.buffer.text = ""
+
+        is_valid, error = app._is_field_valid(system_field)
+        assert is_valid is False
+        assert "required" in error.lower()
+
+    def test_valid_field_passes_validation(self) -> None:
+        """Valid field passes validation."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # System field with value
+        system_field = next(f for f in app.fields if f.name == "system")
+        system_field.buffer.text = "retail"
+
+        is_valid, error = app._is_field_valid(system_field)
+        assert is_valid is True
+        assert error == ""
+
+
+class TestDynamicRequiredFields:
+    """Tests for dynamic required field detection based on current state.
+
+    These tests verify the medallion architecture business rules:
+    - API source requires base_url, endpoint
+    - Database source requires host, database
+    - File source requires source_path
+    - Incremental load requires watermark_column
+    - Auth types require their credentials
+    - Cursor pagination requires cursor_path
+    """
+
+    def test_api_source_requires_base_url_endpoint(self) -> None:
+        """API source type requires base_url and endpoint."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set source type to API
+        source_type = next(f for f in app.fields if f.name == "source_type")
+        source_type.buffer.text = "api_rest"
+        app._sync_fields_to_state()
+
+        required = get_dynamic_required_fields(app.state)
+        assert "base_url" in required["bronze"]
+        assert "endpoint" in required["bronze"]
+
+    def test_database_source_requires_host_database_query(self) -> None:
+        """Database source type requires host, database, and query."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set source type to database
+        source_type = next(f for f in app.fields if f.name == "source_type")
+        source_type.buffer.text = "database_mssql"
+        app._sync_fields_to_state()
+
+        required = get_dynamic_required_fields(app.state)
+        assert "host" in required["bronze"]
+        assert "database" in required["bronze"]
+        assert "query" in required["bronze"]
+
+    def test_file_source_requires_source_path(self) -> None:
+        """File source type requires source_path."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set source type to file
+        source_type = next(f for f in app.fields if f.name == "source_type")
+        source_type.buffer.text = "file_csv"
+        app._sync_fields_to_state()
+
+        required = get_dynamic_required_fields(app.state)
+        assert "source_path" in required["bronze"]
+
+    def test_incremental_load_requires_watermark_column(self) -> None:
+        """Incremental load pattern requires watermark_column."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set load pattern to incremental
+        load_pattern = next(f for f in app.fields if f.name == "load_pattern")
+        load_pattern.buffer.text = "incremental"
+        app._sync_fields_to_state()
+
+        required = get_dynamic_required_fields(app.state)
+        assert "watermark_column" in required["bronze"]
+
+    def test_bearer_auth_requires_token(self) -> None:
+        """Bearer auth type requires token."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set auth type to bearer
+        auth_type = next(f for f in app.fields if f.name == "auth_type")
+        auth_type.buffer.text = "bearer"
+        app._sync_fields_to_state()
+
+        required = get_dynamic_required_fields(app.state)
+        assert "token" in required["bronze"]
+
+    def test_api_key_auth_requires_api_key(self) -> None:
+        """API key auth type requires api_key."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set auth type to api_key
+        auth_type = next(f for f in app.fields if f.name == "auth_type")
+        auth_type.buffer.text = "api_key"
+        app._sync_fields_to_state()
+
+        required = get_dynamic_required_fields(app.state)
+        assert "api_key" in required["bronze"]
+
+    def test_basic_auth_requires_username_password(self) -> None:
+        """Basic auth type requires username and password."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set auth type to basic
+        auth_type = next(f for f in app.fields if f.name == "auth_type")
+        auth_type.buffer.text = "basic"
+        app._sync_fields_to_state()
+
+        required = get_dynamic_required_fields(app.state)
+        assert "username" in required["bronze"]
+        assert "password" in required["bronze"]
+
+    def test_cursor_pagination_requires_cursor_path(self) -> None:
+        """Cursor pagination strategy requires cursor_path."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set pagination strategy to cursor
+        pagination = next(f for f in app.fields if f.name == "pagination_strategy")
+        pagination.buffer.text = "cursor"
+        app._sync_fields_to_state()
+
+        required = get_dynamic_required_fields(app.state)
+        assert "cursor_path" in required["bronze"]
+
+    def test_full_snapshot_does_not_require_watermark(self) -> None:
+        """Full snapshot load pattern does not require watermark."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set load pattern to full_snapshot (default)
+        load_pattern = next(f for f in app.fields if f.name == "load_pattern")
+        load_pattern.buffer.text = "full_snapshot"
+        app._sync_fields_to_state()
+
+        required = get_dynamic_required_fields(app.state)
+        assert "watermark_column" not in required["bronze"]
+
+    def test_cdc_load_requires_watermark_column(self) -> None:
+        """CDC load pattern requires watermark_column."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set load pattern to CDC
+        load_pattern = next(f for f in app.fields if f.name == "load_pattern")
+        load_pattern.buffer.text = "cdc"
+        app._sync_fields_to_state()
+
+        required = get_dynamic_required_fields(app.state)
+        assert "watermark_column" in required["bronze"]
+
+
+class TestCrossFieldValidation:
+    """Tests for cross-field validation rules.
+
+    These tests verify business logic that spans multiple fields:
+    - Events (facts) should not have full_history (SCD2)
+    - Cursor pagination requires cursor_path
+    - API watermark needs watermark_param
+    """
+
+    def test_event_entity_cannot_have_full_history(self) -> None:
+        """Events/facts are immutable and should not use SCD2."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set entity_kind to event
+        entity_kind = next(f for f in app.fields if f.name == "entity_kind")
+        entity_kind.buffer.text = "event"
+
+        # Set history_mode to full_history
+        history_mode = next(f for f in app.fields if f.name == "history_mode")
+        history_mode.buffer.text = "full_history"
+
+        # Validation should fail
+        is_valid, error = app._is_field_valid(history_mode)
+        assert is_valid is False
+        assert "event" in error.lower() or "immutable" in error.lower()
+
+    def test_state_entity_can_have_full_history(self) -> None:
+        """State entities can use SCD2/full_history."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set entity_kind to state
+        entity_kind = next(f for f in app.fields if f.name == "entity_kind")
+        entity_kind.buffer.text = "state"
+
+        # Set history_mode to full_history
+        history_mode = next(f for f in app.fields if f.name == "history_mode")
+        history_mode.buffer.text = "full_history"
+
+        # Validation should pass
+        is_valid, error = app._is_field_valid(history_mode)
+        assert is_valid is True
+
+    def test_cursor_pagination_needs_cursor_path_value(self) -> None:
+        """Cursor pagination must have cursor_path specified."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set pagination strategy to cursor
+        pagination = next(f for f in app.fields if f.name == "pagination_strategy")
+        pagination.buffer.text = "cursor"
+
+        # cursor_path field is empty
+        cursor_path = next(f for f in app.fields if f.name == "cursor_path")
+        cursor_path.buffer.text = ""
+
+        # Validation should fail
+        is_valid, error = app._is_field_valid(cursor_path)
+        assert is_valid is False
+        assert "cursor" in error.lower()
+
+    def test_offset_pagination_does_not_require_cursor_path(self) -> None:
+        """Offset pagination does not require cursor_path."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        # Set pagination strategy to offset
+        pagination = next(f for f in app.fields if f.name == "pagination_strategy")
+        pagination.buffer.text = "offset"
+
+        # cursor_path can be empty
+        cursor_path = next(f for f in app.fields if f.name == "cursor_path")
+        cursor_path.buffer.text = ""
+
+        # Validation should pass (cursor_path not required for offset)
+        is_valid, error = app._is_field_valid(cursor_path)
+        assert is_valid is True
+
+
+class TestMedallionArchitectureGuidance:
+    """Tests for medallion architecture educational features.
+
+    These tests verify that help text and guidance are appropriate
+    for users new to the medallion architecture.
+    """
+
+    def test_entity_kind_has_educational_help_text(self) -> None:
+        """entity_kind field has help text explaining the concept."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        entity_kind = next(f for f in app.fields if f.name == "entity_kind")
+        # Should explain what state vs event means
+        assert "state" in entity_kind.help_text.lower() or "event" in entity_kind.help_text.lower()
+        assert len(entity_kind.help_text) > 20  # More than just "Entity kind"
+
+    def test_history_mode_has_educational_help_text(self) -> None:
+        """history_mode field has help text explaining SCD types."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        history_mode = next(f for f in app.fields if f.name == "history_mode")
+        # Should mention SCD or history concepts
+        assert "history" in history_mode.help_text.lower() or "scd" in history_mode.help_text.lower()
+
+    def test_natural_keys_has_educational_help_text(self) -> None:
+        """natural_keys field has help text explaining the concept."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        natural_keys = next(f for f in app.fields if f.name == "natural_keys")
+        # Should explain what natural keys are
+        assert "unique" in natural_keys.help_text.lower() or "identify" in natural_keys.help_text.lower()
+
+    def test_load_pattern_has_educational_help_text(self) -> None:
+        """load_pattern field has help text explaining the patterns."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app._create_fields()
+
+        load_pattern = next(f for f in app.fields if f.name == "load_pattern")
+        # Should explain the pattern options
+        assert len(load_pattern.help_text) > 20
+
+
+class TestBeginnerGuidance:
+    """Tests for the beginner-friendly contextual guidance feature."""
+
+    def test_beginner_guidance_for_system_field(self) -> None:
+        """System field has beginner guidance."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+
+        guidance = app._get_beginner_guidance("system")
+        assert guidance  # Not empty
+        assert "source" in guidance.lower() or "data" in guidance.lower()
+
+    def test_beginner_guidance_for_natural_keys(self) -> None:
+        """Natural keys field has beginner guidance."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+
+        guidance = app._get_beginner_guidance("natural_keys")
+        assert guidance  # Not empty
+        assert "unique" in guidance.lower()
+
+    def test_beginner_guidance_for_entity_kind(self) -> None:
+        """Entity kind field has beginner guidance explaining state vs event."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+
+        guidance = app._get_beginner_guidance("entity_kind")
+        assert guidance  # Not empty
+        assert "state" in guidance.lower()
+        assert "event" in guidance.lower()
+
+    def test_beginner_guidance_for_history_mode(self) -> None:
+        """History mode field has beginner guidance explaining SCD types."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+
+        guidance = app._get_beginner_guidance("history_mode")
+        assert guidance  # Not empty
+        assert "scd1" in guidance.lower() or "current only" in guidance.lower()
+        assert "scd2" in guidance.lower() or "full history" in guidance.lower()
+
+    def test_beginner_guidance_for_pagination(self) -> None:
+        """Pagination field has beginner guidance."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+
+        guidance = app._get_beginner_guidance("pagination_strategy")
+        assert guidance  # Not empty
+        assert "offset" in guidance.lower() or "cursor" in guidance.lower()
+
+    def test_beginner_guidance_for_load_pattern(self) -> None:
+        """Load pattern field has beginner guidance."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+
+        guidance = app._get_beginner_guidance("load_pattern")
+        assert guidance  # Not empty
+        assert "snapshot" in guidance.lower() or "incremental" in guidance.lower()
+
+    def test_no_guidance_for_unknown_field(self) -> None:
+        """Unknown field returns empty guidance."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+
+        guidance = app._get_beginner_guidance("nonexistent_field")
+        assert guidance == ""
+
+    def test_api_fields_have_guidance(self) -> None:
+        """API-related fields have beginner guidance."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+
+        # All API fields should have guidance
+        api_fields = ["base_url", "endpoint", "data_path", "cursor_path"]
+        for field_name in api_fields:
+            guidance = app._get_beginner_guidance(field_name)
+            assert guidance, f"Missing guidance for {field_name}"
+
+
+class TestPaginationVisibility:
+    """Tests for pagination field visibility rules."""
+
+    def test_pagination_fields_hidden_for_file_source(self) -> None:
+        """Pagination fields are hidden when source is file."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app.advanced_mode = True
+        app._create_fields()
+
+        # Set source type to file
+        source_type = next(f for f in app.fields if f.name == "source_type")
+        source_type.buffer.text = "file_csv"
+
+        visible = app._get_visible_fields()
+        visible_names = [f.name for f in visible]
+
+        assert "pagination_strategy" not in visible_names
+        assert "cursor_path" not in visible_names
+        assert "page_size" not in visible_names
+
+    def test_pagination_fields_visible_for_api_source(self) -> None:
+        """Pagination fields are visible when source is API."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app.advanced_mode = True
+        app._create_fields()
+
+        # Set source type to API
+        source_type = next(f for f in app.fields if f.name == "source_type")
+        source_type.buffer.text = "api_rest"
+
+        visible = app._get_visible_fields()
+        visible_names = [f.name for f in visible]
+
+        assert "pagination_strategy" in visible_names
+
+    def test_cursor_path_visible_only_for_cursor_pagination(self) -> None:
+        """cursor_path field only visible when pagination_strategy is cursor."""
+        app = PipelineConfigApp()
+        app.state = PipelineState.from_schema_defaults()
+        app.advanced_mode = True
+        app._create_fields()
+
+        # Set source type to API and pagination to offset
+        source_type = next(f for f in app.fields if f.name == "source_type")
+        source_type.buffer.text = "api_rest"
+        pagination = next(f for f in app.fields if f.name == "pagination_strategy")
+        pagination.buffer.text = "offset"
+
+        visible = app._get_visible_fields()
+        visible_names = [f.name for f in visible]
+
+        # cursor_path should NOT be visible for offset pagination
+        assert "cursor_path" not in visible_names
+
+        # Now change to cursor pagination
+        pagination.buffer.text = "cursor"
+        visible = app._get_visible_fields()
+        visible_names = [f.name for f in visible]
+
+        # cursor_path SHOULD be visible for cursor pagination
+        assert "cursor_path" in visible_names

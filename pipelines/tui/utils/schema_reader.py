@@ -209,6 +209,9 @@ def validate_field_type(section: str, field: str, value: Any) -> str | None:
 
     Returns error message if invalid, None if valid.
     """
+    import re
+    from urllib.parse import urlparse
+
     if value is None or value == "":
         metadata = get_field_metadata(section, field)
         if metadata["required"]:
@@ -247,6 +250,32 @@ def validate_field_type(section: str, field: str, value: Any) -> str | None:
     enum_values = metadata.get("enum", [])
     if enum_values and value not in enum_values:
         return f"{field} must be one of: {', '.join(enum_values)}"
+
+    # Field-specific validation
+    if field == "base_url" and isinstance(value, str) and value:
+        # Allow env var references
+        if not value.startswith("${"):
+            parsed = urlparse(value)
+            if not parsed.scheme or not parsed.netloc:
+                return f"{field} must be a valid URL (e.g., https://api.example.com)"
+
+    if field == "endpoint" and isinstance(value, str) and value:
+        # Endpoint should start with /
+        if not value.startswith("/"):
+            return f"{field} should start with / (e.g., /v1/customers)"
+
+    if field == "source_path" and isinstance(value, str) and value:
+        # Allow env var references and {run_date} placeholders
+        if not value.startswith("${"):
+            # Basic path validation - should have some path structure
+            if not ("/" in value or "\\" in value or value.startswith("s3://") or value.startswith("gs://")):
+                if "." not in value:  # Simple filename should have extension
+                    return f"{field} should be a valid file path or S3/GCS URL"
+
+    if field in ("system", "entity") and isinstance(value, str) and value:
+        # These should be valid identifiers (alphanumeric + underscores)
+        if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', value):
+            return f"{field} should be alphanumeric with underscores (e.g., my_system)"
 
     return None
 

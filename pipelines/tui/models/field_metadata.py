@@ -253,14 +253,14 @@ def get_dynamic_required_fields(state: "PipelineState") -> dict[str, list[str]]:
 
     # Database source requirements
     if source_type and source_type.startswith("database_"):
-        bronze_required.extend(["host", "database"])
+        bronze_required.extend(["host", "database", "query"])
 
     # File source requirements
     if source_type and source_type.startswith("file_"):
         bronze_required.append("source_path")
 
-    # Incremental load requirements
-    if load_pattern in ("incremental", "incremental_append"):
+    # Incremental/CDC load requirements
+    if load_pattern in ("incremental", "incremental_append", "cdc"):
         bronze_required.append("watermark_column")
 
     # Auth requirements
@@ -270,6 +270,11 @@ def get_dynamic_required_fields(state: "PipelineState") -> dict[str, list[str]]:
         bronze_required.append("api_key")
     elif auth_type == "basic":
         bronze_required.extend(["username", "password"])
+
+    # Pagination requirements
+    pagination_strategy = state.get_bronze_value("pagination_strategy")
+    if pagination_strategy == "cursor":
+        bronze_required.append("cursor_path")  # Must know where next cursor is in response
 
     return {
         "bronze": bronze_required,
