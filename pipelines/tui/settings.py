@@ -8,7 +8,6 @@ Example .bronze-foundry.yaml:
     tui:
       config_dir: ./config           # Where to save new pipeline configs
       env_dirs:                       # Where to look for .env files
-        - ./environments
         - ./
       parent_config_dir: ./config    # Default location for parent configs
 """
@@ -29,7 +28,7 @@ class TUISettings:
     config_dir: str = "./config"
 
     # Directories to search for .env files (in order)
-    env_dirs: list[str] = field(default_factory=lambda: ["./environments", "./"])
+    env_dirs: list[str] = field(default_factory=lambda: ["./"])
 
     # Default directory for browsing parent configs
     parent_config_dir: str = "./config"

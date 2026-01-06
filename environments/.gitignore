@@ -1,5 +1,0 @@
-# Ignore actual environment configs with credentials
-# These contain sensitive access keys and secrets
-*.yaml
-
-!*.yaml.example

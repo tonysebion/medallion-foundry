@@ -1,1 +1,0 @@
-environment configuration files uses for YAMLs for s3 configs are stored here
