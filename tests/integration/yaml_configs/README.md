@@ -107,35 +107,78 @@ To regenerate sample data:
 python scripts/generate_yaml_test_data.py --date 2025-01-15
 ```
 
-## MinIO Configuration
+## Storage Configuration
 
-Tests use MinIO as an S3-compatible object store.
+Tests use S3-compatible object storage. The templates support any S3-compatible backend:
 
-### Default Settings
-
-| Setting | Value |
-|---------|-------|
-| S3 API Endpoint | `http://localhost:9000` |
-| Console URL | `http://localhost:49384` |
-| Access Key | `minioadmin` |
-| Secret Key | `minioadmin` |
-| Bucket | `mdf` |
-
-### Starting MinIO
-
-```bash
-docker run -p 9000:9000 -p 49384:49384 minio/minio server /data --console-address ":49384"
-```
+| Backend | Example Use Case |
+|---------|------------------|
+| MinIO | Local development/testing |
+| AWS S3 | Production cloud storage |
+| Azure ADLS (via S3 API) | Azure data lake |
+| GCS (via S3 API) | Google Cloud storage |
 
 ### Environment Variables
 
-Override defaults with environment variables:
+Configure your storage backend with these environment variables:
 
 ```bash
-export MINIO_ENDPOINT=http://localhost:9000
-export MINIO_ACCESS_KEY=minioadmin
-export MINIO_SECRET_KEY=minioadmin
-export MINIO_BUCKET=mdf
+# S3-compatible endpoint (required for non-AWS)
+export AWS_ENDPOINT_URL=http://localhost:9000
+
+# Credentials
+export AWS_ACCESS_KEY_ID=your_access_key
+export AWS_SECRET_ACCESS_KEY=your_secret_key
+export AWS_REGION=us-east-1
+
+# Bucket name
+export S3_BUCKET=your_bucket_name
+```
+
+### Local Development with MinIO
+
+For local testing, MinIO provides an S3-compatible API:
+
+```bash
+# Start MinIO
+docker run -p 9000:9000 -p 49384:49384 minio/minio server /data --console-address ":49384"
+
+# Configure environment (defaults for MinIO)
+export AWS_ENDPOINT_URL=http://localhost:9000
+export AWS_ACCESS_KEY_ID=minioadmin
+export AWS_SECRET_ACCESS_KEY=minioadmin
+```
+
+### Production with AWS S3
+
+For AWS S3, you only need credentials (no endpoint URL):
+
+```bash
+export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+export AWS_REGION=us-west-2
+```
+
+### Production with Azure ADLS
+
+For Azure, the path format changes to `abfss://` or `wasbs://`:
+
+```yaml
+bronze:
+  target_path: "abfss://container@storageaccount.dfs.core.windows.net/bronze/"
+
+silver:
+  target_path: "abfss://container@storageaccount.dfs.core.windows.net/silver/"
+```
+
+Environment variables:
+```bash
+export AZURE_STORAGE_ACCOUNT_NAME=your_account
+export AZURE_STORAGE_ACCOUNT_KEY=your_key
+# Or use Azure AD authentication
+export AZURE_CLIENT_ID=...
+export AZURE_CLIENT_SECRET=...
+export AZURE_TENANT_ID=...
 ```
 
 ## Running Tests
@@ -165,7 +208,7 @@ pytest tests/integration/test_yaml_s3_comprehensive.py -v -s
 Each test creates files in this structure:
 
 ```
-mdf/
+{bucket}/
 └── test_pattern_{uuid}/
     ├── bronze/
     │   └── system=retail/entity=orders/dt=2025-01-15/
@@ -179,13 +222,29 @@ mdf/
             └── _checksums.json
 ```
 
+This structure is the same regardless of storage backend (S3, ADLS, local).
+
 ## Viewing Test Output
 
-After running tests, view files in MinIO console:
+### MinIO Console (Local Development)
+
+After running tests with MinIO, view files in the web console:
 
 1. Open http://localhost:49384
 2. Login with `minioadmin` / `minioadmin`
-3. Navigate to `mdf` bucket
+3. Navigate to your bucket
 4. Look for directories named `test_pattern_*`
+
+### AWS S3 Console
+
+Use the AWS Console or CLI:
+
+```bash
+aws s3 ls s3://your-bucket/test_pattern_*/
+```
+
+### Azure Portal
+
+Navigate to your storage account → Containers → your-container.
 
 Note: Test cleanup is disabled by default to allow inspection.
