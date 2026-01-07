@@ -5,7 +5,7 @@ Loads static YAML templates and substitutes placeholders with runtime values.
 
 import re
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
 
 def load_yaml_with_substitutions(

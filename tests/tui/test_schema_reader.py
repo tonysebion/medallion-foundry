@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 from pipelines.tui.utils.schema_reader import (
     get_all_bronze_fields,

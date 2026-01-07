@@ -6,14 +6,10 @@ interactive terminal input.
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-from unittest.mock import patch
 
-import pytest
 
 from pipelines.tui.app import PipelineConfigApp, Field
-from pipelines.tui.models import PipelineState, FieldSource
+from pipelines.tui.models import PipelineState
 from pipelines.tui.models.field_metadata import get_dynamic_required_fields
 
 
@@ -1798,7 +1794,6 @@ class TestEnvVarWarnings:
 
     def test_no_warning_when_env_var_exists(self) -> None:
         """No warning when env var exists in environment."""
-        import os
         app = PipelineConfigApp()
         app.state = PipelineState.from_schema_defaults()
         app._create_fields()

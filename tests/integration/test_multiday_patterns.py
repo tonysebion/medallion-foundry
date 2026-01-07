@@ -22,29 +22,23 @@ Each test validates:
 
 from __future__ import annotations
 
-import io
 import os
 from pathlib import Path
-from typing import Dict, Generator, List
+from typing import Dict, List
 
 import pandas as pd
 import pytest
 
 from tests.integration.conftest import (
     MINIO_ACCESS_KEY,
-    MINIO_BUCKET,
     MINIO_ENDPOINT,
     MINIO_REGION,
     MINIO_SECRET_KEY,
     is_minio_available,
-    upload_dataframe_to_minio,
     download_parquet_from_minio,
     list_objects_in_prefix,
 )
 from tests.integration.multiday_data import (
-    DAY1_DATE,
-    DAY2_DATE,
-    DAY3_DATE,
     generate_snapshot_day1,
     generate_snapshot_day2,
     generate_snapshot_day3,
@@ -357,7 +351,7 @@ class TestSnapshotToStateSCD1:
         assert bronze_result["row_count"] == 5
 
         # Run Silver
-        silver_result = run_silver_pipeline(
+        run_silver_pipeline(
             source_bucket=minio_bucket,
             source_prefix=multiday_prefix,
             target_bucket=minio_bucket,

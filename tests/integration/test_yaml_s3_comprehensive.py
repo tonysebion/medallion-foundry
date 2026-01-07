@@ -727,7 +727,7 @@ class TestSpecializedScenarios:
 
         if bronze_artifacts["checksums_exists"]:
             checksum_result = verify_checksum_integrity(client, MINIO_BUCKET, bronze_path, bronze_artifacts["checksums"])
-            print(f"\nBronze checksum verification:")
+            print("\nBronze checksum verification:")
             print(f"  Verified: {len(checksum_result['verified'])} files")
             print(f"  Mismatched: {len(checksum_result['mismatched'])} files")
             print(f"  Missing: {len(checksum_result['missing'])} files")
@@ -798,7 +798,7 @@ class TestSpecializedScenarios:
         assert len(cust001_rows) >= 2, f"CUST001 should have historical versions, got {len(cust001_rows)}"
 
         # Verify only one version per customer is current
-        current_rows = silver_df[silver_df["is_current"] == True]
+        current_rows = silver_df[silver_df["is_current"] == 1]
         unique_current_customers = current_rows["customer_id"].nunique()
         assert unique_current_customers == len(current_rows), "Each customer should have exactly one current row"
 

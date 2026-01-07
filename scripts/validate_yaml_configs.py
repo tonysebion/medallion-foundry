@@ -95,7 +95,7 @@ def validate_dry_run(yaml_file: Path, python_exe: Path, verbose: bool = False) -
         else:
             # Extract last meaningful error line
             lines = (result.stderr or result.stdout).strip().split("\n")
-            error_lines = [l for l in lines if l.strip() and not l.startswith("2")][-3:]
+            error_lines = [line for line in lines if line.strip() and not line.startswith("2")][-3:]
             return False, "\n".join(error_lines)
     except subprocess.TimeoutExpired:
         return False, "Timeout (60s)"
