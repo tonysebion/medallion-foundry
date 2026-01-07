@@ -1,4 +1,4 @@
-# Bronze Foundry Documentation
+# Medallion Foundry Documentation
 
 **From source → Bronze → Silver with one Python package.**
 

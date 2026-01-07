@@ -1,6 +1,6 @@
-# bronze-foundry
+# Medallion Foundry
 
-`bronze-foundry` is a YAML-first framework for building Bronze → Silver data pipelines. Define your pipelines in simple YAML files and run them through the CLI - no Python knowledge required. For advanced use cases, Python pipelines are also supported.
+`medallion-foundry` is a YAML-first framework for building Bronze → Silver data pipelines using the medallion architecture. Define your pipelines in simple YAML files and run them through the CLI - no Python knowledge required. For advanced use cases, Python pipelines are also supported.
 
 ## Highlights
 

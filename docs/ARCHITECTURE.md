@@ -4,7 +4,7 @@ This document covers the storage backends, path structures, and PolyBase integra
 
 ## Storage Backends
 
-Bronze-foundry supports multiple storage backends through a pluggable architecture:
+Medallion Foundry supports multiple storage backends through a pluggable architecture:
 
 | Backend | Implementation | Use Case |
 |---------|---------------|----------|
