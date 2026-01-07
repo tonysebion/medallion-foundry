@@ -49,6 +49,69 @@ __all__ = ["BronzeOutputMetadata", "BronzeSource", "LoadPattern", "SourceType"]
 BronzeOutputMetadata = OutputMetadata
 
 
+def _configure_duckdb_s3(con: ibis.BaseBackend, options: Optional[Dict[str, Any]] = None) -> None:
+    """Configure DuckDB's httpfs extension for S3/MinIO access.
+
+    DuckDB does not automatically pick up AWS_ENDPOINT_URL environment variable,
+    so we need to explicitly configure S3 settings when using custom endpoints
+    like MinIO or LocalStack.
+
+    Args:
+        con: Ibis DuckDB connection
+        options: Optional dict with endpoint_url, key, secret, region
+    """
+    import os
+
+    options = options or {}
+
+    # Get endpoint URL from options or environment
+    endpoint_url = options.get("endpoint_url") or os.environ.get("AWS_ENDPOINT_URL")
+    if not endpoint_url:
+        # No custom endpoint - DuckDB will use AWS defaults
+        return
+
+    # Install and load httpfs extension
+    try:
+        con.raw_sql("INSTALL httpfs; LOAD httpfs;")
+    except Exception:
+        # May already be installed/loaded
+        pass
+
+    # Parse endpoint URL
+    from urllib.parse import urlparse
+    parsed = urlparse(endpoint_url)
+    host = parsed.hostname or "localhost"
+    port = parsed.port
+    use_ssl = parsed.scheme == "https"
+
+    # Build endpoint string
+    if port:
+        endpoint = f"{host}:{port}"
+    else:
+        endpoint = host
+
+    # Get credentials from options or environment
+    access_key = options.get("key") or os.environ.get("AWS_ACCESS_KEY_ID", "")
+    secret_key = options.get("secret") or os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+    region = options.get("region") or os.environ.get("AWS_REGION", "us-east-1")
+
+    # Configure DuckDB S3 settings
+    settings = [
+        f"SET s3_endpoint = '{endpoint}';",
+        f"SET s3_access_key_id = '{access_key}';",
+        f"SET s3_secret_access_key = '{secret_key}';",
+        f"SET s3_region = '{region}';",
+        f"SET s3_use_ssl = {str(use_ssl).lower()};",
+        "SET s3_url_style = 'path';",  # Use path-style URLs for MinIO compatibility
+    ]
+
+    for setting in settings:
+        try:
+            con.raw_sql(setting)
+        except Exception as e:
+            logger.debug("duckdb_s3_setting_warning", setting=setting, error=str(e))
+
+
 class SourceType(Enum):
     """Where the data comes from."""
 
@@ -361,6 +424,11 @@ class BronzeSource:
 
         # Read from source
         con = ibis.duckdb.connect()
+
+        # Configure S3 if target is cloud storage
+        if target.startswith("s3://") or target.startswith("abfs://"):
+            _configure_duckdb_s3(con, self.options)
+
         t = self._read_source(con, run_date, last_watermark)
 
         # Add Bronze technical metadata (the ONLY transforms allowed)
@@ -729,8 +797,15 @@ class BronzeSource:
             # Cloud storage - use storage backend for metadata writes
             storage = get_storage(target)
             storage.makedirs("")  # Ensure target exists
-            t.to_parquet(target, partition_by=self.partition_by)
-            data_files.append(target)
+            # Only pass partition_by if not empty (DuckDB doesn't handle empty list well)
+            if self.partition_by:
+                t.to_parquet(target, partition_by=self.partition_by)
+                data_files.append(target)
+            else:
+                # No partitioning - write a single file with explicit filename
+                output_file = target.rstrip("/") + f"/{self.entity}.parquet"
+                t.to_parquet(output_file)
+                data_files.append(output_file)
 
             # Write metadata to cloud storage
             if self.write_metadata:

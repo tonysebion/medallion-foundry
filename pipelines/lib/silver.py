@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 
 import ibis
 
+from pipelines.lib.bronze import _configure_duckdb_s3
 from pipelines.lib.curate import build_history, dedupe_latest
 from pipelines.lib.io import maybe_dry_run
 from pipelines.lib._path_utils import resolve_target_path, storage_path_exists
@@ -283,6 +284,12 @@ class SilverEntity:
 
         # Read from Bronze
         con = ibis.duckdb.connect()
+
+        # Configure S3 if source or target is cloud storage
+        if source.startswith("s3://") or source.startswith("abfs://") or \
+           target.startswith("s3://") or target.startswith("abfs://"):
+            _configure_duckdb_s3(con)  # Uses environment variables
+
         t = self._read_source(con, source)
 
         if t.count().execute() == 0:
@@ -366,17 +373,47 @@ class SilverEntity:
         """Read from Bronze source.
 
         Handles glob patterns (e.g., *.parquet) by expanding them first.
+        Works with both local and S3/cloud paths.
         """
-        import glob as glob_module
-
         # Expand glob patterns if present
         if "*" in source or "?" in source:
-            files = glob_module.glob(source)
-            if not files:
-                logger.warning("silver_no_files_found", pattern=source)
-                # Return empty table
-                return con.memtable([])
-            source = files  # Pass list of files to read_parquet
+            if source.startswith("s3://"):
+                # Use s3fs for S3 glob
+                import s3fs
+                import os
+
+                # Get S3 config from environment
+                fs_options = {}
+                endpoint_url = os.environ.get("AWS_ENDPOINT_URL")
+                if endpoint_url:
+                    fs_options["endpoint_url"] = endpoint_url
+                access_key = os.environ.get("AWS_ACCESS_KEY_ID")
+                secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+                if access_key and secret_key:
+                    fs_options["key"] = access_key
+                    fs_options["secret"] = secret_key
+
+                fs = s3fs.S3FileSystem(**fs_options)
+                # s3fs.glob needs path without s3:// prefix
+                s3_pattern = source[5:]  # Remove s3://
+                matches = fs.glob(s3_pattern)
+                if not matches:
+                    logger.warning("silver_no_files_found", pattern=source)
+                    # Return empty DataFrame as Ibis table
+                    import pandas as pd
+                    return con.create_table("empty", pd.DataFrame())
+                # Add s3:// prefix back
+                files = [f"s3://{m}" for m in matches]
+                source = files
+            else:
+                # Use standard glob for local paths
+                import glob as glob_module
+                files = glob_module.glob(source)
+                if not files:
+                    logger.warning("silver_no_files_found", pattern=source)
+                    import pandas as pd
+                    return con.create_table("empty", pd.DataFrame())
+                source = files
 
         if isinstance(source, str) and source.endswith(".csv"):
             return con.read_csv(source)
