@@ -610,7 +610,7 @@ class TestSpecializedScenarios:
 
         # Load pattern template
         template_path = get_pattern_template("skipped_days")
-        fs = get_s3fs()
+        client = get_s3_client()
 
         bronze_paths = []
         silver_paths = []
@@ -643,8 +643,8 @@ class TestSpecializedScenarios:
             print(f"  Bronze: {bronze_result['row_count']} rows")
             print(f"  Silver: {silver_result['row_count']} rows")
 
-            bronze_path = f"{MINIO_BUCKET}/{test_prefix}/bronze/system=retail/entity=orders/dt={run_date}"
-            silver_path = f"{MINIO_BUCKET}/{test_prefix}/silver/system=retail/entity=orders"
+            bronze_path = f"{test_prefix}/bronze/system=retail/entity=orders/dt={run_date}"
+            silver_path = f"{test_prefix}/silver/system=retail/entity=orders"
 
             bronze_paths.append(bronze_path)
             silver_paths.append(silver_path)
@@ -653,29 +653,26 @@ class TestSpecializedScenarios:
         print("\nVerifying Bronze partitions...")
         for i, run_date in enumerate(run_dates):
             bronze_path = bronze_paths[i]
-            bronze_artifacts = verify_bronze_artifacts(fs, bronze_path)
+            bronze_artifacts = verify_bronze_artifacts(client, MINIO_BUCKET, bronze_path)
             assert bronze_artifacts["parquet_count"] > 0, f"Bronze partition for {run_date} should exist"
             print(f"  {run_date}: {bronze_artifacts['parquet_count']} parquet files")
 
         # Verify skipped dates DON'T have partitions
         skipped_dates = ["2025-01-16", "2025-01-18"]
         for skipped_date in skipped_dates:
-            skipped_path = f"{MINIO_BUCKET}/{test_prefix}/bronze/system=retail/entity=orders/dt={skipped_date}"
-            try:
-                files = fs.ls(skipped_path)
-                assert len(files) == 0, f"Skipped date {skipped_date} should have no files"
-            except FileNotFoundError:
-                pass  # Expected - path doesn't exist
+            skipped_path = f"{test_prefix}/bronze/system=retail/entity=orders/dt={skipped_date}"
+            files = list_files_in_path(client, MINIO_BUCKET, skipped_path)
+            assert len(files) == 0, f"Skipped date {skipped_date} should have no files"
 
         # Verify Silver output exists
-        silver_path = f"{MINIO_BUCKET}/{test_prefix}/silver/system=retail/entity=orders"
-        silver_artifacts = verify_silver_artifacts(fs, silver_path)
+        silver_path = f"{test_prefix}/silver/system=retail/entity=orders"
+        silver_artifacts = verify_silver_artifacts(client, MINIO_BUCKET, silver_path)
         assert silver_artifacts["parquet_count"] > 0, "Silver should have parquet files"
 
         # Verify PolyBase DDL can be generated from final Bronze metadata
         final_bronze_path = bronze_paths[-1]  # Use last run date
-        metadata_path = final_bronze_path + "/_metadata.json"
-        ddl = generate_polybase_ddl_from_s3(fs, metadata_path)
+        metadata_key = final_bronze_path + "/_metadata.json"
+        ddl = generate_polybase_ddl_from_s3(client, MINIO_BUCKET, metadata_key)
         if ddl:
             print(f"\nPolyBase DDL generated successfully ({len(ddl)} chars)")
             assert "CREATE EXTERNAL TABLE" in ddl
@@ -723,13 +720,13 @@ class TestSpecializedScenarios:
         pipeline.silver.run(run_date)
 
         # Verify Bronze checksums
-        fs = get_s3fs()
-        bronze_path = f"{MINIO_BUCKET}/{test_prefix}/bronze/system=test/entity=orders/dt={run_date}"
+        client = get_s3_client()
+        bronze_path = f"{test_prefix}/bronze/system=test/entity=orders/dt={run_date}"
 
-        bronze_artifacts = verify_bronze_artifacts(fs, bronze_path)
+        bronze_artifacts = verify_bronze_artifacts(client, MINIO_BUCKET, bronze_path)
 
         if bronze_artifacts["checksums_exists"]:
-            checksum_result = verify_checksum_integrity(fs, bronze_path, bronze_artifacts["checksums"])
+            checksum_result = verify_checksum_integrity(client, MINIO_BUCKET, bronze_path, bronze_artifacts["checksums"])
             print(f"\nBronze checksum verification:")
             print(f"  Verified: {len(checksum_result['verified'])} files")
             print(f"  Mismatched: {len(checksum_result['mismatched'])} files")
@@ -778,15 +775,16 @@ class TestSpecializedScenarios:
         pipeline.silver.run(run_date)
 
         # Read Silver data
-        fs = get_s3fs()
-        silver_path = f"{MINIO_BUCKET}/{test_prefix}/silver/system=crm/entity=customers"
-        silver_files = list_files_in_path(fs, silver_path)
+        import io
+        client = get_s3_client()
+        silver_path = f"{test_prefix}/silver/system=crm/entity=customers"
+        silver_files = list_files_in_path(client, MINIO_BUCKET, silver_path)
 
         silver_parquet = next((f for f in silver_files if f.endswith(".parquet")), None)
         assert silver_parquet, "Silver parquet should exist"
 
-        with fs.open(silver_parquet, "rb") as f:
-            silver_df = pd.read_parquet(f)
+        response = client.get_object(Bucket=MINIO_BUCKET, Key=silver_parquet)
+        silver_df = pd.read_parquet(io.BytesIO(response["Body"].read()))
 
         print(f"\nSilver SCD2 DataFrame:\n{silver_df}")
 
@@ -849,11 +847,11 @@ class TestSpecializedScenarios:
         pipeline.bronze.run(run_date)
 
         # Generate PolyBase DDL from Bronze metadata
-        fs = get_s3fs()
-        bronze_path = f"{MINIO_BUCKET}/{test_prefix}/bronze/system=test/entity=orders/dt={run_date}"
-        metadata_path = bronze_path + "/_metadata.json"
+        client = get_s3_client()
+        bronze_path = f"{test_prefix}/bronze/system=test/entity=orders/dt={run_date}"
+        metadata_key = bronze_path + "/_metadata.json"
 
-        ddl = generate_polybase_ddl_from_s3(fs, metadata_path)
+        ddl = generate_polybase_ddl_from_s3(client, MINIO_BUCKET, metadata_key)
 
         assert ddl is not None, "DDL should be generated"
         assert "CREATE EXTERNAL TABLE" in ddl, "DDL should have CREATE EXTERNAL TABLE"
