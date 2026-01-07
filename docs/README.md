@@ -42,6 +42,7 @@ python -m pipelines ./pipelines/examples/retail_orders.yaml --date 2025-01-15 --
 | Guide | Description |
 |-------|-------------|
 | [GETTING_STARTED.md](GETTING_STARTED.md) | Pipeline primer, source types, entity kinds |
+| [ADVANCED_PATTERNS.md](ADVANCED_PATTERNS.md) | CDC presets, delete modes, SCD2, curate helpers |
 | [OPERATIONS.md](OPERATIONS.md) | Testing, troubleshooting, error handling |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Storage backends, path structure, PolyBase |
 | [ROADMAP.md](ROADMAP.md) | Future features |

@@ -352,8 +352,11 @@ class TestThreeWeekIncrementalLifecycle:
                     scenario, day, minio_bucket, lifecycle_prefix, "current_only"
                 )
 
-        # Get final state (last run day)
-        final_date = scenario.schedule[20].run_date.isoformat()  # Day 21
+        # Get final state (find last non-weekend run day)
+        last_run_config = [
+            c for c in scenario.schedule if c.load_type != LoadType.SKIP
+        ][-1]
+        final_date = last_run_config.run_date.isoformat()
         silver_df = get_silver_data(
             minio_client, minio_bucket, lifecycle_prefix, final_date
         )

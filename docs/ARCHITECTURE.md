@@ -97,7 +97,7 @@ target_path="s3://bronze/system={system}/entity={entity}/dt={run_date}/"
 source_path="s3://bronze/system=retail/entity=orders/dt={run_date}/*.parquet"
 ```
 
-Available variables: `{system}`, `{entity}`, `{run_date}`, `{table}`, `{domain}`
+Available variables: `{system}`, `{entity}`, `{run_date}`
 
 ## PolyBase Integration
 

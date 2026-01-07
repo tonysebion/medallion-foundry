@@ -511,7 +511,12 @@ class CDCDeleteCycleScenario(MultiWeekScenario):
                 row["op"] = "I"
                 records.append(row)
 
-        return pd.DataFrame(records) if records else pd.DataFrame()
+        # Ensure consistent schema with op column even when empty
+        df = pd.DataFrame(records) if records else pd.DataFrame()
+        if df.empty:
+            # Return empty DataFrame with correct CDC schema
+            df = pd.DataFrame(columns=columns + ["op"])
+        return df
 
 
 class FailureRecoveryScenario(MultiWeekScenario):
