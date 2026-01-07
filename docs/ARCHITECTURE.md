@@ -16,15 +16,15 @@ Bronze-foundry supports multiple storage backends through a pluggable architectu
 ### Usage
 
 ```python
-from pipelines.lib.storage import get_backend
+from pipelines.lib.storage import get_storage
 
 # Automatically selects backend based on path prefix
-storage = get_backend("s3://my-bucket/bronze/")
+storage = get_storage("s3://my-bucket/bronze/")
 
-# Write/read data
-storage.put(local_path, "s3://my-bucket/bronze/data.parquet")
-data = storage.get("s3://my-bucket/bronze/data.parquet")
-files = storage.glob("s3://my-bucket/bronze/*.parquet")
+# Read/write data
+data = storage.read_bytes("data.parquet")
+storage.write_bytes("data.parquet", parquet_bytes)
+files = storage.list_files(pattern="*.parquet")
 ```
 
 ### Configuration

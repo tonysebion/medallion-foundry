@@ -15,10 +15,10 @@ pip install -e .
 python -m pipelines --list
 
 # Run example
-python -m pipelines examples.retail_orders --date 2025-01-15
+python -m pipelines ./pipelines/examples/retail_orders.yaml --date 2025-01-15
 
 # Validate before running
-python -m pipelines examples.retail_orders --date 2025-01-15 --dry-run
+python -m pipelines ./pipelines/examples/retail_orders.yaml --date 2025-01-15 --dry-run
 ```
 
 ## Commands

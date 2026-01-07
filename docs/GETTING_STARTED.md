@@ -6,8 +6,8 @@ This guide walks you through creating and running your first data pipeline.
 
 ```bash
 # Clone and setup
-git clone https://github.com/tonysebion/medallion-foundry.git
-cd medallion-foundry
+git clone https://github.com/tonysebion/bronze-foundry.git
+cd bronze-foundry
 
 # Create virtual environment
 python -m venv .venv

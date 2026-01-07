@@ -857,7 +857,7 @@ class SilverEntity:
         entity_name = self.entity if self.entity else self._infer_entity_name(target)
 
         # For local filesystem, use enhanced write with artifacts
-        write_silver_with_artifacts(
+        silver_metadata = write_silver_with_artifacts(
             t,
             target,
             entity_kind=self.entity_kind.value,

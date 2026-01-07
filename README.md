@@ -140,7 +140,7 @@ Templates and examples for both formats are in `pipelines/templates/` and `pipel
 ## Documentation & further reading
 
 - `docs/index.md` — Guided table of contents for beginners, owners, and developers.
-- `docs/pipelines/GETTING_STARTED.md` — Pipeline-specific walkthrough with Bronze/Silver snippets and patterns.
+- `docs/GETTING_STARTED.md` — Pipeline-specific walkthrough with Bronze/Silver snippets and patterns.
 - `pipelines/QUICKREF.md` — CLI cheatsheet and operational tips.
 - `docs/scripts/README.md` — Sample data generation & tooling reference.
 - `docs/usage/`, `docs/guides/`, and `docs/framework/` — Deep dives on onboarding, resilience, patterns, and operations.

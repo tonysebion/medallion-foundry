@@ -43,6 +43,8 @@ mypy pipelines/
 
 ## Error Codes
 
+> **Note:** These error codes are planned for a future release and are not yet implemented in the codebase.
+
 | Code | Meaning | Action |
 |------|---------|--------|
 | CFG001 | Configuration validation error | Check config YAML/schema |
