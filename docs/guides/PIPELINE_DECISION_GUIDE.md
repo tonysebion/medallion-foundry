@@ -18,9 +18,8 @@ How does data arrive from your source system?
 │       Example: Transaction log, audit trail
 │
 └── Source provides explicit change markers (I/U/D flags)
-    └── Use LoadPattern.CDC
-        Requires: CDC column indicating insert/update/delete
-        Example: Mainframe change data capture feed
+    └── Use LoadPattern.CDC (not yet fully implemented)
+        Note: CDC enum exists but processing logic is limited
 ```
 
 ### When to Use Each Pattern
@@ -29,7 +28,6 @@ How does data arrive from your source system?
 |---------|----------|-----------|------------|
 | FULL_SNAPSHOT | Reference data, small dimensions | < 100K rows | Low |
 | INCREMENTAL_APPEND | Event logs, large tables with timestamp | Any size | Medium |
-| CDC | Mainframe feeds, ERP systems | Any size | High |
 
 ## 2. History Mode: How should Silver track changes over time?
 
@@ -134,7 +132,6 @@ Should the pipeline occasionally do a full reload?
 | Customer master (track changes) | INCREMENTAL_APPEND | STATE | FULL_HISTORY | 7 | None |
 | Large fact table (millions) | INCREMENTAL_APPEND | EVENT | N/A | 30 | 100000 |
 | Reference data (small) | FULL_SNAPSHOT | STATE | CURRENT_ONLY | None | None |
-| CDC feed from mainframe | CDC | STATE | FULL_HISTORY | 30 | None |
 
 ## Example Configurations
 

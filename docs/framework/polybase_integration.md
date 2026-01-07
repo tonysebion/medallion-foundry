@@ -258,52 +258,24 @@ WHERE order_id = 'ORD123';
 3. **Combine date filters with business logic** for balanced query performance
 4. **Understand your partition scheme** (event_date vs. effective_from_date)
 
-## Future: Trino and Iceberg Migration
-
-The Polybase configuration includes placeholder fields for future migration:
-
-```python
-polybase_setup:
-  trino_enabled: false    # Future: Trino support
-  iceberg_enabled: false  # Future: Iceberg table format
-```
-
-### Migration Path
-
-1. **Phase 1** (Current): Polybase external tables on Parquet files
-2. **Phase 2** (Future): Trino federation layer with Polybase backend
-3. **Phase 3** (Future): Apache Iceberg table format for better ACID semantics
-
-All temporal semantics and partition strategies designed to be forward-compatible with Trino and Iceberg.
-
 ## Configuration Reference
 
-### Polybase Configuration in DatasetConfig
+### Generating PolyBase DDL
 
-The Polybase setup is automatically generated from the dataset configuration:
+Use the `pipelines.lib.polybase` module to generate DDL:
 
 ```python
-from core.config.dataset import DatasetConfig
-from core.polybase import generate_polybase_setup
+from pipelines.lib.polybase import generate_from_metadata, PolyBaseConfig
+from pathlib import Path
 
-# Load dataset config
-dataset = DatasetConfig.from_dict(yaml_data)
-
-# Generate Polybase setup automatically
-polybase = generate_polybase_setup(
-    dataset,
-    external_data_source_location=None,  # Auto-derived
-    external_data_source_name=None,      # Auto-derived
-    schema_name="dbo"                     # Customize schema
+config = PolyBaseConfig(
+    data_source_name="silver_source",
+    data_source_location="wasbs://silver@account.blob.core.windows.net/",
 )
 
-# Access components
-print(polybase.external_data_source.location)
-print(polybase.external_file_format.name)
-for table in polybase.external_tables:
-    print(f"Table: {table.table_name}")
-    for query in table.sample_queries:
-        print(f"  Sample: {query}")
+# Generate DDL from Silver metadata
+ddl = generate_from_metadata(Path("./silver/orders/_metadata.json"), config)
+print(ddl)  # Outputs CREATE EXTERNAL TABLE and views
 ```
 
 ## Troubleshooting
@@ -337,7 +309,4 @@ for table in polybase.external_tables:
 
 ## See Also
 
-- [Silver Patterns Framework](silver_patterns.md)
-- [Unified Temporal Configuration](../design/temporal_partitioning.md)
-- [Pattern Configuration Guide](../examples/configs/patterns/README.md)
 - [SQL Server Polybase Documentation](https://docs.microsoft.com/en-us/sql/relational-databases/polybase/polybase-guide)

@@ -4,7 +4,7 @@ APIs often have shared quotas or burst limits, so Bronze Foundry ships with a to
 
 ## How it works
 
-Every extractor (API, DB, and file-based) may create a `RateLimiter` via `core.platform.resilience.rate_limiter.RateLimiter.from_config`. The rate limiter:
+The `RateLimiter` class in `pipelines.lib.rate_limiter` provides token-bucket rate limiting. The rate limiter:
 
 - refills tokens at `rps` (requests per second) and allows bursts up to the `burst` capacity.
 - emits log lines when tokens are refilled or acquired (`metric=rate_limit component=<name>…`).

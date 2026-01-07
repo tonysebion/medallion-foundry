@@ -322,15 +322,6 @@ source:
 ```bash
 # Delete watermark file to start fresh
 rm .state/salesforce_accounts_watermark.json
-
-# Or set specific watermark value
-python -c "
-from core.foundation.state.watermark import WatermarkStore
-store = WatermarkStore()
-wm = store.get('salesforce', 'accounts', 'SystemModstamp')
-wm.watermark_value = '2025-01-01T00:00:00Z'
-store.save(wm)
-"
 ```
 
 **Backfill historical data:**

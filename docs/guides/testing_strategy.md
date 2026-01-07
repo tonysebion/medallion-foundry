@@ -293,20 +293,15 @@ df = download_parquet_from_minio(client, "mdf", "test-123/claims.parquet")
 
 ```python
 import pytest
-from core.foundation.primitives.patterns import LoadPattern
+from pipelines.lib.bronze import LoadPattern
 
 class TestLoadPatterns:
     """Unit tests for load pattern logic."""
 
-    def test_snapshot_pattern_normalizes(self):
-        """SNAPSHOT pattern should normalize to canonical form."""
-        assert LoadPattern.normalize("full") == LoadPattern.SNAPSHOT
-        assert LoadPattern.normalize("snapshot") == LoadPattern.SNAPSHOT
-
-    def test_invalid_pattern_raises_error(self):
-        """Unknown patterns should raise ValueError."""
-        with pytest.raises(ValueError, match="Unknown load pattern"):
-            LoadPattern.normalize("invalid_pattern")
+    def test_load_pattern_values(self):
+        """LoadPattern enum should have expected values."""
+        assert LoadPattern.FULL_SNAPSHOT.value == "full_snapshot"
+        assert LoadPattern.INCREMENTAL_APPEND.value == "incremental"
 ```
 
 ### Integration Test Example

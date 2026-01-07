@@ -14,7 +14,7 @@ Bronze-foundry now supports multiple storage backends through a clean abstractio
 
 ### StorageBackend Interface
 
-All storage backends implement the abstract `StorageBackend` base class defined in `core/storage.py`:
+All storage backends implement the abstract `StorageBackend` base class defined in `pipelines/lib/storage/`:
 
 ```python
 class StorageBackend(ABC):
@@ -51,20 +51,20 @@ class StorageBackend(ABC):
 The `get_storage_backend()` factory function instantiates the appropriate backend based on configuration:
 
 ```python
-from core.storage import get_storage_backend
+from pipelines.lib.storage import get_backend
 
-# Automatically selects backend based on config
-storage = get_storage_backend(platform_config)
+# Automatically selects backend based on path prefix
+storage = get_backend("s3://my-bucket/bronze/")
 
 # Use the backend
-storage.upload_file("local_file.parquet", "system=api/table=users/file.parquet")
+storage.put("local_file.parquet", "s3://my-bucket/bronze/data.parquet")
 ```
 
 ## Supported Backends
 
 ### S3 Storage (Default)
 
-**Implementation**: `core/s3.py` - `S3Storage` class
+**Implementation**: `pipelines/lib/storage/s3.py`
 
 **Configuration**:
 ```yaml
@@ -106,11 +106,11 @@ platform:
     # Or use SAS token, service principal, etc.
 ```
 
-**See**: [Azure Storage Extension Example](../examples/extensions/azure_storage/README.md) for complete implementation
+**Implementation**: `pipelines/lib/storage/adls.py`
 
 ### Local Filesystem
 
-**Implementation**: Not included in core, requires custom implementation
+**Implementation**: `pipelines/lib/storage/local.py`
 
 **Configuration**:
 ```yaml
@@ -141,103 +141,30 @@ For backward compatibility with existing configs:
 
 ### Creating a Custom Storage Backend
 
-1. **Create backend class** implementing `StorageBackend`:
-
-```python
-# core/my_storage.py
-from core.storage import StorageBackend
-from typing import List
-
-class MyStorage(StorageBackend):
-    def __init__(self, config: Dict[str, Any]):
-        # Initialize from config
-        self.bucket = config["bronze"]["my_bucket"]
-        # ... setup client ...
-
-    def upload_file(self, local_path: str, remote_path: str) -> bool:
-        # Upload implementation
-        pass
-
-    def download_file(self, remote_path: str, local_path: str) -> bool:
-        # Download implementation
-        pass
-
-    def list_files(self, prefix: str) -> List[str]:
-        # List implementation
-        pass
-
-    def delete_file(self, remote_path: str) -> bool:
-        # Delete implementation
-        pass
-
-    def get_backend_type(self) -> str:
-        return "my_storage"
-```
-
-2. **Register in factory** (`core/storage.py`):
-
-```python
-def get_storage_backend(config: Dict[str, Any]) -> StorageBackend:
-    backend_type = config.get("bronze", {}).get("storage_backend", "s3")
-
-    if backend_type == "s3":
-        from core.s3 import S3Storage
-        return S3Storage(config)
-    elif backend_type == "my_storage":
-        from core.my_storage import MyStorage
-        return MyStorage(config)
-    # ... other backends ...
-```
-
-3. **Update config validation** (`core/config.py`):
-
-```python
-valid_backends = ["s3", "azure", "local", "my_storage"]
-```
-
-4. **Document configuration requirements**
+See the existing implementations in `pipelines/lib/storage/` for examples:
+- `local.py` - Local filesystem
+- `s3.py` - AWS S3 and compatible services
+- `adls.py` - Azure Data Lake Storage
+- `fsspec_backend.py` - Generic fsspec-based backend
 
 ## Usage
 
-### In Extractors/Runners
-
-The runner automatically uses the configured storage backend:
+### Usage Example
 
 ```python
-# core/runner.py
-from core.storage import get_storage_backend
+from pipelines.lib.storage import get_backend
 
-# Initialize storage backend
-storage_backend = get_storage_backend(platform_cfg)
+# Get backend based on path prefix
+storage = get_backend("s3://my-bucket/bronze/")
 
-# Upload files
-storage_backend.upload_file(str(local_path), remote_path)
-```
+# Write data
+storage.put(local_path, "s3://my-bucket/bronze/data.parquet")
 
-### Direct Usage
-
-You can also use storage backends directly:
-
-```python
-from core.storage import get_storage_backend
-
-# Load config
-config = load_config("my_config.yaml")
-
-# Get storage backend
-storage = get_storage_backend(config["platform"])
-
-# Upload
-storage.upload_file("output/file.parquet", "system=api/table=users/file.parquet")
+# Read data
+data = storage.get("s3://my-bucket/bronze/data.parquet")
 
 # List files
-files = storage.list_files("system=api/table=users/")
-
-# Download
-storage.download_file("system=api/table=users/file.parquet", "downloaded.parquet")
-
-# Delete
-storage.delete_file("system=api/table=users/old_file.parquet")
+files = storage.glob("s3://my-bucket/bronze/*.parquet")
 ```
 
 ## Benefits
@@ -271,13 +198,13 @@ platform:
 
 ### Updating Code
 
-Use the configured storage backend directly:
+Use the storage backend directly:
 
 ```python
-from core.storage import get_storage_backend
+from pipelines.lib.storage import get_backend
 
-storage = get_storage_backend(platform_cfg)
-storage.upload_file(str(local_path), f"{relative_path}{local_path.name}")
+storage = get_backend(target_path)
+storage.put(local_path, target_path)
 ```
 
 ## Testing
@@ -319,5 +246,4 @@ Potential future additions:
 
 ---
 
-For implementation examples, see:
-- [Azure Storage Extension](../examples/extensions/azure_storage/README.md)
+For implementation examples, see `pipelines/lib/storage/`.
