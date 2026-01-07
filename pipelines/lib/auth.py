@@ -191,7 +191,7 @@ def build_auth_headers_from_dict(
         password=api_options.get("password"),
     )
 
-    extra_headers = api_options.get("headers", {})
+    extra_headers: Dict[str, str] = api_options.get("headers", {})
     if isinstance(extra_headers, dict):
         return build_auth_headers(config, extra_headers=extra_headers)
     return build_auth_headers(config)

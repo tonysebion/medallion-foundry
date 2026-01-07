@@ -428,7 +428,7 @@ class SilverOutputMetadata:
 
     # Format info
     format: str = "parquet"
-    compression: str = "snappy"
+    compression: Optional[str] = "snappy"
 
     # Files written
     data_files: List[str] = field(default_factory=list)

@@ -17,8 +17,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, TYPE_CHECKING, Type
 
-import pandera as pa
-from pandera import Column, Check, DataFrameSchema
+import pandera.pandas as pa
+from pandera.pandas import Column, Check, DataFrameSchema
 import pandas as pd
 
 if TYPE_CHECKING:

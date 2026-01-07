@@ -213,18 +213,16 @@ def filter_late_data(
             f"Late data rejected: {result.late_count} records before cutoff {cutoff}"
         )
 
-    if config.mode == LateDataMode.QUARANTINE:
-        logger.warning(
-            "Quarantining %d late records (before cutoff %s)",
-            result.late_count,
-            cutoff,
-        )
-        # Write late records to quarantine path if configured
-        if config.quarantine_path:
-            _write_quarantine_records(t, timestamp_column, cutoff, config.quarantine_path)
-        return t.filter(t[timestamp_column] >= cutoff)
-
-    return t
+    # config.mode == LateDataMode.QUARANTINE (or unknown future mode)
+    logger.warning(
+        "Quarantining %d late records (before cutoff %s)",
+        result.late_count,
+        cutoff,
+    )
+    # Write late records to quarantine path if configured
+    if config.quarantine_path:
+        _write_quarantine_records(t, timestamp_column, cutoff, config.quarantine_path)
+    return t.filter(t[timestamp_column] >= cutoff)
 
 
 def _write_quarantine_records(

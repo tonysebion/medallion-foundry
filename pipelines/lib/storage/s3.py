@@ -65,9 +65,9 @@ class S3Storage(StorageBackend):
 
     def __init__(self, base_path: str, **options: Any) -> None:
         super().__init__(base_path, **options)
-        self._client = None
-        self._bucket = None
-        self._prefix = None
+        self._client: Optional[Any] = None
+        self._bucket: str = ""
+        self._prefix: str = ""
         self._parse_path()
 
     def _parse_path(self) -> None:

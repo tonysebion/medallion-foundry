@@ -14,7 +14,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 
 def prompt(message: str, default: Optional[str] = None) -> str:
@@ -70,7 +70,7 @@ def prompt_yes_no(message: str, default: bool = False) -> bool:
     return result in ("y", "yes", "true", "1")
 
 
-def create_pipeline() -> dict:
+def create_pipeline() -> Dict[str, Any]:
     """Interactive pipeline creation wizard.
 
     Returns a dictionary with all pipeline configuration.
@@ -81,7 +81,7 @@ def create_pipeline() -> dict:
     print("\nThis wizard will help you create a new pipeline.")
     print("YAML format is recommended for non-Python users.\n")
 
-    config = {}
+    config: Dict[str, Any] = {}
 
     # Step 1: Basic info
     print("STEP 1: Basic Information")

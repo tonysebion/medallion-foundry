@@ -55,10 +55,10 @@ class ADLSStorage(StorageBackend):
 
     def __init__(self, base_path: str, **options: Any) -> None:
         super().__init__(base_path, **options)
-        self._fs = None
-        self._container = None
-        self._account = None
-        self._prefix = None
+        self._fs: Optional[Any] = None
+        self._container: str = ""
+        self._account: Optional[str] = None
+        self._prefix: str = ""
         self._parse_path()
 
     def _parse_path(self) -> None:
