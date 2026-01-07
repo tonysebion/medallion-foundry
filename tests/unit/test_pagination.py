@@ -10,13 +10,10 @@ Tests cover:
 - Edge cases: empty responses, partial pages, max_pages limits
 """
 
-import pytest
-from typing import Any, Dict, List
 
 from pipelines.lib.api import (
     PaginationConfig,
     PaginationStrategy,
-    PaginationState,
     NoPaginationState,
     OffsetPaginationState,
     PagePaginationState,

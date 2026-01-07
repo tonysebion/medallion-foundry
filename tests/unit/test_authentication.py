@@ -10,10 +10,8 @@ Tests cover:
 - Edge cases: empty credentials, missing fields
 """
 
-import base64
 import os
 import pytest
-from typing import Dict, Optional, Tuple
 from unittest.mock import patch
 
 from pipelines.lib.api import (
