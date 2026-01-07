@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=../../../../pipelines/schema/pipeline.schema.json
+#
+# Pattern: Full Snapshot → State Entity → SCD Type 1 (current_only)
+# ================================================================
+# Use Case: Customer master data, reference tables
+# - Bronze: Full replacement each run
+# - Silver: Deduplicate to latest version, no history tracking
+#
+name: snapshot_state_scd1
+description: Full snapshot to state entity with SCD1 (current_only)
+
+bronze:
+  system: {system}
+  entity: {entity}
+  source_type: file_csv
+  source_path: "{source_path}"
+  target_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt={run_date}/"
+  load_pattern: full_snapshot
+  partition_by: []
+
+silver:
+  source_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt={run_date}/*.parquet"
+  target_path: "s3://{bucket}/{prefix}/silver/system={system}/entity={entity}/"
+  natural_keys: [{natural_key}]
+  change_timestamp: {change_timestamp}
+  entity_kind: state
+  history_mode: current_only

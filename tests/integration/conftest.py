@@ -505,3 +505,109 @@ def bronze_s3_pipeline_config(
 #   from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
 #   bronze = BronzeSource(system="test", entity="test", source_type=SourceType.FILE_PARQUET, ...)
 #   result = bronze.run(run_date)
+
+
+# =============================================================================
+# YAML Pattern Test Fixtures
+# =============================================================================
+
+SAMPLE_DATA_DIR = Path(__file__).parent.parent.parent / "pipelines" / "examples" / "sample_data"
+
+
+@pytest.fixture(scope="module")
+def sample_orders_csv() -> Path:
+    """Path to pre-existing orders sample data CSV."""
+    path = SAMPLE_DATA_DIR / "orders_2025-01-15.csv"
+    if not path.exists():
+        pytest.skip(f"Sample data not found: {path}")
+    return path
+
+
+@pytest.fixture(scope="module")
+def sample_customers_csv() -> Path:
+    """Path to pre-existing customers sample data CSV (with SCD2 history)."""
+    path = SAMPLE_DATA_DIR / "customers_2025-01-15.csv"
+    if not path.exists():
+        pytest.skip(f"Sample data not found: {path}")
+    return path
+
+
+@pytest.fixture
+def yaml_test_prefix() -> str:
+    """Generate a unique prefix for YAML pattern test isolation."""
+    return f"yaml_pattern_{uuid.uuid4().hex[:8]}"
+
+
+@pytest.fixture
+def cleanup_yaml_prefix(minio_client, minio_bucket, yaml_test_prefix) -> Generator[str, None, None]:
+    """Yield YAML test prefix and cleanup all objects under it after test."""
+    yield yaml_test_prefix
+
+    # Cleanup: delete all objects with this prefix
+    try:
+        paginator = minio_client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=minio_bucket, Prefix=yaml_test_prefix):
+            if "Contents" in page:
+                objects = [{"Key": obj["Key"]} for obj in page["Contents"]]
+                if objects:
+                    minio_client.delete_objects(
+                        Bucket=minio_bucket,
+                        Delete={"Objects": objects},
+                    )
+    except Exception:
+        pass  # Best effort cleanup
+
+
+@pytest.fixture
+def events_csv(tmp_path: Path) -> Path:
+    """Generate events CSV for event entity tests.
+
+    Creates a simple events dataset with:
+    - event_id: Unique identifier
+    - order_id: Related order
+    - event_type: Type of event
+    - event_timestamp: When the event occurred
+    """
+    events_data = [
+        {"event_id": "EVT001", "order_id": "ORD001", "event_type": "created", "event_timestamp": "2025-01-15T10:00:00"},
+        {"event_id": "EVT002", "order_id": "ORD001", "event_type": "paid", "event_timestamp": "2025-01-15T10:05:00"},
+        {"event_id": "EVT003", "order_id": "ORD002", "event_type": "created", "event_timestamp": "2025-01-15T11:30:00"},
+        {"event_id": "EVT004", "order_id": "ORD003", "event_type": "created", "event_timestamp": "2025-01-15T14:00:00"},
+        {"event_id": "EVT005", "order_id": "ORD003", "event_type": "shipped", "event_timestamp": "2025-01-15T15:00:00"},
+    ]
+    df = pd.DataFrame(events_data)
+    csv_path = tmp_path / "events_2025-01-15.csv"
+    df.to_csv(csv_path, index=False)
+    return csv_path
+
+
+@pytest.fixture
+def multi_day_orders_csv(tmp_path: Path) -> Dict[str, Path]:
+    """Generate orders CSV files for multiple days (for skipped days testing).
+
+    Creates order files for 2025-01-15, 2025-01-17, 2025-01-19 (skipping 16, 18).
+    Each day has slightly different data to verify correct partition processing.
+    """
+    days = {
+        "2025-01-15": [
+            {"order_id": "ORD001", "customer_id": "CUST01", "order_total": "150.00", "status": "completed", "updated_at": "2025-01-15T10:00:00"},
+            {"order_id": "ORD002", "customer_id": "CUST02", "order_total": "89.99", "status": "pending", "updated_at": "2025-01-15T11:30:00"},
+        ],
+        "2025-01-17": [
+            {"order_id": "ORD003", "customer_id": "CUST01", "order_total": "225.50", "status": "shipped", "updated_at": "2025-01-17T14:00:00"},
+            {"order_id": "ORD004", "customer_id": "CUST03", "order_total": "45.00", "status": "completed", "updated_at": "2025-01-17T09:15:00"},
+        ],
+        "2025-01-19": [
+            {"order_id": "ORD005", "customer_id": "CUST02", "order_total": "310.25", "status": "pending", "updated_at": "2025-01-19T16:45:00"},
+            {"order_id": "ORD006", "customer_id": "CUST01", "order_total": "175.00", "status": "completed", "updated_at": "2025-01-19T12:00:00"},
+        ],
+    }
+
+    csv_files = {}
+    for run_date, orders in days.items():
+        df = pd.DataFrame(orders)
+        csv_path = tmp_path / f"orders_{run_date}.csv"
+        df.to_csv(csv_path, index=False)
+        csv_files[run_date] = csv_path
+
+    return csv_files

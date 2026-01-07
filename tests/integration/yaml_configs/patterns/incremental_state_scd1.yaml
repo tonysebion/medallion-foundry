@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=../../../../pipelines/schema/pipeline.schema.json
+#
+# Pattern: Incremental Load → State Entity → SCD Type 1 (current_only)
+# ====================================================================
+# Use Case: Large dimension tables with frequent updates
+# - Bronze: Append only new/changed records via watermark
+# - Silver: Deduplicate to latest version, no history tracking
+#
+name: incremental_state_scd1
+description: Incremental load to state entity with SCD1 (current_only)
+
+bronze:
+  system: {system}
+  entity: {entity}
+  source_type: file_csv
+  source_path: "{source_path}"
+  target_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt={run_date}/"
+  load_pattern: incremental
+  watermark_column: {watermark_column}
+  partition_by: []
+
+silver:
+  source_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt={run_date}/*.parquet"
+  target_path: "s3://{bucket}/{prefix}/silver/system={system}/entity={entity}/"
+  natural_keys: [{natural_key}]
+  change_timestamp: {change_timestamp}
+  entity_kind: state
+  history_mode: current_only

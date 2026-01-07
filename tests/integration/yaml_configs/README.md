@@ -1,66 +1,115 @@
 # Test YAML Pipeline Configurations
 
-This directory contains YAML pipeline configurations used by integration tests.
+This directory contains YAML pipeline configurations and templates used by integration tests.
 
-## Files
+## Directory Structure
 
-### s3_orders_full.yaml
+```
+yaml_configs/
+├── README.md              # This file
+├── template_loader.py     # Utility for loading templates with substitutions
+├── patterns/              # Static YAML pattern templates
+│   ├── snapshot_state_scd1.yaml     # Full snapshot → State → SCD1
+│   ├── snapshot_state_scd2.yaml     # Full snapshot → State → SCD2
+│   ├── incremental_state_scd1.yaml  # Incremental → State → SCD1
+│   ├── incremental_state_scd2.yaml  # Incremental → State → SCD2
+│   ├── snapshot_event.yaml          # Full snapshot → Event
+│   ├── incremental_event.yaml       # Incremental → Event
+│   └── skipped_days.yaml            # Non-consecutive run dates
+├── s3_orders_full.yaml    # (Legacy) Example SCD1 orders config
+└── s3_customers_scd2.yaml # (Legacy) Example SCD2 customers config
+```
 
-Tests the full Bronze → Silver pipeline with S3/MinIO storage using SCD Type 1 (current_only).
+## Pattern Templates
 
-**Used by:** `test_yaml_s3_comprehensive.py::test_full_yaml_pipeline_with_all_artifacts`
+The `patterns/` directory contains static YAML templates for all Bronze→Silver combinations:
 
-**Validates:**
-- Bronze extraction from CSV to S3 parquet
-- Bronze `_metadata.json` and `_checksums.json` generation
-- Silver curation with deduplication
-- Silver `_metadata.json` and `_checksums.json` generation
-- PolyBase DDL generation from metadata
+### State Entities (Dimensions)
 
-### s3_customers_scd2.yaml
+| Pattern | Bronze Load | Silver Entity | Silver History | Use Case |
+|---------|-------------|---------------|----------------|----------|
+| `snapshot_state_scd1` | full_snapshot | state | current_only | Customer master, reference tables |
+| `snapshot_state_scd2` | full_snapshot | state | full_history | Product catalog with audit trail |
+| `incremental_state_scd1` | incremental | state | current_only | Large dimension updates |
+| `incremental_state_scd2` | incremental | state | full_history | Track all historical changes |
 
-Tests SCD Type 2 (full_history) with customer data that includes historical versions.
+### Event Entities (Facts)
 
-**Used by:** `test_yaml_s3_comprehensive.py::test_scd2_history_mode_to_s3`
+| Pattern | Bronze Load | Silver Entity | Silver History | Use Case |
+|---------|-------------|---------------|----------------|----------|
+| `snapshot_event` | full_snapshot | event | current_only | Daily order snapshots |
+| `incremental_event` | incremental | event | current_only | Streaming events, logs |
 
-**Validates:**
-- Full history tracking with `effective_from`, `effective_to` columns
-- `is_current` flag correctly identifies latest version per customer
-- Multiple historical versions preserved
+### Special Scenarios
+
+| Pattern | Description |
+|---------|-------------|
+| `skipped_days` | Pipeline runs with gaps in dates (weekends, holidays) |
+
+## Template Placeholders
+
+Templates use `{placeholder}` syntax for runtime substitution:
+
+| Placeholder | Description | Example |
+|-------------|-------------|---------|
+| `{bucket}` | MinIO/S3 bucket name | `mdf` |
+| `{prefix}` | Test-specific prefix for isolation | `test_pattern_abc123` |
+| `{source_path}` | Path to source CSV file | `/tmp/orders.csv` |
+| `{run_date}` | Pipeline run date | `2025-01-15` |
+| `{system}` | Source system name | `retail`, `crm` |
+| `{entity}` | Entity name | `orders`, `customers` |
+| `{natural_key}` | Primary key column | `order_id` |
+| `{change_timestamp}` | Timestamp column | `updated_at` |
+| `{watermark_column}` | Watermark column (incremental) | `updated_at` |
+
+## Using the Template Loader
+
+```python
+from tests.integration.yaml_configs.template_loader import (
+    get_pattern_template,
+    load_yaml_with_substitutions,
+)
+
+# Get pattern template path
+template_path = get_pattern_template("snapshot_state_scd1")
+
+# Define substitutions
+substitutions = {
+    "bucket": "mdf",
+    "prefix": "test_123",
+    "source_path": "/tmp/orders.csv",
+    "run_date": "2025-01-15",
+    "system": "retail",
+    "entity": "orders",
+    "natural_key": "order_id",
+    "change_timestamp": "updated_at",
+}
+
+# Load and substitute
+yaml_content = load_yaml_with_substitutions(template_path, substitutions)
+
+# Write to temp file and load pipeline
+yaml_file = tmp_path / "test.yaml"
+yaml_file.write_text(yaml_content)
+pipeline = load_pipeline(yaml_file)
+```
 
 ## Sample Data
 
-**The tests automatically generate sample CSV data at runtime.** No manual data setup is required.
+Tests use sample data from `pipelines/examples/sample_data/`:
 
-Each test creates temporary CSV files in a pytest temp directory with deterministic test data:
-- `orders_{run_date}.csv` - 5 order records including a duplicate for deduplication testing
-- `customers_{run_date}.csv` - 4 customer records with historical versions for SCD2 testing
+- `orders_2025-01-15.csv` - 5 order records
+- `customers_2025-01-15.csv` - 6 customer records with SCD2 history
 
-To generate sample data manually (e.g., for the existing example pipelines):
+To regenerate sample data:
 
 ```bash
-# Generate sample data for a specific date
 python scripts/generate_yaml_test_data.py --date 2025-01-15
-
-# Generate to a custom directory
-python scripts/generate_yaml_test_data.py --date 2025-01-15 --output ./my_test_data
-
-# Generate with more rows
-python scripts/generate_yaml_test_data.py --date 2025-01-15 --num-orders 100 --num-customers 20
 ```
-
-## Runtime Path Substitution
-
-These YAML files use placeholder paths that are substituted at runtime:
-
-- `{source_path}` - Replaced with the path to the test CSV file
-- `{bucket}` - Replaced with MinIO bucket name (default: `mdf`)
-- `{prefix}` - Replaced with test-specific prefix for isolation
-- `{run_date}` - Replaced with the pipeline run date
 
 ## MinIO Configuration
 
-Tests use MinIO as an S3-compatible object store running locally.
+Tests use MinIO as an S3-compatible object store.
 
 ### Default Settings
 
@@ -78,59 +127,65 @@ Tests use MinIO as an S3-compatible object store running locally.
 docker run -p 9000:9000 -p 49384:49384 minio/minio server /data --console-address ":49384"
 ```
 
-### Viewing Test Output in MinIO Console
+### Environment Variables
 
-After running the tests, you can view the generated files in the MinIO console:
-
-1. Open http://localhost:49384 in your browser
-2. Login with `minioadmin` / `minioadmin`
-3. Navigate to the `mdf` bucket
-4. Look for directories named `test_comprehensive_*`
-
-**Note:** Test cleanup removes files after each test by default. To keep files for inspection,
-you can comment out the cleanup in the `minio_test_prefix` fixture in `test_yaml_s3_comprehensive.py`.
-
-### Test Output Structure
-
-Each test creates files in this structure:
-
-```
-mdf/
-└── test_comprehensive_{uuid}/
-    ├── bronze/
-    │   └── system=test/entity=orders/dt=2025-01-15/
-    │       ├── orders.parquet
-    │       ├── _metadata.json
-    │       └── _checksums.json
-    └── silver/
-        └── test/orders/
-            ├── data.parquet
-            ├── _metadata.json
-            └── _checksums.json
-```
-
-### Overriding Configuration
-
-You can override MinIO settings via environment variables:
+Override defaults with environment variables:
 
 ```bash
 export MINIO_ENDPOINT=http://localhost:9000
 export MINIO_ACCESS_KEY=minioadmin
 export MINIO_SECRET_KEY=minioadmin
 export MINIO_BUCKET=mdf
-
-pytest tests/integration/test_yaml_s3_comprehensive.py -v
 ```
 
-## Running the Tests
+## Running Tests
 
 ```bash
-# Run all comprehensive S3 tests
+# Run all pattern tests
 pytest tests/integration/test_yaml_s3_comprehensive.py -v
 
-# Run a specific test
-pytest tests/integration/test_yaml_s3_comprehensive.py::TestYamlS3Comprehensive::test_full_yaml_pipeline_with_all_artifacts -v
+# Run specific pattern
+pytest tests/integration/test_yaml_s3_comprehensive.py -k "snapshot_state_scd1" -v
 
-# Run with output visible (useful for debugging)
+# Run all state patterns
+pytest tests/integration/test_yaml_s3_comprehensive.py -k "state" -v
+
+# Run all event patterns
+pytest tests/integration/test_yaml_s3_comprehensive.py -k "event" -v
+
+# Run skipped days test
+pytest tests/integration/test_yaml_s3_comprehensive.py -k "skipped_days" -v
+
+# Run with verbose output
 pytest tests/integration/test_yaml_s3_comprehensive.py -v -s
 ```
+
+## Test Output Structure
+
+Each test creates files in this structure:
+
+```
+mdf/
+└── test_pattern_{uuid}/
+    ├── bronze/
+    │   └── system=retail/entity=orders/dt=2025-01-15/
+    │       ├── orders.parquet
+    │       ├── _metadata.json
+    │       └── _checksums.json
+    └── silver/
+        └── system=retail/entity=orders/
+            ├── orders.parquet
+            ├── _metadata.json
+            └── _checksums.json
+```
+
+## Viewing Test Output
+
+After running tests, view files in MinIO console:
+
+1. Open http://localhost:49384
+2. Login with `minioadmin` / `minioadmin`
+3. Navigate to `mdf` bucket
+4. Look for directories named `test_pattern_*`
+
+Note: Test cleanup is disabled by default to allow inspection.

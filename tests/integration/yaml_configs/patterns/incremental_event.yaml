@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=../../../../pipelines/schema/pipeline.schema.json
+#
+# Pattern: Incremental Load → Event Entity
+# ========================================
+# Use Case: Streaming events, real-time logs
+# - Bronze: Append only new events via watermark
+# - Silver: Deduplicate events, no SCD (events are immutable)
+#
+name: incremental_event
+description: Incremental load to event entity
+
+bronze:
+  system: {system}
+  entity: {entity}
+  source_type: file_csv
+  source_path: "{source_path}"
+  target_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt={run_date}/"
+  load_pattern: incremental
+  watermark_column: {watermark_column}
+  partition_by: []
+
+silver:
+  source_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt={run_date}/*.parquet"
+  target_path: "s3://{bucket}/{prefix}/silver/system={system}/entity={entity}/"
+  natural_keys: [{natural_key}]
+  change_timestamp: {change_timestamp}
+  entity_kind: event
+  history_mode: current_only

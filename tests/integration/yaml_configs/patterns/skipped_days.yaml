@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=../../../../pipelines/schema/pipeline.schema.json
+#
+# Pattern: Skipped Days Test
+# ==========================
+# Use Case: Verify pipeline works with non-consecutive run dates
+# Simulates weekends, holidays, or outage scenarios where pipelines
+# don't run every day. PolyBase DDL must work with gaps in partitions.
+#
+# Test Flow:
+#   1. Run pipeline on days 1, 3, 5 (skipping days 2, 4)
+#   2. Verify Bronze partitions exist only for run days
+#   3. Verify Silver correctly processes each available Bronze partition
+#   4. Verify PolyBase DDL references actual partitions
+#
+name: skipped_days
+description: Test pipeline with non-consecutive run dates
+
+bronze:
+  system: {system}
+  entity: {entity}
+  source_type: file_csv
+  source_path: "{source_path}"
+  target_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt={run_date}/"
+  load_pattern: full_snapshot
+  partition_by: []
+
+silver:
+  source_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt={run_date}/*.parquet"
+  target_path: "s3://{bucket}/{prefix}/silver/system={system}/entity={entity}/"
+  natural_keys: [{natural_key}]
+  change_timestamp: {change_timestamp}
+  entity_kind: state
+  history_mode: current_only

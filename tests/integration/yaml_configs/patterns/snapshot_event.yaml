@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=../../../../pipelines/schema/pipeline.schema.json
+#
+# Pattern: Full Snapshot → Event Entity
+# =====================================
+# Use Case: Daily order snapshots, transaction logs
+# - Bronze: Full replacement each run
+# - Silver: Deduplicate events, no SCD (events are immutable)
+#
+name: snapshot_event
+description: Full snapshot to event entity
+
+bronze:
+  system: {system}
+  entity: {entity}
+  source_type: file_csv
+  source_path: "{source_path}"
+  target_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt={run_date}/"
+  load_pattern: full_snapshot
+  partition_by: []
+
+silver:
+  source_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt={run_date}/*.parquet"
+  target_path: "s3://{bucket}/{prefix}/silver/system={system}/entity={entity}/"
+  natural_keys: [{natural_key}]
+  change_timestamp: {change_timestamp}
+  entity_kind: event
+  history_mode: current_only
