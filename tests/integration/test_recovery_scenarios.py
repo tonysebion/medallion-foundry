@@ -583,8 +583,9 @@ class TestFailureRecoveryScenarioIntegration:
         assert 5 in silver_days_run, "Day 5 Silver recovery should have run"
 
         # Verify final state is complete
-        # Find last run date
-        last_config = [c for c in scenario.schedule if c.load_type.value != "skip"][-1]
+        # Find last Silver run date (from our run, not the whole schedule)
+        last_silver_day = max(silver_days_run)
+        last_config = scenario.schedule[last_silver_day - 1]
         final_df = get_silver_data(
             minio_client, minio_bucket, prefix, last_config.run_date.isoformat()
         )

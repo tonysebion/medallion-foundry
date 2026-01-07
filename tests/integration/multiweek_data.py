@@ -190,12 +190,14 @@ class MultiWeekScenario:
 
         schema_cols = self.get_schema_columns(config.schema_version)
 
-        if pattern == "snapshot" or config.is_full_refresh:
+        # Route to appropriate generator based on pattern
+        # For CDC, always use CDC generator even on full refresh days
+        if pattern == "cdc":
+            return self._generate_cdc_data(day, schema_cols)
+        elif pattern == "snapshot" or config.is_full_refresh:
             return self._generate_snapshot_data(day, schema_cols)
         elif pattern == "incremental":
             return self._generate_incremental_data(day, schema_cols)
-        elif pattern == "cdc":
-            return self._generate_cdc_data(day, schema_cols)
         else:
             raise ValueError(f"Unknown pattern: {pattern}")
 
@@ -488,7 +490,7 @@ class CDCDeleteCycleScenario(MultiWeekScenario):
                 row["op"] = "I"
                 records.append(row)
 
-        # Week 2 (days 8-14): Mass deletes
+        # Week 2 (days 8-14): Mass deletes on 8-12, quiet on 13-14
         elif 8 <= day <= 12:
             # Delete multiple records
             active_ids = [
@@ -502,6 +504,17 @@ class CDCDeleteCycleScenario(MultiWeekScenario):
                 records.append(row)
                 rec.is_deleted = True
                 rec.deleted_on_day = day
+        elif 13 <= day <= 14:
+            # Days 13-14: No changes (but may be weekend anyway)
+            # Generate a single no-op update to maintain schema
+            active_ids = [
+                r.id for r in self._record_states.values() if not r.is_deleted
+            ]
+            if active_ids:
+                rec = self._record_states[active_ids[0]]
+                row = self._record_to_row(rec, columns, ts)
+                row["op"] = "U"  # No-op update
+                records.append(row)
 
         # Week 3 (days 15-21): Recovery inserts
         elif day >= 15:
