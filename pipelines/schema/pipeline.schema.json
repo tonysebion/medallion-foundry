@@ -88,6 +88,11 @@
           "enum": ["full_snapshot", "incremental", "incremental_append", "cdc"],
           "default": "full_snapshot"
         },
+        "input_mode": {
+          "type": "string",
+          "description": "How Silver should interpret Bronze partitions. 'replace_daily' means each partition is a complete snapshot (Silver reads latest). 'append_log' means partitions are additive (Silver unions all partitions).",
+          "enum": ["replace_daily", "append_log"]
+        },
         "watermark_column": {
           "type": "string",
           "description": "Column to use for incremental loads (required if load_pattern is incremental)",

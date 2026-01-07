@@ -42,7 +42,7 @@ from pipelines.lib.observability import get_structlog_logger
 # Use structlog for structured logging with pipeline context
 logger = get_structlog_logger(__name__)
 
-__all__ = ["BronzeOutputMetadata", "BronzeSource", "LoadPattern", "SourceType"]
+__all__ = ["BronzeOutputMetadata", "BronzeSource", "InputMode", "LoadPattern", "SourceType"]
 
 
 # Backwards compatibility: BronzeOutputMetadata is now OutputMetadata
@@ -142,6 +142,23 @@ class LoadPattern(Enum):
     CDC = "cdc"  # Change data capture deltas
 
 
+class InputMode(Enum):
+    """How Silver should interpret Bronze partitions.
+
+    This controls how multiple Bronze date partitions are combined when
+    processing in the Silver layer:
+
+    - REPLACE_DAILY: Each Bronze partition is a complete snapshot. Silver
+      reads only the latest partition and replaces the target.
+
+    - APPEND_LOG: Bronze partitions are additive (e.g., CDC events, logs).
+      Silver reads all partitions and unions them before processing.
+    """
+
+    REPLACE_DAILY = "replace_daily"  # Each partition is complete snapshot
+    APPEND_LOG = "append_log"  # Partitions are additive (CDC/events)
+
+
 # Default target path template - can be overridden
 DEFAULT_BRONZE_TARGET = "./bronze/system={system}/entity={entity}/dt={run_date}/"
 
@@ -203,6 +220,7 @@ class BronzeSource:
 
     # Behavior
     load_pattern: LoadPattern = LoadPattern.FULL_SNAPSHOT
+    input_mode: Optional[InputMode] = None  # How Silver interprets partitions (required in YAML)
     watermark_column: Optional[str] = None  # For incremental loads
 
     # Database connection params (convenience - merged into options)
@@ -793,6 +811,7 @@ class BronzeSource:
             "entity": self.entity,
             "source_type": self.source_type.value,
             "load_pattern": self.load_pattern.value,
+            "input_mode": self.input_mode.value if self.input_mode else None,
             "watermark_column": self.watermark_column,
             "last_watermark": last_watermark,
         }

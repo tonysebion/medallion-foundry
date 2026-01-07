@@ -1,25 +1,68 @@
-# medallion-foundry documentation
+# Bronze Foundry Documentation
 
-This directory powers the on-site documentation, but it is also the canonical source of truth for new users exploring the framework locally.
+**From source → Bronze → Silver with one Python package.**
 
-## Start points
+## Quick Start
 
-- `docs/index.md` — curated roadmap (beginner, owner, developer tracks) plus links to the most common tasks.
-- `docs/pipelines/GETTING_STARTED.md` — primer for authoring and running pipelines through `python -m pipelines`.
-- `pipelines/QUICKREF.md` — CLI cheatsheet with flags, helpers, and troubleshooting tips.
-- `docs/scripts/README.md` — how to regenerate `sampledata/` fixtures with the current tooling.
+```bash
+# Install
+python -m venv .venv
+.venv\Scripts\activate  # Windows
+# source .venv/bin/activate  # Linux/Mac
+pip install -e .
 
-## Quick sanity checks
+# List pipelines
+python -m pipelines --list
 
-- List every discovered pipeline: `python -m pipelines --list`
-- Explain or validate before running: use `--explain`, `--dry-run`, or `--check`
-- Build new pipelines interactively: `python -m pipelines.create` or `python -m pipelines new my.system --source-type database_mssql`
-- Generate sample fixtures: `python scripts/generate_bronze_samples.py --all` and `python scripts/generate_silver_samples.py --all`
+# Run example
+python -m pipelines examples.retail_orders --date 2025-01-15
 
-## Keeping the docs fresh
+# Validate before running
+python -m pipelines examples.retail_orders --date 2025-01-15 --dry-run
+```
 
-1. Align any conceptual content with `pipelines/lib` (Bronze/Silver dataclasses, runner helpers, resiliant utilities, etc.).
-2. Update sample paths if `sampledata/` or `pipelines/examples/` moves.
-3. Regenerate `docs/pipelines` guides when new CLI flags are added (for example, `inspect-source`, `generate-sample`, `test-connection`).
+## Commands
 
-The rest of the directory includes usage guides, operational playbooks, and framework references that link back to these core entry points.
+| Task | Command |
+|------|---------|
+| List pipelines | `python -m pipelines --list` |
+| Run pipeline | `python -m pipelines <module> --date YYYY-MM-DD` |
+| Bronze only | `python -m pipelines <module>:bronze --date YYYY-MM-DD` |
+| Silver only | `python -m pipelines <module>:silver --date YYYY-MM-DD` |
+| Dry run | Add `--dry-run` |
+| Check connectivity | Add `--check` |
+| Show plan | Add `--explain` |
+| Override target | Add `--target ./local/` |
+| Interactive creator | `python -m pipelines.create` |
+| Test connection | `python -m pipelines test-connection db --host ... --database ...` |
+| Inspect file | `python -m pipelines inspect-source --file ./data.csv` |
+
+## Documentation
+
+| Guide | Description |
+|-------|-------------|
+| [GETTING_STARTED.md](GETTING_STARTED.md) | Pipeline primer, source types, entity kinds |
+| [OPERATIONS.md](OPERATIONS.md) | Testing, troubleshooting, error handling |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Storage backends, path structure, PolyBase |
+| [ROADMAP.md](ROADMAP.md) | Future features |
+
+## System Requirements
+
+- Python 3.9+
+- Storage: Local filesystem, S3, Azure (ADLS, Blob)
+- Credentials: AWS env vars or Azure credentials
+
+## Sample Data
+
+Generate test fixtures:
+
+```bash
+python scripts/generate_bronze_samples.py --all
+python scripts/generate_silver_samples.py --all
+```
+
+## Help
+
+1. `python -m pipelines --list` - confirm pipeline is discoverable
+2. `--dry-run --check` - validate before writing
+3. See [OPERATIONS.md](OPERATIONS.md) for troubleshooting
