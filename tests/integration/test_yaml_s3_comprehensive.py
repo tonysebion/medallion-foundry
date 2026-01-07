@@ -384,14 +384,16 @@ def minio_test_prefix():
     prefix = f"test_comprehensive_{test_id}"
     yield prefix
 
-    # Cleanup after test
-    try:
-        fs = get_s3fs()
-        objects = fs.find(f"{MINIO_BUCKET}/{prefix}")
-        for obj in objects:
-            fs.rm(obj)
-    except Exception as e:
-        print(f"Cleanup warning: {e}")
+    # Cleanup after test - DISABLED for inspection
+    # Uncomment to enable cleanup:
+    # try:
+    #     fs = get_s3fs()
+    #     objects = fs.find(f"{MINIO_BUCKET}/{prefix}")
+    #     for obj in objects:
+    #         fs.rm(obj)
+    # except Exception as e:
+    #     print(f"Cleanup warning: {e}")
+    print(f"\n[CLEANUP DISABLED] Test files preserved at: s3://{MINIO_BUCKET}/{prefix}/")
 
 
 @pytest.fixture

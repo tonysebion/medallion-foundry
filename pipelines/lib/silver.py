@@ -573,6 +573,57 @@ class SilverEntity:
             except Exception as e:
                 logger.warning("silver_checksum_write_failed", error=str(e))
 
+            # Write PolyBase DDL script to cloud storage
+            try:
+                from pipelines.lib.polybase import PolyBaseConfig, write_polybase_ddl_s3
+
+                # Extract entity name from target path (last non-empty segment)
+                target_parts = target.rstrip("/").split("/")
+                entity_name = target_parts[-1] if target_parts else "entity"
+
+                # Extract bucket/container from S3 URI for data source location
+                # s3://bucket/prefix/... -> s3://bucket/silver/
+                if target.startswith("s3://"):
+                    bucket = target.split("/")[2]
+                    data_source_location = f"s3://{bucket}/silver/"
+                    data_source_name = f"silver_{bucket}"
+                else:
+                    # ADLS: abfs://container@account.dfs.core.windows.net/...
+                    data_source_location = target.rsplit("/silver/", 1)[0] + "/silver/"
+                    data_source_name = "silver_adls"
+
+                # Build metadata dict for PolyBase generation
+                polybase_metadata = {
+                    "columns": columns,
+                    "entity_kind": self.entity_kind.value,
+                    "history_mode": self.history_mode.value,
+                    "natural_keys": self.natural_keys,
+                    "change_timestamp": self.change_timestamp,
+                }
+
+                # Get S3 endpoint from environment if available
+                import os
+                s3_endpoint = os.environ.get("AWS_ENDPOINT_URL", "https://s3.amazonaws.com")
+                s3_access_key = os.environ.get("AWS_ACCESS_KEY_ID", "<your_access_key>")
+
+                polybase_config = PolyBaseConfig(
+                    data_source_name=data_source_name,
+                    data_source_location=data_source_location,
+                    credential_name="s3_credential",  # Placeholder - user must configure
+                    s3_endpoint=s3_endpoint,
+                    s3_access_key=s3_access_key,
+                )
+
+                write_polybase_ddl_s3(
+                    storage,
+                    polybase_metadata,
+                    polybase_config,
+                    entity_name=entity_name,
+                )
+                logger.debug("silver_polybase_ddl_written", target=target)
+            except Exception as e:
+                logger.warning("silver_polybase_write_failed", error=str(e))
+
             logger.info("silver_curation_complete", row_count=row_count, target=target)
 
             return {
@@ -584,6 +635,7 @@ class SilverEntity:
                 "files": written_files,
                 "metadata_file": "_metadata.json",
                 "checksums_file": "_checksums.json",
+                "polybase_file": "_polybase.sql",
             }
 
         # For local filesystem, use enhanced write with artifacts

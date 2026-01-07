@@ -11,7 +11,10 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from pipelines.lib.storage.base import StorageBackend
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +25,8 @@ __all__ = [
     "generate_state_views",
     "generate_event_views",
     "generate_from_metadata",
+    "generate_from_metadata_dict",
+    "write_polybase_ddl_s3",
 ]
 
 
@@ -44,6 +49,10 @@ class PolyBaseConfig:
 
     # Credential (optional)
     credential_name: Optional[str] = None
+
+    # S3 endpoint (for MinIO or custom S3-compatible storage)
+    s3_endpoint: Optional[str] = None
+    s3_access_key: Optional[str] = None  # Will be masked in output
 
     def external_table_name(self, entity_name: str, entity_kind: str) -> str:
         """Generate external table name for an entity."""
@@ -122,7 +131,7 @@ def generate_data_source_ddl(config: PolyBaseConfig) -> str:
     """
     credential_clause = ""
     if config.credential_name:
-        credential_clause = f",\n    CREDENTIAL = [{config.credential_name}]"
+        credential_clause = f",\n        CREDENTIAL = [{config.credential_name}]"
 
     ddl = f"""-- External Data Source for Silver layer
 IF NOT EXISTS (SELECT * FROM sys.external_data_sources WHERE name = '{config.data_source_name}')
@@ -191,8 +200,27 @@ def generate_polybase_setup(
     """
     parts = []
 
-    # Header
-    parts.append(f"""-- ============================================
+    # Header with credential setup instructions
+    credential_setup = ""
+    if config.credential_name:
+        s3_endpoint_info = f"\n-- S3 Endpoint: {config.s3_endpoint}" if config.s3_endpoint else ""
+        s3_access_info = f"\n-- Access Key: {config.s3_access_key}" if config.s3_access_key else ""
+        credential_setup = f"""
+-- ============================================
+-- CREDENTIAL SETUP (run once per database)
+-- ============================================
+-- Before running this script, create the database scoped credential:
+--
+-- CREATE DATABASE SCOPED CREDENTIAL [{config.credential_name}]
+-- WITH IDENTITY = '<access_key>',
+-- SECRET = '<secret_key>';{s3_endpoint_info}{s3_access_info}
+--
+-- For MinIO/S3-compatible storage, you may also need to configure
+-- the external data source with a custom endpoint.
+-- ============================================
+"""
+
+    parts.append(f"""{credential_setup}-- ============================================
 -- PolyBase Setup for: {entity_name}
 -- Entity Kind: {entity_kind}
 -- History Mode: {history_mode}
@@ -498,3 +526,111 @@ def write_polybase_script(
     output_path.write_text(ddl, encoding="utf-8")
     logger.info("Wrote PolyBase script to %s", output_path)
     return output_path
+
+
+def generate_from_metadata_dict(
+    metadata: Dict[str, Any],
+    config: PolyBaseConfig,
+    *,
+    entity_name: Optional[str] = None,
+) -> str:
+    """Generate PolyBase DDL from metadata dictionary.
+
+    This function accepts an in-memory metadata dict rather than reading
+    from a file, making it suitable for cloud storage scenarios.
+
+    Args:
+        metadata: Metadata dictionary (same structure as _metadata.json)
+        config: PolyBase configuration
+        entity_name: Entity name (required since no file path to derive from)
+
+    Returns:
+        Complete SQL setup script
+
+    Example:
+        >>> metadata = {"columns": [...], "entity_kind": "state", ...}
+        >>> ddl = generate_from_metadata_dict(
+        ...     metadata,
+        ...     PolyBaseConfig(
+        ...         data_source_name="silver_source",
+        ...         data_source_location="s3://bucket/silver/",
+        ...     ),
+        ...     entity_name="orders",
+        ... )
+    """
+    if not entity_name:
+        raise ValueError("entity_name is required when generating from dict")
+
+    # Extract required fields
+    columns = metadata.get("columns", [])
+    entity_kind = metadata.get("entity_kind", "state")
+    history_mode = metadata.get("history_mode", "current_only")
+    natural_keys = metadata.get("natural_keys", [])
+    change_timestamp = metadata.get("change_timestamp", "updated_at")
+    partition_by = metadata.get("partition_by")
+
+    # Generate full setup
+    return generate_polybase_setup(
+        entity_name,
+        columns,
+        entity_kind,
+        natural_keys,
+        config,
+        history_mode=history_mode,
+        partition_columns=partition_by,
+        change_timestamp=change_timestamp,
+    )
+
+
+def write_polybase_ddl_s3(
+    storage: "StorageBackend",
+    metadata: Dict[str, Any],
+    config: PolyBaseConfig,
+    *,
+    entity_name: str,
+    filename: str = "_polybase.sql",
+) -> bool:
+    """Write PolyBase DDL script to S3/cloud storage.
+
+    Generates and writes a _polybase.sql file alongside the data and metadata
+    in cloud storage. This makes it easy to set up SQL Server PolyBase
+    external tables pointing to the Silver layer data.
+
+    Args:
+        storage: Storage backend to write to (S3, ADLS, etc.)
+        metadata: Metadata dictionary with columns, entity_kind, etc.
+        config: PolyBase configuration with data source details
+        entity_name: Name of the entity (used in table/view names)
+        filename: Output filename (default: _polybase.sql)
+
+    Returns:
+        True if DDL was written successfully
+
+    Example:
+        >>> from pipelines.lib.storage import get_storage
+        >>> from pipelines.lib.polybase import PolyBaseConfig, write_polybase_ddl_s3
+        >>>
+        >>> storage = get_storage("s3://bucket/silver/orders/")
+        >>> config = PolyBaseConfig(
+        ...     data_source_name="silver_minio",
+        ...     data_source_location="s3://mdf/silver/",
+        ...     credential_name="minio_credential",
+        ... )
+        >>> write_polybase_ddl_s3(storage, metadata, config, entity_name="orders")
+    """
+    try:
+        ddl = generate_from_metadata_dict(metadata, config, entity_name=entity_name)
+        result = storage.write_text(filename, ddl)
+        if result.success:
+            logger.info(
+                "Wrote PolyBase DDL to S3: %s/%s",
+                storage.base_path,
+                filename,
+            )
+            return True
+        else:
+            logger.warning("Failed to write PolyBase DDL: %s", result.error)
+            return False
+    except Exception as e:
+        logger.warning("Error writing PolyBase DDL to S3: %s", e)
+        return False
