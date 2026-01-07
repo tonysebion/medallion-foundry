@@ -170,7 +170,7 @@ def run_silver(
     entity: str,
     entity_kind: EntityKind,
     history_mode: HistoryMode,
-    delete_mode: DeleteMode = None,
+    delete_mode: DeleteMode = DeleteMode.IGNORE,
     cdc_col: str = None,
 ):
     """Run Silver pipeline."""

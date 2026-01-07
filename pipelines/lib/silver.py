@@ -370,7 +370,7 @@ class SilverEntity:
         # Configure S3 if source or target is cloud storage
         if source.startswith("s3://") or source.startswith("abfs://") or \
            target.startswith("s3://") or target.startswith("abfs://"):
-            _configure_duckdb_s3(con)  # Uses environment variables
+            _configure_duckdb_s3(con, self.storage_options)  # Pass storage_options for MinIO/custom endpoints
 
         t = self._read_source(con, source)
 

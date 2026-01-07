@@ -39,7 +39,7 @@ class TestS3ConnectionScript:
         )
         mock_storage.exists.return_value = True
         mock_storage.list_files.return_value = [
-            MagicMock(path="test/hello_world_20250107.json")
+            MagicMock(path="test/hello_world_20250107_120000.json")
         ]
         mock_storage.delete.return_value = True
 
