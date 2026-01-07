@@ -7,11 +7,12 @@ for advanced use cases.
 
 from __future__ import annotations
 
-from typing import List
+from typing import Dict, List, Optional
 
 import ibis
 
 __all__ = [
+    "apply_cdc",
     "build_history",
     "coalesce_columns",
     "dedupe_earliest",
@@ -223,3 +224,82 @@ def union_dedupe(
         unioned = unioned.union(t)
 
     return dedupe_latest(unioned, keys, order_by)
+
+
+def apply_cdc(
+    t: ibis.Table,
+    keys: List[str],
+    order_by: str,
+    delete_mode: str,
+    cdc_options: Optional[Dict[str, str]] = None,
+) -> ibis.Table:
+    """Apply CDC (Change Data Capture) processing to a table.
+
+    Handles Insert/Update/Delete operation codes and applies the appropriate
+    delete handling strategy.
+
+    Args:
+        t: Input table with CDC operation codes
+        keys: Natural key columns for deduplication
+        order_by: Timestamp column for ordering (latest wins)
+        delete_mode: How to handle deletes - "ignore", "tombstone", or "hard_delete"
+        cdc_options: CDC configuration with:
+            - operation_column: Column containing I/U/D codes (required)
+            - insert_code: Value for inserts (default "I")
+            - update_code: Value for updates (default "U")
+            - delete_code: Value for deletes (default "D")
+
+    Returns:
+        Table with CDC operations applied
+
+    Example:
+        >>> result = apply_cdc(
+        ...     t, ["customer_id"], "updated_at",
+        ...     delete_mode="tombstone",
+        ...     cdc_options={"operation_column": "op"}
+        ... )
+    """
+    if not cdc_options or "operation_column" not in cdc_options:
+        raise ValueError("cdc_options with operation_column is required for CDC processing")
+
+    op_col = cdc_options["operation_column"]
+    insert_code = cdc_options.get("insert_code", "I")
+    update_code = cdc_options.get("update_code", "U")
+    delete_code = cdc_options.get("delete_code", "D")
+
+    if op_col not in t.columns:
+        raise ValueError(f"Operation column '{op_col}' not found in table. Available: {t.columns}")
+
+    # First, dedupe to get latest operation per key
+    deduped = dedupe_latest(t, keys, order_by)
+
+    # Helper to drop operation column using select (avoids Ibis/DuckDB schema issues with drop)
+    def drop_op_col(table: ibis.Table) -> ibis.Table:
+        cols = [c for c in table.columns if c != op_col]
+        return table.select(*cols)
+
+    if delete_mode == "ignore":
+        # Filter out delete records, keep only I/U
+        filtered = deduped.filter(
+            (deduped[op_col] == insert_code) | (deduped[op_col] == update_code)
+        )
+        return drop_op_col(filtered)
+
+    elif delete_mode == "tombstone":
+        # Add _deleted column: true for deletes, false for I/U
+        with_flag = deduped.mutate(
+            _deleted=(deduped[op_col] == delete_code)
+        )
+        return drop_op_col(with_flag)
+
+    elif delete_mode == "hard_delete":
+        # Filter out deletes (same as ignore, but semantic difference:
+        # hard_delete implies records should be removed from existing Silver)
+        # The actual removal from existing data happens in Silver layer
+        filtered = deduped.filter(
+            (deduped[op_col] == insert_code) | (deduped[op_col] == update_code)
+        )
+        return drop_op_col(filtered)
+
+    else:
+        raise ValueError(f"Unknown delete_mode: {delete_mode}. Valid options: ignore, tombstone, hard_delete")

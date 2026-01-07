@@ -93,6 +93,36 @@
           "description": "How Silver should interpret Bronze partitions. 'replace_daily' means each partition is a complete snapshot (Silver reads latest). 'append_log' means partitions are additive (Silver unions all partitions).",
           "enum": ["replace_daily", "append_log"]
         },
+        "cdc_options": {
+          "type": "object",
+          "description": "CDC (Change Data Capture) options. Required when load_pattern is 'cdc'.",
+          "properties": {
+            "operation_column": {
+              "type": "string",
+              "description": "Column containing operation codes (I/U/D)",
+              "examples": ["op", "operation", "_op", "__op"]
+            },
+            "insert_code": {
+              "type": "string",
+              "description": "Value indicating an Insert operation",
+              "default": "I",
+              "examples": ["I", "INSERT", "c", "create"]
+            },
+            "update_code": {
+              "type": "string",
+              "description": "Value indicating an Update operation",
+              "default": "U",
+              "examples": ["U", "UPDATE", "u", "update"]
+            },
+            "delete_code": {
+              "type": "string",
+              "description": "Value indicating a Delete operation",
+              "default": "D",
+              "examples": ["D", "DELETE", "d", "delete"]
+            }
+          },
+          "required": ["operation_column"]
+        },
         "watermark_column": {
           "type": "string",
           "description": "Column to use for incremental loads (required if load_pattern is incremental)",
@@ -388,6 +418,11 @@
           "description": "Where to write Silver output. Defaults to ./silver/system={system}/entity={entity}/",
           "examples": ["./silver/system=retail/entity=orders/", "s3://bucket/silver/system=retail/entity=orders/"]
         },
+        "model": {
+          "type": "string",
+          "description": "Pre-built transformation pattern. Sets entity_kind, history_mode, and input_mode. Can be overridden by explicit settings.",
+          "enum": ["periodic_snapshot", "full_merge_dedupe", "incremental_merge", "scd_type_2", "event_log"]
+        },
         "entity_kind": {
           "type": "string",
           "description": "What kind of entity this represents",
@@ -399,6 +434,17 @@
           "description": "How to handle historical changes. 'current_only' (SCD1) or 'full_history' (SCD2)",
           "enum": ["current_only", "scd1", "full_history", "scd2"],
           "default": "current_only"
+        },
+        "input_mode": {
+          "type": "string",
+          "description": "How to interpret Bronze partitions. Usually auto-wired from Bronze layer.",
+          "enum": ["replace_daily", "append_log"]
+        },
+        "delete_mode": {
+          "type": "string",
+          "description": "How to handle Delete operations in CDC data. 'ignore' filters out deletes, 'tombstone' keeps records with _deleted=true, 'hard_delete' removes records from Silver.",
+          "enum": ["ignore", "tombstone", "hard_delete"],
+          "default": "ignore"
         },
         "attributes": {
           "type": "array",

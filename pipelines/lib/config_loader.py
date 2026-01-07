@@ -33,8 +33,15 @@ from typing import Any, Dict, List, Optional, Union
 
 import yaml
 
-from pipelines.lib.bronze import BronzeSource, LoadPattern, SourceType
-from pipelines.lib.silver import EntityKind, HistoryMode, SilverEntity
+from pipelines.lib.bronze import BronzeSource, InputMode, LoadPattern, SourceType
+from pipelines.lib.silver import (
+    DeleteMode,
+    EntityKind,
+    HistoryMode,
+    SilverEntity,
+    SilverModel,
+    SILVER_MODEL_PRESETS,
+)
 from pipelines.lib.validate import LoggingConfig
 
 logger = logging.getLogger(__name__)
@@ -79,6 +86,11 @@ LOAD_PATTERN_MAP = {
     "cdc": LoadPattern.CDC,
 }
 
+INPUT_MODE_MAP = {
+    "replace_daily": InputMode.REPLACE_DAILY,
+    "append_log": InputMode.APPEND_LOG,
+}
+
 ENTITY_KIND_MAP = {
     "state": EntityKind.STATE,
     "event": EntityKind.EVENT,
@@ -89,6 +101,20 @@ HISTORY_MODE_MAP = {
     "scd1": HistoryMode.CURRENT_ONLY,
     "full_history": HistoryMode.FULL_HISTORY,
     "scd2": HistoryMode.FULL_HISTORY,
+}
+
+SILVER_MODEL_MAP = {
+    "periodic_snapshot": SilverModel.PERIODIC_SNAPSHOT,
+    "full_merge_dedupe": SilverModel.FULL_MERGE_DEDUPE,
+    "incremental_merge": SilverModel.INCREMENTAL_MERGE,
+    "scd_type_2": SilverModel.SCD_TYPE_2,
+    "event_log": SilverModel.EVENT_LOG,
+}
+
+DELETE_MODE_MAP = {
+    "ignore": DeleteMode.IGNORE,
+    "tombstone": DeleteMode.TOMBSTONE,
+    "hard_delete": DeleteMode.HARD_DELETE,
 }
 
 
@@ -311,6 +337,18 @@ def load_bronze_from_yaml(
             )
         load_pattern = LOAD_PATTERN_MAP[pattern_str]
 
+    # Convert input_mode string to enum (optional)
+    input_mode = None
+    if "input_mode" in config:
+        mode_str = config["input_mode"].lower()
+        if mode_str not in INPUT_MODE_MAP:
+            valid = ", ".join(sorted(INPUT_MODE_MAP.keys()))
+            raise YAMLConfigError(
+                f"Invalid input_mode '{config['input_mode']}'. "
+                f"Valid options: {valid}"
+            )
+        input_mode = INPUT_MODE_MAP[mode_str]
+
     # Resolve source_path relative to config file
     source_path = config.get("source_path", "")
     if source_path:
@@ -332,6 +370,7 @@ def load_bronze_from_yaml(
         source_path=source_path,
         target_path=target_path,
         load_pattern=load_pattern,
+        input_mode=input_mode,
         watermark_column=config.get("watermark_column"),
         connection=config.get("connection"),
         host=config.get("host"),
@@ -377,29 +416,44 @@ def load_silver_from_yaml(
     if isinstance(natural_keys, str):
         natural_keys = [natural_keys]
 
-    # Convert entity_kind string to enum (optional)
-    entity_kind = EntityKind.STATE
-    if "entity_kind" in config:
-        kind_str = config["entity_kind"].lower()
-        if kind_str not in ENTITY_KIND_MAP:
-            valid = ", ".join(sorted(ENTITY_KIND_MAP.keys()))
+    # Expand model preset if specified (before parsing individual settings)
+    # Model provides defaults; explicit settings can override them
+    model_defaults: Dict[str, str] = {}
+    if "model" in config:
+        model_str = config["model"].lower()
+        if model_str not in SILVER_MODEL_MAP:
+            valid = ", ".join(sorted(SILVER_MODEL_MAP.keys()))
             raise YAMLConfigError(
-                f"Invalid entity_kind '{config['entity_kind']}'. "
+                f"Invalid model '{config['model']}'. "
                 f"Valid options: {valid}"
             )
-        entity_kind = ENTITY_KIND_MAP[kind_str]
+        model_defaults = SILVER_MODEL_PRESETS[model_str]
+        logger.debug(
+            "Expanding Silver model preset",
+            extra={"model": model_str, "defaults": model_defaults}
+        )
 
-    # Convert history_mode string to enum (optional)
-    history_mode = HistoryMode.CURRENT_ONLY
-    if "history_mode" in config:
-        mode_str = config["history_mode"].lower()
-        if mode_str not in HISTORY_MODE_MAP:
-            valid = ", ".join(sorted(HISTORY_MODE_MAP.keys()))
-            raise YAMLConfigError(
-                f"Invalid history_mode '{config['history_mode']}'. "
-                f"Valid options: {valid}"
-            )
-        history_mode = HISTORY_MODE_MAP[mode_str]
+    # Convert entity_kind string to enum (from config or model preset)
+    entity_kind_str = config.get("entity_kind") or model_defaults.get("entity_kind") or "state"
+    entity_kind_str = entity_kind_str.lower()
+    if entity_kind_str not in ENTITY_KIND_MAP:
+        valid = ", ".join(sorted(ENTITY_KIND_MAP.keys()))
+        raise YAMLConfigError(
+            f"Invalid entity_kind '{entity_kind_str}'. "
+            f"Valid options: {valid}"
+        )
+    entity_kind = ENTITY_KIND_MAP[entity_kind_str]
+
+    # Convert history_mode string to enum (from config or model preset)
+    history_mode_str = config.get("history_mode") or model_defaults.get("history_mode") or "current_only"
+    history_mode_str = history_mode_str.lower()
+    if history_mode_str not in HISTORY_MODE_MAP:
+        valid = ", ".join(sorted(HISTORY_MODE_MAP.keys()))
+        raise YAMLConfigError(
+            f"Invalid history_mode '{history_mode_str}'. "
+            f"Valid options: {valid}"
+        )
+    history_mode = HISTORY_MODE_MAP[history_mode_str]
 
     # Resolve source_path
     source_path = config.get("source_path", "")
@@ -435,6 +489,40 @@ def load_silver_from_yaml(
     system = config.get("system", "")
     entity = config.get("entity", "")
 
+    # Convert input_mode string to enum (from config, model preset, or auto-wired from Bronze)
+    input_mode = None
+    input_mode_str = config.get("input_mode") or model_defaults.get("input_mode")
+    if input_mode_str:
+        input_mode_str = input_mode_str.lower()
+        if input_mode_str not in INPUT_MODE_MAP:
+            valid = ", ".join(sorted(INPUT_MODE_MAP.keys()))
+            raise YAMLConfigError(
+                f"Invalid input_mode '{input_mode_str}'. "
+                f"Valid options: {valid}"
+            )
+        input_mode = INPUT_MODE_MAP[input_mode_str]
+
+    # Convert delete_mode string to enum (for CDC processing)
+    delete_mode = DeleteMode.IGNORE  # Default to ignoring deletes
+    if "delete_mode" in config:
+        delete_mode_str = config["delete_mode"].lower()
+        if delete_mode_str not in DELETE_MODE_MAP:
+            valid = ", ".join(sorted(DELETE_MODE_MAP.keys()))
+            raise YAMLConfigError(
+                f"Invalid delete_mode '{config['delete_mode']}'. "
+                f"Valid options: {valid}"
+            )
+        delete_mode = DELETE_MODE_MAP[delete_mode_str]
+
+    # Parse cdc_options (for CDC load pattern)
+    cdc_options = None
+    if "cdc_options" in config:
+        cdc_options = config["cdc_options"]
+        if not isinstance(cdc_options, dict):
+            raise YAMLConfigError("cdc_options must be an object")
+        if "operation_column" not in cdc_options:
+            raise YAMLConfigError("cdc_options.operation_column is required")
+
     # Auto-wire from Bronze if not specified in Silver config
     if bronze:
         if not system:
@@ -454,6 +542,9 @@ def load_silver_from_yaml(
         exclude_columns=exclude_columns,
         entity_kind=entity_kind,
         history_mode=history_mode,
+        input_mode=input_mode,
+        delete_mode=delete_mode,
+        cdc_options=cdc_options,
         partition_by=partition_by,
         output_formats=output_formats,
         parquet_compression=config.get("parquet_compression", "snappy"),
@@ -600,6 +691,10 @@ class PipelineFromYAML:
         if bronze and silver and not silver.target_path:
             # Auto-generate Silver target using Hive-style partitioning for consistency
             silver.target_path = f"./silver/system={bronze.system}/entity={bronze.entity}/"
+
+        # Auto-wire input_mode from Bronze to Silver if not explicitly set
+        if bronze and silver and silver.input_mode is None and bronze.input_mode is not None:
+            silver.input_mode = bronze.input_mode
 
     def setup_logging(self) -> None:
         """Configure logging based on the YAML logging config.
@@ -752,6 +847,7 @@ class PipelineFromYAML:
         ]
 
         if self.bronze:
+            input_mode_str = self.bronze.input_mode.value if self.bronze.input_mode else "(not set)"
             lines.extend([
                 "BRONZE LAYER:",
                 f"  System:       {self.bronze.system}",
@@ -760,6 +856,7 @@ class PipelineFromYAML:
                 f"  Source Path:  {self.bronze.source_path or '(from database)'}",
                 f"  Target Path:  {self.bronze.target_path}",
                 f"  Load Pattern: {self.bronze.load_pattern.value}",
+                f"  Input Mode:   {input_mode_str}",
                 "",
             ])
 

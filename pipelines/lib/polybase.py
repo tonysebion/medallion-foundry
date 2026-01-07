@@ -180,6 +180,7 @@ def generate_polybase_setup(
     history_mode: str = "current_only",
     partition_columns: Optional[List[str]] = None,
     change_timestamp: str = "updated_at",
+    delete_mode: str = "ignore",
 ) -> str:
     """Generate complete PolyBase setup DDL for a Silver entity.
 
@@ -194,6 +195,7 @@ def generate_polybase_setup(
         history_mode: "current_only" or "full_history"
         partition_columns: Columns used for partitioning
         change_timestamp: Timestamp column name
+        delete_mode: "ignore", "tombstone", or "hard_delete"
 
     Returns:
         Complete SQL setup script
@@ -253,6 +255,7 @@ def generate_polybase_setup(
             config,
             history_mode=history_mode,
             change_timestamp=change_timestamp,
+            delete_mode=delete_mode,
         ))
     else:
         parts.append(generate_event_views(
@@ -273,6 +276,7 @@ def generate_state_views(
     *,
     history_mode: str = "current_only",
     change_timestamp: str = "updated_at",
+    delete_mode: str = "ignore",
 ) -> str:
     """Generate views for STATE (SCD) entities.
 
@@ -282,6 +286,7 @@ def generate_state_views(
         config: PolyBase configuration
         history_mode: "current_only" or "full_history"
         change_timestamp: Timestamp column name
+        delete_mode: "ignore", "tombstone", or "hard_delete"
 
     Returns:
         SQL DDL for views
@@ -289,6 +294,11 @@ def generate_state_views(
     schema = config.schema_name
     base_name = external_table_name.replace("_external", "")
     pk_cols = ", ".join([f"[{col}]" for col in natural_keys])
+
+    # For tombstone mode, we need to filter out deleted records in views
+    deleted_filter = ""
+    if delete_mode == "tombstone":
+        deleted_filter = " AND (_deleted = 0 OR _deleted IS NULL)"
 
     views = []
 
@@ -301,11 +311,21 @@ CREATE OR ALTER VIEW [{schema}].[vw_{base_name}_current]
 AS
 SELECT *
 FROM [{schema}].[{external_table_name}]
-WHERE is_current = 1;
+WHERE is_current = 1{deleted_filter};
 """
     else:
         # For SCD1, all records are current
-        current_view = f"""
+        if delete_mode == "tombstone":
+            current_view = f"""
+-- Current State View (excludes soft-deleted records)
+CREATE OR ALTER VIEW [{schema}].[vw_{base_name}_current]
+AS
+SELECT *
+FROM [{schema}].[{external_table_name}]
+WHERE _deleted = 0 OR _deleted IS NULL;
+"""
+        else:
+            current_view = f"""
 -- Current State View (all records are current in SCD1)
 CREATE OR ALTER VIEW [{schema}].[vw_{base_name}_current]
 AS
@@ -490,6 +510,7 @@ def generate_from_metadata(
     natural_keys = metadata.get("natural_keys", [])
     change_timestamp = metadata.get("change_timestamp", "updated_at")
     partition_by = metadata.get("partition_by")
+    delete_mode = metadata.get("delete_mode", "ignore")
 
     # Generate full setup
     return generate_polybase_setup(
@@ -501,6 +522,7 @@ def generate_from_metadata(
         history_mode=history_mode,
         partition_columns=partition_by,
         change_timestamp=change_timestamp,
+        delete_mode=delete_mode,
     )
 
 
@@ -568,6 +590,7 @@ def generate_from_metadata_dict(
     natural_keys = metadata.get("natural_keys", [])
     change_timestamp = metadata.get("change_timestamp", "updated_at")
     partition_by = metadata.get("partition_by")
+    delete_mode = metadata.get("delete_mode", "ignore")
 
     # Generate full setup
     return generate_polybase_setup(
@@ -579,6 +602,7 @@ def generate_from_metadata_dict(
         history_mode=history_mode,
         partition_columns=partition_by,
         change_timestamp=change_timestamp,
+        delete_mode=delete_mode,
     )
 
 

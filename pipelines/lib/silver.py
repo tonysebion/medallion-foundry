@@ -21,8 +21,8 @@ from typing import Any, Dict, List, Optional
 
 import ibis
 
-from pipelines.lib.bronze import _configure_duckdb_s3
-from pipelines.lib.curate import build_history, dedupe_latest
+from pipelines.lib.bronze import _configure_duckdb_s3, InputMode
+from pipelines.lib.curate import apply_cdc, build_history, dedupe_latest
 from pipelines.lib.io import maybe_dry_run
 from pipelines.lib._path_utils import resolve_target_path, storage_path_exists
 from pipelines.lib.observability import get_structlog_logger
@@ -30,7 +30,15 @@ from pipelines.lib.observability import get_structlog_logger
 # Use structlog for structured logging with pipeline context
 logger = get_structlog_logger(__name__)
 
-__all__ = ["EntityKind", "HistoryMode", "SilverEntity"]
+__all__ = [
+    "DeleteMode",
+    "EntityKind",
+    "HistoryMode",
+    "InputMode",
+    "SilverEntity",
+    "SilverModel",
+    "SILVER_MODEL_PRESETS",
+]
 
 
 class EntityKind(Enum):
@@ -45,6 +53,66 @@ class HistoryMode(Enum):
 
     CURRENT_ONLY = "current_only"  # SCD Type 1 - only keep latest
     FULL_HISTORY = "full_history"  # SCD Type 2 - keep all versions
+
+
+class SilverModel(Enum):
+    """Pre-built Silver transformation patterns.
+
+    These are convenience presets that configure entity_kind + history_mode +
+    input_mode together for common use cases.
+
+    Use a model when you want a standard pattern; use explicit settings
+    when you need custom behavior.
+    """
+
+    PERIODIC_SNAPSHOT = "periodic_snapshot"  # Simple dimension refresh
+    FULL_MERGE_DEDUPE = "full_merge_dedupe"  # Dedupe accumulated changes
+    INCREMENTAL_MERGE = "incremental_merge"  # CDC with merge
+    SCD_TYPE_2 = "scd_type_2"  # Full history tracking
+    EVENT_LOG = "event_log"  # Immutable event stream
+
+
+class DeleteMode(Enum):
+    """How to handle delete operations in CDC data.
+
+    - IGNORE: Filter out delete records, only process Inserts/Updates
+    - TOMBSTONE: Keep deleted records with _deleted=true flag
+    - HARD_DELETE: Remove records from Silver when Delete operation received
+    """
+
+    IGNORE = "ignore"  # Filter out delete records
+    TOMBSTONE = "tombstone"  # Keep with _deleted=true flag
+    HARD_DELETE = "hard_delete"  # Remove from Silver
+
+
+# Mapping from SilverModel to its configuration settings
+SILVER_MODEL_PRESETS: dict[str, dict[str, str]] = {
+    "periodic_snapshot": {
+        "entity_kind": "state",
+        "history_mode": "current_only",
+        "input_mode": "replace_daily",
+    },
+    "full_merge_dedupe": {
+        "entity_kind": "state",
+        "history_mode": "current_only",
+        "input_mode": "append_log",
+    },
+    "incremental_merge": {
+        "entity_kind": "state",
+        "history_mode": "current_only",
+        "input_mode": "append_log",
+    },
+    "scd_type_2": {
+        "entity_kind": "state",
+        "history_mode": "full_history",
+        "input_mode": "append_log",
+    },
+    "event_log": {
+        "entity_kind": "event",
+        "history_mode": "current_only",
+        "input_mode": "append_log",
+    },
+}
 
 
 # Default target path template - can be overridden
@@ -105,6 +173,11 @@ class SilverEntity:
     # Behavior
     entity_kind: EntityKind = EntityKind.STATE
     history_mode: HistoryMode = HistoryMode.CURRENT_ONLY
+    input_mode: Optional[InputMode] = None  # How to interpret Bronze partitions (auto-wired from Bronze)
+    delete_mode: DeleteMode = DeleteMode.IGNORE  # How to handle CDC deletes
+
+    # CDC options (auto-wired from Bronze when load_pattern=cdc)
+    cdc_options: Optional[Dict[str, str]] = None
 
     # Partitioning
     partition_by: Optional[List[str]] = None
@@ -383,7 +456,15 @@ class SilverEntity:
 
         Handles glob patterns (e.g., *.parquet) by expanding them first.
         Works with both local and S3/cloud paths.
+
+        When input_mode=APPEND_LOG, reads ALL Bronze partitions and unions them.
+        When input_mode=REPLACE_DAILY (or None), reads just the specified partition.
         """
+        # For APPEND_LOG mode, expand to read all partitions
+        if self.input_mode == InputMode.APPEND_LOG:
+            source = self._expand_to_all_partitions(source)
+            logger.debug("silver_append_log_mode", expanded_source=source)
+
         # Expand glob patterns if present
         if "*" in source or "?" in source:
             if source.startswith("s3://"):
@@ -430,6 +511,36 @@ class SilverEntity:
             # Default to parquet
             return con.read_parquet(source)
 
+    def _expand_to_all_partitions(self, source: str) -> str:
+        """Expand a single-partition source path to read all partitions.
+
+        Converts paths like:
+          s3://bucket/bronze/system=retail/entity=orders/dt=2025-01-15/*.parquet
+        To:
+          s3://bucket/bronze/system=retail/entity=orders/dt=*/*.parquet
+
+        This allows reading ALL Bronze partitions when input_mode=APPEND_LOG.
+        """
+        import re
+
+        # Replace dt=YYYY-MM-DD with dt=* to match all date partitions
+        # Handles common date formats: YYYY-MM-DD, YYYYMMDD, etc.
+        expanded = re.sub(
+            r"dt=\d{4}-?\d{2}-?\d{2}",
+            "dt=*",
+            source
+        )
+
+        if expanded == source:
+            # No date partition found - warn but continue
+            logger.warning(
+                "silver_no_date_partition",
+                source=source,
+                message="Could not find dt= partition to expand for append_log mode"
+            )
+
+        return expanded
+
     def _select_columns(self, t: ibis.Table) -> ibis.Table:
         """Apply column selection logic.
 
@@ -465,7 +576,26 @@ class SilverEntity:
             return t
 
     def _curate(self, t: ibis.Table) -> ibis.Table:
-        """Apply curation based on entity kind and history mode."""
+        """Apply curation based on entity kind and history mode.
+
+        If cdc_options is set, applies CDC processing first (handling I/U/D
+        operation codes), then applies the standard curation logic.
+        """
+        # Apply CDC processing if configured
+        if self.cdc_options:
+            t = apply_cdc(
+                t,
+                self.natural_keys,
+                self.change_timestamp,
+                self.delete_mode.value,
+                self.cdc_options,
+            )
+            logger.debug(
+                "silver_cdc_applied",
+                delete_mode=self.delete_mode.value,
+                operation_column=self.cdc_options.get("operation_column"),
+            )
+
         if self.entity_kind == EntityKind.STATE:
             return self._curate_state(t)
         else:
@@ -579,6 +709,7 @@ class SilverEntity:
                 extra={
                     "entity_kind": self.entity_kind.value,
                     "history_mode": self.history_mode.value,
+                    "delete_mode": self.delete_mode.value,
                     "natural_keys": self.natural_keys,
                     "change_timestamp": self.change_timestamp,
                     "source_path": source,
@@ -634,6 +765,7 @@ class SilverEntity:
                     "columns": columns,
                     "entity_kind": self.entity_kind.value,
                     "history_mode": self.history_mode.value,
+                    "delete_mode": self.delete_mode.value,
                     "natural_keys": self.natural_keys,
                     "change_timestamp": self.change_timestamp,
                 }

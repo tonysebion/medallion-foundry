@@ -12,12 +12,11 @@ requests-toolbelt>=1.0.0
 tenacity>=8.0.0
 ibis-framework[duckdb]>=9.0.0  # Portable dataframe library with DuckDB backend
 s3fs>=2023.1.0  # S3 filesystem implementation for fsspec
-pyodbc>=4.0.0  # ODBC support for database extractors
-azure-identity>=1.14.0
-azure-storage-blob>=12.12.0
+pyodbc>=4.0.0  # ODBC support for database extractors (DB2)
 
-# Install with: pip install -r requirements.txt   
+# Install with: pip install -r requirements.txt
 #
-# Note: Optional dependencies moved to separate files that can be installed instead of requirements.txt:
-# - requirements-tui.txt: Text User Interface dependencies (not required for core runtime functionality)
-# - requirements-dev.txt: Developer support libraries (linting, testing, etc.)
+# Optional dependencies (install separately if needed):
+# - Azure: pip install azure-identity azure-storage-blob adlfs
+# - TUI: pip install -r requirements-tui.txt
+# - Dev: pip install -r requirements-dev.txt
