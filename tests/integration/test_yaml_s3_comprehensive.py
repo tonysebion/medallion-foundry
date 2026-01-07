@@ -177,30 +177,34 @@ def compute_sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def verify_artifact_exists(fs, path: str, artifact_name: str) -> bool:
+def verify_artifact_exists(client, bucket: str, path: str, artifact_name: str) -> bool:
     """Check if an artifact file exists in S3."""
-    artifact_path = path.rstrip("/") + "/" + artifact_name
+    from botocore.exceptions import ClientError
+    key = path.rstrip("/") + "/" + artifact_name
     try:
-        return fs.exists(artifact_path)
+        client.head_object(Bucket=bucket, Key=key)
+        return True
+    except ClientError:
+        return False
     except Exception:
         return False
 
 
-def read_json_from_s3(fs, path: str) -> Optional[Dict[str, Any]]:
+def read_json_from_s3(client, bucket: str, key: str) -> Optional[Dict[str, Any]]:
     """Read and parse JSON file from S3."""
     try:
-        with fs.open(path, "rb") as f:
-            return json.load(f)
+        response = client.get_object(Bucket=bucket, Key=key)
+        return json.load(response["Body"])
     except Exception as e:
-        print(f"Failed to read JSON from {path}: {e}")
+        print(f"Failed to read JSON from {key}: {e}")
         return None
 
 
-def verify_parquet_integrity(fs, parquet_path: str, expected_sha256: str) -> bool:
+def verify_parquet_integrity(client, bucket: str, parquet_key: str, expected_sha256: str) -> bool:
     """Verify SHA256 hash of parquet file matches expected value."""
     try:
-        with fs.open(parquet_path, "rb") as f:
-            data = f.read()
+        response = client.get_object(Bucket=bucket, Key=parquet_key)
+        data = response["Body"].read()
         actual_sha256 = compute_sha256_bytes(data)
         return actual_sha256 == expected_sha256
     except Exception as e:
@@ -208,16 +212,21 @@ def verify_parquet_integrity(fs, parquet_path: str, expected_sha256: str) -> boo
         return False
 
 
-def list_files_in_path(fs, path: str) -> List[str]:
+def list_files_in_path(client, bucket: str, prefix: str) -> List[str]:
     """List all files in an S3 path."""
     try:
-        return fs.ls(path)
+        files = []
+        paginator = client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            files.extend([obj["Key"] for obj in page.get("Contents", [])])
+        return files
     except Exception:
         return []
 
 
-def verify_bronze_artifacts(fs, bronze_path: str) -> Dict[str, Any]:
+def verify_bronze_artifacts(client, bucket: str, bronze_path: str) -> Dict[str, Any]:
     """Verify Bronze layer artifacts exist and return details."""
+    from botocore.exceptions import ClientError
     result = {
         "path": bronze_path,
         "parquet_files": [],
@@ -230,7 +239,7 @@ def verify_bronze_artifacts(fs, bronze_path: str) -> Dict[str, Any]:
 
     # List all files
     try:
-        all_files = fs.ls(bronze_path)
+        all_files = list_files_in_path(client, bucket, bronze_path)
     except Exception as e:
         result["error"] = str(e)
         return result
@@ -240,22 +249,29 @@ def verify_bronze_artifacts(fs, bronze_path: str) -> Dict[str, Any]:
     result["parquet_count"] = len(result["parquet_files"])
 
     # Check for metadata
-    metadata_path = bronze_path.rstrip("/") + "/_metadata.json"
-    if fs.exists(metadata_path):
+    metadata_key = bronze_path.rstrip("/") + "/_metadata.json"
+    try:
+        client.head_object(Bucket=bucket, Key=metadata_key)
         result["metadata_exists"] = True
-        result["metadata"] = read_json_from_s3(fs, metadata_path)
+        result["metadata"] = read_json_from_s3(client, bucket, metadata_key)
+    except ClientError:
+        pass
 
     # Check for checksums
-    checksums_path = bronze_path.rstrip("/") + "/_checksums.json"
-    if fs.exists(checksums_path):
+    checksums_key = bronze_path.rstrip("/") + "/_checksums.json"
+    try:
+        client.head_object(Bucket=bucket, Key=checksums_key)
         result["checksums_exists"] = True
-        result["checksums"] = read_json_from_s3(fs, checksums_path)
+        result["checksums"] = read_json_from_s3(client, bucket, checksums_key)
+    except ClientError:
+        pass
 
     return result
 
 
-def verify_silver_artifacts(fs, silver_path: str) -> Dict[str, Any]:
+def verify_silver_artifacts(client, bucket: str, silver_path: str) -> Dict[str, Any]:
     """Verify Silver layer artifacts exist and return details."""
+    from botocore.exceptions import ClientError
     result = {
         "path": silver_path,
         "parquet_files": [],
@@ -268,7 +284,7 @@ def verify_silver_artifacts(fs, silver_path: str) -> Dict[str, Any]:
 
     # List all files
     try:
-        all_files = fs.ls(silver_path)
+        all_files = list_files_in_path(client, bucket, silver_path)
     except Exception as e:
         result["error"] = str(e)
         return result
@@ -278,25 +294,32 @@ def verify_silver_artifacts(fs, silver_path: str) -> Dict[str, Any]:
     result["parquet_count"] = len(result["parquet_files"])
 
     # Check for metadata
-    metadata_path = silver_path.rstrip("/") + "/_metadata.json"
-    if fs.exists(metadata_path):
+    metadata_key = silver_path.rstrip("/") + "/_metadata.json"
+    try:
+        client.head_object(Bucket=bucket, Key=metadata_key)
         result["metadata_exists"] = True
-        result["metadata"] = read_json_from_s3(fs, metadata_path)
+        result["metadata"] = read_json_from_s3(client, bucket, metadata_key)
+    except ClientError:
+        pass
 
     # Check for checksums
-    checksums_path = silver_path.rstrip("/") + "/_checksums.json"
-    if fs.exists(checksums_path):
+    checksums_key = silver_path.rstrip("/") + "/_checksums.json"
+    try:
+        client.head_object(Bucket=bucket, Key=checksums_key)
         result["checksums_exists"] = True
-        result["checksums"] = read_json_from_s3(fs, checksums_path)
+        result["checksums"] = read_json_from_s3(client, bucket, checksums_key)
+    except ClientError:
+        pass
 
     return result
 
 
-def verify_checksum_integrity(fs, base_path: str, checksums: Dict[str, Any]) -> Dict[str, Any]:
+def verify_checksum_integrity(client, bucket: str, base_path: str, checksums: Dict[str, Any]) -> Dict[str, Any]:
     """Verify SHA256 hashes of parquet files match manifest.
 
     Returns dict with verification results.
     """
+    from botocore.exceptions import ClientError
     result = {
         "verified": [],
         "mismatched": [],
@@ -316,15 +339,17 @@ def verify_checksum_integrity(fs, base_path: str, checksums: Dict[str, Any]) -> 
         if not filename or not expected_sha256:
             continue
 
-        file_path = base_path.rstrip("/") + "/" + filename
+        file_key = base_path.rstrip("/") + "/" + filename
 
         try:
-            if not fs.exists(file_path):
+            try:
+                client.head_object(Bucket=bucket, Key=file_key)
+            except ClientError:
                 result["missing"].append(filename)
                 continue
 
-            with fs.open(file_path, "rb") as f:
-                data = f.read()
+            response = client.get_object(Bucket=bucket, Key=file_key)
+            data = response["Body"].read()
 
             actual_sha256 = compute_sha256_bytes(data)
             actual_size = len(data)
@@ -351,9 +376,9 @@ def verify_checksum_integrity(fs, base_path: str, checksums: Dict[str, Any]) -> 
     return result
 
 
-def generate_polybase_ddl_from_s3(fs, metadata_path: str) -> Optional[str]:
+def generate_polybase_ddl_from_s3(client, bucket: str, metadata_key: str) -> Optional[str]:
     """Generate PolyBase DDL from metadata file in S3."""
-    metadata = read_json_from_s3(fs, metadata_path)
+    metadata = read_json_from_s3(client, bucket, metadata_key)
     if not metadata:
         return None
 
@@ -490,10 +515,11 @@ class TestYamlPatterns:
         print(f"Silver result: {silver_result}")
 
         # Verify Bronze artifacts
-        fs = get_s3fs()
-        bronze_path = f"{MINIO_BUCKET}/{test_prefix}/bronze/system={pattern.system}/entity={pattern.entity}/dt={run_date}"
+        import io
+        client = get_s3_client()
+        bronze_path = f"{test_prefix}/bronze/system={pattern.system}/entity={pattern.entity}/dt={run_date}"
 
-        bronze_artifacts = verify_bronze_artifacts(fs, bronze_path)
+        bronze_artifacts = verify_bronze_artifacts(client, MINIO_BUCKET, bronze_path)
         print(f"\nBronze artifacts: {bronze_artifacts}")
 
         assert bronze_artifacts["parquet_count"] > 0, "Bronze should create parquet files"
@@ -507,13 +533,13 @@ class TestYamlPatterns:
 
         # Verify checksums if available
         if bronze_artifacts["checksums_exists"]:
-            checksum_result = verify_checksum_integrity(fs, bronze_path, bronze_artifacts["checksums"])
+            checksum_result = verify_checksum_integrity(client, MINIO_BUCKET, bronze_path, bronze_artifacts["checksums"])
             print(f"Bronze checksum verification: {checksum_result}")
 
         # Verify Silver artifacts
-        silver_path = f"{MINIO_BUCKET}/{test_prefix}/silver/system={pattern.system}/entity={pattern.entity}"
+        silver_path = f"{test_prefix}/silver/system={pattern.system}/entity={pattern.entity}"
 
-        silver_artifacts = verify_silver_artifacts(fs, silver_path)
+        silver_artifacts = verify_silver_artifacts(client, MINIO_BUCKET, silver_path)
         print(f"\nSilver artifacts: {silver_artifacts}")
 
         assert silver_artifacts["parquet_count"] > 0, "Silver should create parquet files"
@@ -525,8 +551,8 @@ class TestYamlPatterns:
         )
         assert silver_parquet is not None, "Silver should have parquet file"
 
-        with fs.open(silver_parquet, "rb") as f:
-            silver_df = pd.read_parquet(f)
+        response = client.get_object(Bucket=MINIO_BUCKET, Key=silver_parquet)
+        silver_df = pd.read_parquet(io.BytesIO(response["Body"].read()))
 
         print(f"\nSilver DataFrame:\n{silver_df}")
 
