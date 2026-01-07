@@ -1,21 +1,35 @@
+# yaml-language-server: $schema=../../../../pipelines/schema/pipeline.schema.json
+#
 # Silver Claims Test Configuration
 # Used for Silver processing integration tests
+#
+# To run:
+#   python -m pipelines ./tests/integration/fixtures/configs/silver_claims_test.yaml --date 2025-01-15
 
-environment: test
-domain: healthcare
-system: synthetic
-entity: claims
+name: silver_claims_test
+description: Healthcare claims Silver curation for integration tests
 
 bronze:
-  enabled: true
-  output_bucket: bronze_data
+  system: synthetic
+  entity: claims
+  source_type: file_parquet
+  source_path: "${INPUT_DIR}/claims_*.parquet"
+  load_pattern: full_snapshot
+  # target_path auto-generates: ./bronze/system=synthetic/entity=claims/dt={run_date}/
 
 silver:
-  enabled: true
+  natural_keys: [claim_id]
+  change_timestamp: updated_at
   entity_kind: event
-  version: 1
-  natural_keys:
-    - claim_id
-  order_column: updated_at
-  input_storage: local
-  include_pattern_folder: false
+  # target_path auto-generates: ./silver/system=synthetic/entity=claims/
+  attributes:
+    - patient_id
+    - provider_id
+    - claim_type
+    - service_date
+    - billed_amount
+    - paid_amount
+    - diagnosis_code
+    - procedure_code
+    - status
+    - created_at

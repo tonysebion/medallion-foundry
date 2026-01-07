@@ -1,26 +1,24 @@
+# yaml-language-server: $schema=../../../../pipelines/schema/pipeline.schema.json
+#
 # Bronze Claims Test Configuration
-# Used for full pipeline integration tests with MinIO storage
+# Used for full pipeline integration tests with local storage
+#
+# To run:
+#   python -m pipelines ./tests/integration/fixtures/configs/bronze_claims_test.yaml --date 2025-01-15
 
-environment: test
-domain: healthcare
-system: synthetic
-entity: claims
+name: bronze_claims_test
+description: Healthcare claims extraction for integration tests
 
-platform:
-  bronze:
-    storage_backend: local  # Use local storage for tests
-    output_defaults:
-      parquet: true
-      csv: false
-
-source:
+bronze:
   system: synthetic
-  table: claims
-  type: file
-  file:
-    format: parquet
-  run:
-    load_pattern: snapshot
-    storage_enabled: false
-    max_rows_per_file: 0
-    cleanup_on_failure: true
+  entity: claims
+  source_type: file_parquet
+  source_path: "${INPUT_DIR}/claims_*.parquet"
+  load_pattern: full_snapshot
+  # target_path auto-generates: ./bronze/system=synthetic/entity=claims/dt={run_date}/
+
+silver:
+  natural_keys: [claim_id]
+  change_timestamp: updated_at
+  entity_kind: event
+  # target_path auto-generates: ./silver/system=synthetic/entity=claims/
