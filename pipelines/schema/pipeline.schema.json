@@ -210,6 +210,18 @@
               "type": "array",
               "items": { "type": "string" },
               "description": "Column names for fixed-width or space-delimited files"
+            },
+            "s3_signature_version": {
+              "type": "string",
+              "description": "S3 signature version for S3-compatible storage (Nutanix Objects, MinIO, etc.)",
+              "enum": ["s3v4", "s3"],
+              "examples": ["s3v4"]
+            },
+            "s3_addressing_style": {
+              "type": "string",
+              "description": "S3 URL addressing style. Use 'path' for most S3-compatible storage.",
+              "enum": ["path", "virtual", "auto"],
+              "examples": ["path"]
             }
           }
         },

@@ -32,13 +32,31 @@ class S3Storage(StorageBackend):
         AWS_SECRET_ACCESS_KEY: AWS secret key
         AWS_REGION: AWS region (default: us-east-1)
         AWS_ENDPOINT_URL: Custom S3 endpoint (for MinIO, LocalStack, etc.)
+        AWS_S3_SIGNATURE_VERSION: S3 signature version ('s3v4', 's3', or unset for auto)
+        AWS_S3_ADDRESSING_STYLE: S3 addressing style ('path', 'virtual', or 'auto')
 
     Options:
         key: AWS access key (overrides env var)
         secret: AWS secret key (overrides env var)
         region: AWS region (overrides env var)
         endpoint_url: Custom S3 endpoint
+        signature_version: S3 signature version ('s3v4' for v4, 's3' for v2)
+        addressing_style: URL addressing style ('path' or 'virtual')
         anon: If True, use anonymous access (for public buckets)
+
+    S3-Compatible Storage (Nutanix Objects, MinIO, etc.):
+        For S3-compatible storage, you typically need:
+        - endpoint_url: Your storage endpoint
+        - signature_version: 's3v4' (most common)
+        - addressing_style: 'path' (required for most S3-compatible storage)
+
+        Example:
+            >>> storage = S3Storage(
+            ...     "s3://my-bucket/data/",
+            ...     endpoint_url="https://objects.nutanix.local:443",
+            ...     signature_version="s3v4",
+            ...     addressing_style="path",
+            ... )
     """
 
     def __init__(self, base_path: str, **options: Any) -> None:
@@ -74,6 +92,8 @@ class S3Storage(StorageBackend):
                     "Install with: pip install s3fs"
                 )
 
+            from botocore.config import Config
+
             # Build options from environment and passed options
             fs_options = {}
 
@@ -84,16 +104,46 @@ class S3Storage(StorageBackend):
                 fs_options["key"] = key
                 fs_options["secret"] = secret
 
+            # Initialize client_kwargs
+            client_kwargs = {}
+
             # Region
             region = self.options.get("region") or os.environ.get("AWS_REGION")
             if region:
-                fs_options["client_kwargs"] = {"region_name": region}
+                client_kwargs["region_name"] = region
 
-            # Custom endpoint (MinIO, LocalStack, etc.)
+            # Custom endpoint (MinIO, LocalStack, Nutanix Objects, etc.)
             endpoint_url = self.options.get("endpoint_url") or os.environ.get("AWS_ENDPOINT_URL")
             if endpoint_url:
-                fs_options.setdefault("client_kwargs", {})
-                fs_options["client_kwargs"]["endpoint_url"] = endpoint_url
+                client_kwargs["endpoint_url"] = endpoint_url
+
+            # Build botocore Config for signature version and addressing style
+            # These settings are critical for S3-compatible storage like Nutanix Objects
+            config_kwargs = {}
+
+            # Signature version: 's3v4' (recommended), 's3' (legacy v2), or None (auto)
+            signature_version = (
+                self.options.get("signature_version")
+                or os.environ.get("AWS_S3_SIGNATURE_VERSION")
+            )
+            if signature_version:
+                config_kwargs["signature_version"] = signature_version
+
+            # Addressing style: 'path', 'virtual', or 'auto'
+            # Path-style is typically required for S3-compatible storage
+            addressing_style = (
+                self.options.get("addressing_style")
+                or os.environ.get("AWS_S3_ADDRESSING_STYLE")
+            )
+            if addressing_style:
+                config_kwargs["s3"] = {"addressing_style": addressing_style}
+
+            # Apply botocore Config if any custom settings specified
+            if config_kwargs:
+                client_kwargs["config"] = Config(**config_kwargs)
+
+            if client_kwargs:
+                fs_options["client_kwargs"] = client_kwargs
 
             # Anonymous access
             if self.options.get("anon"):

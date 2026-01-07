@@ -32,7 +32,7 @@ bronze:
   # Authentication - API key in header
   auth:
     auth_type: api_key
-    header_name: X-API-Key
+    api_key_header: X-API-Key
     api_key: ${API_KEY}
 
   # Cursor-based pagination

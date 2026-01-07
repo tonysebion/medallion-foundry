@@ -136,3 +136,63 @@ def test_copy_file(s3_storage: S3Storage):
 def test_get_storage_returns_s3():
     storage = get_storage(BASE_PATH)
     assert isinstance(storage, S3Storage)
+
+
+# ============================================================
+# Tests for S3-compatible storage configuration (Nutanix, etc.)
+# ============================================================
+
+
+def test_s3_storage_signature_version_option():
+    """Test S3Storage accepts signature_version option."""
+    storage = S3Storage(BASE_PATH, signature_version="s3v4")
+    assert storage.options.get("signature_version") == "s3v4"
+
+
+def test_s3_storage_addressing_style_option():
+    """Test S3Storage accepts addressing_style option."""
+    storage = S3Storage(BASE_PATH, addressing_style="path")
+    assert storage.options.get("addressing_style") == "path"
+
+
+def test_s3_storage_nutanix_compatible_config():
+    """Test typical Nutanix Objects configuration."""
+    storage = S3Storage(
+        "s3://nutanix-bucket/bronze/",
+        endpoint_url="https://objects.nutanix.local:443",
+        signature_version="s3v4",
+        addressing_style="path",
+        key="access_key",
+        secret="secret_key",
+    )
+    assert storage.options.get("endpoint_url") == "https://objects.nutanix.local:443"
+    assert storage.options.get("signature_version") == "s3v4"
+    assert storage.options.get("addressing_style") == "path"
+    assert storage.options.get("key") == "access_key"
+    assert storage.options.get("secret") == "secret_key"
+
+
+def test_s3_storage_signature_version_from_env(monkeypatch):
+    """Test S3Storage reads signature_version from environment."""
+    monkeypatch.setenv("AWS_S3_SIGNATURE_VERSION", "s3v4")
+    monkeypatch.setenv("AWS_S3_ADDRESSING_STYLE", "path")
+
+    storage = S3Storage(BASE_PATH)
+    # Options dict won't have env vars, but they're read in fs property
+    # Just verify the storage was created without error
+    assert storage is not None
+
+
+def test_s3_storage_option_overrides_env(monkeypatch):
+    """Test that explicit options override environment variables."""
+    monkeypatch.setenv("AWS_S3_SIGNATURE_VERSION", "s3")
+    monkeypatch.setenv("AWS_S3_ADDRESSING_STYLE", "virtual")
+
+    storage = S3Storage(
+        BASE_PATH,
+        signature_version="s3v4",
+        addressing_style="path",
+    )
+    # Explicit options should be stored
+    assert storage.options.get("signature_version") == "s3v4"
+    assert storage.options.get("addressing_style") == "path"

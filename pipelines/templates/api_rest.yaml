@@ -43,7 +43,7 @@ bronze:
   # Option 2: API key
   # auth:
   #   auth_type: api_key
-  #   header_name: X-API-Key      # Header name (default: X-API-Key)
+  #   api_key_header: X-API-Key   # Header name (default: X-API-Key)
   #   api_key: ${API_KEY}
 
   # Option 3: Basic auth

@@ -33,7 +33,7 @@ bronze:
         - description
 
       # Define column widths (characters per field)
-      field_widths: [10, 20, 12, 10, 40]
+      widths: [10, 20, 12, 10, 40]
 
       # OR use column specifications (start, end positions)
       # column_specs:
