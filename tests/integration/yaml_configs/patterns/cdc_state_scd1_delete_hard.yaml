@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=../../../../pipelines/schema/pipeline.schema.json
+#
+# Pattern: CDC -> State Entity -> SCD Type 1 (current_only) -> Delete Mode: HARD_DELETE
+# =====================================================================================
+# Use Case: CDC feed where deletes should physically remove records from Silver
+# - Bronze: CDC stream with I/U/D operations
+# - Silver: Deduplicate to latest version, remove deleted records entirely
+#
+# Expected Behavior:
+# - Insert (I): Add new record
+# - Update (U): Replace existing record with newer version
+# - Delete (D): REMOVE record from Silver (no longer queryable)
+#
+name: cdc_state_scd1_delete_hard
+description: CDC to state entity with SCD1, deleted records removed from Silver
+
+bronze:
+  system: {system}
+  entity: {entity}
+  source_type: file_csv
+  source_path: "{source_path}"
+  target_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt={run_date}/"
+  load_pattern: cdc
+  cdc_operation_column: op
+  partition_by: []
+
+silver:
+  source_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt=*/*.parquet"
+  target_path: "s3://{bucket}/{prefix}/silver/system={system}/entity={entity}/"
+  natural_keys: [{natural_key}]
+  change_timestamp: {change_timestamp}
+  entity_kind: state
+  history_mode: current_only
+  delete_mode: hard_delete
+  cdc_operation_column: op

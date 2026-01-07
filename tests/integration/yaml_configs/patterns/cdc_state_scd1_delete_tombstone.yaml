@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=../../../../pipelines/schema/pipeline.schema.json
+#
+# Pattern: CDC -> State Entity -> SCD Type 1 (current_only) -> Delete Mode: TOMBSTONE
+# ====================================================================================
+# Use Case: CDC feed where deletes should be marked but retained for audit
+# - Bronze: CDC stream with I/U/D operations
+# - Silver: Deduplicate to latest version, mark deleted records with _deleted=true
+#
+# Expected Behavior:
+# - Insert (I): Add new record with _deleted=false
+# - Update (U): Replace existing record with newer version, _deleted=false
+# - Delete (D): Mark record with _deleted=true (record remains queryable)
+#
+name: cdc_state_scd1_delete_tombstone
+description: CDC to state entity with SCD1, deleted records marked with tombstone
+
+bronze:
+  system: {system}
+  entity: {entity}
+  source_type: file_csv
+  source_path: "{source_path}"
+  target_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt={run_date}/"
+  load_pattern: cdc
+  cdc_operation_column: op
+  partition_by: []
+
+silver:
+  source_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt=*/*.parquet"
+  target_path: "s3://{bucket}/{prefix}/silver/system={system}/entity={entity}/"
+  natural_keys: [{natural_key}]
+  change_timestamp: {change_timestamp}
+  entity_kind: state
+  history_mode: current_only
+  delete_mode: tombstone
+  cdc_operation_column: op

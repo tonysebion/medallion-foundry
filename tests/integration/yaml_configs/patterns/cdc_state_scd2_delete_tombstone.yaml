@@ -1,0 +1,41 @@
+# yaml-language-server: $schema=../../../../pipelines/schema/pipeline.schema.json
+#
+# Pattern: CDC -> State Entity -> SCD Type 2 (full_history) -> Delete Mode: TOMBSTONE
+# ===================================================================================
+# Use Case: CDC feed with full history tracking, deletes create tombstone versions
+# - Bronze: CDC stream with I/U/D operations
+# - Silver: Full SCD2 history with effective dates, deletes tracked as tombstone
+#
+# Expected Behavior:
+# - Insert (I): Create initial version with effective_from, is_current=1
+# - Update (U): Close previous version, create new version
+# - Delete (D): Close previous version, create tombstone version with _deleted=true
+#
+# Silver Columns Added:
+# - effective_from: When this version became active
+# - effective_to: When this version was superseded (NULL if current)
+# - is_current: 1 if this is the active version, 0 otherwise
+# - _deleted: true if this is a delete tombstone record
+#
+name: cdc_state_scd2_delete_tombstone
+description: CDC to state entity with SCD2 full history, deletes tracked with tombstone
+
+bronze:
+  system: {system}
+  entity: {entity}
+  source_type: file_csv
+  source_path: "{source_path}"
+  target_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt={run_date}/"
+  load_pattern: cdc
+  cdc_operation_column: op
+  partition_by: []
+
+silver:
+  source_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt=*/*.parquet"
+  target_path: "s3://{bucket}/{prefix}/silver/system={system}/entity={entity}/"
+  natural_keys: [{natural_key}]
+  change_timestamp: {change_timestamp}
+  entity_kind: state
+  history_mode: full_history
+  delete_mode: tombstone
+  cdc_operation_column: op

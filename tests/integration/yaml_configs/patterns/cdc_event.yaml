@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=../../../../pipelines/schema/pipeline.schema.json
+#
+# Pattern: CDC -> Event Entity
+# ============================
+# Use Case: CDC stream treated as immutable event log
+# - Bronze: CDC stream with I/U/D operations (all treated as events)
+# - Silver: All operations preserved as individual events (no deduplication by key)
+#
+# Expected Behavior:
+# - Insert (I): Recorded as insert event
+# - Update (U): Recorded as update event (original not modified)
+# - Delete (D): Recorded as delete event (original not modified)
+#
+# Note: For event entities, all CDC operations become immutable records.
+# The 'op' column is preserved to indicate what type of operation occurred.
+# Natural keys are NOT used for deduplication - only for event identification.
+#
+name: cdc_event
+description: CDC stream to immutable event log (all operations preserved)
+
+bronze:
+  system: {system}
+  entity: {entity}
+  source_type: file_csv
+  source_path: "{source_path}"
+  target_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt={run_date}/"
+  load_pattern: cdc
+  cdc_operation_column: op
+  partition_by: []
+
+silver:
+  source_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt=*/*.parquet"
+  target_path: "s3://{bucket}/{prefix}/silver/system={system}/entity={entity}/"
+  natural_keys: [{natural_key}]
+  change_timestamp: {change_timestamp}
+  entity_kind: event
+  # Note: delete_mode is not applicable for event entities
+  # All operations are preserved as immutable events
