@@ -1,5 +1,10 @@
 # Medallion Foundry
 
+[![CI](https://github.com/tonysebion/medallion-foundry/actions/workflows/ci.yml/badge.svg)](https://github.com/tonysebion/medallion-foundry/actions/workflows/ci.yml)
+[![Python Versions](https://img.shields.io/pypi/pyversions/medallion-foundry.svg)](https://pypi.org/project/medallion-foundry/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+
 `medallion-foundry` is a YAML-first framework for building Bronze → Silver data pipelines using the medallion architecture. Define your pipelines in simple YAML files and run them through the CLI - no Python knowledge required. For advanced use cases, Python pipelines are also supported.
 
 ## Highlights
@@ -144,6 +149,17 @@ Templates and examples for both formats are in `pipelines/templates/` and `pipel
 - `pipelines/QUICKREF.md` — CLI cheatsheet and operational tips.
 - `docs/scripts/README.md` — Sample data generation & tooling reference.
 - `docs/usage/`, `docs/guides/`, and `docs/framework/` — Deep dives on onboarding, resilience, patterns, and operations.
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
+
+- Setting up your development environment
+- Running tests and quality checks
+- Submitting pull requests
+- Code style and documentation standards
+
+For security issues, please see our [Security Policy](SECURITY.md).
 
 ## Testing & validation
 

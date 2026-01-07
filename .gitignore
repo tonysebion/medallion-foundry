@@ -2,9 +2,9 @@
 # VS Code
 # ================================
 .vscode/
-!.vscode/extensions.json        # optionally keep if you want to recommend extensions
-!.vscode/settings.json          # optionally keep project-specific settings
-!.vscode/launch.json            # optionally keep for debugging configs
+!.vscode/extensions.json        # Keep recommended extensions
+!.vscode/settings.json          # Keep project-specific settings
+!.vscode/launch.json            # Keep debugging configs (if added later)
 *.code-workspace
 
 # ================================
@@ -224,5 +224,6 @@ CLAUDE.md
 _version.py
 .state/
 .state/checkpoints/
-.vscode/
 sampledata/
+# Keep .vscode settings from being ignored
+!.vscode/
