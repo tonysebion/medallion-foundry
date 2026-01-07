@@ -211,8 +211,10 @@ class MultiWeekScenario:
             records.append(row)
 
         # Add new records for this day
-        new_records = self._generate_new_records(day, columns, ts)
-        records.extend(new_records)
+        new_count = self._get_new_record_count(day)
+        for _ in range(new_count):
+            rec = self._create_record(day, columns, ts)
+            records.append(self._record_to_row(rec, columns, ts))
 
         return pd.DataFrame(records)
 
@@ -515,16 +517,17 @@ class CDCDeleteCycleScenario(MultiWeekScenario):
 class FailureRecoveryScenario(MultiWeekScenario):
     """Scenario for testing failure recovery.
 
-    Days 1-3: Normal operation
-    Days 4-5: Silver fails (Bronze succeeds)
-    Day 6: Recovery run
-    Days 7-10: Normal operation
+    Days 1-2: Normal operation (Mon-Tue)
+    Days 3-4: Silver fails (Bronze succeeds) (Wed-Thu)
+    Day 5: Recovery run (Fri)
+    Days 8-10: Normal operation (next Mon-Wed)
+    Note: Days 6-7 are weekend (Sat-Sun)
     """
 
     def __init__(self, start_date: date = date(2025, 1, 6)):
         super().__init__(start_date, weeks=2)
-        self.failed_days = {4, 5}  # Days where Silver "fails"
-        self.recovery_day = 6
+        self.failed_days = {3, 4}  # Days where Silver "fails" (Wed-Thu)
+        self.recovery_day = 5  # Friday - recovery run
 
     def should_run_silver(self, day: int) -> bool:
         """Determine if Silver should run on this day (simulating failures)."""

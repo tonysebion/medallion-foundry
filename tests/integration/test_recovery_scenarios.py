@@ -578,9 +578,9 @@ class TestFailureRecoveryScenarioIntegration:
         assert len(bronze_days_run) >= 8, "Bronze should run most days"
 
         # Verify Silver skipped failure days but ran recovery
+        assert 3 not in silver_days_run, "Day 3 Silver should have 'failed'"
         assert 4 not in silver_days_run, "Day 4 Silver should have 'failed'"
-        assert 5 not in silver_days_run, "Day 5 Silver should have 'failed'"
-        assert 6 in silver_days_run, "Day 6 Silver recovery should have run"
+        assert 5 in silver_days_run, "Day 5 Silver recovery should have run"
 
         # Verify final state is complete
         # Find last run date
