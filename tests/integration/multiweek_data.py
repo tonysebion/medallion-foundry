@@ -20,6 +20,7 @@ import pandas as pd
 
 class LoadType(Enum):
     """Type of load for a given day."""
+
     FULL_SNAPSHOT = "full_snapshot"
     INCREMENTAL = "incremental"
     CDC = "cdc"
@@ -28,6 +29,7 @@ class LoadType(Enum):
 
 class SchemaVersion(Enum):
     """Schema versions for evolution testing."""
+
     V1 = 1  # Base schema: id, name, value, ts
     V2 = 2  # Added: category column
     V3 = 3  # Added: priority column, removed: value → amount rename
@@ -36,6 +38,7 @@ class SchemaVersion(Enum):
 @dataclass
 class DayConfig:
     """Configuration for a single day's pipeline run."""
+
     day_number: int
     run_date: date
     load_type: LoadType
@@ -50,6 +53,7 @@ class DayConfig:
 @dataclass
 class RecordState:
     """Track the state of a single record across days."""
+
     id: int
     current_values: Dict
     history: List[Tuple[int, Dict]]  # (day_number, values)
@@ -167,7 +171,9 @@ class MultiWeekScenario:
         else:  # V3
             return ["id", "name", "amount", "category", "priority", "ts"]
 
-    def generate_bronze_data(self, day: int, pattern: str = "incremental") -> pd.DataFrame:
+    def generate_bronze_data(
+        self, day: int, pattern: str = "incremental"
+    ) -> pd.DataFrame:
         """Generate Bronze layer data for a specific day.
 
         Args:
@@ -242,7 +248,7 @@ class MultiWeekScenario:
         if config.has_late_data and config.late_data_for_day:
             late_ts = datetime.combine(
                 self._schedule[config.late_data_for_day - 1].run_date,
-                datetime.min.time().replace(hour=10)
+                datetime.min.time().replace(hour=10),
             )
             late_rec = self._create_record(config.late_data_for_day, columns, late_ts)
             records.append(self._record_to_row(late_rec, columns, late_ts))
@@ -287,7 +293,10 @@ class MultiWeekScenario:
         if day in [10, 11, 17]:  # Delete days
             delete_ids = self._get_delete_ids(day)
             for rec_id in delete_ids:
-                if rec_id in self._record_states and not self._record_states[rec_id].is_deleted:
+                if (
+                    rec_id in self._record_states
+                    and not self._record_states[rec_id].is_deleted
+                ):
                     rec = self._record_states[rec_id]
                     row = self._record_to_row(rec, columns, ts)
                     row["op"] = "D"
@@ -333,9 +342,13 @@ class MultiWeekScenario:
 
         # Update value/amount
         if "value" in columns:
-            rec.current_values["value"] = rec.current_values.get("value", rec.id * 100) + 10
+            rec.current_values["value"] = (
+                rec.current_values.get("value", rec.id * 100) + 10
+            )
         if "amount" in columns:
-            rec.current_values["amount"] = rec.current_values.get("amount", rec.id * 100) + 10
+            rec.current_values["amount"] = (
+                rec.current_values.get("amount", rec.id * 100) + 10
+            )
 
         rec.history.append((day, rec.current_values.copy()))
 
@@ -360,7 +373,8 @@ class MultiWeekScenario:
     def _get_active_records(self, day: int) -> List[RecordState]:
         """Get all records that are active (not deleted) as of a day."""
         return [
-            rec for rec in self._record_states.values()
+            rec
+            for rec in self._record_states.values()
             if not rec.is_deleted or (rec.deleted_on_day and rec.deleted_on_day > day)
         ]
 
@@ -374,7 +388,7 @@ class MultiWeekScenario:
         # Update 1-2 records per day
         update_count = min(2, len(existing_ids))
         start_idx = (day - 1) % len(existing_ids)
-        return set(existing_ids[start_idx:start_idx + update_count])
+        return set(existing_ids[start_idx : start_idx + update_count])
 
     def _get_new_record_count(self, day: int) -> int:
         """Determine how many new records to create on a given day."""
@@ -389,8 +403,7 @@ class MultiWeekScenario:
     def _get_delete_ids(self, day: int) -> Set[int]:
         """Determine which record IDs to delete on a given day."""
         existing_ids = [
-            rec.id for rec in self._record_states.values()
-            if not rec.is_deleted
+            rec.id for rec in self._record_states.values() if not rec.is_deleted
         ]
         if not existing_ids or len(existing_ids) <= 3:
             return set()
@@ -418,8 +431,12 @@ class MultiWeekScenario:
             # SCD1: Just current values of non-deleted records
             records = []
             for rec in self._record_states.values():
-                if not rec.is_deleted or (rec.deleted_on_day and rec.deleted_on_day > day):
-                    row = self._record_to_row(rec, columns, rec.current_values.get("ts"))
+                if not rec.is_deleted or (
+                    rec.deleted_on_day and rec.deleted_on_day > day
+                ):
+                    row = self._record_to_row(
+                        rec, columns, rec.current_values.get("ts")
+                    )
                     records.append(row)
             return pd.DataFrame(records)
         else:
@@ -472,7 +489,9 @@ class CDCDeleteCycleScenario(MultiWeekScenario):
         # Week 2 (days 8-14): Mass deletes
         elif 8 <= day <= 12:
             # Delete multiple records
-            active_ids = [r.id for r in self._record_states.values() if not r.is_deleted]
+            active_ids = [
+                r.id for r in self._record_states.values() if not r.is_deleted
+            ]
             delete_count = min(2, len(active_ids))
             for i in range(delete_count):
                 rec = self._record_states[active_ids[i]]

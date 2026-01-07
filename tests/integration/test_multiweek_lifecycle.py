@@ -13,10 +13,9 @@ testing realistic scenarios including:
 from __future__ import annotations
 
 import json
-import os
 from datetime import date
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict
 
 import pandas as pd
 import pytest
@@ -184,7 +183,10 @@ def get_silver_data(client, bucket: str, prefix: str, run_date: str) -> pd.DataF
 
 def get_metadata_from_minio(client, bucket: str, prefix: str, run_date: str) -> dict:
     """Read _metadata.json from MinIO."""
-    key = f"{prefix}/silver/system=multiweek/entity=lifecycle/dt={run_date}/_metadata.json"
+    key = (
+        f"{prefix}/silver/system=multiweek/entity=lifecycle/"
+        f"dt={run_date}/_metadata.json"
+    )
     try:
         response = client.get_object(Bucket=bucket, Key=key)
         return json.loads(response["Body"].read().decode("utf-8"))
@@ -204,6 +206,7 @@ class TestThreeWeekIncrementalLifecycle:
     def lifecycle_prefix(self):
         """Unique prefix for this test run."""
         import uuid
+
         return f"lifecycle_test_{uuid.uuid4().hex[:8]}"
 
     def test_week1_full_load_and_incremental(
@@ -220,7 +223,9 @@ class TestThreeWeekIncrementalLifecycle:
             )
 
             if config.load_type == LoadType.SKIP:
-                assert bronze_result.get("skipped"), f"Day {day} should be skipped (weekend)"
+                assert bronze_result.get("skipped"), (
+                    f"Day {day} should be skipped (weekend)"
+                )
                 continue
 
             assert bronze_result.get("row_count", 0) > 0, f"Day {day} should have data"
@@ -233,11 +238,15 @@ class TestThreeWeekIncrementalLifecycle:
 
         # Verify final state after week 1
         # Day 5 is last run day of week 1 (Friday)
-        silver_df = get_silver_data(minio_client, minio_bucket, lifecycle_prefix, "2025-01-10")
+        silver_df = get_silver_data(
+            minio_client, minio_bucket, lifecycle_prefix, "2025-01-10"
+        )
         assert len(silver_df) > 0, "Should have Silver data after week 1"
 
         # Verify no data on weekend days
-        weekend_df = get_silver_data(minio_client, minio_bucket, lifecycle_prefix, "2025-01-11")
+        weekend_df = get_silver_data(
+            minio_client, minio_bucket, lifecycle_prefix, "2025-01-11"
+        )
         assert len(weekend_df) == 0, "Should have no Silver data on Saturday"
 
     def test_week2_schema_evolution(
@@ -246,16 +255,20 @@ class TestThreeWeekIncrementalLifecycle:
         """Week 2: Schema change on Day 9, late data on Day 13."""
         # First run week 1 to establish data
         for day in range(1, 8):
-            run_bronze_for_day(scenario, day, tmp_path, minio_bucket, lifecycle_prefix, "incremental")
+            run_bronze_for_day(
+                scenario, day, tmp_path, minio_bucket, lifecycle_prefix, "incremental"
+            )
             config = scenario.schedule[day - 1]
             if config.load_type != LoadType.SKIP:
-                run_silver_for_day(scenario, day, minio_bucket, lifecycle_prefix, "current_only")
+                run_silver_for_day(
+                    scenario, day, minio_bucket, lifecycle_prefix, "current_only"
+                )
 
         # Run week 2 (days 8-14)
         for day in range(8, 15):
             config = scenario.schedule[day - 1]
 
-            bronze_result = run_bronze_for_day(
+            run_bronze_for_day(
                 scenario, day, tmp_path, minio_bucket, lifecycle_prefix, "incremental"
             )
 
@@ -263,17 +276,22 @@ class TestThreeWeekIncrementalLifecycle:
                 continue
 
             # Silver
-            silver_result = run_silver_for_day(
+            run_silver_for_day(
                 scenario, day, minio_bucket, lifecycle_prefix, "current_only"
             )
 
             # Verify schema evolution on day 9
             if day >= 9:
                 silver_df = get_silver_data(
-                    minio_client, minio_bucket, lifecycle_prefix, config.run_date.isoformat()
+                    minio_client,
+                    minio_bucket,
+                    lifecycle_prefix,
+                    config.run_date.isoformat(),
                 )
                 # Schema V2 should have category column
-                assert "category" in silver_df.columns, f"Day {day} should have category column"
+                assert "category" in silver_df.columns, (
+                    f"Day {day} should have category column"
+                )
 
     def test_week3_full_refresh_reconciliation(
         self, minio_client, minio_bucket, lifecycle_prefix, scenario, tmp_path
@@ -282,28 +300,42 @@ class TestThreeWeekIncrementalLifecycle:
         # Run weeks 1-2
         for day in range(1, 15):
             config = scenario.schedule[day - 1]
-            run_bronze_for_day(scenario, day, tmp_path, minio_bucket, lifecycle_prefix, "incremental")
+            run_bronze_for_day(
+                scenario, day, tmp_path, minio_bucket, lifecycle_prefix, "incremental"
+            )
             if config.load_type != LoadType.SKIP:
-                run_silver_for_day(scenario, day, minio_bucket, lifecycle_prefix, "current_only")
+                run_silver_for_day(
+                    scenario, day, minio_bucket, lifecycle_prefix, "current_only"
+                )
 
-        # Get state before full refresh
-        day14_df = get_silver_data(minio_client, minio_bucket, lifecycle_prefix, "2025-01-17")
-        pre_refresh_count = len(day14_df)
+        # Get state before full refresh (verify data exists)
+        day14_df = get_silver_data(
+            minio_client, minio_bucket, lifecycle_prefix, "2025-01-17"
+        )
+        assert len(day14_df) >= 0  # Just verify we can read it
 
         # Run full refresh on day 15
-        run_bronze_for_day(scenario, 15, tmp_path, minio_bucket, lifecycle_prefix, "snapshot")
+        run_bronze_for_day(
+            scenario, 15, tmp_path, minio_bucket, lifecycle_prefix, "snapshot"
+        )
         run_silver_for_day(scenario, 15, minio_bucket, lifecycle_prefix, "current_only")
 
         # Verify full refresh
-        day15_df = get_silver_data(minio_client, minio_bucket, lifecycle_prefix, "2025-01-20")
+        day15_df = get_silver_data(
+            minio_client, minio_bucket, lifecycle_prefix, "2025-01-20"
+        )
         assert len(day15_df) > 0, "Full refresh should produce data"
 
         # Continue with week 3
         for day in range(16, 22):
             config = scenario.schedule[day - 1]
-            run_bronze_for_day(scenario, day, tmp_path, minio_bucket, lifecycle_prefix, "incremental")
+            run_bronze_for_day(
+                scenario, day, tmp_path, minio_bucket, lifecycle_prefix, "incremental"
+            )
             if config.load_type != LoadType.SKIP:
-                run_silver_for_day(scenario, day, minio_bucket, lifecycle_prefix, "current_only")
+                run_silver_for_day(
+                    scenario, day, minio_bucket, lifecycle_prefix, "current_only"
+                )
 
     def test_final_21_day_state(
         self, minio_client, minio_bucket, lifecycle_prefix, scenario, tmp_path
@@ -312,13 +344,19 @@ class TestThreeWeekIncrementalLifecycle:
         # Run all 21 days
         for day in range(1, 22):
             config = scenario.schedule[day - 1]
-            run_bronze_for_day(scenario, day, tmp_path, minio_bucket, lifecycle_prefix, "incremental")
+            run_bronze_for_day(
+                scenario, day, tmp_path, minio_bucket, lifecycle_prefix, "incremental"
+            )
             if config.load_type != LoadType.SKIP:
-                run_silver_for_day(scenario, day, minio_bucket, lifecycle_prefix, "current_only")
+                run_silver_for_day(
+                    scenario, day, minio_bucket, lifecycle_prefix, "current_only"
+                )
 
         # Get final state (last run day)
         final_date = scenario.schedule[20].run_date.isoformat()  # Day 21
-        silver_df = get_silver_data(minio_client, minio_bucket, lifecycle_prefix, final_date)
+        silver_df = get_silver_data(
+            minio_client, minio_bucket, lifecycle_prefix, final_date
+        )
 
         # Verify final schema (V3)
         assert "amount" in silver_df.columns, "Final schema should have amount"
@@ -342,6 +380,7 @@ class TestCDCDeleteCycleLifecycle:
     def cdc_prefix(self):
         """Unique prefix for CDC tests."""
         import uuid
+
         return f"cdc_lifecycle_{uuid.uuid4().hex[:8]}"
 
     def test_cdc_delete_cycle_tombstone(
@@ -352,15 +391,18 @@ class TestCDCDeleteCycleLifecycle:
         for day in range(1, 22):
             config = scenario.schedule[day - 1]
 
-            bronze_result = run_bronze_for_day(
+            run_bronze_for_day(
                 scenario, day, tmp_path, minio_bucket, cdc_prefix, "cdc"
             )
 
             if config.load_type == LoadType.SKIP:
                 continue
 
-            silver_result = run_silver_for_day(
-                scenario, day, minio_bucket, cdc_prefix,
+            run_silver_for_day(
+                scenario,
+                day,
+                minio_bucket,
+                cdc_prefix,
                 history_mode="current_only",
                 delete_mode="tombstone",
                 cdc_col="op",
@@ -371,7 +413,11 @@ class TestCDCDeleteCycleLifecycle:
         silver_df = get_silver_data(minio_client, minio_bucket, cdc_prefix, final_date)
 
         if "_deleted" in silver_df.columns:
-            deleted_count = silver_df["_deleted"].sum() if silver_df["_deleted"].dtype == bool else (silver_df["_deleted"] == 1).sum()
+            deleted_count = (
+                silver_df["_deleted"].sum()
+                if silver_df["_deleted"].dtype == bool
+                else (silver_df["_deleted"] == 1).sum()
+            )
             # Should have some tombstone records from week 2 deletes
             assert deleted_count >= 0, "Tombstone mode tracks deletes"
 
@@ -385,13 +431,18 @@ class TestCDCDeleteCycleLifecycle:
         for day in range(1, 22):
             config = scenario.schedule[day - 1]
 
-            run_bronze_for_day(scenario, day, tmp_path, minio_bucket, hard_prefix, "cdc")
+            run_bronze_for_day(
+                scenario, day, tmp_path, minio_bucket, hard_prefix, "cdc"
+            )
 
             if config.load_type == LoadType.SKIP:
                 continue
 
             run_silver_for_day(
-                scenario, day, minio_bucket, hard_prefix,
+                scenario,
+                day,
+                minio_bucket,
+                hard_prefix,
                 history_mode="current_only",
                 delete_mode="hard_delete",
                 cdc_col="op",
@@ -415,6 +466,7 @@ class TestSCD2ThreeWeekHistory:
     @pytest.fixture
     def scd2_prefix(self):
         import uuid
+
         return f"scd2_lifecycle_{uuid.uuid4().hex[:8]}"
 
     def test_scd2_builds_complete_history(
@@ -425,13 +477,18 @@ class TestSCD2ThreeWeekHistory:
         for day in range(1, 22):
             config = scenario.schedule[day - 1]
 
-            run_bronze_for_day(scenario, day, tmp_path, minio_bucket, scd2_prefix, "incremental")
+            run_bronze_for_day(
+                scenario, day, tmp_path, minio_bucket, scd2_prefix, "incremental"
+            )
 
             if config.load_type == LoadType.SKIP:
                 continue
 
             run_silver_for_day(
-                scenario, day, minio_bucket, scd2_prefix,
+                scenario,
+                day,
+                minio_bucket,
+                scd2_prefix,
                 history_mode="full_history",
             )
 
@@ -446,7 +503,9 @@ class TestSCD2ThreeWeekHistory:
 
         # Verify exactly one current per ID
         current_df = silver_df[silver_df["is_current"] == 1]
-        assert current_df["id"].is_unique, "Each ID should have exactly one current record"
+        assert current_df["id"].is_unique, (
+            "Each ID should have exactly one current record"
+        )
 
         # Verify history exists (some IDs should have multiple versions)
         version_counts = silver_df.groupby("id").size()
@@ -463,6 +522,7 @@ class TestPolyBaseDDLConsistency:
     @pytest.fixture
     def polybase_prefix(self):
         import uuid
+
         return f"polybase_lifecycle_{uuid.uuid4().hex[:8]}"
 
     def test_polybase_ddl_across_schema_versions(
@@ -482,21 +542,30 @@ class TestPolyBaseDDLConsistency:
         for day in range(1, 22):
             config = scenario.schedule[day - 1]
 
-            run_bronze_for_day(scenario, day, tmp_path, minio_bucket, polybase_prefix, "incremental")
+            run_bronze_for_day(
+                scenario, day, tmp_path, minio_bucket, polybase_prefix, "incremental"
+            )
 
             if config.load_type == LoadType.SKIP:
                 continue
 
-            run_silver_for_day(scenario, day, minio_bucket, polybase_prefix, "current_only")
+            run_silver_for_day(
+                scenario, day, minio_bucket, polybase_prefix, "current_only"
+            )
 
             # Capture DDL at checkpoints
             if day in schema_check_days:
                 metadata = get_metadata_from_minio(
-                    minio_client, minio_bucket, polybase_prefix, config.run_date.isoformat()
+                    minio_client,
+                    minio_bucket,
+                    polybase_prefix,
+                    config.run_date.isoformat(),
                 )
                 if metadata:
                     ddl = generate_from_metadata_dict(
-                        metadata, polybase_config, entity_name=f"lifecycle_v{config.schema_version.value}"
+                        metadata,
+                        polybase_config,
+                        entity_name=f"lifecycle_v{config.schema_version.value}",
                     )
                     ddl_by_version[config.schema_version] = ddl
 

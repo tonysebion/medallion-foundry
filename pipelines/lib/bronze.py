@@ -794,14 +794,14 @@ class BronzeSource:
 
         # Handle common API response patterns
         if isinstance(data, list):
-            return data
+            return list(data)
         elif isinstance(data, dict):
             # Try common keys for data arrays
             for key in ("data", "results", "items", "records"):
                 if key in data and isinstance(data[key], list):
-                    return data[key]
+                    return list(data[key])
             # If no array found, wrap the dict
-            return [data]
+            return [dict(data)]
         else:
             raise ValueError(f"Unexpected API response type: {type(data)}")
 
@@ -836,7 +836,7 @@ class BronzeSource:
         # Execute count before writing (Ibis is lazy)
         # Ibis count() returns different types depending on backend
         count_result = t.count().execute()
-        row_count: int = int(count_result.iloc[0] if hasattr(count_result, "iloc") else count_result)  # type: ignore[arg-type]
+        row_count: int = int(count_result.iloc[0] if hasattr(count_result, "iloc") else count_result)
 
         if row_count == 0:
             logger.warning("bronze_no_rows", system=self.system, entity=self.entity)
@@ -922,9 +922,9 @@ class BronzeSource:
             # Local filesystem - write with artifacts
             storage = get_storage(target)
             storage.makedirs("")
-            output_file = Path(target) / f"{self.entity}.parquet"
-            t.to_parquet(str(output_file))
-            data_files.append(str(output_file))
+            local_output_file = Path(target) / f"{self.entity}.parquet"
+            t.to_parquet(str(local_output_file))
+            data_files.append(str(local_output_file))
 
             # Write metadata
             if self.write_metadata:

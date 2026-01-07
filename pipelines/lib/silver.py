@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import ibis
 
@@ -514,6 +514,7 @@ class SilverEntity:
             logger.debug("silver_append_log_mode", expanded_source=source)
 
         # Expand glob patterns if present
+        source_to_read: Union[str, List[str]] = source
         if "*" in source or "?" in source:
             if source.startswith("s3://"):
                 # Use S3Storage for S3 glob operations
@@ -536,23 +537,22 @@ class SilverEntity:
                     return con.create_table("empty", pd.DataFrame())
 
                 # glob returns keys without bucket prefix, add full s3:// path back
-                files = [f"s3://{bucket}/{m}" for m in matches]
-                source = files
+                source_to_read = [f"s3://{bucket}/{m}" for m in matches]
             else:
                 # Use standard glob for local paths
                 import glob as glob_module
-                files = glob_module.glob(source)
-                if not files:
+                local_files = glob_module.glob(source)
+                if not local_files:
                     logger.warning("silver_no_files_found", pattern=source)
                     import pandas as pd
                     return con.create_table("empty", pd.DataFrame())
-                source = files
+                source_to_read = local_files
 
-        if isinstance(source, str) and source.endswith(".csv"):
-            return con.read_csv(source)
+        if isinstance(source_to_read, str) and source_to_read.endswith(".csv"):
+            return con.read_csv(source_to_read)
         else:
             # Default to parquet
-            return con.read_parquet(source)
+            return con.read_parquet(source_to_read)
 
     def _expand_to_all_partitions(self, source: str) -> str:
         """Expand a single-partition source path to read all partitions.
@@ -857,7 +857,7 @@ class SilverEntity:
         entity_name = self.entity if self.entity else self._infer_entity_name(target)
 
         # For local filesystem, use enhanced write with artifacts
-        metadata = write_silver_with_artifacts(
+        write_silver_with_artifacts(
             t,
             target,
             entity_kind=self.entity_kind.value,
@@ -880,12 +880,12 @@ class SilverEntity:
             t.execute().to_csv(str(csv_file), index=False)
 
         return {
-            "row_count": metadata.row_count,
+            "row_count": silver_metadata.row_count,
             "target": target,
-            "columns": [c["name"] for c in metadata.columns],
+            "columns": [c["name"] for c in silver_metadata.columns],
             "entity_kind": self.entity_kind.value,
             "history_mode": self.history_mode.value,
-            "files": metadata.data_files,
+            "files": silver_metadata.data_files,
             "metadata_file": "_metadata.json",
             "checksums_file": "_checksums.json",
         }

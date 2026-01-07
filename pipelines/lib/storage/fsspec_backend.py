@@ -211,7 +211,7 @@ class FsspecStorage(StorageBackend):
                 # Convert list to (name, info) pairs
                 for item in items:
                     if isinstance(item, dict):
-                        item_name: str = item.get("name", item.get("Key", ""))
+                        item_name: str = str(item.get("name", item.get("Key", "")))
                         file_items.append((item_name, item))
                     else:
                         file_items.append((str(item), {"name": str(item), "type": "file", "size": 0}))

@@ -70,7 +70,7 @@ def pipeline(
                     result["_elapsed_seconds"] = elapsed
                     result["_pipeline"] = name
 
-                return result
+                return dict(result) if isinstance(result, dict) else {"result": result}
 
             except Exception as e:
                 elapsed = time.time() - start
@@ -114,14 +114,14 @@ class PipelineResult:
     @property
     def total_rows(self) -> int:
         """Get total rows processed across Bronze and Silver."""
-        bronze_rows = self.bronze.get("row_count", 0)
-        silver_rows = self.silver.get("row_count", 0)
+        bronze_rows: int = self.bronze.get("row_count", 0) or 0
+        silver_rows: int = self.silver.get("row_count", 0) or 0
         return bronze_rows + silver_rows
 
     @property
     def was_skipped(self) -> bool:
         """Check if the pipeline was skipped."""
-        return self.bronze.get("skipped", False) or self.silver.get("skipped", False)
+        return bool(self.bronze.get("skipped", False)) or bool(self.silver.get("skipped", False))
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
