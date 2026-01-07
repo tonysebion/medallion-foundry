@@ -103,9 +103,18 @@ bronze:
   # watermark_column: updated_at       # Column to track
   # watermark_param: since             # Query param to send watermark
 
+  # ========================================
+  # STORAGE OUTPUT
+  # ========================================
+  target_path: "./bronze/system={system}/entity={entity}/dt={run_date}/"
+  # For S3: target_path: "s3://bucket/bronze/{system}/{entity}/dt={run_date}/"
+  # For ADLS: target_path: "abfss://container@account.dfs.core.windows.net/bronze/{system}/{entity}/"
+
 silver:
   natural_keys: [id]
   change_timestamp: updated_at
+  target_path: "./silver/system={system}/entity={entity}/"
+  # For S3: target_path: "s3://bucket/silver/{system}/{entity}/"
   # attributes:
   #   - name
   #   - status

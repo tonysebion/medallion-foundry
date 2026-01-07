@@ -40,8 +40,14 @@ bronze:
   load_pattern: incremental
   watermark_column: LastUpdated  # Column to track for incremental
 
+  # Storage output location
+  target_path: "./bronze/system={system}/entity={entity}/dt={run_date}/"
+  # For S3: target_path: "s3://bucket/bronze/{system}/{entity}/dt={run_date}/"
+
 # Silver layer - curate with full history (SCD Type 2)
 silver:
   natural_keys: [OrderID]           # Primary key column(s)
   change_timestamp: LastUpdated     # When was the record changed?
+  target_path: "./silver/system={system}/entity={entity}/"
+  # For S3: target_path: "s3://bucket/silver/{system}/{entity}/"
   history_mode: full_history        # Keep all versions (SCD Type 2)

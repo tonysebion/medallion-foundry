@@ -43,10 +43,16 @@ bronze:
       #   - [42, 52]
       #   - [52, 92]
 
+  # Storage output location
+  target_path: "./bronze/system={system}/entity={entity}/dt={run_date}/"
+  # For S3: target_path: "s3://bucket/bronze/{system}/{entity}/dt={run_date}/"
+
 # Silver layer - curate to clean format
 silver:
   natural_keys: [txn_id]            # Primary key column
   change_timestamp: txn_date        # Timestamp column
+  target_path: "./silver/system={system}/entity={entity}/"
+  # For S3: target_path: "s3://bucket/silver/{system}/{entity}/"
 
   # Transactions/events are immutable
   entity_kind: event
