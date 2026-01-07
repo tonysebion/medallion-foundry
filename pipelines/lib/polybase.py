@@ -349,12 +349,14 @@ RETURN
     SELECT *
     FROM [{schema}].[{external_table_name}]
     WHERE effective_from <= @as_of_date
-    AND (effective_to IS NULL OR effective_to > @as_of_date);
+    AND (effective_to IS NULL OR effective_to > @as_of_date){deleted_filter};
 """
         views.append(pit_function)
 
-        # History lookup function
-        history_function = f"""
+        # History lookup function - supports single or composite keys
+        if len(natural_keys) == 1:
+            # Single key: simple parameter
+            history_function = f"""
 -- Entity History Function
 -- Usage: SELECT * FROM [{schema}].[fn_{base_name}_history]('KEY_VALUE')
 CREATE OR ALTER FUNCTION [{schema}].[fn_{base_name}_history]
@@ -367,6 +369,26 @@ RETURN
     SELECT *
     FROM [{schema}].[{external_table_name}]
     WHERE [{natural_keys[0]}] = @key_value
+    ORDER BY effective_from DESC;
+"""
+        else:
+            # Composite key: multiple parameters
+            params = ", ".join([f"@key_{i} NVARCHAR(255)" for i in range(len(natural_keys))])
+            where_clauses = " AND ".join([f"[{key}] = @key_{i}" for i, key in enumerate(natural_keys)])
+            param_list = ", ".join([f"@key_{i}" for i in range(len(natural_keys))])
+            history_function = f"""
+-- Entity History Function (Composite Key)
+-- Usage: SELECT * FROM [{schema}].[fn_{base_name}_history]({param_list})
+CREATE OR ALTER FUNCTION [{schema}].[fn_{base_name}_history]
+(
+    {params}
+)
+RETURNS TABLE
+AS
+RETURN
+    SELECT *
+    FROM [{schema}].[{external_table_name}]
+    WHERE {where_clauses}
     ORDER BY effective_from DESC;
 """
         views.append(history_function)

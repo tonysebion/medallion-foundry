@@ -347,6 +347,58 @@ class TestGenerateStateViews:
         )
         assert "_deleted = 0" in ddl
 
+    def test_scd2_tombstone_filters_point_in_time(self, config):
+        """Point-in-time function excludes tombstones when delete_mode=tombstone."""
+        ddl = generate_state_views(
+            "customers_state_external",
+            ["customer_id"],
+            config,
+            history_mode="full_history",
+            delete_mode="tombstone",
+        )
+        # Point-in-time function should include tombstone filter
+        assert "fn_customers_state_as_of" in ddl
+        assert "_deleted = 0 OR _deleted IS NULL" in ddl
+
+    def test_scd2_tombstone_current_view_filters_deleted(self, config):
+        """Current view for SCD2 + tombstone excludes deleted records."""
+        ddl = generate_state_views(
+            "orders_state_external",
+            ["order_id"],
+            config,
+            history_mode="full_history",
+            delete_mode="tombstone",
+        )
+        # Current view should filter by is_current AND exclude deleted
+        assert "is_current = 1" in ddl
+        assert "_deleted = 0 OR _deleted IS NULL" in ddl
+
+    def test_composite_key_history_function(self, config):
+        """History function supports composite natural keys."""
+        ddl = generate_state_views(
+            "order_lines_state_external",
+            ["order_id", "line_id"],
+            config,
+            history_mode="full_history",
+        )
+        # Should have multiple parameters
+        assert "@key_0 NVARCHAR(255)" in ddl
+        assert "@key_1 NVARCHAR(255)" in ddl
+        assert "[order_id] = @key_0" in ddl
+        assert "[line_id] = @key_1" in ddl
+
+    def test_single_key_history_function(self, config):
+        """History function works with single natural key."""
+        ddl = generate_state_views(
+            "customers_state_external",
+            ["customer_id"],
+            config,
+            history_mode="full_history",
+        )
+        # Should have single parameter
+        assert "@key_value NVARCHAR(255)" in ddl
+        assert "[customer_id] = @key_value" in ddl
+
 
 # ============================================
 # generate_event_views tests
