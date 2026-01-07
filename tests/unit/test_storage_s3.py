@@ -265,7 +265,7 @@ def test_s3_storage_bucket_and_prefix_parsing():
     """Test that bucket and prefix are correctly parsed from S3 URI."""
     storage = S3Storage("s3://my-bucket/some/prefix/path/")
     assert storage._bucket == "my-bucket"
-    assert storage._prefix == "some/prefix/path"
+    assert storage._prefix == "some/prefix/path/"
 
 
 def test_s3_storage_bucket_only():

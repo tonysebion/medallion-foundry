@@ -13,6 +13,10 @@
 #   1. Set your GitHub token:
 #       export GITHUB_TOKEN="ghp_xxxxxxxxxxxx"
 #
+#   2. (Optional) For Azure ADLS output, set storage environment variables:
+#       export AZURE_STORAGE_ACCOUNT="your_account"
+#       export AZURE_STORAGE_KEY="your_key"
+#
 # Run:
 #   python -m pipelines ./pipelines/examples/github_api.yaml --date 2025-01-15
 #
@@ -54,3 +58,15 @@ bronze:
 
   # Request timeout
   timeout: 30.0
+
+  # Storage output location
+  target_path: "./bronze/system={system}/entity={entity}/dt={run_date}/"
+  # For Azure Data Lake Storage (ADLS):
+  # target_path: "abfss://bronze@datalake.dfs.core.windows.net/{system}/{entity}/dt={run_date}/"
+
+silver:
+  natural_keys: [id]
+  change_timestamp: created_at
+  target_path: "./silver/system={system}/entity={entity}/"
+  # For Azure ADLS:
+  # target_path: "abfss://silver@datalake.dfs.core.windows.net/{system}/{entity}/"

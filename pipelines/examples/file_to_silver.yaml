@@ -26,10 +26,12 @@ bronze:
   source_type: file_parquet
   source_path: ./input/products/*.parquet
   load_pattern: full_snapshot
+  target_path: "./bronze/system={system}/entity={entity}/dt={run_date}/"
 
 silver:
   natural_keys: [product_id]
   change_timestamp: updated_at
+  target_path: "./silver/system={system}/entity={entity}/"
   entity_kind: state
   # SCD Type 2: Maintains full history with effective_from/effective_to dates
   history_mode: full_history

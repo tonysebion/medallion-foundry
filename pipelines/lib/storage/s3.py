@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import fnmatch
-import io
 import logging
 import os
 from typing import Any, List, Optional
@@ -79,7 +78,7 @@ class S3Storage(StorageBackend):
 
         parts = path.split("/", 1)
         self._bucket = parts[0]
-        self._prefix = parts[1].rstrip("/") if len(parts) > 1 else ""
+        self._prefix = parts[1] if len(parts) > 1 else ""
 
     @property
     def scheme(self) -> str:
@@ -141,9 +140,9 @@ class S3Storage(StorageBackend):
             return parts[1] if len(parts) > 1 else ""
 
         if not path:
-            return self._prefix
+            return self._prefix.rstrip("/")
 
-        prefix = self._prefix
+        prefix = self._prefix.rstrip("/")
         if prefix:
             return f"{prefix}/{path.lstrip('/')}"
         else:

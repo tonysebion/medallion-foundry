@@ -9,6 +9,11 @@
 # Prerequisites:
 #   export DB_HOST="your-server.database.com"
 #
+# For S3 output (optional):
+#   export AWS_ACCESS_KEY_ID="your_key"
+#   export AWS_SECRET_ACCESS_KEY="your_secret"
+#   export AWS_REGION="us-east-1"
+#
 # To run:
 #   python -m pipelines ./pipelines/templates/mssql_dimension.yaml --date 2025-01-15
 
@@ -32,8 +37,14 @@ bronze:
   #   FROM dbo.Customers
   #   WHERE IsActive = 1
 
+  # Storage output location
+  target_path: "./bronze/system={system}/entity={entity}/dt={run_date}/"
+  # For S3: target_path: "s3://bucket/bronze/{system}/{entity}/dt={run_date}/"
+
 # Silver layer - curate as SCD Type 1 (current only)
 silver:
   natural_keys: [id]                # What makes a record unique?
   change_timestamp: LastUpdated     # When was the record last changed?
+  target_path: "./silver/system={system}/entity={entity}/"
+  # For S3: target_path: "s3://bucket/silver/{system}/{entity}/"
   # history_mode: current_only      # Default - only keep latest version

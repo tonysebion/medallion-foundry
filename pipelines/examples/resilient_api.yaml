@@ -10,7 +10,13 @@
 # See: resilient_api.py for retry/circuit breaker example
 #
 # Setup:
-#   export API_TOKEN="your_api_token"
+#   1. Set API authentication:
+#       export API_TOKEN="your_api_token"
+#
+#   2. (Optional) For S3-compatible storage (MinIO, Nutanix), set:
+#       export AWS_ACCESS_KEY_ID="your_access_key"
+#       export AWS_SECRET_ACCESS_KEY="your_secret_key"
+#       export AWS_ENDPOINT_URL="https://minio.example.com:9000"
 #
 # Run:
 #   python -m pipelines ./pipelines/examples/resilient_api.yaml --date 2025-01-15
@@ -49,9 +55,18 @@ bronze:
   watermark_column: updated_at
   watermark_param: modified_since
 
+  # Storage output location
+  target_path: "./bronze/system={system}/entity={entity}/dt={run_date}/"
+  # For S3-compatible storage (MinIO, Nutanix Objects):
+  # target_path: "s3://my-bucket/bronze/{system}/{entity}/dt={run_date}/"
+  # options:
+  #   s3_signature_version: s3v4
+  #   s3_addressing_style: path
+
 silver:
   natural_keys: [contact_id]
   change_timestamp: updated_at
+  target_path: "./silver/system={system}/entity={entity}/"
   entity_kind: state
   history_mode: current_only
   attributes:

@@ -9,6 +9,11 @@
 # Prerequisites:
 #   export DB_HOST="your-server.database.com"
 #
+# For S3 output (optional):
+#   export AWS_ACCESS_KEY_ID="your_key"
+#   export AWS_SECRET_ACCESS_KEY="your_secret"
+#   export AWS_REGION="us-east-1"
+#
 # To run:
 #   python -m pipelines ./pipelines/templates/incremental_load.yaml --date 2025-01-15
 

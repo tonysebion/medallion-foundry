@@ -110,6 +110,49 @@ bronze:
   # CHUNKING: For large datasets, process in chunks (optional)
   # chunk_size: 100000
 
+  # ============================================================
+  # STORAGE OUTPUT: Where to write Bronze data (optional)
+  # ============================================================
+  # Local filesystem (default):
+  target_path: "./bronze/system={system}/entity={entity}/dt={run_date}/"
+
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # AWS S3 Configuration:
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # target_path: "s3://my-bucket/bronze/{system}/{entity}/dt={run_date}/"
+  #
+  # Set these environment variables before running:
+  #   export AWS_ACCESS_KEY_ID="your_access_key"
+  #   export AWS_SECRET_ACCESS_KEY="your_secret_key"
+  #   export AWS_REGION="us-east-1"
+
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # S3-Compatible Storage (MinIO, Nutanix Objects, Ceph, etc.):
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # target_path: "s3://my-bucket/bronze/{system}/{entity}/dt={run_date}/"
+  # options:
+  #   s3_signature_version: s3v4    # Required for most S3-compatible storage
+  #   s3_addressing_style: path     # Required for most S3-compatible storage
+  #
+  # Set these environment variables before running:
+  #   export AWS_ACCESS_KEY_ID="your_access_key"
+  #   export AWS_SECRET_ACCESS_KEY="your_secret_key"
+  #   export AWS_ENDPOINT_URL="https://minio.example.com:9000"  # Your S3-compatible endpoint
+
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Azure Data Lake Storage (ADLS) Configuration:
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # target_path: "abfss://container@account.dfs.core.windows.net/bronze/{system}/{entity}/"
+  #
+  # Option 1: Storage account key
+  #   export AZURE_STORAGE_ACCOUNT="your_account"
+  #   export AZURE_STORAGE_KEY="your_key"
+  #
+  # Option 2: Service principal
+  #   export AZURE_CLIENT_ID="your_client_id"
+  #   export AZURE_CLIENT_SECRET="your_secret"
+  #   export AZURE_TENANT_ID="your_tenant_id"
+
 # ============================================================
 # SILVER: How should data be curated?
 # ============================================================
@@ -142,3 +185,19 @@ silver:
   # exclude_columns:
   #   - internal_id
   #   - password_hash
+
+  # ============================================================
+  # STORAGE OUTPUT: Where to write Silver data (optional)
+  # ============================================================
+  # Local filesystem (default):
+  target_path: "./silver/system={system}/entity={entity}/"
+
+  # AWS S3:
+  # target_path: "s3://my-bucket/silver/{system}/{entity}/"
+
+  # S3-Compatible (MinIO, Nutanix):
+  # target_path: "s3://my-bucket/silver/{system}/{entity}/"
+  # (Same options and env vars as Bronze section above)
+
+  # Azure Data Lake Storage (ADLS):
+  # target_path: "abfss://container@account.dfs.core.windows.net/silver/{system}/{entity}/"
