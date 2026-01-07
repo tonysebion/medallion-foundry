@@ -484,8 +484,20 @@
         },
         "model": {
           "type": "string",
-          "description": "Pre-built transformation pattern. Sets entity_kind, history_mode, and input_mode. Can be overridden by explicit settings.",
-          "enum": ["periodic_snapshot", "full_merge_dedupe", "incremental_merge", "scd_type_2", "event_log"]
+          "description": "Pre-built transformation pattern. Sets entity_kind, history_mode, input_mode, and delete_mode. Can be overridden by explicit settings.",
+          "enum": [
+            "periodic_snapshot",
+            "full_merge_dedupe",
+            "incremental_merge",
+            "scd_type_2",
+            "event_log",
+            "cdc_current",
+            "cdc_current_tombstone",
+            "cdc_current_hard_delete",
+            "cdc_history",
+            "cdc_history_tombstone",
+            "cdc_history_hard_delete"
+          ]
         },
         "entity_kind": {
           "type": "string",

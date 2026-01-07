@@ -70,6 +70,13 @@ class SilverModel(Enum):
     INCREMENTAL_MERGE = "incremental_merge"  # CDC with merge
     SCD_TYPE_2 = "scd_type_2"  # Full history tracking
     EVENT_LOG = "event_log"  # Immutable event stream
+    # CDC presets - simplify CDC configuration
+    CDC_CURRENT = "cdc_current"  # CDC → SCD1, ignore deletes
+    CDC_CURRENT_TOMBSTONE = "cdc_current_tombstone"  # CDC → SCD1, soft deletes
+    CDC_CURRENT_HARD_DELETE = "cdc_current_hard_delete"  # CDC → SCD1, remove deletes
+    CDC_HISTORY = "cdc_history"  # CDC → SCD2, ignore deletes
+    CDC_HISTORY_TOMBSTONE = "cdc_history_tombstone"  # CDC → SCD2, soft deletes
+    CDC_HISTORY_HARD_DELETE = "cdc_history_hard_delete"  # CDC → SCD2, remove deletes
 
 
 class DeleteMode(Enum):
@@ -111,6 +118,43 @@ SILVER_MODEL_PRESETS: dict[str, dict[str, str]] = {
         "entity_kind": "event",
         "history_mode": "current_only",
         "input_mode": "append_log",
+    },
+    # CDC presets - simplify CDC configuration with pre-configured delete_mode
+    "cdc_current": {
+        "entity_kind": "state",
+        "history_mode": "current_only",
+        "input_mode": "append_log",
+        "delete_mode": "ignore",
+    },
+    "cdc_current_tombstone": {
+        "entity_kind": "state",
+        "history_mode": "current_only",
+        "input_mode": "append_log",
+        "delete_mode": "tombstone",
+    },
+    "cdc_current_hard_delete": {
+        "entity_kind": "state",
+        "history_mode": "current_only",
+        "input_mode": "append_log",
+        "delete_mode": "hard_delete",
+    },
+    "cdc_history": {
+        "entity_kind": "state",
+        "history_mode": "full_history",
+        "input_mode": "append_log",
+        "delete_mode": "ignore",
+    },
+    "cdc_history_tombstone": {
+        "entity_kind": "state",
+        "history_mode": "full_history",
+        "input_mode": "append_log",
+        "delete_mode": "tombstone",
+    },
+    "cdc_history_hard_delete": {
+        "entity_kind": "state",
+        "history_mode": "full_history",
+        "input_mode": "append_log",
+        "delete_mode": "hard_delete",
     },
 }
 

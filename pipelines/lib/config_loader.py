@@ -109,6 +109,13 @@ SILVER_MODEL_MAP = {
     "incremental_merge": SilverModel.INCREMENTAL_MERGE,
     "scd_type_2": SilverModel.SCD_TYPE_2,
     "event_log": SilverModel.EVENT_LOG,
+    # CDC presets
+    "cdc_current": SilverModel.CDC_CURRENT,
+    "cdc_current_tombstone": SilverModel.CDC_CURRENT_TOMBSTONE,
+    "cdc_current_hard_delete": SilverModel.CDC_CURRENT_HARD_DELETE,
+    "cdc_history": SilverModel.CDC_HISTORY,
+    "cdc_history_tombstone": SilverModel.CDC_HISTORY_TOMBSTONE,
+    "cdc_history_hard_delete": SilverModel.CDC_HISTORY_HARD_DELETE,
 }
 
 DELETE_MODE_MAP = {
@@ -514,17 +521,16 @@ def load_silver_from_yaml(
             )
         input_mode = INPUT_MODE_MAP[input_mode_str]
 
-    # Convert delete_mode string to enum (for CDC processing)
-    delete_mode = DeleteMode.IGNORE  # Default to ignoring deletes
-    if "delete_mode" in config:
-        delete_mode_str = config["delete_mode"].lower()
-        if delete_mode_str not in DELETE_MODE_MAP:
-            valid = ", ".join(sorted(DELETE_MODE_MAP.keys()))
-            raise YAMLConfigError(
-                f"Invalid delete_mode '{config['delete_mode']}'. "
-                f"Valid options: {valid}"
-            )
-        delete_mode = DELETE_MODE_MAP[delete_mode_str]
+    # Convert delete_mode string to enum (from config or model preset)
+    delete_mode_str = config.get("delete_mode") or model_defaults.get("delete_mode") or "ignore"
+    delete_mode_str = delete_mode_str.lower()
+    if delete_mode_str not in DELETE_MODE_MAP:
+        valid = ", ".join(sorted(DELETE_MODE_MAP.keys()))
+        raise YAMLConfigError(
+            f"Invalid delete_mode '{delete_mode_str}'. "
+            f"Valid options: {valid}"
+        )
+    delete_mode = DELETE_MODE_MAP[delete_mode_str]
 
     # Parse cdc_options (for CDC load pattern)
     cdc_options = None
