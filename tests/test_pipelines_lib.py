@@ -411,7 +411,7 @@ class TestAuth:
 
     def test_auth_type_enum_values(self):
         """Should have expected auth types."""
-        from pipelines.lib.auth import AuthType
+        from pipelines.lib.api import AuthType
 
         assert AuthType.NONE.value == "none"
         assert AuthType.BEARER.value == "bearer"
@@ -420,28 +420,28 @@ class TestAuth:
 
     def test_auth_config_validates_bearer_requires_token(self):
         """Bearer auth should require token."""
-        from pipelines.lib.auth import AuthConfig, AuthType
+        from pipelines.lib.api import AuthConfig, AuthType
 
         with pytest.raises(ValueError, match="token"):
             AuthConfig(auth_type=AuthType.BEARER, token=None)
 
     def test_auth_config_validates_api_key_requires_key(self):
         """API key auth should require api_key."""
-        from pipelines.lib.auth import AuthConfig, AuthType
+        from pipelines.lib.api import AuthConfig, AuthType
 
         with pytest.raises(ValueError, match="api_key"):
             AuthConfig(auth_type=AuthType.API_KEY, api_key=None)
 
     def test_auth_config_validates_basic_requires_credentials(self):
         """Basic auth should require username and password."""
-        from pipelines.lib.auth import AuthConfig, AuthType
+        from pipelines.lib.api import AuthConfig, AuthType
 
         with pytest.raises(ValueError, match="username.*password"):
             AuthConfig(auth_type=AuthType.BASIC, username="user", password=None)
 
     def test_build_auth_headers_none(self):
         """No auth should return default headers."""
-        from pipelines.lib.auth import build_auth_headers
+        from pipelines.lib.api import build_auth_headers
 
         headers, auth_tuple = build_auth_headers(None)
 
@@ -450,7 +450,7 @@ class TestAuth:
 
     def test_build_auth_headers_bearer(self, monkeypatch):
         """Bearer auth should add Authorization header."""
-        from pipelines.lib.auth import AuthConfig, AuthType, build_auth_headers
+        from pipelines.lib.api import AuthConfig, AuthType, build_auth_headers
 
         monkeypatch.setenv("TEST_TOKEN", "my-secret-token")
 
@@ -462,7 +462,7 @@ class TestAuth:
 
     def test_build_auth_headers_api_key(self, monkeypatch):
         """API key auth should add custom header."""
-        from pipelines.lib.auth import AuthConfig, AuthType, build_auth_headers
+        from pipelines.lib.api import AuthConfig, AuthType, build_auth_headers
 
         monkeypatch.setenv("TEST_API_KEY", "key-123")
 
@@ -478,7 +478,7 @@ class TestAuth:
 
     def test_build_auth_headers_basic(self, monkeypatch):
         """Basic auth should return auth tuple."""
-        from pipelines.lib.auth import AuthConfig, AuthType, build_auth_headers
+        from pipelines.lib.api import AuthConfig, AuthType, build_auth_headers
 
         monkeypatch.setenv("TEST_USER", "admin")
         monkeypatch.setenv("TEST_PASS", "secret")
@@ -494,7 +494,7 @@ class TestAuth:
 
     def test_build_auth_headers_with_extra_headers(self, monkeypatch):
         """Should include extra headers."""
-        from pipelines.lib.auth import build_auth_headers
+        from pipelines.lib.api import build_auth_headers
 
         extra = {"X-Request-ID": "123", "X-Custom": "value"}
         headers, _ = build_auth_headers(None, extra_headers=extra)
@@ -509,7 +509,7 @@ class TestPagination:
 
     def test_pagination_strategy_enum_values(self):
         """Should have expected pagination strategies."""
-        from pipelines.lib.pagination import PaginationStrategy
+        from pipelines.lib.api import PaginationStrategy
 
         assert PaginationStrategy.NONE.value == "none"
         assert PaginationStrategy.OFFSET.value == "offset"
@@ -518,7 +518,7 @@ class TestPagination:
 
     def test_no_pagination_state(self):
         """NoPaginationState should fetch once then stop."""
-        from pipelines.lib.pagination import (
+        from pipelines.lib.api import (
             NoPaginationState,
             PaginationConfig,
             PaginationStrategy,
@@ -536,7 +536,7 @@ class TestPagination:
 
     def test_offset_pagination_state(self):
         """OffsetPaginationState should increment offset."""
-        from pipelines.lib.pagination import (
+        from pipelines.lib.api import (
             OffsetPaginationState,
             PaginationConfig,
             PaginationStrategy,
@@ -571,7 +571,7 @@ class TestPagination:
 
     def test_page_pagination_state(self):
         """PagePaginationState should increment page number."""
-        from pipelines.lib.pagination import (
+        from pipelines.lib.api import (
             PagePaginationState,
             PaginationConfig,
             PaginationStrategy,
@@ -601,7 +601,7 @@ class TestPagination:
 
     def test_page_pagination_max_pages(self):
         """PagePaginationState should respect max_pages limit."""
-        from pipelines.lib.pagination import (
+        from pipelines.lib.api import (
             PagePaginationState,
             PaginationConfig,
             PaginationStrategy,
@@ -628,7 +628,7 @@ class TestPagination:
 
     def test_cursor_pagination_state(self):
         """CursorPaginationState should extract and use cursor."""
-        from pipelines.lib.pagination import (
+        from pipelines.lib.api import (
             CursorPaginationState,
             PaginationConfig,
             PaginationStrategy,
@@ -664,7 +664,7 @@ class TestPagination:
 
     def test_build_pagination_state(self):
         """build_pagination_state should create correct state type."""
-        from pipelines.lib.pagination import (
+        from pipelines.lib.api import (
             CursorPaginationState,
             NoPaginationState,
             OffsetPaginationState,
@@ -696,7 +696,7 @@ class TestPagination:
 
     def test_build_pagination_config_from_dict(self):
         """Should build config from dictionary."""
-        from pipelines.lib.pagination import (
+        from pipelines.lib.api import (
             PaginationStrategy,
             build_pagination_config_from_dict,
         )

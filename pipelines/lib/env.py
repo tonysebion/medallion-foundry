@@ -10,12 +10,29 @@ from __future__ import annotations
 
 import os
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 from dotenv import load_dotenv
 
-__all__ = ["expand_env_vars", "expand_options", "load_env_file"]
+__all__ = ["expand_env_vars", "expand_options", "load_env_file", "utc_now_iso"]
+
+
+def utc_now_iso() -> str:
+    """Return the current UTC time as an ISO 8601 formatted string.
+
+    This is a convenience function to standardize timestamp generation
+    across the codebase.
+
+    Returns:
+        ISO 8601 formatted timestamp string (e.g., "2025-01-15T10:30:00+00:00")
+
+    Example:
+        >>> now = utc_now_iso()
+        >>> # Returns something like "2025-01-15T10:30:00.123456+00:00"
+    """
+    return datetime.now(timezone.utc).isoformat()
 
 # Pattern for ${VAR_NAME} or $VAR_NAME
 ENV_VAR_PATTERN = re.compile(r"\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)")

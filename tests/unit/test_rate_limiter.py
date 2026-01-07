@@ -3,7 +3,7 @@
 import threading
 import time
 
-from pipelines.lib.rate_limiter import RateLimiter, rate_limited
+from pipelines.lib.api import RateLimiter, rate_limited
 
 
 # ============================================
