@@ -14,7 +14,6 @@ Silver layer rules:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -22,6 +21,7 @@ from typing import Any, Dict, List, Optional, Union
 import ibis
 
 from pipelines.lib.bronze import _configure_duckdb_s3, _extract_storage_options, InputMode
+from pipelines.lib.env import utc_now_iso
 from pipelines.lib.curate import apply_cdc, build_history, dedupe_latest
 from pipelines.lib.io import maybe_dry_run
 from pipelines.lib._path_utils import resolve_target_path, storage_path_exists
@@ -662,7 +662,7 @@ class SilverEntity:
 
     def _add_metadata(self, t: ibis.Table, run_date: str) -> ibis.Table:
         """Add Silver metadata columns."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = utc_now_iso()
         return t.mutate(
             _silver_curated_at=ibis.literal(now),
             _silver_run_date=ibis.literal(run_date),
@@ -743,7 +743,7 @@ class SilverEntity:
 
             # Infer column types for metadata
             columns = infer_column_types(t, include_sql_types=False)
-            now = datetime.now(timezone.utc).isoformat()
+            now = utc_now_iso()
 
             # Write metadata to cloud storage
             metadata = OutputMetadata(

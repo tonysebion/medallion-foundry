@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Generator, List, Optional
 
+from pipelines.lib.env import utc_now_iso
+
 import structlog
 from structlog.processors import JSONRenderer, TimeStamper
 from structlog.stdlib import BoundLogger, ProcessorFormatter
@@ -183,7 +185,7 @@ class PipelineMetrics:
                 },
             },
             "metrics": [m.to_dict() for m in self._metrics],
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utc_now_iso(),
         }
 
     def to_log_dict(self) -> Dict[str, Any]:

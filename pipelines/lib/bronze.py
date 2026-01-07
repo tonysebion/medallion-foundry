@@ -12,7 +12,6 @@ Bronze layer rules:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -21,7 +20,7 @@ import ibis
 import pandas as pd
 
 from pipelines.lib.connections import get_connection
-from pipelines.lib.env import expand_env_vars, expand_options
+from pipelines.lib.env import expand_env_vars, expand_options, utc_now_iso
 from pipelines.lib.io import OutputMetadata, infer_column_types, maybe_dry_run, maybe_skip_if_exists
 from pipelines.lib.storage import get_storage
 from pipelines.lib.state import (
@@ -810,7 +809,7 @@ class BronzeSource:
 
         These are the ONLY additions allowed in Bronze.
         """
-        now = datetime.now(timezone.utc).isoformat()
+        now = utc_now_iso()
         return t.mutate(
             _load_date=ibis.literal(run_date),
             _extracted_at=ibis.literal(now),
@@ -848,7 +847,7 @@ class BronzeSource:
 
         # Infer column types for metadata using shared function
         columns = infer_column_types(t, include_sql_types=False)
-        now = datetime.now(timezone.utc).isoformat()
+        now = utc_now_iso()
 
         # Determine output format based on target using storage backend
         data_files: List[str] = []

@@ -11,8 +11,9 @@ import json
 import logging
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
+
+from pipelines.lib.env import utc_now_iso
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
@@ -170,7 +171,7 @@ def write_checksum_manifest(
         ...     row_count=1000,
         ... )
     """
-    now = datetime.now(timezone.utc).isoformat()
+    now = utc_now_iso()
 
     file_entries = []
     for file_path in files:
@@ -233,7 +234,7 @@ def write_checksum_manifest_s3(
         >>> file_data = [{"path": "orders.parquet", "size_bytes": 1234, "sha256": "abc123..."}]
         >>> write_checksum_manifest_s3(storage, file_data, entity_kind="bronze", row_count=100)
     """
-    now = datetime.now(timezone.utc).isoformat()
+    now = utc_now_iso()
 
     manifest = ChecksumManifest(
         timestamp=now,

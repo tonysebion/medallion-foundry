@@ -40,7 +40,9 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
+
+from pipelines.lib.env import utc_now_iso
 from enum import Enum
 from functools import wraps
 from pathlib import Path
@@ -965,7 +967,7 @@ class ApiSource:
             }
 
         # Add Bronze metadata
-        now = datetime.now(timezone.utc).isoformat()
+        now = utc_now_iso()
         for record in records:
             record["_load_date"] = run_date
             record["_extracted_at"] = now
@@ -1206,7 +1208,7 @@ class ApiSource:
         row_count = len(records)
         # Use shared column inference function
         columns = infer_column_types(records)
-        now = datetime.now(timezone.utc).isoformat()
+        now = utc_now_iso()
 
         # Write to target
         output_dir = Path(target)

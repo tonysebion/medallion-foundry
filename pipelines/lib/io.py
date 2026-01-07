@@ -9,9 +9,10 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
+
+from pipelines.lib.env import utc_now_iso
 
 if TYPE_CHECKING:
     import ibis
@@ -211,7 +212,7 @@ def write_silver(
     # Execute count before writing (Ibis is lazy)
     row_count = t.count().execute()
     columns = list(t.columns)
-    now = datetime.now(timezone.utc).isoformat()
+    now = utc_now_iso()
 
     # Prepare output directory
     output_path = Path(path)
@@ -659,7 +660,7 @@ def write_silver_with_artifacts(
     # Execute count before writing (Ibis is lazy)
     row_count = t.count().execute()
     columns = _infer_column_types(t)
-    now = datetime.now(timezone.utc).isoformat()
+    now = utc_now_iso()
 
     # Prepare output directory
     output_path = Path(path)

@@ -11,6 +11,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
+from pipelines.lib.env import utc_now_iso
+
 if TYPE_CHECKING:
     import ibis
 
@@ -328,7 +330,7 @@ def save_watermark(system: str, entity: str, value: str) -> None:
         "system": system,
         "entity": entity,
         "last_value": value,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": utc_now_iso(),
     }
 
     path.write_text(json.dumps(data, indent=2))
