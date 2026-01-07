@@ -13,7 +13,10 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from pipelines.lib.storage.base import StorageBackend
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +25,9 @@ __all__ = [
     "ChecksumVerificationResult",
     "ChecksumValidationError",
     "compute_file_sha256",
+    "compute_bytes_sha256",
     "write_checksum_manifest",
+    "write_checksum_manifest_s3",
     "verify_checksum_manifest",
     "validate_bronze_checksums",
 ]
@@ -119,6 +124,18 @@ def compute_file_sha256(path: Path) -> str:
     return hasher.hexdigest()
 
 
+def compute_bytes_sha256(data: bytes) -> str:
+    """Compute SHA256 hash of bytes.
+
+    Args:
+        data: Bytes to hash
+
+    Returns:
+        Hexadecimal digest string
+    """
+    return hashlib.sha256(data).hexdigest()
+
+
 def write_checksum_manifest(
     out_dir: Path,
     files: List[Path],
@@ -181,6 +198,67 @@ def write_checksum_manifest(
 
     logger.info("Wrote checksum manifest to %s (%d files)", manifest_path, len(file_entries))
     return manifest_path
+
+
+def write_checksum_manifest_s3(
+    storage: "StorageBackend",
+    file_data: List[Dict[str, Any]],
+    *,
+    entity_kind: Optional[str] = None,
+    history_mode: Optional[str] = None,
+    row_count: int = 0,
+    extra_metadata: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """Write a checksum manifest to S3/cloud storage.
+
+    This function writes checksums for files in cloud storage where we can't
+    use Path objects. The caller must provide pre-computed file data including
+    the SHA256 hashes and sizes.
+
+    Args:
+        storage: Storage backend to write to (S3, ADLS, etc.)
+        file_data: List of dicts with {"path": filename, "size_bytes": int, "sha256": str}
+        entity_kind: Entity kind (state/event/bronze) for metadata
+        history_mode: History mode (current_only/full_history)
+        row_count: Total row count across files
+        extra_metadata: Optional additional metadata to include
+
+    Returns:
+        True if manifest was written successfully
+
+    Example:
+        >>> from pipelines.lib.storage import get_storage
+        >>> storage = get_storage("s3://bucket/bronze/")
+        >>> # After writing parquet, compute checksums
+        >>> file_data = [{"path": "orders.parquet", "size_bytes": 1234, "sha256": "abc123..."}]
+        >>> write_checksum_manifest_s3(storage, file_data, entity_kind="bronze", row_count=100)
+    """
+    now = datetime.now(timezone.utc).isoformat()
+
+    manifest = ChecksumManifest(
+        timestamp=now,
+        files=file_data,
+        entity_kind=entity_kind,
+        history_mode=history_mode,
+        row_count=row_count,
+        extra=extra_metadata or {},
+    )
+
+    try:
+        result = storage.write_text("_checksums.json", manifest.to_json())
+        if result.success:
+            logger.info(
+                "Wrote checksum manifest to S3: %s (%d files)",
+                storage.base_path,
+                len(file_data),
+            )
+            return True
+        else:
+            logger.warning("Failed to write checksum manifest: %s", result.error)
+            return False
+    except Exception as e:
+        logger.warning("Error writing checksum manifest to S3: %s", e)
+        return False
 
 
 def verify_checksum_manifest(

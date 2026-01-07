@@ -759,7 +759,11 @@ class BronzeSource:
         last_watermark: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Write to Bronze target with optional checksums and metadata."""
-        from pipelines.lib.checksum import write_checksum_manifest
+        from pipelines.lib.checksum import (
+            compute_bytes_sha256,
+            write_checksum_manifest,
+            write_checksum_manifest_s3,
+        )
         from pipelines.lib.storage import parse_uri
 
         # Execute count before writing (Ibis is lazy)
@@ -798,12 +802,13 @@ class BronzeSource:
             storage = get_storage(target)
             storage.makedirs("")  # Ensure target exists
             # Only pass partition_by if not empty (DuckDB doesn't handle empty list well)
+            parquet_filename = f"{self.entity}.parquet"
             if self.partition_by:
                 t.to_parquet(target, partition_by=self.partition_by)
                 data_files.append(target)
             else:
                 # No partitioning - write a single file with explicit filename
-                output_file = target.rstrip("/") + f"/{self.entity}.parquet"
+                output_file = target.rstrip("/") + f"/{parquet_filename}"
                 t.to_parquet(output_file)
                 data_files.append(output_file)
 
@@ -814,11 +819,36 @@ class BronzeSource:
                     columns=columns,
                     written_at=now,
                     run_date=run_date,
-                    data_files=[f"{self.entity}.parquet"],
+                    data_files=[parquet_filename],
                     extra=bronze_extra,
                 )
                 storage.write_text("_metadata.json", metadata.to_json())
                 logger.debug("bronze_metadata_written", target=target)
+
+            # Write checksums to cloud storage
+            if self.write_checksums:
+                try:
+                    # Read parquet file back to compute checksum
+                    parquet_data = storage.read_bytes(parquet_filename)
+                    file_checksum_data = [{
+                        "path": parquet_filename,
+                        "size_bytes": len(parquet_data),
+                        "sha256": compute_bytes_sha256(parquet_data),
+                    }]
+                    write_checksum_manifest_s3(
+                        storage,
+                        file_checksum_data,
+                        entity_kind="bronze",
+                        row_count=row_count,
+                        extra_metadata={
+                            "system": self.system,
+                            "entity": self.entity,
+                            "load_pattern": self.load_pattern.value,
+                        },
+                    )
+                    logger.debug("bronze_checksums_written", target=target)
+                except Exception as e:
+                    logger.warning("bronze_checksum_write_failed", error=str(e))
         else:
             # Local filesystem - write with artifacts
             storage = get_storage(target)
@@ -872,7 +902,7 @@ class BronzeSource:
 
         if self.write_metadata:
             result["metadata_file"] = "_metadata.json"
-        if self.write_checksums and scheme == "local":
+        if self.write_checksums:
             result["checksums_file"] = "_checksums.json"
 
         return result

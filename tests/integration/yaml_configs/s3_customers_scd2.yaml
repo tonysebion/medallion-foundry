@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=../../../pipelines/schema/pipeline.schema.json
+#
+# Test Pipeline: SCD Type 2 History with S3 Storage
+# =================================================
+# Tests SCD Type 2 (full_history) with customers data writing to S3/MinIO.
+#
+# Used by: test_yaml_s3_comprehensive.py::test_scd2_history_mode_to_s3
+#
+# This pipeline expects:
+#   - source_path to be overwritten at runtime with temp CSV path
+#   - target_path to be overwritten with test-specific S3 prefix
+#
+# Validates:
+#   - Bronze extracts CSV with historical customer versions
+#   - Silver builds full history with effective_from/effective_to columns
+#   - is_current flag correctly identifies latest versions
+
+name: s3_customers_scd2_test
+description: SCD Type 2 history tracking test with S3 storage
+
+bronze:
+  system: crm
+  entity: customers
+  source_type: file_csv
+  source_path: "{source_path}"  # Overwritten at runtime
+  target_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt={run_date}/"
+  partition_by: []  # Disable partitioning for S3
+
+silver:
+  source_path: "s3://{bucket}/{prefix}/bronze/system=crm/entity=customers/dt={run_date}/*.parquet"
+  target_path: "s3://{bucket}/{prefix}/silver/crm/customers/"
+  natural_keys: [customer_id]
+  change_timestamp: updated_at
+  entity_kind: state
+  history_mode: full_history  # SCD Type 2
+  attributes:
+    - name
+    - email
+    - tier
+    - status

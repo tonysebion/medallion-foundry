@@ -1,0 +1,41 @@
+# yaml-language-server: $schema=../../../pipelines/schema/pipeline.schema.json
+#
+# Test Pipeline: Full Bronze → Silver with S3 Storage
+# ====================================================
+# Tests SCD Type 1 (current_only) with orders data writing to S3/MinIO.
+#
+# Used by: test_yaml_s3_comprehensive.py::test_full_yaml_pipeline_with_all_artifacts
+#
+# This pipeline expects:
+#   - source_path to be overwritten at runtime with temp CSV path
+#   - target_path to be overwritten with test-specific S3 prefix
+#
+# Validates:
+#   - Bronze extracts CSV to S3 parquet
+#   - Bronze writes _metadata.json and _checksums.json
+#   - Silver curates with deduplication
+#   - Silver writes _metadata.json and _checksums.json
+#   - PolyBase DDL can be generated from metadata
+
+name: s3_orders_full_test
+description: Full S3 pipeline test with all artifacts - SCD Type 1
+
+bronze:
+  system: test
+  entity: orders
+  source_type: file_csv
+  source_path: "{source_path}"  # Overwritten at runtime
+  target_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt={run_date}/"
+  partition_by: []  # Disable partitioning for S3
+
+silver:
+  source_path: "s3://{bucket}/{prefix}/bronze/system=test/entity=orders/dt={run_date}/*.parquet"
+  target_path: "s3://{bucket}/{prefix}/silver/test/orders/"
+  natural_keys: [order_id]
+  change_timestamp: updated_at
+  entity_kind: state
+  history_mode: current_only  # SCD Type 1
+  attributes:
+    - customer_id
+    - order_total
+    - status

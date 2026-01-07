@@ -494,7 +494,12 @@ class SilverEntity:
         source: str,
     ) -> Dict[str, Any]:
         """Write to Silver target with metadata and checksums."""
-        from pipelines.lib.io import write_silver_with_artifacts
+        from pipelines.lib.checksum import (
+            compute_bytes_sha256,
+            write_checksum_manifest_s3,
+        )
+        from pipelines.lib.io import OutputMetadata, infer_column_types, write_silver_with_artifacts
+        from pipelines.lib.storage import get_storage
 
         # Execute count before writing (Ibis is lazy)
         row_count = t.count().execute()
@@ -506,26 +511,79 @@ class SilverEntity:
                 "target": target,
             }
 
-        # For S3, use standard Ibis write (checksums not applicable)
-        if target.startswith("s3://"):
+        # For S3, write data with metadata and checksums
+        if target.startswith("s3://") or target.startswith("abfs://"):
+            storage = get_storage(target)
+            storage.makedirs("")
+
             write_opts = {}
             if self.partition_by:
                 write_opts["partition_by"] = self.partition_by
 
+            # Write parquet file
+            parquet_filename = "data.parquet"
             written_files = []
             if "parquet" in self.output_formats:
-                t.to_parquet(target, **write_opts)
-                written_files.append(target)
+                output_file = target.rstrip("/") + f"/{parquet_filename}"
+                t.to_parquet(output_file, **write_opts)
+                written_files.append(output_file)
+
+            # Infer column types for metadata
+            columns = infer_column_types(t, include_sql_types=False)
+            now = datetime.now(timezone.utc).isoformat()
+
+            # Write metadata to cloud storage
+            metadata = OutputMetadata(
+                row_count=int(row_count),
+                columns=columns,
+                written_at=now,
+                run_date=run_date,
+                data_files=[parquet_filename],
+                extra={
+                    "entity_kind": self.entity_kind.value,
+                    "history_mode": self.history_mode.value,
+                    "natural_keys": self.natural_keys,
+                    "change_timestamp": self.change_timestamp,
+                    "source_path": source,
+                },
+            )
+            storage.write_text("_metadata.json", metadata.to_json())
+            logger.debug("silver_metadata_written", target=target)
+
+            # Write checksums to cloud storage
+            try:
+                # Read parquet file back to compute checksum
+                parquet_data = storage.read_bytes(parquet_filename)
+                file_checksum_data = [{
+                    "path": parquet_filename,
+                    "size_bytes": len(parquet_data),
+                    "sha256": compute_bytes_sha256(parquet_data),
+                }]
+                write_checksum_manifest_s3(
+                    storage,
+                    file_checksum_data,
+                    entity_kind=self.entity_kind.value,
+                    history_mode=self.history_mode.value,
+                    row_count=int(row_count),
+                    extra_metadata={
+                        "natural_keys": self.natural_keys,
+                    },
+                )
+                logger.debug("silver_checksums_written", target=target)
+            except Exception as e:
+                logger.warning("silver_checksum_write_failed", error=str(e))
 
             logger.info("silver_curation_complete", row_count=row_count, target=target)
 
             return {
-                "row_count": row_count,
+                "row_count": int(row_count),
                 "target": target,
                 "columns": list(t.columns),
                 "entity_kind": self.entity_kind.value,
                 "history_mode": self.history_mode.value,
                 "files": written_files,
+                "metadata_file": "_metadata.json",
+                "checksums_file": "_checksums.json",
             }
 
         # For local filesystem, use enhanced write with artifacts
