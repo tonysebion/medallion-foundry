@@ -739,7 +739,8 @@ class PipelineFromYAML:
 
         if bronze and silver and not silver.target_path:
             # Auto-generate Silver target using Hive-style partitioning for consistency
-            silver.target_path = f"./silver/system={bronze.system}/entity={bronze.entity}/"
+            # Include dt={run_date} to match Bronze date partitioning
+            silver.target_path = f"./silver/system={bronze.system}/entity={bronze.entity}/dt={{run_date}}/"
 
         # Auto-wire input_mode from Bronze to Silver if not explicitly set
         if bronze and silver and silver.input_mode is None and bronze.input_mode is not None:

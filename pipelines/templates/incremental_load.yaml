@@ -47,6 +47,6 @@ bronze:
 silver:
   natural_keys: [OrderID]           # Primary key column(s)
   change_timestamp: LastUpdated     # When was the record changed?
-  # target_path auto-generates: ./silver/system=your_system/entity=your_entity/
-  # For S3: target_path: "s3://bucket/silver/your_system/your_entity/"
+  # target_path auto-generates: ./silver/system=your_system/entity=your_entity/dt={run_date}/
+  # For S3: target_path: "s3://bucket/silver/system=your_system/entity=your_entity/dt={run_date}/"
   history_mode: full_history        # Keep all versions (SCD Type 2)

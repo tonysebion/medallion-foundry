@@ -65,7 +65,7 @@ bronze:
 silver:
   natural_keys: [contact_id]
   change_timestamp: updated_at
-  # target_path auto-generates: ./silver/system=crm/entity=contacts/
+  # target_path auto-generates: ./silver/system=crm/entity=contacts/dt={run_date}/
   entity_kind: state
   history_mode: current_only
   attributes:

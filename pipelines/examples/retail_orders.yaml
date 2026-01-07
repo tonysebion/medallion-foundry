@@ -21,7 +21,7 @@
 #
 # Output:
 #   bronze/system=retail/entity=orders/dt=2025-01-15/
-#   silver/orders/
+#   silver/system=retail/entity=orders/dt=2025-01-15/
 
 name: retail_orders
 description: Load retail orders from CSV and curate with SCD Type 1
@@ -36,7 +36,7 @@ bronze:
 silver:
   natural_keys: [order_id]
   change_timestamp: updated_at
-  # target_path defaults to: ./silver/system=retail/entity=orders/
+  # target_path defaults to: ./silver/system=retail/entity=orders/dt={run_date}/
   attributes:
     - customer_id
     - order_total

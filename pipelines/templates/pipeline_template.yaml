@@ -189,14 +189,14 @@ silver:
   # ============================================================
   # STORAGE OUTPUT: Where to write Silver data (optional)
   # ============================================================
-  # If omitted, auto-generates: ./silver/system=your_system/entity=your_entity/
+  # If omitted, auto-generates: ./silver/system=your_system/entity=your_entity/dt={run_date}/
 
   # AWS S3:
-  # target_path: "s3://my-bucket/silver/your_system/your_entity/"
+  # target_path: "s3://my-bucket/silver/system=your_system/entity=your_entity/dt={run_date}/"
 
   # S3-Compatible (MinIO, Nutanix):
-  # target_path: "s3://my-bucket/silver/your_system/your_entity/"
+  # target_path: "s3://my-bucket/silver/system=your_system/entity=your_entity/dt={run_date}/"
   # (Same options and env vars as Bronze section above)
 
   # Azure Data Lake Storage (ADLS):
-  # target_path: "abfss://container@account.dfs.core.windows.net/silver/your_system/your_entity/"
+  # target_path: "abfss://container@account.dfs.core.windows.net/silver/system=your_system/entity=your_entity/dt={run_date}/"

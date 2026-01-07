@@ -218,7 +218,7 @@ class TestYamlPipelineS3:
 
         # ===== Step 2: Create pipeline YAML =====
         bronze_target = f"s3://{MINIO_BUCKET}/{test_prefix}/bronze/system={{system}}/entity={{entity}}/dt={{run_date}}/"
-        silver_target = f"s3://{MINIO_BUCKET}/{test_prefix}/silver/retail/orders/"
+        silver_target = f"s3://{MINIO_BUCKET}/{test_prefix}/silver/system=retail/entity=orders/dt={{run_date}}/"
 
         yaml_file = tmp_path / "pipelines" / "test_pipeline.yaml"
         create_pipeline_yaml(
@@ -278,7 +278,7 @@ class TestYamlPipelineS3:
         assert any(f.endswith(".parquet") for f in bronze_files), "Bronze should write parquet file"
 
         # List Silver files
-        silver_path = f"{test_prefix}/silver/retail/orders"
+        silver_path = f"{test_prefix}/silver/system=retail/entity=orders/dt={run_date}"
         silver_files = []
         for page in paginator.paginate(Bucket=MINIO_BUCKET, Prefix=silver_path):
             silver_files.extend([obj["Key"] for obj in page.get("Contents", [])])

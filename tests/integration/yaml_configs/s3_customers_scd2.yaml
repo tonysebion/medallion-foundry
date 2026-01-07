@@ -28,7 +28,7 @@ bronze:
 
 silver:
   source_path: "s3://{bucket}/{prefix}/bronze/system=crm/entity=customers/dt={run_date}/*.parquet"
-  target_path: "s3://{bucket}/{prefix}/silver/crm/customers/"
+  target_path: "s3://{bucket}/{prefix}/silver/system=crm/entity=customers/dt={run_date}/"
   natural_keys: [customer_id]
   change_timestamp: updated_at
   entity_kind: state

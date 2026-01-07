@@ -72,9 +72,9 @@ bronze:
 silver:
   natural_keys: [OrderDetailID]
   change_timestamp: UpdatedAt
-  # target_path auto-generates: ./silver/system=sales_dw/entity=order_details/
+  # target_path auto-generates: ./silver/system=sales_dw/entity=order_details/dt={run_date}/
   # For AWS S3:
-  # target_path: "s3://data-lake/silver/sales_dw/order_details/"
+  # target_path: "s3://data-lake/silver/system=sales_dw/entity=order_details/dt={run_date}/"
   attributes:
     - OrderID
     - ProductID

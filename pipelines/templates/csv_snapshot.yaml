@@ -27,7 +27,7 @@ bronze:
 silver:
   natural_keys: [id]            # What makes a record unique?
   change_timestamp: updated_at  # When was the record last changed?
-  # target_path auto-generates: ./silver/system=your_system/entity=your_entity/
-  # For S3: target_path: "s3://bucket/silver/your_system/your_entity/"
+  # target_path auto-generates: ./silver/system=your_system/entity=your_entity/dt={run_date}/
+  # For S3: target_path: "s3://bucket/silver/system=your_system/entity=your_entity/dt={run_date}/"
   # entity_kind defaults to state
   # history_mode defaults to current_only (SCD Type 1)

@@ -113,8 +113,8 @@ bronze:
 silver:
   natural_keys: [id]
   change_timestamp: updated_at
-  # target_path auto-generates: ./silver/system=your_system/entity=your_entity/
-  # For S3: target_path: "s3://bucket/silver/your_system/your_entity/"
+  # target_path auto-generates: ./silver/system=your_system/entity=your_entity/dt={run_date}/
+  # For S3: target_path: "s3://bucket/silver/system=your_system/entity=your_entity/dt={run_date}/"
   # attributes:
   #   - name
   #   - status

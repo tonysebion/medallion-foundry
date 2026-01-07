@@ -31,7 +31,7 @@ bronze:
 
 silver:
   source_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt=*/*.parquet"
-  target_path: "s3://{bucket}/{prefix}/silver/system={system}/entity={entity}/"
+  target_path: "s3://{bucket}/{prefix}/silver/system={system}/entity={entity}/dt={run_date}/"
   natural_keys: [{natural_key}]
   change_timestamp: {change_timestamp}
   entity_kind: state

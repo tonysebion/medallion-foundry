@@ -116,8 +116,8 @@ SILVER_MODEL_PRESETS: dict[str, dict[str, str]] = {
 
 
 # Default target path template - can be overridden
-# Includes system= for consistency with Bronze layer
-DEFAULT_SILVER_TARGET = "./silver/system={system}/entity={entity}/"
+# Includes system= and dt= for consistency with Bronze layer
+DEFAULT_SILVER_TARGET = "./silver/system={system}/entity={entity}/dt={run_date}/"
 
 
 @dataclass
