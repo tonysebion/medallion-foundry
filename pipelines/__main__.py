@@ -582,7 +582,7 @@ def check_pipeline(module: Any, layer: Optional[str], run_date: str) -> None:
 
     Performs pre-flight checks without executing the pipeline.
     """
-    from pipelines.lib.validate import (
+    from pipelines.lib.config_loader import (
         validate_bronze_source,
         validate_silver_entity,
         format_validation_report,

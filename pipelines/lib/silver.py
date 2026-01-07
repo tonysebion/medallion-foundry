@@ -327,7 +327,7 @@ class SilverEntity:
             ... else:
             ...     print("Configuration is valid")
         """
-        from pipelines.lib.validate import validate_silver_entity
+        from pipelines.lib.config_loader import validate_silver_entity
 
         issues: List[str] = []
 

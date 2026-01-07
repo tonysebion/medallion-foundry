@@ -4,7 +4,7 @@ import pytest
 
 from pipelines.lib.bronze import BronzeSource, LoadPattern, SourceType
 from pipelines.lib.silver import EntityKind, HistoryMode, SilverEntity
-from pipelines.lib.validate import (
+from pipelines.lib.config_loader import (
     ValidationSeverity,
     format_validation_report,
     validate_and_raise,

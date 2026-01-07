@@ -36,7 +36,6 @@ from pipelines.lib._path_utils import (
     resolve_target_path,
     storage_path_exists,
 )
-from pipelines.lib.validate import validate_and_raise
 from pipelines.lib.observability import get_structlog_logger
 
 # Use structlog for structured logging with pipeline context
@@ -306,7 +305,8 @@ class BronzeSource:
         # Top-level params take precedence over options dict
         self._merge_top_level_params()
 
-        # Validate configuration
+        # Validate configuration (local import to avoid circular import)
+        from pipelines.lib.config_loader import validate_and_raise
         try:
             validate_and_raise(source=self)
         except ValueError as exc:
@@ -363,7 +363,7 @@ class BronzeSource:
             ... else:
             ...     print("Configuration is valid")
         """
-        from pipelines.lib.validate import validate_bronze_source
+        from pipelines.lib.config_loader import validate_bronze_source
 
         issues: List[str] = []
 

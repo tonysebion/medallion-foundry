@@ -8,9 +8,8 @@ Provides full-featured REST API extraction with:
 - Watermark-based incremental extraction
 
 Example:
-    from pipelines.lib.api import ApiSource
-    from pipelines.lib.auth import AuthConfig, AuthType
-    from pipelines.lib.pagination import PaginationConfig, PaginationStrategy
+    from pipelines.lib.api import ApiSource, AuthConfig, AuthType
+    from pipelines.lib.api import PaginationConfig, PaginationStrategy
 
     source = ApiSource(
         system="github",
@@ -37,11 +36,15 @@ Example:
 from __future__ import annotations
 
 import logging
+import threading
 import time
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from enum import Enum
+from functools import wraps
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
 
 import httpx
 import requests_toolbelt
@@ -56,21 +59,692 @@ from tenacity import (
 )
 
 from pipelines.lib._path_utils import path_has_data, resolve_target_path
-from pipelines.lib.auth import AuthConfig, build_auth_headers
 from pipelines.lib.checksum import write_checksum_manifest
 from pipelines.lib.env import expand_env_vars, expand_options
 from pipelines.lib.io import OutputMetadata, infer_column_types, maybe_dry_run, maybe_skip_if_exists
-from pipelines.lib.pagination import (
-    PagePaginationState,
-    PaginationConfig,
-    PaginationStrategy,
-    build_pagination_config_from_dict,
-    build_pagination_state,
-)
-from pipelines.lib.rate_limiter import RateLimiter
 from pipelines.lib.state import get_watermark, save_watermark
 
 logger = logging.getLogger(__name__)
+
+# ============================================================================
+# Authentication (formerly auth.py)
+# ============================================================================
+
+
+class AuthType(Enum):
+    """Supported API authentication methods."""
+
+    NONE = "none"
+    BEARER = "bearer"
+    API_KEY = "api_key"
+    BASIC = "basic"
+
+
+@dataclass
+class AuthConfig:
+    """Configuration for API authentication.
+
+    All credential fields support environment variable expansion using
+    ${VAR_NAME} syntax. Use this instead of hardcoding secrets.
+
+    Examples:
+        # No authentication
+        auth = AuthConfig(auth_type=AuthType.NONE)
+
+        # Bearer token
+        auth = AuthConfig(
+            auth_type=AuthType.BEARER,
+            token="${API_TOKEN}",
+        )
+
+        # API key in header
+        auth = AuthConfig(
+            auth_type=AuthType.API_KEY,
+            api_key="${API_KEY}",
+            api_key_header="X-API-Key",
+        )
+
+        # Basic auth
+        auth = AuthConfig(
+            auth_type=AuthType.BASIC,
+            username="${API_USER}",
+            password="${API_PASSWORD}",
+        )
+    """
+
+    auth_type: AuthType = AuthType.NONE
+
+    # Bearer token authentication
+    token: Optional[str] = None
+
+    # API key authentication
+    api_key: Optional[str] = None
+    api_key_header: str = "X-API-Key"
+
+    # Basic authentication
+    username: Optional[str] = None
+    password: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Validate configuration based on auth type."""
+        if self.auth_type == AuthType.BEARER and not self.token:
+            raise ValueError("Bearer authentication requires 'token' to be set")
+        if self.auth_type == AuthType.API_KEY and not self.api_key:
+            raise ValueError("API key authentication requires 'api_key' to be set")
+        if self.auth_type == AuthType.BASIC and not (self.username and self.password):
+            raise ValueError(
+                "Basic authentication requires both 'username' and 'password'"
+            )
+
+
+def build_auth_headers(
+    config: Optional[AuthConfig],
+    *,
+    extra_headers: Optional[Dict[str, str]] = None,
+) -> Tuple[Dict[str, str], Optional[Tuple[str, str]]]:
+    """Build HTTP headers and auth tuple from authentication config.
+
+    Args:
+        config: Authentication configuration (None = no auth)
+        extra_headers: Additional headers to include
+
+    Returns:
+        Tuple of (headers dict, optional basic auth tuple)
+
+    Raises:
+        ValueError: If environment variables cannot be resolved
+
+    Example:
+        auth = AuthConfig(auth_type=AuthType.BEARER, token="${MY_TOKEN}")
+        headers, auth_tuple = build_auth_headers(auth)
+        response = requests.get(url, headers=headers, auth=auth_tuple)
+    """
+    headers: Dict[str, str] = {"Accept": "application/json"}
+    auth_tuple: Optional[Tuple[str, str]] = None
+
+    if config is None or config.auth_type == AuthType.NONE:
+        logger.debug("No authentication configured")
+
+    elif config.auth_type == AuthType.BEARER:
+        token = expand_env_vars(config.token or "", strict=True)
+        if not token:
+            raise ValueError("Bearer token resolved to empty string")
+        headers["Authorization"] = f"Bearer {token}"
+        logger.debug("Added bearer token authentication")
+
+    elif config.auth_type == AuthType.API_KEY:
+        api_key = expand_env_vars(config.api_key or "", strict=True)
+        if not api_key:
+            raise ValueError("API key resolved to empty string")
+        headers[config.api_key_header] = api_key
+        logger.debug("Added API key authentication in header '%s'", config.api_key_header)
+
+    elif config.auth_type == AuthType.BASIC:
+        username = expand_env_vars(config.username or "", strict=True)
+        password = expand_env_vars(config.password or "", strict=True)
+        if not (username and password):
+            raise ValueError("Basic auth username or password resolved to empty string")
+        auth_tuple = (username, password)
+        logger.debug("Prepared basic authentication")
+
+    # Add any extra headers
+    if extra_headers:
+        # Expand env vars in extra headers too
+        for key, value in extra_headers.items():
+            headers[key] = expand_env_vars(value, strict=False)
+
+    return headers, auth_tuple
+
+
+def build_auth_headers_from_dict(
+    api_options: Dict[str, str],
+) -> Tuple[Dict[str, str], Optional[Tuple[str, str]]]:
+    """Build auth headers from a dictionary of options.
+
+    This is a convenience function for building AuthConfig from
+    the options dict commonly used in BronzeSource.
+
+    Expected keys:
+        - auth_type: "none", "bearer", "api_key", "basic"
+        - token: Bearer token (for auth_type=bearer)
+        - api_key: API key value (for auth_type=api_key)
+        - api_key_header: Header name for API key (default: X-API-Key)
+        - username: Username (for auth_type=basic)
+        - password: Password (for auth_type=basic)
+
+    Args:
+        api_options: Dictionary with auth configuration
+
+    Returns:
+        Tuple of (headers dict, optional basic auth tuple)
+    """
+    auth_type_str = api_options.get("auth_type", "none").lower()
+
+    try:
+        auth_type = AuthType(auth_type_str)
+    except ValueError:
+        raise ValueError(
+            f"Unsupported auth_type: '{auth_type_str}'. "
+            f"Use 'bearer', 'api_key', 'basic', or 'none'"
+        )
+
+    config = AuthConfig(
+        auth_type=auth_type,
+        token=api_options.get("token"),
+        api_key=api_options.get("api_key"),
+        api_key_header=api_options.get("api_key_header", "X-API-Key"),
+        username=api_options.get("username"),
+        password=api_options.get("password"),
+    )
+
+    raw_headers: Any = api_options.get("headers", {})
+    extra_headers: Dict[str, str] = raw_headers if isinstance(raw_headers, dict) else {}
+    return build_auth_headers(config, extra_headers=extra_headers)
+
+
+# ============================================================================
+# Pagination (formerly pagination.py)
+# ============================================================================
+
+
+class PaginationStrategy(Enum):
+    """Supported pagination strategies."""
+
+    NONE = "none"
+    OFFSET = "offset"
+    PAGE = "page"
+    CURSOR = "cursor"
+
+
+@dataclass
+class PaginationConfig:
+    """Configuration for API pagination.
+
+    Examples:
+        # No pagination (single request)
+        config = PaginationConfig(strategy=PaginationStrategy.NONE)
+
+        # Offset pagination (offset/limit params)
+        config = PaginationConfig(
+            strategy=PaginationStrategy.OFFSET,
+            page_size=100,
+            offset_param="offset",
+            limit_param="limit",
+        )
+
+        # Page pagination (page/per_page params)
+        config = PaginationConfig(
+            strategy=PaginationStrategy.PAGE,
+            page_size=50,
+            page_param="page",
+            page_size_param="per_page",
+            max_pages=10,  # Optional limit
+        )
+
+        # Cursor pagination (cursor-based)
+        config = PaginationConfig(
+            strategy=PaginationStrategy.CURSOR,
+            cursor_param="cursor",
+            cursor_path="meta.next_cursor",
+        )
+    """
+
+    strategy: PaginationStrategy = PaginationStrategy.NONE
+    page_size: int = 100
+
+    # Offset pagination params
+    offset_param: str = "offset"
+    limit_param: str = "limit"
+
+    # Page pagination params
+    page_param: str = "page"
+    page_size_param: str = "page_size"
+    max_pages: Optional[int] = None
+
+    # Cursor pagination params
+    cursor_param: str = "cursor"
+    cursor_path: str = "next_cursor"
+
+    # Global limit (stop after this many records regardless of pagination)
+    max_records: int = 0  # 0 = unlimited
+
+
+class PaginationState(ABC):
+    """Base class for pagination state machines.
+
+    Pagination states track the progress through paginated API responses
+    and build the appropriate query parameters for each request.
+    """
+
+    def __init__(
+        self,
+        config: PaginationConfig,
+        base_params: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Initialize pagination state.
+
+        Args:
+            config: Pagination configuration
+            base_params: Additional query parameters to include in every request
+        """
+        self.config = config
+        self.base_params = dict(base_params or {})
+        self.max_records = config.max_records
+
+    @abstractmethod
+    def should_fetch_more(self) -> bool:
+        """Check if more pages should be fetched.
+
+        Returns:
+            True if there are more pages to fetch
+        """
+        ...
+
+    @abstractmethod
+    def build_params(self) -> Dict[str, Any]:
+        """Build query parameters for the current page.
+
+        Returns:
+            Dictionary of query parameters
+        """
+        ...
+
+    @abstractmethod
+    def on_response(self, records: List[Dict[str, Any]], data: Any) -> bool:
+        """Process a page response and update state.
+
+        Args:
+            records: Records extracted from the response
+            data: Full response data (for cursor extraction)
+
+        Returns:
+            True if there are more pages to fetch
+        """
+        ...
+
+    @abstractmethod
+    def describe(self) -> str:
+        """Get a human-readable description of current pagination state.
+
+        Returns:
+            Description string for logging
+        """
+        ...
+
+
+class NoPaginationState(PaginationState):
+    """State for single-request (non-paginated) APIs."""
+
+    def __init__(
+        self,
+        config: PaginationConfig,
+        base_params: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        super().__init__(config, base_params)
+        self._fetched = False
+
+    def should_fetch_more(self) -> bool:
+        return not self._fetched
+
+    def build_params(self) -> Dict[str, Any]:
+        return dict(self.base_params)
+
+    def on_response(self, records: List[Dict[str, Any]], data: Any) -> bool:
+        self._fetched = True
+        return False
+
+    def describe(self) -> str:
+        return "(no pagination)"
+
+
+class OffsetPaginationState(PaginationState):
+    """State for offset/limit pagination.
+
+    Typical API pattern:
+        GET /items?offset=0&limit=100
+        GET /items?offset=100&limit=100
+        ...
+    """
+
+    def __init__(
+        self,
+        config: PaginationConfig,
+        base_params: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        super().__init__(config, base_params)
+        self.offset = 0
+        self._last_offset = 0
+
+    def should_fetch_more(self) -> bool:
+        return True  # Controlled by on_response
+
+    def build_params(self) -> Dict[str, Any]:
+        params = dict(self.base_params)
+        params[self.config.limit_param] = self.config.page_size
+        params[self.config.offset_param] = self.offset
+        self._last_offset = self.offset
+        return params
+
+    def on_response(self, records: List[Dict[str, Any]], data: Any) -> bool:
+        if not records or len(records) < self.config.page_size:
+            return False
+        self.offset += self.config.page_size
+        return True
+
+    def describe(self) -> str:
+        return f"at offset {self._last_offset}"
+
+
+class PagePaginationState(PaginationState):
+    """State for page number pagination.
+
+    Typical API pattern:
+        GET /items?page=1&page_size=100
+        GET /items?page=2&page_size=100
+        ...
+    """
+
+    def __init__(
+        self,
+        config: PaginationConfig,
+        base_params: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        super().__init__(config, base_params)
+        self.page = 1
+        self._last_page = 1
+        self._max_pages_reached = False
+
+    def should_fetch_more(self) -> bool:
+        if self.config.max_pages and self.page > self.config.max_pages:
+            self._max_pages_reached = True
+            return False
+        return True
+
+    def build_params(self) -> Dict[str, Any]:
+        params = dict(self.base_params)
+        params[self.config.page_param] = self.page
+        params[self.config.page_size_param] = self.config.page_size
+        self._last_page = self.page
+        return params
+
+    def on_response(self, records: List[Dict[str, Any]], data: Any) -> bool:
+        if not records or len(records) < self.config.page_size:
+            return False
+        self.page += 1
+        return True
+
+    def describe(self) -> str:
+        return f"from page {self._last_page}"
+
+    @property
+    def max_pages_limit_hit(self) -> bool:
+        """Check if max_pages limit was reached."""
+        return self._max_pages_reached
+
+
+class CursorPaginationState(PaginationState):
+    """State for cursor-based pagination.
+
+    Typical API pattern:
+        GET /items
+        -> Response: {"items": [...], "next_cursor": "abc123"}
+        GET /items?cursor=abc123
+        -> Response: {"items": [...], "next_cursor": "def456"}
+        ...
+    """
+
+    def __init__(
+        self,
+        config: PaginationConfig,
+        base_params: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        super().__init__(config, base_params)
+        self.cursor: Optional[str] = None
+
+    def should_fetch_more(self) -> bool:
+        return True  # Controlled by on_response
+
+    def build_params(self) -> Dict[str, Any]:
+        params = dict(self.base_params)
+        if self.cursor:
+            params[self.config.cursor_param] = self.cursor
+        return params
+
+    def on_response(self, records: List[Dict[str, Any]], data: Any) -> bool:
+        if not records:
+            return False
+        self.cursor = self._extract_cursor(data)
+        return bool(self.cursor)
+
+    def describe(self) -> str:
+        if self.cursor:
+            return f"(cursor={self.cursor[:20]}...)" if len(self.cursor) > 20 else f"(cursor={self.cursor})"
+        return "(cursor pagination, first page)"
+
+    def _extract_cursor(self, data: Any) -> Optional[str]:
+        """Extract next cursor from response data.
+
+        Supports nested paths like "meta.pagination.next_cursor".
+        """
+        if not isinstance(data, dict):
+            return None
+
+        obj: Any = data
+        for key in self.config.cursor_path.split("."):
+            if isinstance(obj, dict):
+                obj = obj.get(key)
+            else:
+                return None
+            if obj is None:
+                return None
+
+        if isinstance(obj, str):
+            return obj
+        elif obj is not None:
+            # Try to convert to string
+            return str(obj)
+        return None
+
+
+def build_pagination_state(
+    config: PaginationConfig,
+    base_params: Optional[Dict[str, Any]] = None,
+) -> PaginationState:
+    """Create appropriate pagination state from configuration.
+
+    Args:
+        config: Pagination configuration
+        base_params: Additional query parameters for every request
+
+    Returns:
+        Appropriate PaginationState subclass instance
+    """
+    if config.strategy == PaginationStrategy.OFFSET:
+        return OffsetPaginationState(config, base_params)
+    elif config.strategy == PaginationStrategy.PAGE:
+        return PagePaginationState(config, base_params)
+    elif config.strategy == PaginationStrategy.CURSOR:
+        return CursorPaginationState(config, base_params)
+    else:
+        return NoPaginationState(config, base_params)
+
+
+def build_pagination_config_from_dict(
+    options: Dict[str, Any],
+) -> PaginationConfig:
+    """Build PaginationConfig from a dictionary of options.
+
+    Convenience function for creating config from BronzeSource options.
+
+    Expected keys:
+        - pagination_type: "none", "offset", "page", "cursor"
+        - page_size: Number of records per page (default: 100)
+        - offset_param: Query param for offset (default: "offset")
+        - limit_param: Query param for limit (default: "limit")
+        - page_param: Query param for page number (default: "page")
+        - page_size_param: Query param for page size (default: "page_size")
+        - max_pages: Maximum pages to fetch (default: None)
+        - cursor_param: Query param for cursor (default: "cursor")
+        - cursor_path: Path to cursor in response (default: "next_cursor")
+        - max_records: Stop after this many records (default: 0 = unlimited)
+
+    Args:
+        options: Dictionary with pagination options
+
+    Returns:
+        PaginationConfig instance
+    """
+    pagination_type = options.get("pagination_type", "none").lower()
+
+    try:
+        strategy = PaginationStrategy(pagination_type)
+    except ValueError:
+        raise ValueError(
+            f"Unsupported pagination_type: '{pagination_type}'. "
+            f"Use 'offset', 'page', 'cursor', or 'none'"
+        )
+
+    return PaginationConfig(
+        strategy=strategy,
+        page_size=options.get("page_size", 100),
+        offset_param=options.get("offset_param", "offset"),
+        limit_param=options.get("limit_param", "limit"),
+        page_param=options.get("page_param", "page"),
+        page_size_param=options.get("page_size_param", "page_size"),
+        max_pages=options.get("max_pages"),
+        cursor_param=options.get("cursor_param", "cursor"),
+        cursor_path=options.get("cursor_path", "next_cursor"),
+        max_records=options.get("max_records", 0),
+    )
+
+
+# ============================================================================
+# Rate Limiting (formerly rate_limiter.py)
+# ============================================================================
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+class RateLimiter:
+    """Token-bucket rate limiter.
+
+    Limits the rate of operations to a specified number per second.
+    Thread-safe for concurrent usage.
+
+    Example:
+        limiter = RateLimiter(requests_per_second=10)
+
+        for item in items:
+            limiter.acquire()  # Blocks until allowed
+            make_api_call(item)
+    """
+
+    def __init__(
+        self,
+        requests_per_second: float,
+        *,
+        burst_size: int | None = None,
+    ) -> None:
+        """Initialize rate limiter.
+
+        Args:
+            requests_per_second: Maximum sustained rate
+            burst_size: Maximum burst capacity (defaults to 1)
+        """
+        self.rate = requests_per_second
+        self.burst_size = burst_size or 1
+        self.tokens = float(self.burst_size)
+        self.last_update = time.monotonic()
+        self._lock = threading.Lock()
+
+    def acquire(self, timeout: float | None = None) -> bool:
+        """Acquire a token, blocking until available.
+
+        Args:
+            timeout: Maximum time to wait (None = wait forever)
+
+        Returns:
+            True if token acquired, False if timeout expired
+        """
+        start_time = time.monotonic()
+
+        while True:
+            with self._lock:
+                self._refill_tokens()
+
+                if self.tokens >= 1:
+                    self.tokens -= 1
+                    return True
+
+                # Calculate wait time for next token
+                wait_time = (1 - self.tokens) / self.rate
+
+            # Check timeout
+            if timeout is not None:
+                elapsed = time.monotonic() - start_time
+                if elapsed + wait_time > timeout:
+                    return False
+
+            # Wait and retry
+            time.sleep(min(wait_time, 0.1))  # Cap wait at 100ms increments
+
+    def _refill_tokens(self) -> None:
+        """Refill tokens based on elapsed time."""
+        now = time.monotonic()
+        elapsed = now - self.last_update
+        self.tokens = min(
+            self.burst_size,
+            self.tokens + elapsed * self.rate,
+        )
+        self.last_update = now
+
+    def try_acquire(self) -> bool:
+        """Try to acquire a token without blocking.
+
+        Returns:
+            True if token acquired, False if not available
+        """
+        with self._lock:
+            self._refill_tokens()
+            if self.tokens >= 1:
+                self.tokens -= 1
+                return True
+            return False
+
+
+def rate_limited(
+    requests_per_second: float,
+    *,
+    burst_size: int | None = None,
+) -> Callable[[F], F]:
+    """Decorator to rate-limit a function.
+
+    Example:
+        @rate_limited(10)  # 10 requests per second
+        def call_api(item):
+            return requests.get(f"https://api.example.com/{item}")
+
+        # Can also be used with burst capacity
+        @rate_limited(5, burst_size=10)  # 5 RPS sustained, burst of 10
+        def call_api(item):
+            ...
+    """
+    limiter = RateLimiter(requests_per_second, burst_size=burst_size)
+
+    def decorator(fn: F) -> F:
+        @wraps(fn)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            limiter.acquire()
+            return fn(*args, **kwargs)
+
+        return wrapper  # type: ignore[return-value]
+
+    return decorator
+
+
+# ============================================================================
+# API Source
+# ============================================================================
 
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
@@ -84,7 +758,30 @@ _USER_AGENT = user_agent(
     ],
 )
 
-__all__ = ["ApiSource", "ApiOutputMetadata"]
+__all__ = [
+    # Authentication
+    "AuthType",
+    "AuthConfig",
+    "build_auth_headers",
+    "build_auth_headers_from_dict",
+    # Pagination
+    "PaginationStrategy",
+    "PaginationConfig",
+    "PaginationState",
+    "NoPaginationState",
+    "OffsetPaginationState",
+    "PagePaginationState",
+    "CursorPaginationState",
+    "build_pagination_state",
+    "build_pagination_config_from_dict",
+    # Rate Limiting
+    "RateLimiter",
+    "rate_limited",
+    # API Source
+    "ApiSource",
+    "ApiOutputMetadata",
+    "create_api_source_from_options",
+]
 
 # Backwards compatibility: ApiOutputMetadata is now OutputMetadata
 ApiOutputMetadata = OutputMetadata
@@ -704,8 +1401,6 @@ def create_api_source_from_options(
     Returns:
         Configured ApiSource instance
     """
-    from pipelines.lib.auth import AuthConfig, AuthType
-
     # Build auth config
     auth_type_str = options.get("auth_type", "none").lower()
     try:
