@@ -49,6 +49,55 @@ __all__ = ["BronzeOutputMetadata", "BronzeSource", "InputMode", "LoadPattern", "
 BronzeOutputMetadata = OutputMetadata
 
 
+def _extract_storage_options(options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Extract S3/ADLS storage options from pipeline options.
+
+    Maps YAML option names to storage backend option names:
+    - s3_signature_version -> signature_version
+    - s3_addressing_style -> addressing_style
+    - endpoint_url, key, secret, region -> passed through
+
+    Args:
+        options: Pipeline options dict (from YAML config or Python)
+
+    Returns:
+        Dict of storage backend options
+    """
+    import os
+
+    if not options:
+        return {}
+
+    storage_opts: Dict[str, Any] = {}
+
+    # Map YAML option names to storage backend option names
+    yaml_to_storage = {
+        "s3_signature_version": "signature_version",
+        "s3_addressing_style": "addressing_style",
+    }
+
+    for yaml_key, storage_key in yaml_to_storage.items():
+        if yaml_key in options:
+            storage_opts[storage_key] = options[yaml_key]
+
+    # Pass through standard S3 options (also check environment variables)
+    pass_through = ["endpoint_url", "key", "secret", "region"]
+    env_mapping = {
+        "endpoint_url": "AWS_ENDPOINT_URL",
+        "key": "AWS_ACCESS_KEY_ID",
+        "secret": "AWS_SECRET_ACCESS_KEY",
+        "region": "AWS_REGION",
+    }
+
+    for key in pass_through:
+        if key in options:
+            storage_opts[key] = options[key]
+        elif env_mapping.get(key) and os.environ.get(env_mapping[key]):
+            storage_opts[key] = os.environ[env_mapping[key]]
+
+    return storage_opts
+
+
 def _configure_duckdb_s3(con: ibis.BaseBackend, options: Optional[Dict[str, Any]] = None) -> None:
     """Configure DuckDB's httpfs extension for S3/MinIO access.
 
@@ -818,7 +867,8 @@ class BronzeSource:
 
         if scheme in ("s3", "abfs"):
             # Cloud storage - use storage backend for metadata writes
-            storage = get_storage(target)
+            storage_opts = _extract_storage_options(self.options)
+            storage = get_storage(target, **storage_opts)
             storage.makedirs("")  # Ensure target exists
             # Only pass partition_by if not empty (DuckDB doesn't handle empty list well)
             parquet_filename = f"{self.entity}.parquet"

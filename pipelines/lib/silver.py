@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional
 
 import ibis
 
-from pipelines.lib.bronze import _configure_duckdb_s3, InputMode
+from pipelines.lib.bronze import _configure_duckdb_s3, _extract_storage_options, InputMode
 from pipelines.lib.curate import apply_cdc, build_history, dedupe_latest
 from pipelines.lib.io import maybe_dry_run
 from pipelines.lib._path_utils import resolve_target_path, storage_path_exists
@@ -188,6 +188,10 @@ class SilverEntity:
 
     # Validation options
     validate_source: str = "skip"  # "skip", "warn", or "strict"
+
+    # Storage options (for S3-compatible storage like Nutanix Objects)
+    # Maps to: signature_version, addressing_style, endpoint_url, key, secret, region
+    storage_options: Optional[Dict[str, Any]] = None
 
     # Internal flag to track if this entity is used standalone or with Pipeline
     _standalone: bool = field(default=True, repr=False)
@@ -469,25 +473,16 @@ class SilverEntity:
         if "*" in source or "?" in source:
             if source.startswith("s3://"):
                 # Use S3Storage for S3 glob operations
-                import os
                 from pipelines.lib.storage import S3Storage
 
                 # Extract bucket from source path
                 s3_path = source[5:]  # Remove s3://
                 bucket = s3_path.split("/")[0]
 
-                # Build storage options from environment
-                storage_options = {}
-                endpoint_url = os.environ.get("AWS_ENDPOINT_URL")
-                if endpoint_url:
-                    storage_options["endpoint_url"] = endpoint_url
-                access_key = os.environ.get("AWS_ACCESS_KEY_ID")
-                secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
-                if access_key and secret_key:
-                    storage_options["key"] = access_key
-                    storage_options["secret"] = secret_key
+                # Build storage options from self.storage_options and environment
+                storage_opts = _extract_storage_options(self.storage_options)
 
-                storage = S3Storage(f"s3://{bucket}/", **storage_options)
+                storage = S3Storage(f"s3://{bucket}/", **storage_opts)
                 matches = storage.glob(source)
 
                 if not matches:
@@ -681,7 +676,10 @@ class SilverEntity:
 
         # For S3, write data with metadata and checksums
         if target.startswith("s3://") or target.startswith("abfs://"):
-            storage = get_storage(target)
+            # Extract storage options from self.storage_options (which may contain
+            # s3_signature_version, s3_addressing_style from YAML config)
+            storage_opts = _extract_storage_options(self.storage_options)
+            storage = get_storage(target, **storage_opts)
             storage.makedirs("")
 
             write_opts = {}

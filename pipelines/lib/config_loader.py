@@ -524,11 +524,28 @@ def load_silver_from_yaml(
             raise YAMLConfigError("cdc_options.operation_column is required")
 
     # Auto-wire from Bronze if not specified in Silver config
+    storage_options = None
     if bronze:
         if not system:
             system = bronze.system
         if not entity:
             entity = bronze.entity
+        # Auto-wire storage options from Bronze (for S3-compatible storage)
+        # This passes s3_signature_version, s3_addressing_style, etc.
+        if bronze.options:
+            storage_keys = [
+                "s3_signature_version",
+                "s3_addressing_style",
+                "endpoint_url",
+                "key",
+                "secret",
+                "region",
+            ]
+            storage_options = {
+                k: v for k, v in bronze.options.items() if k in storage_keys
+            }
+            if not storage_options:
+                storage_options = None
 
     # Build SilverEntity
     return SilverEntity(
@@ -549,6 +566,7 @@ def load_silver_from_yaml(
         output_formats=output_formats,
         parquet_compression=config.get("parquet_compression", "snappy"),
         validate_source=config.get("validate_source", "skip"),
+        storage_options=storage_options,
     )
 
 
