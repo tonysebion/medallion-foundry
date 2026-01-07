@@ -10,7 +10,7 @@ the same database.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, TYPE_CHECKING, Union
+from typing import Any, Dict, Optional, TYPE_CHECKING, Union
 
 import ibis
 
@@ -236,7 +236,7 @@ def _create_db2_connection(options: Dict[str, Any]) -> ibis.BaseBackend:
 
         def __init__(self, conn_str: str):
             self._conn_str = conn_str
-            self._odbc_conn = None
+            self._odbc_conn: Optional[Any] = None
             self._duckdb = ibis.duckdb.connect()
 
         def _get_odbc(self):

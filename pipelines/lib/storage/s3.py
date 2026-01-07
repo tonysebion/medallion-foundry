@@ -274,7 +274,8 @@ class S3Storage(StorageBackend):
         """Read file contents as bytes."""
         s3_key = self._get_s3_key(path)
         response = self.client.get_object(Bucket=self._bucket, Key=s3_key)
-        return response["Body"].read()
+        content: bytes = response["Body"].read()
+        return content
 
     def write_bytes(self, path: str, data: bytes) -> StorageResult:
         """Write bytes to a file."""

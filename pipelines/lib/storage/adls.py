@@ -185,7 +185,8 @@ class ADLSStorage(StorageBackend):
                 return False
 
         try:
-            return self.fs.exists(adls_path)
+            result: bool = self.fs.exists(adls_path)
+            return result
         except Exception as e:
             logger.warning("Error checking existence of %s: %s", adls_path, e)
             return False
@@ -246,7 +247,8 @@ class ADLSStorage(StorageBackend):
         """Read file contents as bytes."""
         adls_path = self._get_adls_path(path)
         with self.fs.open(adls_path, "rb") as f:
-            return f.read()
+            content: bytes = f.read()
+            return content
 
     def write_bytes(self, path: str, data: bytes) -> StorageResult:
         """Write bytes to a file."""

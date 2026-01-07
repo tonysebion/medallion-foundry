@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from pipelines.lib.env import expand_env_vars
 
@@ -191,7 +191,6 @@ def build_auth_headers_from_dict(
         password=api_options.get("password"),
     )
 
-    extra_headers: Dict[str, str] = api_options.get("headers", {})
-    if isinstance(extra_headers, dict):
-        return build_auth_headers(config, extra_headers=extra_headers)
-    return build_auth_headers(config)
+    raw_headers: Any = api_options.get("headers", {})
+    extra_headers: Dict[str, str] = raw_headers if isinstance(raw_headers, dict) else {}
+    return build_auth_headers(config, extra_headers=extra_headers)

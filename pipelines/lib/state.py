@@ -306,7 +306,7 @@ def get_watermark(system: str, entity: str) -> Optional[str]:
             value,
             data.get("updated_at", "unknown"),
         )
-        return value
+        return str(value) if value is not None else None
     except (json.JSONDecodeError, KeyError) as exc:
         logger.warning(
             "Invalid watermark file for %s.%s: %s",
