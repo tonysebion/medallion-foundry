@@ -94,7 +94,9 @@ class TestSilverEntityFullHistory:
 
         silver = SilverEntity(
             source_path=str(bronze_dir / "*.parquet"),
-            target_path=str(tmp_path / "silver/customers/"),
+            target_path=str(tmp_path / "silver/system=test/entity=customers/"),
+            system="test",
+            entity="customers",
             natural_keys=["customer_id"],
             change_timestamp="updated_at",
             entity_kind=EntityKind.STATE,
@@ -107,7 +109,7 @@ class TestSilverEntityFullHistory:
         assert result["row_count"] == 3
 
         # Verify output
-        silver_df = pd.read_parquet(tmp_path / "silver/customers/data.parquet")
+        silver_df = pd.read_parquet(tmp_path / "silver/system=test/entity=customers/customers.parquet")
         assert len(silver_df) == 3
 
         # Check effective dates are present (no underscore prefix)
@@ -133,7 +135,9 @@ class TestSilverEntityFullHistory:
 
         silver = SilverEntity(
             source_path=str(bronze_dir / "*.parquet"),
-            target_path=str(tmp_path / "silver/prices/"),
+            target_path=str(tmp_path / "silver/system=test/entity=prices/"),
+            system="test",
+            entity="prices",
             natural_keys=["region", "product_id"],
             change_timestamp="updated_at",
             entity_kind=EntityKind.STATE,
@@ -145,7 +149,7 @@ class TestSilverEntityFullHistory:
         # All 4 rows should be preserved
         assert result["row_count"] == 4
 
-        silver_df = pd.read_parquet(tmp_path / "silver/prices/data.parquet")
+        silver_df = pd.read_parquet(tmp_path / "silver/system=test/entity=prices/prices.parquet")
 
         # US + product_id=1 should have 2 versions
         us_p1 = silver_df[(silver_df["region"] == "US") & (silver_df["product_id"] == 1)]
@@ -170,7 +174,9 @@ class TestSilverEntityCurrentOnly:
 
         silver = SilverEntity(
             source_path=str(bronze_dir / "*.parquet"),
-            target_path=str(tmp_path / "silver/orders/"),
+            target_path=str(tmp_path / "silver/system=test/entity=orders/"),
+            system="test",
+            entity="orders",
             natural_keys=["id"],
             change_timestamp="updated_at",
             entity_kind=EntityKind.STATE,
@@ -182,7 +188,7 @@ class TestSilverEntityCurrentOnly:
         # Should deduplicate to 2 rows
         assert result["row_count"] == 2
 
-        silver_df = pd.read_parquet(tmp_path / "silver/orders/data.parquet")
+        silver_df = pd.read_parquet(tmp_path / "silver/system=test/entity=orders/orders.parquet")
         assert len(silver_df) == 2
 
         # Order 1 should be "completed" (latest)
@@ -208,7 +214,9 @@ class TestEventEntity:
 
         silver = SilverEntity(
             source_path=str(bronze_dir / "*.parquet"),
-            target_path=str(tmp_path / "silver/events/"),
+            target_path=str(tmp_path / "silver/system=test/entity=events/"),
+            system="test",
+            entity="events",
             natural_keys=["event_id"],
             change_timestamp="ts",
             entity_kind=EntityKind.EVENT,
@@ -220,7 +228,7 @@ class TestEventEntity:
         # Should have 3 unique events (1 duplicate removed)
         assert result["row_count"] == 3
 
-        silver_df = pd.read_parquet(tmp_path / "silver/events/data.parquet")
+        silver_df = pd.read_parquet(tmp_path / "silver/system=test/entity=events/events.parquet")
         assert len(silver_df) == 3
 
 

@@ -431,10 +431,23 @@ def load_silver_from_yaml(
     if isinstance(output_formats, str):
         output_formats = [output_formats]
 
+    # Get system and entity from config or infer from bronze
+    system = config.get("system", "")
+    entity = config.get("entity", "")
+
+    # Auto-wire from Bronze if not specified in Silver config
+    if bronze:
+        if not system:
+            system = bronze.system
+        if not entity:
+            entity = bronze.entity
+
     # Build SilverEntity
     return SilverEntity(
         natural_keys=natural_keys,
         change_timestamp=config["change_timestamp"],
+        system=system,
+        entity=entity,
         source_path=source_path,
         target_path=target_path,
         attributes=attributes,
@@ -585,8 +598,8 @@ class PipelineFromYAML:
             silver.source_path = bronze.target_path.rstrip("/") + "/*.parquet"
 
         if bronze and silver and not silver.target_path:
-            # Auto-generate Silver target based on Bronze entity
-            silver.target_path = f"./silver/{bronze.entity}/"
+            # Auto-generate Silver target using Hive-style partitioning for consistency
+            silver.target_path = f"./silver/system={bronze.system}/entity={bronze.entity}/"
 
     def setup_logging(self) -> None:
         """Configure logging based on the YAML logging config.

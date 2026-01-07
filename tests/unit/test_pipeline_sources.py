@@ -105,11 +105,13 @@ def test_silver_entity_curates_state_entity(tmp_path: Path):
     ).to_parquet(bronze_dir / "data.parquet", index=False)
 
     source_template = tmp_path / "bronze" / "system=tests" / "entity=items" / "dt={run_date}" / "*.parquet"
-    silver_target = tmp_path / "silver" / "items"
+    silver_target = tmp_path / "silver" / "system=tests" / "entity=items"
 
     silver = SilverEntity(
         source_path=source_template.as_posix(),
         target_path=silver_target.as_posix(),
+        system="tests",
+        entity="items",
         natural_keys=["id"],
         change_timestamp="updated_at",
         entity_kind=EntityKind.STATE,
@@ -118,10 +120,10 @@ def test_silver_entity_curates_state_entity(tmp_path: Path):
 
     result = silver.run("2025-01-15")
     assert result["row_count"] == 2
-    assert (silver_target / "data.parquet").exists()
+    assert (silver_target / "items.parquet").exists()
     assert (silver_target / "_metadata.json").exists()
 
-    output_df = pd.read_parquet(silver_target / "data.parquet")
+    output_df = pd.read_parquet(silver_target / "items.parquet")
     assert len(output_df) == 2
     assert output_df[output_df["id"] == 1]["value"].iloc[0] == 150
 

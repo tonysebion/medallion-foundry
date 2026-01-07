@@ -48,7 +48,8 @@ class HistoryMode(Enum):
 
 
 # Default target path template - can be overridden
-DEFAULT_SILVER_TARGET = "./silver/{entity}/"
+# Includes system= for consistency with Bronze layer
+DEFAULT_SILVER_TARGET = "./silver/system={system}/entity={entity}/"
 
 
 @dataclass
@@ -88,6 +89,10 @@ class SilverEntity:
 
     # Temporal (required)
     change_timestamp: str  # When the source record changed
+
+    # Source system and entity (optional - auto-wired from Bronze or inferred from paths)
+    system: str = ""  # Source system name (e.g., "retail", "crm")
+    entity: str = ""  # Entity name (e.g., "orders", "customers")
 
     # Source and target paths (optional when used with Pipeline)
     source_path: str = ""  # Path to Bronze data (auto-wired from Pipeline)
@@ -324,7 +329,11 @@ class SilverEntity:
             template=self.target_path,
             target_override=target_override,
             env_var="SILVER_TARGET_ROOT",
-            format_vars={"run_date": run_date},
+            format_vars={
+                "run_date": run_date,
+                "system": self.system,
+                "entity": self.entity,
+            },
         )
 
     def _validate_source(self, source: str) -> Optional[Dict[str, Any]]:
@@ -486,6 +495,31 @@ class SilverEntity:
             _silver_run_date=ibis.literal(run_date),
         )
 
+    def _infer_entity_name(self, target: str) -> str:
+        """Infer entity name from target path.
+
+        Extracts entity name from Hive-style partition paths like:
+        - 'silver/system=retail/entity=orders/' -> 'orders'
+        - 's3://bucket/silver/orders/' -> 'orders'
+        - './silver/orders/' -> 'orders'
+
+        Falls back to 'data' if entity cannot be determined.
+        """
+        import re
+
+        # Try to extract from entity= partition
+        match = re.search(r"entity=([^/]+)", target)
+        if match:
+            return match.group(1)
+
+        # Fall back to last non-empty path segment
+        target_parts = target.rstrip("/").split("/")
+        for part in reversed(target_parts):
+            if part and "=" not in part and part not in ("silver", "bronze"):
+                return part
+
+        return "data"
+
     def _write(
         self,
         t: ibis.Table,
@@ -520,8 +554,11 @@ class SilverEntity:
             if self.partition_by:
                 write_opts["partition_by"] = self.partition_by
 
-            # Write parquet file
-            parquet_filename = "data.parquet"
+            # Determine entity name for filename
+            entity_name = self.entity if self.entity else self._infer_entity_name(target)
+
+            # Write parquet file with entity name (consistent with Bronze)
+            parquet_filename = f"{entity_name}.parquet"
             written_files = []
             if "parquet" in self.output_formats:
                 output_file = target.rstrip("/") + f"/{parquet_filename}"
@@ -638,6 +675,9 @@ class SilverEntity:
                 "polybase_file": "_polybase.sql",
             }
 
+        # Determine entity name for filename
+        entity_name = self.entity if self.entity else self._infer_entity_name(target)
+
         # For local filesystem, use enhanced write with artifacts
         metadata = write_silver_with_artifacts(
             t,
@@ -652,12 +692,13 @@ class SilverEntity:
             run_date=run_date,
             source_path=source,
             write_checksums=True,
+            entity_name=entity_name,
         )
 
         # Also write CSV if requested
         if "csv" in self.output_formats and "parquet" in self.output_formats:
             output_dir = Path(target)
-            csv_file = output_dir / "data.csv"
+            csv_file = output_dir / f"{entity_name}.csv"
             t.execute().to_csv(str(csv_file), index=False)
 
         return {

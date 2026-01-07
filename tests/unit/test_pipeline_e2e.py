@@ -58,7 +58,9 @@ class TestBronzeToSilverE2E:
         # Configure Silver
         silver = SilverEntity(
             source_path=str(tmp_path / "bronze/system=sales/entity=products/dt={run_date}/*.parquet"),
-            target_path=str(tmp_path / "silver/products/"),
+            target_path=str(tmp_path / "silver/system=sales/entity=products/"),
+            system="sales",
+            entity="products",
             natural_keys=["id"],
             change_timestamp="updated_at",
             entity_kind=EntityKind.STATE,
@@ -79,11 +81,11 @@ class TestBronzeToSilverE2E:
         assert (bronze_dir / "_metadata.json").exists()
 
         # Verify Silver output
-        silver_dir = tmp_path / "silver/products"
-        assert (silver_dir / "data.parquet").exists()
+        silver_dir = tmp_path / "silver/system=sales/entity=products"
+        assert (silver_dir / "products.parquet").exists()
 
         # Verify deduplication - only latest record per id
-        silver_df = pd.read_parquet(silver_dir / "data.parquet")
+        silver_df = pd.read_parquet(silver_dir / "products.parquet")
         assert len(silver_df) == 2
         widget = silver_df[silver_df["id"] == 1].iloc[0]
         assert widget["name"] == "Widget Pro"  # Latest version
@@ -115,7 +117,9 @@ class TestBronzeToSilverE2E:
 
         silver = SilverEntity(
             source_path=str(tmp_path / "bronze/system=test/entity=items/dt={run_date}/*.parquet"),
-            target_path=str(tmp_path / "silver/items/"),
+            target_path=str(tmp_path / "silver/system=test/entity=items/"),
+            system="test",
+            entity="items",
             natural_keys=["id"],
             change_timestamp="updated_at",
         )
@@ -133,7 +137,7 @@ class TestBronzeToSilverE2E:
         assert result1.silver["row_count"] == result2.silver["row_count"]
 
         # Verify Silver data is the same
-        silver_df = pd.read_parquet(tmp_path / "silver/items/data.parquet")
+        silver_df = pd.read_parquet(tmp_path / "silver/system=test/entity=items/items.parquet")
         assert len(silver_df) == 2
 
     def test_backfill_multiple_dates(self, tmp_path: Path, monkeypatch):

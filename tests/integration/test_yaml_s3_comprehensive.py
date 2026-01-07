@@ -450,7 +450,7 @@ class TestYamlS3Comprehensive:
         # ===== Step 2: Create YAML pipeline configuration =====
         bronze_target = f"s3://{MINIO_BUCKET}/{test_prefix}/bronze/system={{system}}/entity={{entity}}/dt={{run_date}}/"
         silver_source = f"s3://{MINIO_BUCKET}/{test_prefix}/bronze/system=test/entity=orders/dt={{run_date}}/*.parquet"
-        silver_target = f"s3://{MINIO_BUCKET}/{test_prefix}/silver/test/orders/"
+        silver_target = f"s3://{MINIO_BUCKET}/{test_prefix}/silver/system=test/entity=orders/"
 
         yaml_content = create_pipeline_yaml(
             source_path=str(csv_files["orders"]),
@@ -498,7 +498,7 @@ class TestYamlS3Comprehensive:
             # Note: This may fail if checksums aren't being written to S3 yet
 
         # ===== Step 5: Verify Silver artifacts =====
-        silver_path = f"{MINIO_BUCKET}/{test_prefix}/silver/test/orders"
+        silver_path = f"{MINIO_BUCKET}/{test_prefix}/silver/system=test/entity=orders"
 
         silver_artifacts = verify_silver_artifacts(fs, silver_path)
         print(f"\nSilver artifacts: {silver_artifacts}")
@@ -566,7 +566,7 @@ class TestYamlS3Comprehensive:
         # Create pipeline YAML
         bronze_target = f"s3://{MINIO_BUCKET}/{test_prefix}/bronze/system={{system}}/entity={{entity}}/dt={{run_date}}/"
         silver_source = f"s3://{MINIO_BUCKET}/{test_prefix}/bronze/system=retail/entity=orders/dt={{run_date}}/*.parquet"
-        silver_target = f"s3://{MINIO_BUCKET}/{test_prefix}/silver/retail/orders/"
+        silver_target = f"s3://{MINIO_BUCKET}/{test_prefix}/silver/system=retail/entity=orders/"
 
         yaml_content = create_pipeline_yaml(
             source_path=str(orders_file),
@@ -596,7 +596,7 @@ class TestYamlS3Comprehensive:
         # Verify artifacts exist in S3
         fs = get_s3fs()
         bronze_path = f"{MINIO_BUCKET}/{test_prefix}/bronze/system=retail/entity=orders/dt={run_date}"
-        silver_path = f"{MINIO_BUCKET}/{test_prefix}/silver/retail/orders"
+        silver_path = f"{MINIO_BUCKET}/{test_prefix}/silver/system=retail/entity=orders"
 
         bronze_files = list_files_in_path(fs, bronze_path)
         silver_files = list_files_in_path(fs, silver_path)
@@ -627,7 +627,7 @@ class TestYamlS3Comprehensive:
         # Create SCD2 pipeline YAML
         bronze_target = f"s3://{MINIO_BUCKET}/{test_prefix}/bronze/system={{system}}/entity={{entity}}/dt={{run_date}}/"
         silver_source = f"s3://{MINIO_BUCKET}/{test_prefix}/bronze/system=crm/entity=customers/dt={{run_date}}/*.parquet"
-        silver_target = f"s3://{MINIO_BUCKET}/{test_prefix}/silver/crm/customers/"
+        silver_target = f"s3://{MINIO_BUCKET}/{test_prefix}/silver/system=crm/entity=customers/"
 
         # Convert Windows backslashes to forward slashes for YAML compatibility
         customers_path = str(csv_files['customers']).replace("\\", "/")
@@ -666,7 +666,7 @@ silver:
 
         # Verify Silver has SCD2 columns
         fs = get_s3fs()
-        silver_path = f"{MINIO_BUCKET}/{test_prefix}/silver/crm/customers"
+        silver_path = f"{MINIO_BUCKET}/{test_prefix}/silver/system=crm/entity=customers"
         silver_files = list_files_in_path(fs, silver_path)
 
         silver_parquet = next((f for f in silver_files if f.endswith(".parquet")), None)

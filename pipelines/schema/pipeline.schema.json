@@ -348,6 +348,16 @@
       "additionalProperties": false,
       "required": ["natural_keys", "change_timestamp"],
       "properties": {
+        "system": {
+          "type": "string",
+          "description": "Source system name. Auto-wired from Bronze if not specified.",
+          "examples": ["retail", "crm", "hr_db"]
+        },
+        "entity": {
+          "type": "string",
+          "description": "Entity name. Auto-wired from Bronze if not specified.",
+          "examples": ["orders", "customers", "products"]
+        },
         "natural_keys": {
           "oneOf": [
             { "type": "string" },
@@ -370,8 +380,8 @@
         },
         "target_path": {
           "type": "string",
-          "description": "Where to write Silver output. Defaults to ./silver/{entity}/",
-          "examples": ["./silver/orders/", "s3://bucket/silver/orders/"]
+          "description": "Where to write Silver output. Defaults to ./silver/system={system}/entity={entity}/",
+          "examples": ["./silver/system=retail/entity=orders/", "s3://bucket/silver/system=retail/entity=orders/"]
         },
         "entity_kind": {
           "type": "string",

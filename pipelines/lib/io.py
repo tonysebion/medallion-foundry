@@ -617,6 +617,7 @@ def write_silver_with_artifacts(
     run_date: Optional[str] = None,
     source_path: Optional[str] = None,
     write_checksums: bool = True,
+    entity_name: Optional[str] = None,
 ) -> SilverOutputMetadata:
     """Write Silver layer data with metadata and checksums.
 
@@ -637,6 +638,7 @@ def write_silver_with_artifacts(
         run_date: Run date for metadata
         source_path: Source path for lineage tracking
         write_checksums: Whether to write _checksums.json
+        entity_name: Entity name for filename (defaults to 'data' for backwards compat)
 
     Returns:
         SilverOutputMetadata with comprehensive details
@@ -649,6 +651,7 @@ def write_silver_with_artifacts(
         ...     history_mode="current_only",
         ...     natural_keys=["order_id"],
         ...     change_timestamp="updated_at",
+        ...     entity_name="orders",  # Creates orders.parquet
         ... )
     """
     from pipelines.lib.checksum import write_checksum_manifest
@@ -662,14 +665,17 @@ def write_silver_with_artifacts(
     output_path = Path(path)
     output_path.mkdir(parents=True, exist_ok=True)
 
+    # Use entity name for filename if provided, otherwise fall back to 'data'
+    base_filename = entity_name if entity_name else "data"
+
     # Write data files
     data_files = []
     if format == "parquet":
-        data_file = output_path / "data.parquet"
+        data_file = output_path / f"{base_filename}.parquet"
         t.to_parquet(str(data_file))
         data_files.append(str(data_file))
     elif format == "csv":
-        data_file = output_path / "data.csv"
+        data_file = output_path / f"{base_filename}.csv"
         t.execute().to_csv(str(data_file), index=False)
         data_files.append(str(data_file))
     else:
