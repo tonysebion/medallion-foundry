@@ -113,13 +113,13 @@ bronze:
   # ============================================================
   # STORAGE OUTPUT: Where to write Bronze data (optional)
   # ============================================================
-  # Local filesystem (default):
-  target_path: "./bronze/system={system}/entity={entity}/dt={run_date}/"
+  # If omitted, auto-generates: ./bronze/system=your_system/entity=your_entity/dt={run_date}/
+  # Only {run_date} is expanded - system/entity values are used literally
 
   # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # AWS S3 Configuration:
   # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  # target_path: "s3://my-bucket/bronze/{system}/{entity}/dt={run_date}/"
+  # target_path: "s3://my-bucket/bronze/your_system/your_entity/dt={run_date}/"
   #
   # Set these environment variables before running:
   #   export AWS_ACCESS_KEY_ID="your_access_key"
@@ -129,7 +129,7 @@ bronze:
   # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # S3-Compatible Storage (MinIO, Nutanix Objects, Ceph, etc.):
   # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  # target_path: "s3://my-bucket/bronze/{system}/{entity}/dt={run_date}/"
+  # target_path: "s3://my-bucket/bronze/your_system/your_entity/dt={run_date}/"
   # options:
   #   s3_signature_version: s3v4    # Required for most S3-compatible storage
   #   s3_addressing_style: path     # Required for most S3-compatible storage
@@ -142,7 +142,7 @@ bronze:
   # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # Azure Data Lake Storage (ADLS) Configuration:
   # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  # target_path: "abfss://container@account.dfs.core.windows.net/bronze/{system}/{entity}/"
+  # target_path: "abfss://container@account.dfs.core.windows.net/bronze/your_system/your_entity/"
   #
   # Option 1: Storage account key
   #   export AZURE_STORAGE_ACCOUNT="your_account"
@@ -189,15 +189,14 @@ silver:
   # ============================================================
   # STORAGE OUTPUT: Where to write Silver data (optional)
   # ============================================================
-  # Local filesystem (default):
-  target_path: "./silver/system={system}/entity={entity}/"
+  # If omitted, auto-generates: ./silver/system=your_system/entity=your_entity/
 
   # AWS S3:
-  # target_path: "s3://my-bucket/silver/{system}/{entity}/"
+  # target_path: "s3://my-bucket/silver/your_system/your_entity/"
 
   # S3-Compatible (MinIO, Nutanix):
-  # target_path: "s3://my-bucket/silver/{system}/{entity}/"
+  # target_path: "s3://my-bucket/silver/your_system/your_entity/"
   # (Same options and env vars as Bronze section above)
 
   # Azure Data Lake Storage (ADLS):
-  # target_path: "abfss://container@account.dfs.core.windows.net/silver/{system}/{entity}/"
+  # target_path: "abfss://container@account.dfs.core.windows.net/silver/your_system/your_entity/"

@@ -31,12 +31,12 @@ bronze:
   entity: orders
   source_type: file_csv
   source_path: "./pipelines/examples/sample_data/orders_{run_date}.csv"
-  target_path: "./bronze/system={system}/entity={entity}/dt={run_date}/"
+  # target_path defaults to: ./bronze/system=retail/entity=orders/dt={run_date}/
 
 silver:
   natural_keys: [order_id]
   change_timestamp: updated_at
-  target_path: "./silver/system={system}/entity={entity}/"
+  # target_path defaults to: ./silver/system=retail/entity=orders/
   attributes:
     - customer_id
     - order_total

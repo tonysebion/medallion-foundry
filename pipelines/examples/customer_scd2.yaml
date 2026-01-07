@@ -31,12 +31,12 @@ bronze:
   entity: customers
   source_type: file_csv
   source_path: "./pipelines/examples/sample_data/customers_{run_date}.csv"
-  target_path: "./bronze/system={system}/entity={entity}/dt={run_date}/"
+  # target_path defaults to: ./bronze/system=crm/entity=customers/dt={run_date}/
 
 silver:
   natural_keys: [customer_id]
   change_timestamp: updated_at
-  target_path: "./silver/system={system}/entity={entity}/"
+  # target_path defaults to: ./silver/system=crm/entity=customers/
   history_mode: full_history    # SCD Type 2!
   attributes:
     - name

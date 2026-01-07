@@ -20,14 +20,14 @@ bronze:
   source_type: file_csv
   source_path: "./data/{entity}_{run_date}.csv"
   # load_pattern defaults to full_snapshot
-  target_path: "./bronze/system={system}/entity={entity}/dt={run_date}/"
-  # For S3: target_path: "s3://bucket/bronze/{system}/{entity}/dt={run_date}/"
+  # target_path auto-generates: ./bronze/system=your_system/entity=your_entity/dt={run_date}/
+  # For S3: target_path: "s3://bucket/bronze/your_system/your_entity/dt={run_date}/"
 
 # Silver layer - data curation
 silver:
   natural_keys: [id]            # What makes a record unique?
   change_timestamp: updated_at  # When was the record last changed?
-  target_path: "./silver/system={system}/entity={entity}/"
-  # For S3: target_path: "s3://bucket/silver/{system}/{entity}/"
+  # target_path auto-generates: ./silver/system=your_system/entity=your_entity/
+  # For S3: target_path: "s3://bucket/silver/your_system/your_entity/"
   # entity_kind defaults to state
   # history_mode defaults to current_only (SCD Type 1)

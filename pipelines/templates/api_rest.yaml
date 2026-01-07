@@ -106,15 +106,15 @@ bronze:
   # ========================================
   # STORAGE OUTPUT
   # ========================================
-  target_path: "./bronze/system={system}/entity={entity}/dt={run_date}/"
-  # For S3: target_path: "s3://bucket/bronze/{system}/{entity}/dt={run_date}/"
-  # For ADLS: target_path: "abfss://container@account.dfs.core.windows.net/bronze/{system}/{entity}/"
+  # target_path auto-generates: ./bronze/system=your_system/entity=your_entity/dt={run_date}/
+  # For S3: target_path: "s3://bucket/bronze/your_system/your_entity/dt={run_date}/"
+  # For ADLS: target_path: "abfss://container@account.dfs.core.windows.net/bronze/your_system/your_entity/"
 
 silver:
   natural_keys: [id]
   change_timestamp: updated_at
-  target_path: "./silver/system={system}/entity={entity}/"
-  # For S3: target_path: "s3://bucket/silver/{system}/{entity}/"
+  # target_path auto-generates: ./silver/system=your_system/entity=your_entity/
+  # For S3: target_path: "s3://bucket/silver/your_system/your_entity/"
   # attributes:
   #   - name
   #   - status

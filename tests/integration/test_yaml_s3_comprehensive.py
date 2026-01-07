@@ -564,8 +564,8 @@ class TestYamlPatterns:
 
         # Test PolyBase DDL generation
         if bronze_artifacts["metadata_exists"]:
-            metadata_path = bronze_path + "/_metadata.json"
-            ddl = generate_polybase_ddl_from_s3(fs, metadata_path)
+            metadata_key = bronze_path + "/_metadata.json"
+            ddl = generate_polybase_ddl_from_s3(client, MINIO_BUCKET, metadata_key)
             if ddl:
                 print(f"\nGenerated PolyBase DDL:\n{ddl[:500]}...")
                 assert "CREATE EXTERNAL TABLE" in ddl, "DDL should contain CREATE EXTERNAL TABLE"

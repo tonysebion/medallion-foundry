@@ -55,10 +55,9 @@ bronze:
   watermark_column: updated_at
   watermark_param: modified_since
 
-  # Storage output location
-  target_path: "./bronze/system={system}/entity={entity}/dt={run_date}/"
+  # Storage output location (optional - auto-generates ./bronze/system=crm/entity=contacts/dt={run_date}/)
   # For S3-compatible storage (MinIO, Nutanix Objects):
-  # target_path: "s3://my-bucket/bronze/{system}/{entity}/dt={run_date}/"
+  # target_path: "s3://my-bucket/bronze/crm/contacts/dt={run_date}/"
   # options:
   #   s3_signature_version: s3v4
   #   s3_addressing_style: path
@@ -66,7 +65,7 @@ bronze:
 silver:
   natural_keys: [contact_id]
   change_timestamp: updated_at
-  target_path: "./silver/system={system}/entity={entity}/"
+  # target_path auto-generates: ./silver/system=crm/entity=contacts/
   entity_kind: state
   history_mode: current_only
   attributes:

@@ -214,6 +214,44 @@ class TestLoadBronzeFromYaml:
         assert bronze.options["columns"] == ["id", "name", "value"]
         assert bronze.options["widths"] == [10, 30, 20]
 
+    def test_s3_storage_options_top_level(self):
+        """S3 storage options at top level (for Nutanix Objects, MinIO)."""
+        config = {
+            "system": "retail",
+            "entity": "orders",
+            "source_type": "file_parquet",
+            "source_path": "s3://bucket/data/*.parquet",
+            "target_path": "s3://bucket/bronze/",
+            "s3_endpoint_url": "https://objects.nutanix.local:443",
+            "s3_signature_version": "s3v4",
+            "s3_addressing_style": "path",
+            "s3_region": "us-west-2",
+        }
+        bronze = load_bronze_from_yaml(config)
+
+        # S3 options should be merged into options dict
+        assert bronze.options["endpoint_url"] == "https://objects.nutanix.local:443"
+        assert bronze.options["s3_signature_version"] == "s3v4"
+        assert bronze.options["s3_addressing_style"] == "path"
+        assert bronze.options["region"] == "us-west-2"
+
+    def test_s3_options_in_nested_options(self):
+        """S3 options in nested options dict (backward compatibility)."""
+        config = {
+            "system": "retail",
+            "entity": "orders",
+            "source_type": "file_parquet",
+            "source_path": "s3://bucket/data/*.parquet",
+            "options": {
+                "s3_signature_version": "s3v4",
+                "s3_addressing_style": "path",
+            },
+        }
+        bronze = load_bronze_from_yaml(config)
+
+        assert bronze.options["s3_signature_version"] == "s3v4"
+        assert bronze.options["s3_addressing_style"] == "path"
+
     def test_missing_required_field_system(self):
         """Missing system field should raise."""
         config = {
@@ -393,6 +431,55 @@ class TestLoadSilverFromYaml:
         silver = load_silver_from_yaml(config)
 
         assert silver.output_formats == ["parquet", "csv"]
+
+    def test_s3_storage_options_top_level(self):
+        """S3 storage options at top level in Silver config."""
+        config = {
+            "natural_keys": ["id"],
+            "change_timestamp": "updated_at",
+            "target_path": "s3://bucket/silver/",
+            "s3_endpoint_url": "https://objects.nutanix.local:443",
+            "s3_signature_version": "s3v4",
+            "s3_addressing_style": "path",
+            "s3_region": "us-west-2",
+        }
+        silver = load_silver_from_yaml(config)
+
+        # S3 options should be in storage_options
+        assert silver.storage_options is not None
+        assert silver.storage_options["endpoint_url"] == "https://objects.nutanix.local:443"
+        assert silver.storage_options["s3_signature_version"] == "s3v4"
+        assert silver.storage_options["s3_addressing_style"] == "path"
+        assert silver.storage_options["region"] == "us-west-2"
+
+    def test_s3_options_auto_wired_from_bronze(self):
+        """S3 options auto-wired from Bronze to Silver."""
+        from pipelines.lib.bronze import BronzeSource, SourceType
+
+        bronze = BronzeSource(
+            system="retail",
+            entity="orders",
+            source_type=SourceType.FILE_PARQUET,
+            source_path="s3://bucket/data/*.parquet",
+            target_path="s3://bucket/bronze/",
+            options={
+                "s3_signature_version": "s3v4",
+                "s3_addressing_style": "path",
+                "endpoint_url": "https://objects.nutanix.local:443",
+            },
+        )
+
+        silver_config = {
+            "natural_keys": ["id"],
+            "change_timestamp": "updated_at",
+        }
+        silver = load_silver_from_yaml(silver_config, bronze=bronze)
+
+        # S3 options should be auto-wired from Bronze
+        assert silver.storage_options is not None
+        assert silver.storage_options["s3_signature_version"] == "s3v4"
+        assert silver.storage_options["s3_addressing_style"] == "path"
+        assert silver.storage_options["endpoint_url"] == "https://objects.nutanix.local:443"
 
     def test_missing_natural_keys_raises(self):
         """Missing natural_keys should raise."""

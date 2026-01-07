@@ -21,12 +21,12 @@ bronze:
   entity: customers
   source_type: file_csv
   source_path: ./input/customers/customers_{run_date}.csv
-  target_path: "./bronze/system={system}/entity={entity}/dt={run_date}/"
+  # target_path auto-generates: ./bronze/system=ecommerce/entity=customers/dt={run_date}/
 
 silver:
   natural_keys: [customer_id]
   change_timestamp: updated_at
-  target_path: "./silver/system={system}/entity={entity}/"
+  # target_path auto-generates: ./silver/system=ecommerce/entity=customers/
   entity_kind: state
   history_mode: current_only
   attributes:

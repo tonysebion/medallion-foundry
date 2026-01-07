@@ -24,16 +24,16 @@ bronze:
   entity: your_entity           # e.g., "page_views", "sensor_readings"
   source_type: file_parquet
   source_path: "./data/{entity}/{run_date}/*.parquet"
-  target_path: "./bronze/system={system}/entity={entity}/dt={run_date}/"
-  # For S3: target_path: "s3://bucket/bronze/{system}/{entity}/dt={run_date}/"
+  # target_path auto-generates: ./bronze/system=your_system/entity=your_entity/dt={run_date}/
+  # For S3: target_path: "s3://bucket/bronze/your_system/your_entity/dt={run_date}/"
 
 # Silver layer - curate events (dedupe only)
 silver:
   # Event identity - what makes an event unique?
   natural_keys: [event_id]          # Usually a UUID or composite key
   change_timestamp: event_time      # When did the event occur?
-  target_path: "./silver/system={system}/entity={entity}/"
-  # For S3: target_path: "s3://bucket/silver/{system}/{entity}/"
+  # target_path auto-generates: ./silver/system=your_system/entity=your_entity/
+  # For S3: target_path: "s3://bucket/silver/your_system/your_entity/"
 
   # Events are immutable - just dedupe exact duplicates
   entity_kind: event

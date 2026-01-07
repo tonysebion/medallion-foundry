@@ -56,13 +56,12 @@ bronze:
   watermark_column: event_timestamp
   watermark_param: since  # Query param for watermark value
 
-  # Storage output location
-  target_path: "./bronze/system={system}/entity={entity}/dt={run_date}/"
+  # Storage output location (optional - auto-generates ./bronze/system=events_api/entity=audit_events/dt={run_date}/)
 
 silver:
   natural_keys: [event_id]
   change_timestamp: event_timestamp
-  target_path: "./silver/system={system}/entity={entity}/"
+  # target_path auto-generates: ./silver/system=events_api/entity=audit_events/
   entity_kind: event
   attributes:
     - event_type

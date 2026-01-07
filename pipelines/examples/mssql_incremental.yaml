@@ -65,17 +65,16 @@ bronze:
   load_pattern: incremental
   watermark_column: UpdatedAt
 
-  # Storage output location
-  target_path: "./bronze/system={system}/entity={entity}/dt={run_date}/"
+  # Storage output location (optional - auto-generates ./bronze/system=sales_dw/entity=order_details/dt={run_date}/)
   # For AWS S3:
-  # target_path: "s3://data-lake/bronze/{system}/{entity}/dt={run_date}/"
+  # target_path: "s3://data-lake/bronze/sales_dw/order_details/dt={run_date}/"
 
 silver:
   natural_keys: [OrderDetailID]
   change_timestamp: UpdatedAt
-  target_path: "./silver/system={system}/entity={entity}/"
+  # target_path auto-generates: ./silver/system=sales_dw/entity=order_details/
   # For AWS S3:
-  # target_path: "s3://data-lake/silver/{system}/{entity}/"
+  # target_path: "s3://data-lake/silver/sales_dw/order_details/"
   attributes:
     - OrderID
     - ProductID

@@ -362,6 +362,18 @@ def load_bronze_from_yaml(
     # Build options dict from YAML
     options = dict(config.get("options", {}))
 
+    # Merge top-level S3 storage options into options dict
+    # These take precedence over options.s3_* for cleaner YAML syntax
+    s3_option_keys = [
+        ("s3_endpoint_url", "endpoint_url"),
+        ("s3_signature_version", "s3_signature_version"),
+        ("s3_addressing_style", "s3_addressing_style"),
+        ("s3_region", "region"),
+    ]
+    for yaml_key, options_key in s3_option_keys:
+        if yaml_key in config:
+            options[options_key] = config[yaml_key]
+
     # Build BronzeSource
     return BronzeSource(
         system=config["system"],
@@ -523,16 +535,29 @@ def load_silver_from_yaml(
         if "operation_column" not in cdc_options:
             raise YAMLConfigError("cdc_options.operation_column is required")
 
+    # Build storage options from Silver config's top-level S3 options
+    storage_options: Optional[Dict[str, Any]] = None
+    silver_s3_keys = [
+        ("s3_endpoint_url", "endpoint_url"),
+        ("s3_signature_version", "s3_signature_version"),
+        ("s3_addressing_style", "s3_addressing_style"),
+        ("s3_region", "region"),
+    ]
+    for yaml_key, storage_key in silver_s3_keys:
+        if yaml_key in config:
+            if storage_options is None:
+                storage_options = {}
+            storage_options[storage_key] = config[yaml_key]
+
     # Auto-wire from Bronze if not specified in Silver config
-    storage_options = None
     if bronze:
         if not system:
             system = bronze.system
         if not entity:
             entity = bronze.entity
         # Auto-wire storage options from Bronze (for S3-compatible storage)
-        # This passes s3_signature_version, s3_addressing_style, etc.
-        if bronze.options:
+        # Only if Silver doesn't have its own S3 options
+        if storage_options is None and bronze.options:
             storage_keys = [
                 "s3_signature_version",
                 "s3_addressing_style",
@@ -704,7 +729,13 @@ class PipelineFromYAML:
         # If both bronze and silver are present, wire them together
         if bronze and silver and not silver.source_path:
             # Auto-wire Silver source from Bronze target
-            silver.source_path = bronze.target_path.rstrip("/") + "/*.parquet"
+            # Substitute {system} and {entity} placeholders with actual values
+            bronze_target = bronze.target_path.format(
+                system=bronze.system,
+                entity=bronze.entity,
+                run_date="{run_date}",  # Keep {run_date} for later substitution
+            )
+            silver.source_path = bronze_target.rstrip("/") + "/*.parquet"
 
         if bronze and silver and not silver.target_path:
             # Auto-generate Silver target using Hive-style partitioning for consistency

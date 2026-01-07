@@ -32,6 +32,35 @@
     { "required": ["extends"] }
   ],
   "definitions": {
+    "s3_storage_options": {
+      "type": "object",
+      "description": "S3-compatible storage options (for Nutanix Objects, MinIO, etc.)",
+      "properties": {
+        "s3_endpoint_url": {
+          "type": "string",
+          "description": "Custom S3 endpoint URL for S3-compatible storage (Nutanix Objects, MinIO, LocalStack, etc.)",
+          "examples": ["https://objects.nutanix.local:443", "http://localhost:9000"]
+        },
+        "s3_signature_version": {
+          "type": "string",
+          "description": "S3 signature version. Use 's3v4' for most S3-compatible storage.",
+          "enum": ["s3v4", "s3"],
+          "examples": ["s3v4"]
+        },
+        "s3_addressing_style": {
+          "type": "string",
+          "description": "S3 URL addressing style. Use 'path' for S3-compatible storage (Nutanix, MinIO). AWS S3 uses 'virtual' by default.",
+          "enum": ["path", "virtual", "auto"],
+          "examples": ["path"]
+        },
+        "s3_region": {
+          "type": "string",
+          "description": "AWS region or region identifier for S3-compatible storage",
+          "default": "us-east-1",
+          "examples": ["us-east-1", "us-west-2", "eu-west-1"]
+        }
+      }
+    },
     "bronze": {
       "type": "object",
       "description": "Bronze layer configuration - raw data extraction",
@@ -81,6 +110,29 @@
             "./bronze/system={system}/entity={entity}/dt={run_date}/",
             "s3://bucket/bronze/{system}/{entity}/"
           ]
+        },
+        "s3_endpoint_url": {
+          "type": "string",
+          "description": "Custom S3 endpoint URL for S3-compatible storage (Nutanix Objects, MinIO, LocalStack, etc.)",
+          "examples": ["https://objects.nutanix.local:443", "http://localhost:9000"]
+        },
+        "s3_signature_version": {
+          "type": "string",
+          "description": "S3 signature version. Use 's3v4' for most S3-compatible storage.",
+          "enum": ["s3v4", "s3"],
+          "examples": ["s3v4"]
+        },
+        "s3_addressing_style": {
+          "type": "string",
+          "description": "S3 URL addressing style. Use 'path' for S3-compatible storage (Nutanix, MinIO). AWS S3 uses 'virtual' by default.",
+          "enum": ["path", "virtual", "auto"],
+          "examples": ["path"]
+        },
+        "s3_region": {
+          "type": "string",
+          "description": "AWS region or region identifier for S3-compatible storage",
+          "default": "us-east-1",
+          "examples": ["us-east-1", "us-west-2", "eu-west-1"]
         },
         "load_pattern": {
           "type": "string",
@@ -493,6 +545,29 @@
           "description": "How to validate Bronze source checksums",
           "enum": ["skip", "warn", "strict"],
           "default": "skip"
+        },
+        "s3_endpoint_url": {
+          "type": "string",
+          "description": "Custom S3 endpoint URL for S3-compatible storage (Nutanix Objects, MinIO, LocalStack, etc.). Auto-wired from Bronze if not specified.",
+          "examples": ["https://objects.nutanix.local:443", "http://localhost:9000"]
+        },
+        "s3_signature_version": {
+          "type": "string",
+          "description": "S3 signature version. Use 's3v4' for most S3-compatible storage. Auto-wired from Bronze if not specified.",
+          "enum": ["s3v4", "s3"],
+          "examples": ["s3v4"]
+        },
+        "s3_addressing_style": {
+          "type": "string",
+          "description": "S3 URL addressing style. Use 'path' for S3-compatible storage (Nutanix, MinIO). Auto-wired from Bronze if not specified.",
+          "enum": ["path", "virtual", "auto"],
+          "examples": ["path"]
+        },
+        "s3_region": {
+          "type": "string",
+          "description": "AWS region or region identifier for S3-compatible storage. Auto-wired from Bronze if not specified.",
+          "default": "us-east-1",
+          "examples": ["us-east-1", "us-west-2", "eu-west-1"]
         }
       }
     }
