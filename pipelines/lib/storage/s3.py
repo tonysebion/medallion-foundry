@@ -1,11 +1,16 @@
-"""AWS S3 storage backend."""
+"""AWS S3 storage backend using direct boto3 calls."""
 
 from __future__ import annotations
 
 import fnmatch
+import io
 import logging
 import os
 from typing import Any, List, Optional
+
+import boto3
+from botocore.config import Config
+from botocore.exceptions import ClientError
 
 from pipelines.lib.storage.base import FileInfo, StorageBackend, StorageResult
 
@@ -15,9 +20,9 @@ __all__ = ["S3Storage"]
 
 
 class S3Storage(StorageBackend):
-    """AWS S3 storage backend.
+    """AWS S3 storage backend using direct boto3 calls.
 
-    Provides storage operations on AWS S3 using fsspec/s3fs.
+    Provides storage operations on AWS S3.
 
     Example:
         >>> storage = S3Storage("s3://my-bucket/bronze/")
@@ -61,7 +66,7 @@ class S3Storage(StorageBackend):
 
     def __init__(self, base_path: str, **options: Any) -> None:
         super().__init__(base_path, **options)
-        self._fs = None
+        self._client = None
         self._bucket = None
         self._prefix = None
         self._parse_path()
@@ -74,43 +79,29 @@ class S3Storage(StorageBackend):
 
         parts = path.split("/", 1)
         self._bucket = parts[0]
-        self._prefix = parts[1] if len(parts) > 1 else ""
+        self._prefix = parts[1].rstrip("/") if len(parts) > 1 else ""
 
     @property
     def scheme(self) -> str:
         return "s3"
 
     @property
-    def fs(self):
-        """Lazy-load the S3 filesystem."""
-        if self._fs is None:
-            try:
-                import s3fs
-            except ImportError:
-                raise ImportError(
-                    "s3fs is required for S3 storage. "
-                    "Install with: pip install s3fs"
-                )
-
-            from botocore.config import Config
-
-            # Build options from environment and passed options
-            fs_options = {}
+    def client(self):
+        """Lazy-load the boto3 S3 client."""
+        if self._client is None:
+            # Build client configuration
+            client_kwargs = {}
 
             # Credentials
             key = self.options.get("key") or os.environ.get("AWS_ACCESS_KEY_ID")
             secret = self.options.get("secret") or os.environ.get("AWS_SECRET_ACCESS_KEY")
             if key and secret:
-                fs_options["key"] = key
-                fs_options["secret"] = secret
-
-            # Initialize client_kwargs
-            client_kwargs = {}
+                client_kwargs["aws_access_key_id"] = key
+                client_kwargs["aws_secret_access_key"] = secret
 
             # Region
-            region = self.options.get("region") or os.environ.get("AWS_REGION")
-            if region:
-                client_kwargs["region_name"] = region
+            region = self.options.get("region") or os.environ.get("AWS_REGION", "us-east-1")
+            client_kwargs["region_name"] = region
 
             # Custom endpoint (MinIO, LocalStack, Nutanix Objects, etc.)
             endpoint_url = self.options.get("endpoint_url") or os.environ.get("AWS_ENDPOINT_URL")
@@ -118,10 +109,8 @@ class S3Storage(StorageBackend):
                 client_kwargs["endpoint_url"] = endpoint_url
 
             # Build botocore Config for signature version and addressing style
-            # These settings are critical for S3-compatible storage like Nutanix Objects
             config_kwargs = {}
 
-            # Signature version: 's3v4' (recommended), 's3' (legacy v2), or None (auto)
             signature_version = (
                 self.options.get("signature_version")
                 or os.environ.get("AWS_S3_SIGNATURE_VERSION")
@@ -129,8 +118,6 @@ class S3Storage(StorageBackend):
             if signature_version:
                 config_kwargs["signature_version"] = signature_version
 
-            # Addressing style: 'path', 'virtual', or 'auto'
-            # Path-style is typically required for S3-compatible storage
             addressing_style = (
                 self.options.get("addressing_style")
                 or os.environ.get("AWS_S3_ADDRESSING_STYLE")
@@ -138,51 +125,104 @@ class S3Storage(StorageBackend):
             if addressing_style:
                 config_kwargs["s3"] = {"addressing_style": addressing_style}
 
-            # Apply botocore Config if any custom settings specified
             if config_kwargs:
                 client_kwargs["config"] = Config(**config_kwargs)
 
-            if client_kwargs:
-                fs_options["client_kwargs"] = client_kwargs
+            self._client = boto3.client("s3", **client_kwargs)
 
-            # Anonymous access
-            if self.options.get("anon"):
-                fs_options["anon"] = True
+        return self._client
 
-            self._fs = s3fs.S3FileSystem(**fs_options)
-
-        return self._fs
-
-    def _get_s3_path(self, path: str) -> str:
-        """Get the full S3 path (bucket/prefix/path)."""
+    def _get_s3_key(self, path: str) -> str:
+        """Get the S3 key (path within bucket) from a relative or absolute path."""
         if path.startswith("s3://"):
-            return path[5:]
+            # Extract key from full S3 URI
+            uri_path = path[5:]
+            parts = uri_path.split("/", 1)
+            return parts[1] if len(parts) > 1 else ""
 
         if not path:
-            return f"{self._bucket}/{self._prefix}".rstrip("/")
+            return self._prefix
 
-        prefix = self._prefix.rstrip("/") if self._prefix else ""
+        prefix = self._prefix
         if prefix:
-            return f"{self._bucket}/{prefix}/{path.lstrip('/')}"
+            return f"{prefix}/{path.lstrip('/')}"
         else:
-            return f"{self._bucket}/{path.lstrip('/')}"
+            return path.lstrip("/")
+
+    def _glob_to_prefix_and_pattern(self, glob_pattern: str) -> tuple:
+        """Convert glob pattern to S3 prefix and fnmatch pattern.
+
+        Example: 'bronze/system=retail/dt=*/data.parquet'
+        Returns: ('bronze/system=retail/dt=', '*/data.parquet')
+        """
+        # Find the first glob character
+        for i, char in enumerate(glob_pattern):
+            if char in "*?[":
+                # Split at the last / before the glob
+                prefix_end = glob_pattern.rfind("/", 0, i)
+                if prefix_end == -1:
+                    return "", glob_pattern
+                return glob_pattern[: prefix_end + 1], glob_pattern[prefix_end + 1 :]
+        # No glob characters - return as prefix
+        return glob_pattern, ""
+
+    def glob(self, pattern: str) -> List[str]:
+        """Match files using glob pattern.
+
+        Args:
+            pattern: Glob pattern (e.g., 's3://bucket/prefix/*/data.parquet')
+
+        Returns:
+            List of matching S3 keys (without bucket prefix)
+        """
+        s3_pattern = self._get_s3_key(pattern)
+        prefix, fnmatch_pattern = self._glob_to_prefix_and_pattern(s3_pattern)
+
+        matches = []
+        paginator = self.client.get_paginator("list_objects_v2")
+
+        for page in paginator.paginate(Bucket=self._bucket, Prefix=prefix):
+            if "Contents" not in page:
+                continue
+            for obj in page["Contents"]:
+                key = obj["Key"]
+                # If no pattern, everything under prefix matches
+                if not fnmatch_pattern:
+                    matches.append(key)
+                # Apply fnmatch to the part after the prefix
+                elif fnmatch.fnmatch(key[len(prefix) :], fnmatch_pattern):
+                    matches.append(key)
+
+        return matches
 
     def exists(self, path: str) -> bool:
         """Check if a path exists."""
-        s3_path = self._get_s3_path(path)
+        s3_key = self._get_s3_key(path)
 
         # Handle glob patterns
-        if "*" in s3_path or "?" in s3_path:
+        if "*" in s3_key or "?" in s3_key:
             try:
-                matches = self.fs.glob(s3_path)
+                matches = self.glob(path)
                 return len(matches) > 0
             except Exception:
                 return False
 
         try:
-            return self.fs.exists(s3_path)
+            self.client.head_object(Bucket=self._bucket, Key=s3_key)
+            return True
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "")
+            if error_code in ("404", "NoSuchKey"):
+                # Check if it's a "directory" (has objects under it)
+                paginator = self.client.get_paginator("list_objects_v2")
+                prefix = s3_key.rstrip("/") + "/"
+                for page in paginator.paginate(Bucket=self._bucket, Prefix=prefix, MaxKeys=1):
+                    if page.get("KeyCount", 0) > 0:
+                        return True
+                return False
+            raise
         except Exception as e:
-            logger.warning("Error checking existence of s3://%s: %s", s3_path, e)
+            logger.warning("Error checking existence of s3://%s/%s: %s", self._bucket, s3_key, e)
             return False
 
     def list_files(
@@ -192,127 +232,143 @@ class S3Storage(StorageBackend):
         recursive: bool = False,
     ) -> List[FileInfo]:
         """List files at a path."""
-        s3_path = self._get_s3_path(path)
+        s3_prefix = self._get_s3_key(path)
+        if s3_prefix and not s3_prefix.endswith("/"):
+            s3_prefix += "/"
+
+        files: List[FileInfo] = []
+        paginator = self.client.get_paginator("list_objects_v2")
+
+        paginate_kwargs = {"Bucket": self._bucket, "Prefix": s3_prefix}
+        if not recursive:
+            paginate_kwargs["Delimiter"] = "/"
 
         try:
-            if recursive:
-                items = self.fs.find(s3_path, detail=True)
-            else:
-                items = self.fs.ls(s3_path, detail=True)
-                # Filter to files only
-                items = {k: v for k, v in items.items() if v.get("type") == "file"} if isinstance(items, dict) else items
+            for page in paginator.paginate(**paginate_kwargs):
+                for obj in page.get("Contents", []):
+                    key = obj["Key"]
+                    name = key.split("/")[-1]
 
-            files: List[FileInfo] = []
+                    # Skip "directory" markers (empty keys ending with /)
+                    if not name:
+                        continue
 
-            # Handle both dict and list responses
-            if isinstance(items, dict):
-                for key, info in items.items():
-                    if info.get("type") == "file":
-                        # Apply pattern filter
-                        name = key.split("/")[-1]
-                        if pattern and not fnmatch.fnmatch(name, pattern):
-                            continue
+                    # Apply pattern filter
+                    if pattern and not fnmatch.fnmatch(name, pattern):
+                        continue
 
-                        files.append(
-                            FileInfo(
-                                path=key,
-                                size=info.get("Size", info.get("size", 0)),
-                                modified=info.get("LastModified"),
-                            )
+                    files.append(
+                        FileInfo(
+                            path=key,
+                            size=obj.get("Size", 0),
+                            modified=obj.get("LastModified"),
                         )
-            else:
-                for info in items:
-                    if isinstance(info, str):
-                        # Simple path list
-                        name = info.split("/")[-1]
-                        if pattern and not fnmatch.fnmatch(name, pattern):
-                            continue
-                        files.append(FileInfo(path=info, size=0))
-                    elif isinstance(info, dict) and info.get("type") == "file":
-                        name = info.get("name", info.get("Key", "")).split("/")[-1]
-                        if pattern and not fnmatch.fnmatch(name, pattern):
-                            continue
-                        files.append(
-                            FileInfo(
-                                path=info.get("name", info.get("Key", "")),
-                                size=info.get("Size", info.get("size", 0)),
-                                modified=info.get("LastModified"),
-                            )
-                        )
+                    )
 
             return sorted(files, key=lambda f: f.path)
 
         except Exception as e:
-            logger.warning("Error listing s3://%s: %s", s3_path, e)
+            logger.warning("Error listing s3://%s/%s: %s", self._bucket, s3_prefix, e)
             return []
 
     def read_bytes(self, path: str) -> bytes:
         """Read file contents as bytes."""
-        s3_path = self._get_s3_path(path)
-        with self.fs.open(s3_path, "rb") as f:
-            return f.read()
+        s3_key = self._get_s3_key(path)
+        response = self.client.get_object(Bucket=self._bucket, Key=s3_key)
+        return response["Body"].read()
 
     def write_bytes(self, path: str, data: bytes) -> StorageResult:
         """Write bytes to a file."""
-        s3_path = self._get_s3_path(path)
+        s3_key = self._get_s3_key(path)
 
         try:
-            with self.fs.open(s3_path, "wb") as f:
-                f.write(data)
+            self.client.put_object(
+                Bucket=self._bucket,
+                Key=s3_key,
+                Body=data,
+            )
 
             return StorageResult(
                 success=True,
-                path=f"s3://{s3_path}",
-                files_written=[f"s3://{s3_path}"],
+                path=f"s3://{self._bucket}/{s3_key}",
+                files_written=[f"s3://{self._bucket}/{s3_key}"],
                 bytes_written=len(data),
             )
         except Exception as e:
-            logger.error("Failed to write s3://%s: %s", s3_path, e)
+            logger.error("Failed to write s3://%s/%s: %s", self._bucket, s3_key, e)
             return StorageResult(
                 success=False,
-                path=f"s3://{s3_path}",
+                path=f"s3://{self._bucket}/{s3_key}",
                 error=str(e),
             )
 
     def delete(self, path: str) -> bool:
         """Delete a file or directory."""
-        s3_path = self._get_s3_path(path)
+        s3_key = self._get_s3_key(path)
 
         try:
-            if self.fs.isdir(s3_path):
-                self.fs.rm(s3_path, recursive=True)
-            else:
-                self.fs.rm(s3_path)
+            # Try to delete as single object first
+            try:
+                self.client.delete_object(Bucket=self._bucket, Key=s3_key)
+            except ClientError:
+                pass
+
+            # Also delete all objects with this prefix (directory-like behavior)
+            paginator = self.client.get_paginator("list_objects_v2")
+            prefix = s3_key.rstrip("/") + "/"
+
+            for page in paginator.paginate(Bucket=self._bucket, Prefix=prefix):
+                if "Contents" not in page:
+                    continue
+                objects = [{"Key": obj["Key"]} for obj in page["Contents"]]
+                if objects:
+                    self.client.delete_objects(
+                        Bucket=self._bucket,
+                        Delete={"Objects": objects},
+                    )
+
             return True
         except Exception as e:
-            logger.error("Failed to delete s3://%s: %s", s3_path, e)
+            logger.error("Failed to delete s3://%s/%s: %s", self._bucket, s3_key, e)
             return False
 
     def makedirs(self, path: str) -> None:
         """Create directories (no-op for S3 as directories don't exist)."""
-        # S3 doesn't have real directories - they're implied by object keys
         pass
 
     def copy(self, src: str, dst: str) -> StorageResult:
         """Copy a file (uses server-side copy for efficiency)."""
-        src_path = self._get_s3_path(src)
-        dst_path = self._get_s3_path(dst)
+        src_key = self._get_s3_key(src)
+        dst_key = self._get_s3_key(dst)
 
         try:
-            self.fs.copy(src_path, dst_path)
-            info = self.fs.info(dst_path)
-            size = info.get("Size", info.get("size", 0))
+            self.client.copy_object(
+                Bucket=self._bucket,
+                CopySource={"Bucket": self._bucket, "Key": src_key},
+                Key=dst_key,
+            )
+
+            # Get size of copied object
+            response = self.client.head_object(Bucket=self._bucket, Key=dst_key)
+            size = response.get("ContentLength", 0)
 
             return StorageResult(
                 success=True,
-                path=f"s3://{dst_path}",
-                files_written=[f"s3://{dst_path}"],
+                path=f"s3://{self._bucket}/{dst_key}",
+                files_written=[f"s3://{self._bucket}/{dst_key}"],
                 bytes_written=size,
             )
         except Exception as e:
-            logger.error("Failed to copy s3://%s to s3://%s: %s", src_path, dst_path, e)
+            logger.error(
+                "Failed to copy s3://%s/%s to s3://%s/%s: %s",
+                self._bucket,
+                src_key,
+                self._bucket,
+                dst_key,
+                e,
+            )
             return StorageResult(
                 success=False,
-                path=f"s3://{dst_path}",
+                path=f"s3://{self._bucket}/{dst_key}",
                 error=str(e),
             )

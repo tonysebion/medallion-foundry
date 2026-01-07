@@ -468,32 +468,36 @@ class SilverEntity:
         # Expand glob patterns if present
         if "*" in source or "?" in source:
             if source.startswith("s3://"):
-                # Use s3fs for S3 glob
-                import s3fs
+                # Use S3Storage for S3 glob operations
                 import os
+                from pipelines.lib.storage import S3Storage
 
-                # Get S3 config from environment
-                fs_options = {}
+                # Extract bucket from source path
+                s3_path = source[5:]  # Remove s3://
+                bucket = s3_path.split("/")[0]
+
+                # Build storage options from environment
+                storage_options = {}
                 endpoint_url = os.environ.get("AWS_ENDPOINT_URL")
                 if endpoint_url:
-                    fs_options["endpoint_url"] = endpoint_url
+                    storage_options["endpoint_url"] = endpoint_url
                 access_key = os.environ.get("AWS_ACCESS_KEY_ID")
                 secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
                 if access_key and secret_key:
-                    fs_options["key"] = access_key
-                    fs_options["secret"] = secret_key
+                    storage_options["key"] = access_key
+                    storage_options["secret"] = secret_key
 
-                fs = s3fs.S3FileSystem(**fs_options)
-                # s3fs.glob needs path without s3:// prefix
-                s3_pattern = source[5:]  # Remove s3://
-                matches = fs.glob(s3_pattern)
+                storage = S3Storage(f"s3://{bucket}/", **storage_options)
+                matches = storage.glob(source)
+
                 if not matches:
                     logger.warning("silver_no_files_found", pattern=source)
                     # Return empty DataFrame as Ibis table
                     import pandas as pd
                     return con.create_table("empty", pd.DataFrame())
-                # Add s3:// prefix back
-                files = [f"s3://{m}" for m in matches]
+
+                # glob returns keys without bucket prefix, add full s3:// path back
+                files = [f"s3://{bucket}/{m}" for m in matches]
                 source = files
             else:
                 # Use standard glob for local paths

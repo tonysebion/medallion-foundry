@@ -11,36 +11,16 @@ Currently supported: `STATE`, `EVENT`
 - `derived_state` - Build state from event streams (e.g., current status from status change events)
 - `derived_event` - Derive events from state changes (e.g., generate change events from snapshots)
 
-### Delete Mode
-Handle deletions/missing keys in source data:
-- `ignore` - Missing keys are simply absent (default)
-- `tombstone_state` - Insert tombstone records for deleted entities
-- `tombstone_event` - Insert delete events for removed records
-
 ### Schema Mode
 Control schema evolution behavior:
 - `strict` - Fail on any schema changes
 - `allow_new_columns` - Auto-add new columns from source
 
-### Input Mode
-Control how Bronze feeds are interpreted:
-- `append_log` - Each Bronze partition is additive
-- `replace_daily` - Each Bronze partition is a full replacement
-
-### Silver Models
-Pre-built transformation patterns:
-- `periodic_snapshot` - Simple periodic refresh, no deduplication
-- `full_merge_dedupe` - Deduplicated current view (SCD Type 1)
-- `incremental_merge` - CDC stream processing with change tracking
-- `scd_type_2` - Full history with effective dates and is_current flags
-
-## Bronze Layer Enhancements
-
-### CDC Load Pattern
-The `CDC` load pattern enum exists but is not fully implemented. Would need:
-- Insert/update/delete marker handling
-- Change data capture stream processing
-- Merge operations for target updates
+### Silver Joins
+Cross-entity joins in the Silver layer:
+- Reference data enrichment
+- Dimension lookup during curation
+- Multi-source entity building
 
 ## Query Layer Integration
 
@@ -56,17 +36,43 @@ Additional PolyBase features:
 - Schema synchronization
 - Multi-table DDL generation
 
-## Operational Features
+## Future Enhancements
 
-### Config Doctor
-CLI tool to validate configuration health:
-- Check connection strings
-- Validate paths exist
-- Verify credentials
-- Test source connectivity
+### Gold Layer
+Complete the medallion architecture with a Gold layer for business-level aggregations:
+- Pre-aggregated metrics and KPIs
+- Business-specific data models
+- Consumption-ready datasets
 
-### Silver Joins
-Cross-entity joins in the Silver layer:
-- Reference data enrichment
-- Dimension lookup during curation
-- Multi-source entity building
+### Orchestration Integration
+Native integration with workflow orchestrators:
+- Airflow operators/hooks
+- Prefect tasks
+- Dagster assets
+- Scheduled pipeline execution
+
+### Schema Registry
+Centralized schema management:
+- Schema versioning and history
+- Compatibility checking (backward, forward, full)
+- Schema evolution tracking across pipelines
+
+### Lineage Tracking
+Full data lineage capabilities:
+- Pipeline-to-pipeline lineage graph
+- Column-level lineage
+- Impact analysis for schema changes
+- Visualization of data flow
+
+### Notifications and Alerting
+Pipeline event notifications:
+- Webhook callbacks on success/failure
+- Email notifications
+- Slack/Teams integration
+- Custom alerting rules
+
+### Pipeline Dependencies
+DAG-style pipeline orchestration:
+- Dependency graph between pipelines
+- Automatic triggering of downstream pipelines
+- Cross-pipeline scheduling

@@ -26,7 +26,7 @@ classifiers = [
 ]
 requires-python = ">=3.9"
 dependencies = [
-    "boto3>=1.26.0",
+    "boto3==1.17.84",
     "pandas>=1.5.0",
     "polars>=1.0.0",
     "pandera>=0.20.0",
@@ -38,7 +38,6 @@ dependencies = [
     "requests-toolbelt>=1.0.0",
     "tenacity>=8.0.0",
     "ibis-framework[duckdb]>=9.0.0",
-    "s3fs>=2023.1.0",
     "pyodbc>=4.0.0",
 ]
 

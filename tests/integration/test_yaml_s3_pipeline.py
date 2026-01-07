@@ -126,17 +126,22 @@ def minio_test_prefix():
 
     # Cleanup after test
     try:
-        import s3fs
+        import boto3
 
-        fs = s3fs.S3FileSystem(
+        client = boto3.client(
+            "s3",
             endpoint_url=MINIO_ENDPOINT,
-            key=MINIO_ACCESS_KEY,
-            secret=MINIO_SECRET_KEY,
+            aws_access_key_id=MINIO_ACCESS_KEY,
+            aws_secret_access_key=MINIO_SECRET_KEY,
+            region_name="us-east-1",
         )
         # Delete all objects with this prefix
-        objects = fs.find(f"{MINIO_BUCKET}/{prefix}")
-        for obj in objects:
-            fs.rm(obj)
+        paginator = client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=MINIO_BUCKET, Prefix=prefix):
+            if "Contents" in page:
+                objects = [{"Key": obj["Key"]} for obj in page["Contents"]]
+                if objects:
+                    client.delete_objects(Bucket=MINIO_BUCKET, Delete={"Objects": objects})
     except Exception as e:
         print(f"Cleanup warning: {e}")
 
@@ -251,32 +256,40 @@ class TestYamlPipelineS3:
         assert result.silver["row_count"] == 2, "Silver should have 2 unique orders"
 
         # ===== Step 5: Read back from MinIO and verify =====
-        import s3fs
+        import io
+        import boto3
 
-        fs = s3fs.S3FileSystem(
+        client = boto3.client(
+            "s3",
             endpoint_url=MINIO_ENDPOINT,
-            key=MINIO_ACCESS_KEY,
-            secret=MINIO_SECRET_KEY,
+            aws_access_key_id=MINIO_ACCESS_KEY,
+            aws_secret_access_key=MINIO_SECRET_KEY,
+            region_name="us-east-1",
         )
 
         # List Bronze files
-        bronze_path = f"{MINIO_BUCKET}/{test_prefix}/bronze/system=retail/entity=orders/dt={run_date}"
-        bronze_files = fs.find(bronze_path)
+        bronze_path = f"{test_prefix}/bronze/system=retail/entity=orders/dt={run_date}"
+        bronze_files = []
+        paginator = client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=MINIO_BUCKET, Prefix=bronze_path):
+            bronze_files.extend([obj["Key"] for obj in page.get("Contents", [])])
         print(f"\nBronze files in S3: {bronze_files}")
         assert len(bronze_files) > 0, "Bronze should create files in S3"
         assert any(f.endswith(".parquet") for f in bronze_files), "Bronze should write parquet file"
 
         # List Silver files
-        silver_path = f"{MINIO_BUCKET}/{test_prefix}/silver/retail/orders"
-        silver_files = fs.find(silver_path)
+        silver_path = f"{test_prefix}/silver/retail/orders"
+        silver_files = []
+        for page in paginator.paginate(Bucket=MINIO_BUCKET, Prefix=silver_path):
+            silver_files.extend([obj["Key"] for obj in page.get("Contents", [])])
         print(f"Silver files in S3: {silver_files}")
         assert len(silver_files) > 0, "Silver should create files in S3"
 
         # Read Silver parquet and verify content
         silver_parquet = next((f for f in silver_files if f.endswith(".parquet")), None)
         if silver_parquet:
-            with fs.open(silver_parquet, "rb") as f:
-                silver_df = pd.read_parquet(f)
+            response = client.get_object(Bucket=MINIO_BUCKET, Key=silver_parquet)
+            silver_df = pd.read_parquet(io.BytesIO(response["Body"].read()))
 
             print(f"\nSilver DataFrame:\n{silver_df}")
 

@@ -159,14 +159,16 @@ PATTERNS = [
 # ---------------------------------------------------------------------------
 
 
-def get_s3fs():
-    """Get configured S3FileSystem for MinIO."""
-    import s3fs
+def get_s3_client():
+    """Get configured boto3 S3 client for MinIO."""
+    import boto3
 
-    return s3fs.S3FileSystem(
+    return boto3.client(
+        "s3",
         endpoint_url=MINIO_ENDPOINT,
-        key=MINIO_ACCESS_KEY,
-        secret=MINIO_SECRET_KEY,
+        aws_access_key_id=MINIO_ACCESS_KEY,
+        aws_secret_access_key=MINIO_SECRET_KEY,
+        region_name="us-east-1",
     )
 
 

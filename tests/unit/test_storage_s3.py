@@ -1,7 +1,8 @@
-"""Unit tests for `pipelines.lib.storage.S3Storage` using a fake filesystem."""
+"""Unit tests for `pipelines.lib.storage.S3Storage` using a mock boto3 client."""
 
 import io
-from typing import Dict, List
+from datetime import datetime
+from typing import Any, Dict, List
 
 import pytest
 
@@ -13,82 +14,96 @@ AWS_PREFIX = "bronze-data"
 BASE_PATH = f"s3://{AWS_BUCKET}/{AWS_PREFIX}/"
 
 
-class DummyS3FS:
-    """In-memory approximation of s3fs.S3FileSystem for testing."""
+class MockClientError(Exception):
+    """Mock botocore ClientError for testing."""
+
+    def __init__(self, code: str, message: str = "Error"):
+        self.response = {"Error": {"Code": code, "Message": message}}
+        super().__init__(message)
+
+
+class DummyPaginator:
+    """Mock paginator for list_objects_v2."""
+
+    def __init__(self, objects: Dict[str, bytes]):
+        self.objects = objects
+
+    def paginate(self, Bucket: str, Prefix: str = "", **kwargs) -> List[Dict[str, Any]]:
+        contents = []
+        delimiter = kwargs.get("Delimiter")
+        max_keys = kwargs.get("MaxKeys")
+
+        for key, data in self.objects.items():
+            if key.startswith(Prefix):
+                # If delimiter is set, only include objects at this level
+                if delimiter:
+                    relative_key = key[len(Prefix) :]
+                    if delimiter in relative_key:
+                        continue  # Skip nested objects
+
+                contents.append(
+                    {
+                        "Key": key,
+                        "Size": len(data),
+                        "LastModified": datetime.now(),
+                    }
+                )
+                if max_keys and len(contents) >= max_keys:
+                    break
+
+        return [{"Contents": contents, "KeyCount": len(contents)}]
+
+
+class DummyS3Client:
+    """In-memory approximation of boto3 S3 client for testing."""
 
     def __init__(self) -> None:
         self.objects: Dict[str, bytes] = {}
 
-    def open(self, path: str, mode: str = "rb"):
-        class DummyFile(io.BytesIO):
-            def __init__(self, storage: Dict[str, bytes], key: str, mode: str) -> None:
-                super().__init__()
-                self._storage = storage
-                self._key = key
-                self._mode = mode
-                if "r" in mode and key in storage:
-                    self.write(storage[key])
-                    self.seek(0)
+    def get_object(self, Bucket: str, Key: str) -> Dict[str, Any]:
+        if Key not in self.objects:
+            raise MockClientError("NoSuchKey", "Not found")
+        return {"Body": io.BytesIO(self.objects[Key])}
 
-            def __enter__(self) -> "DummyFile":
-                return self
+    def put_object(self, Bucket: str, Key: str, Body: bytes, **kwargs) -> Dict[str, Any]:
+        self.objects[Key] = Body
+        return {}
 
-            def __exit__(self, exc_type, exc_val, exc_tb):
-                if "w" in self._mode or "a" in self._mode:
-                    self._storage[self._key] = self.getvalue()
+    def head_object(self, Bucket: str, Key: str) -> Dict[str, Any]:
+        if Key not in self.objects:
+            # Check if it's a "directory"
+            prefix = Key.rstrip("/") + "/"
+            if any(k.startswith(prefix) for k in self.objects):
+                return {"ContentLength": 0}
+            raise MockClientError("404", "Not found")
+        return {"ContentLength": len(self.objects[Key])}
 
-        return DummyFile(self.objects, path, mode)
+    def delete_object(self, Bucket: str, Key: str) -> Dict[str, Any]:
+        self.objects.pop(Key, None)
+        return {}
 
-    def exists(self, path: str) -> bool:
-        return any(obj.startswith(path.rstrip("/") + "/") or obj == path for obj in self.objects)
+    def delete_objects(self, Bucket: str, Delete: Dict[str, List]) -> Dict[str, Any]:
+        for obj in Delete.get("Objects", []):
+            self.objects.pop(obj["Key"], None)
+        return {}
 
-    def ls(self, path: str, detail: bool = True):
-        entries = []
-        prefix = path.rstrip("/")
-        for key, data in self.objects.items():
-            if key.startswith(prefix):
-                entries.append(
-                    {
-                        "name": key,
-                        "type": "file",
-                        "Size": len(data),
-                        "LastModified": None,
-                    }
-                )
-        return entries
+    def copy_object(
+        self, Bucket: str, CopySource: Dict[str, str], Key: str
+    ) -> Dict[str, Any]:
+        src_key = CopySource["Key"]
+        if src_key not in self.objects:
+            raise MockClientError("NoSuchKey", "Not found")
+        self.objects[Key] = self.objects[src_key]
+        return {}
 
-    def find(self, path: str, detail: bool = True):
-        return self.ls(path, detail=detail)
-
-    def copy(self, src: str, dst: str) -> None:
-        if src not in self.objects:
-            raise FileNotFoundError(src)
-        self.objects[dst] = self.objects[src]
-
-    def info(self, path: str):
-        size = len(self.objects.get(path, b""))
-        return {"Size": size}
-
-    def rm(self, path: str, recursive: bool = False) -> None:
-        keys = [k for k in self.objects if k == path or k.startswith(path.rstrip("/") + "/")]
-        for key in keys:
-            del self.objects[key]
-
-    def isdir(self, path: str) -> bool:
-        prefix = path.rstrip("/") + "/"
-        return any(k.startswith(prefix) for k in self.objects)
-
-    def glob(self, pattern: str) -> List[str]:
-        if "*" not in pattern:
-            return [pattern] if pattern in self.objects else []
-        prefix = pattern.split("*", 1)[0]
-        return [k for k in self.objects if k.startswith(prefix)]
+    def get_paginator(self, operation: str):
+        return DummyPaginator(self.objects)
 
 
 @pytest.fixture
 def s3_storage() -> S3Storage:
     storage = S3Storage(BASE_PATH)
-    storage._fs = DummyS3FS()  # type: ignore[attr-defined]
+    storage._client = DummyS3Client()
     return storage
 
 
@@ -109,11 +124,23 @@ def test_exists_and_list_files(s3_storage: S3Storage):
     assert s3_storage.exists("dir/a.txt")
     assert s3_storage.exists("dir/*")
 
-    results = s3_storage.list_files("dir", pattern="*.txt")
+    results = s3_storage.list_files("dir", recursive=True)
     names = [entry.path for entry in results]
-    assert any(name.endswith("a.txt") for name in names)
-    assert any(name.endswith("b.txt") for name in names)
-    assert not any(name.endswith("c.csv") for name in names)
+    # Filter by pattern manually for this test
+    txt_files = [n for n in names if n.endswith(".txt")]
+    csv_files = [n for n in names if n.endswith(".csv")]
+
+    assert len(txt_files) == 2
+    assert len(csv_files) == 1
+
+
+def test_list_files_with_pattern(s3_storage: S3Storage):
+    write_test_files(s3_storage, ["dir/a.txt", "dir/b.txt", "dir/c.csv"])
+
+    results = s3_storage.list_files("dir", pattern="*.txt", recursive=True)
+    names = [entry.path for entry in results]
+    assert len(names) == 2
+    assert all(n.endswith(".txt") for n in names)
 
 
 def test_delete_file(s3_storage: S3Storage):
@@ -136,6 +163,42 @@ def test_copy_file(s3_storage: S3Storage):
 def test_get_storage_returns_s3():
     storage = get_storage(BASE_PATH)
     assert isinstance(storage, S3Storage)
+
+
+def test_glob_pattern(s3_storage: S3Storage):
+    """Test glob pattern matching."""
+    write_test_files(
+        s3_storage,
+        ["data/dt=2025-01-01/file.parquet", "data/dt=2025-01-02/file.parquet"],
+    )
+
+    matches = s3_storage.glob("data/dt=*/file.parquet")
+    assert len(matches) == 2
+
+
+def test_glob_no_matches(s3_storage: S3Storage):
+    """Test glob with no matches returns empty list."""
+    matches = s3_storage.glob("nonexistent/*/file.parquet")
+    assert matches == []
+
+
+def test_exists_directory(s3_storage: S3Storage):
+    """Test exists returns True for directory-like paths."""
+    s3_storage.write_bytes("mydir/file.txt", b"content")
+
+    # The directory "mydir" should exist (has objects under it)
+    assert s3_storage.exists("mydir")
+    assert s3_storage.exists("mydir/file.txt")
+
+
+def test_delete_directory(s3_storage: S3Storage):
+    """Test deleting a directory removes all objects under it."""
+    write_test_files(s3_storage, ["mydir/a.txt", "mydir/b.txt", "mydir/sub/c.txt"])
+
+    assert s3_storage.delete("mydir")
+    assert not s3_storage.exists("mydir/a.txt")
+    assert not s3_storage.exists("mydir/b.txt")
+    assert not s3_storage.exists("mydir/sub/c.txt")
 
 
 # ============================================================
@@ -178,7 +241,7 @@ def test_s3_storage_signature_version_from_env(monkeypatch):
     monkeypatch.setenv("AWS_S3_ADDRESSING_STYLE", "path")
 
     storage = S3Storage(BASE_PATH)
-    # Options dict won't have env vars, but they're read in fs property
+    # Options dict won't have env vars, but they're read in client property
     # Just verify the storage was created without error
     assert storage is not None
 
@@ -196,3 +259,24 @@ def test_s3_storage_option_overrides_env(monkeypatch):
     # Explicit options should be stored
     assert storage.options.get("signature_version") == "s3v4"
     assert storage.options.get("addressing_style") == "path"
+
+
+def test_s3_storage_bucket_and_prefix_parsing():
+    """Test that bucket and prefix are correctly parsed from S3 URI."""
+    storage = S3Storage("s3://my-bucket/some/prefix/path/")
+    assert storage._bucket == "my-bucket"
+    assert storage._prefix == "some/prefix/path"
+
+
+def test_s3_storage_bucket_only():
+    """Test S3 URI with only bucket (no prefix)."""
+    storage = S3Storage("s3://my-bucket/")
+    assert storage._bucket == "my-bucket"
+    assert storage._prefix == ""
+
+
+def test_s3_storage_bucket_no_trailing_slash():
+    """Test S3 URI without trailing slash."""
+    storage = S3Storage("s3://my-bucket/prefix")
+    assert storage._bucket == "my-bucket"
+    assert storage._prefix == "prefix"
