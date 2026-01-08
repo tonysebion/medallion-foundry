@@ -1,0 +1,17 @@
+# template for work1 pipeline
+# this reads data from a csv on the file system
+# and then writes data to s3 in bronze and then also silver layers
+
+
+bronze:
+  system: CRM
+  entity: unknownCRMEducation
+  source_type: file_csv
+  source_path: "E:\\dev\\f\\CRM\\20251203.csv"
+  target_path: "s3://bucketname/bronze/system={system}/entity={entity}/dt={run_date}/"
+  load_pattern: full_snapshot
+  partition_by: []
+  options:
+    endpoint_url: "https://http://localhost:9000”
+    key: minioadmin
+    secret: minioadmin

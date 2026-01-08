@@ -12,6 +12,8 @@ requests-toolbelt>=1.0.0
 tenacity>=8.0.0
 ibis-framework[duckdb]>=9.0.0  # Portable dataframe library with DuckDB backend
 pyodbc>=4.0.0  # ODBC support for database extractors (DB2)
+fsspec
+dotenv
 
 # Install with: pip install -r requirements.txt
 #
