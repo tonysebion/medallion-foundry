@@ -51,6 +51,84 @@ def test_select_columns_excludes_columns():
     assert {"id", "ts", "extra"} <= set(selected.columns)
 
 
+def test_select_columns_renames_with_column_mapping():
+    """Test column_mapping renames columns from Bronze to Silver."""
+    entity = _make_entity(
+        column_mapping={
+            "id": "order_id",
+            "extra": "extra_data",
+        }
+    )
+    df = pd.DataFrame(
+        {
+            "id": [1],
+            "ts": [1],
+            "extra": ["value"],
+        }
+    )
+
+    table = ibis.memtable(df)
+    selected = entity._select_columns(table)
+
+    # Columns should be renamed
+    assert "order_id" in selected.columns
+    assert "extra_data" in selected.columns
+    # Original names should be gone
+    assert "id" not in selected.columns
+    assert "extra" not in selected.columns
+    # ts was not renamed
+    assert "ts" in selected.columns
+
+
+def test_select_columns_mapping_with_attributes():
+    """Test column_mapping works with attributes."""
+    entity = _make_entity(
+        attributes=["extra"],
+        column_mapping={"extra": "renamed_extra"},
+    )
+    df = pd.DataFrame(
+        {
+            "id": [1],
+            "ts": [1],
+            "extra": ["value"],
+            "secret": ["hide"],
+        }
+    )
+
+    table = ibis.memtable(df)
+    selected = entity._select_columns(table)
+
+    # extra should be included (via attributes) and renamed
+    assert "renamed_extra" in selected.columns
+    assert "extra" not in selected.columns
+    # secret should be excluded (not in attributes)
+    assert "secret" not in selected.columns
+
+
+def test_select_columns_mapping_ignores_missing_columns():
+    """Test column_mapping ignores columns that don't exist."""
+    entity = _make_entity(
+        column_mapping={
+            "id": "order_id",
+            "nonexistent": "should_be_ignored",
+        }
+    )
+    df = pd.DataFrame(
+        {
+            "id": [1],
+            "ts": [1],
+        }
+    )
+
+    table = ibis.memtable(df)
+    selected = entity._select_columns(table)
+
+    # id should be renamed
+    assert "order_id" in selected.columns
+    # nonexistent mapping should be ignored silently
+    assert "should_be_ignored" not in selected.columns
+
+
 def test_curate_event_deduplicates_records():
     entity = _make_entity(entity_kind=EntityKind.EVENT)
     df = pd.DataFrame(

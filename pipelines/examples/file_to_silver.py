@@ -79,7 +79,12 @@ def run_silver(run_date: str, **kwargs):
     result = silver.run(run_date, **kwargs)
 
     if result.get("row_count", 0) > 0:
-        output_path = Path(silver.target_path) / "data.parquet"
+        # Silver writes to entity_name.parquet (e.g., products.parquet)
+        output_dir = Path(silver.target_path)
+        # Try entity-named file first, fall back to data.parquet for compatibility
+        output_path = output_dir / "products.parquet"
+        if not output_path.exists():
+            output_path = output_dir / "data.parquet"
         if output_path.exists():
             import ibis
 

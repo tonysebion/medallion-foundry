@@ -38,6 +38,7 @@ class S3Storage(StorageBackend):
         AWS_ENDPOINT_URL: Custom S3 endpoint (for MinIO, LocalStack, etc.)
         AWS_S3_SIGNATURE_VERSION: S3 signature version ('s3v4', 's3', or unset for auto)
         AWS_S3_ADDRESSING_STYLE: S3 addressing style ('path', 'virtual', or 'auto')
+        AWS_S3_VERIFY_SSL: SSL verification ('true'/'false'). Defaults to 'false' for self-signed certs.
 
     Options:
         key: AWS access key (overrides env var)
@@ -46,6 +47,7 @@ class S3Storage(StorageBackend):
         endpoint_url: Custom S3 endpoint
         signature_version: S3 signature version ('s3v4' for v4, 's3' for v2)
         addressing_style: URL addressing style ('path' or 'virtual')
+        verify_ssl: Enable SSL verification (default: False for self-signed certificates)
         anon: If True, use anonymous access (for public buckets)
 
     S3-Compatible Storage (Nutanix Objects, MinIO, etc.):
@@ -106,6 +108,16 @@ class S3Storage(StorageBackend):
             endpoint_url = self.options.get("endpoint_url") or os.environ.get("AWS_ENDPOINT_URL")
             if endpoint_url:
                 client_kwargs["endpoint_url"] = endpoint_url
+
+            # SSL Verification - default to False for self-signed certificates
+            verify_ssl = self.options.get("verify_ssl")
+            if verify_ssl is None:
+                env_verify = os.environ.get("AWS_S3_VERIFY_SSL", "").lower()
+                # Default to False unless explicitly set to true
+                verify_ssl = env_verify in ("true", "1", "yes")
+            if verify_ssl is False:
+                client_kwargs["verify"] = False
+                logger.debug("s3_ssl_verification_disabled", endpoint=endpoint_url)
 
             # Build botocore Config for signature version and addressing style
             config_kwargs = {}

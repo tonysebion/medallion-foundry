@@ -188,6 +188,20 @@ class TestConfigLoaderModelExpansion:
         assert silver.history_mode == HistoryMode.CURRENT_ONLY
         assert silver.input_mode == InputMode.REPLACE_DAILY
 
+    def test_load_silver_periodic_snapshot_without_keys(self, tmp_path: Path):
+        """Test periodic_snapshot model does not require natural_keys or change_timestamp."""
+        config = {
+            "source_path": "./bronze/*.parquet",
+            "target_path": "./silver/orders/",
+            "model": "periodic_snapshot",
+        }
+        silver = load_silver_from_yaml(config, tmp_path)
+        assert silver.natural_keys is None
+        assert silver.change_timestamp is None
+        assert silver.entity_kind == EntityKind.STATE
+        assert silver.history_mode == HistoryMode.CURRENT_ONLY
+        assert silver.input_mode == InputMode.REPLACE_DAILY
+
     def test_load_silver_with_full_merge_dedupe_model(self, tmp_path: Path):
         """Test loading Silver config with full_merge_dedupe model."""
         config = {
@@ -259,6 +273,39 @@ class TestConfigLoaderModelExpansion:
         with pytest.raises(YAMLConfigError) as exc_info:
             load_silver_from_yaml(config, tmp_path)
         assert "Invalid model" in str(exc_info.value)
+
+    def test_load_silver_with_column_mapping(self, tmp_path: Path):
+        """Test loading Silver config with column_mapping."""
+        config = {
+            "natural_keys": ["order_id"],
+            "change_timestamp": "updated_at",
+            "source_path": "./bronze/*.parquet",
+            "target_path": "./silver/orders/",
+            "model": "periodic_snapshot",
+            "column_mapping": {
+                "ORDER_ID": "order_id",
+                "CUST_NBR": "customer_number",
+                "LastModified": "updated_at",
+            },
+        }
+        silver = load_silver_from_yaml(config, tmp_path)
+        assert silver.column_mapping == {
+            "ORDER_ID": "order_id",
+            "CUST_NBR": "customer_number",
+            "LastModified": "updated_at",
+        }
+
+    def test_load_silver_without_column_mapping(self, tmp_path: Path):
+        """Test loading Silver config without column_mapping defaults to None."""
+        config = {
+            "natural_keys": ["order_id"],
+            "change_timestamp": "updated_at",
+            "source_path": "./bronze/*.parquet",
+            "target_path": "./silver/orders/",
+            "model": "periodic_snapshot",
+        }
+        silver = load_silver_from_yaml(config, tmp_path)
+        assert silver.column_mapping is None
 
 
 class TestPipelineWithModels:

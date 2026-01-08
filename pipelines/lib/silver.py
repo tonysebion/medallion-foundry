@@ -24,7 +24,7 @@ from pipelines.lib.bronze import _configure_duckdb_s3, _extract_storage_options,
 from pipelines.lib.env import utc_now_iso
 from pipelines.lib.curate import apply_cdc, build_history, dedupe_latest
 from pipelines.lib.io import maybe_dry_run
-from pipelines.lib._path_utils import resolve_target_path, storage_path_exists
+from pipelines.lib._path_utils import is_object_storage_path, resolve_target_path, storage_path_exists
 from pipelines.lib.observability import get_structlog_logger
 
 # Use structlog for structured logging with pipeline context
@@ -196,11 +196,11 @@ class SilverEntity:
         )
     """
 
-    # Identity (required)
-    natural_keys: List[str]  # What makes a record unique
+    # Identity (required for most models, optional for periodic_snapshot)
+    natural_keys: Optional[List[str]] = None  # What makes a record unique
 
-    # Temporal (required)
-    change_timestamp: str  # When the source record changed
+    # Temporal (required for most models, optional for periodic_snapshot)
+    change_timestamp: Optional[str] = None  # When the source record changed
 
     # Source system and entity (optional - auto-wired from Bronze or inferred from paths)
     system: str = ""  # Source system name (e.g., "retail", "crm")
@@ -213,6 +213,7 @@ class SilverEntity:
     # Schema (optional - defaults to all columns)
     attributes: Optional[List[str]] = None  # Columns to include (None = all)
     exclude_columns: Optional[List[str]] = None  # Columns to always exclude
+    column_mapping: Optional[Dict[str, str]] = None  # Rename columns: {old_name: new_name}
 
     # Behavior
     entity_kind: EntityKind = EntityKind.STATE
@@ -276,12 +277,19 @@ class SilverEntity:
                     "target_path is required (or use with Pipeline for auto-generation)"
                 )
 
-        if not self.natural_keys:
+        # For periodic_snapshot model (replace_daily + current_only), keys are optional
+        # since there's no deduplication or history tracking - just simple replacement
+        is_periodic_snapshot = (
+            self.input_mode == InputMode.REPLACE_DAILY
+            and self.history_mode == HistoryMode.CURRENT_ONLY
+        )
+
+        if not self.natural_keys and not is_periodic_snapshot:
             errors.append(
                 "natural_keys is required (what makes a record unique?)"
             )
 
-        if not self.change_timestamp:
+        if not self.change_timestamp and not is_periodic_snapshot:
             errors.append(
                 "change_timestamp is required (when was the record updated?)"
             )
@@ -412,8 +420,7 @@ class SilverEntity:
         con = ibis.duckdb.connect()
 
         # Configure S3 if source or target is cloud storage
-        if source.startswith("s3://") or source.startswith("abfs://") or \
-           target.startswith("s3://") or target.startswith("abfs://"):
+        if is_object_storage_path(source) or is_object_storage_path(target):
             _configure_duckdb_s3(con, self.storage_options)  # Pass storage_options for MinIO/custom endpoints
 
         t = self._read_source(con, source)
@@ -475,15 +482,16 @@ class SilverEntity:
         if "*" in source or "?" in source:
             # Get the base directory before any wildcards
             parts = source.split("*")[0].split("?")[0]
-            source_dir = Path(parts).parent if parts else Path(".")
+            # If path ends with separator, use it directly; otherwise get parent
+            source_dir = Path(parts.rstrip("/\\")) if parts.endswith(("/", "\\")) else Path(parts).parent if parts else Path(".")
         else:
             source_dir = Path(source)
             if source_dir.is_file():
                 source_dir = source_dir.parent
 
         # Only validate if it's a local path
-        if str(source_dir).startswith("s3://"):
-            logger.debug("silver_skip_checksum_validation", reason="s3_source")
+        if is_object_storage_path(str(source_dir)):
+            logger.debug("silver_skip_checksum_validation", reason="cloud_source")
             return None
 
         result = validate_bronze_checksums(
@@ -585,12 +593,13 @@ class SilverEntity:
         return expanded
 
     def _select_columns(self, t: ibis.Table) -> ibis.Table:
-        """Apply column selection logic.
+        """Apply column selection and renaming logic.
 
         Priority:
         1. If attributes specified, use only those (plus keys and timestamp)
         2. If exclude_columns specified, exclude those
         3. Otherwise, keep all columns
+        4. If column_mapping specified, rename columns
 
         Column order is preserved: natural_keys first, then change_timestamp,
         then attributes in their specified order.
@@ -599,24 +608,47 @@ class SilverEntity:
             # Explicit allow list - only these columns
             # Use dict.fromkeys to dedupe while preserving order:
             # natural_keys first, then change_timestamp, then attributes
-            ordered_cols = list(dict.fromkeys(
-                self.natural_keys + [self.change_timestamp] + self.attributes
-            ))
+            keys = self.natural_keys or []
+            ts = [self.change_timestamp] if self.change_timestamp else []
+            ordered_cols = list(dict.fromkeys(keys + ts + self.attributes))
             # Filter to columns that actually exist, preserving order
             existing = [c for c in ordered_cols if c in t.columns]
             missing = set(ordered_cols) - set(existing)
             if missing:
                 logger.warning("silver_missing_columns", columns=list(missing))
-            return t.select(*existing)
+            t = t.select(*existing)
 
         elif self.exclude_columns:
             # Exclude list - all except these
             cols = [c for c in t.columns if c not in self.exclude_columns]
-            return t.select(*cols)
+            t = t.select(*cols)
 
-        else:
-            # Default: all columns from Bronze
-            return t
+        # Apply column renaming if specified
+        if self.column_mapping:
+            # Build rename mapping for columns that exist
+            # Note: ibis.rename expects {new_name: old_name}, but our config uses
+            # {old_name: new_name} which is more intuitive for users
+            rename_map = {
+                new_name: old_name
+                for old_name, new_name in self.column_mapping.items()
+                if old_name in t.columns
+            }
+            if rename_map:
+                t = t.rename(rename_map)
+                logger.debug(
+                    "silver_columns_renamed",
+                    renamed={v: k for k, v in rename_map.items()},  # Log as old->new
+                )
+            # Warn about columns that don't exist
+            missing = set(self.column_mapping.keys()) - set(t.columns)
+            if missing:
+                logger.warning(
+                    "silver_column_mapping_missing",
+                    message="Column mapping references columns that don't exist",
+                    columns=list(missing),
+                )
+
+        return t
 
     def _curate(self, t: ibis.Table) -> ibis.Table:
         """Apply curation based on entity kind and history mode.
@@ -681,12 +713,14 @@ class SilverEntity:
         import re
 
         # Try to extract from entity= partition
-        match = re.search(r"entity=([^/]+)", target)
+        match = re.search(r"entity=([^/\\]+)", target)
         if match:
             return match.group(1)
 
         # Fall back to last non-empty path segment
-        target_parts = target.rstrip("/").split("/")
+        # Normalize path separators for cross-platform compatibility
+        normalized = target.replace("\\", "/").rstrip("/")
+        target_parts = normalized.split("/")
         for part in reversed(target_parts):
             if part and "=" not in part and part not in ("silver", "bronze"):
                 return part
@@ -718,8 +752,8 @@ class SilverEntity:
                 "target": target,
             }
 
-        # For S3, write data with metadata and checksums
-        if target.startswith("s3://") or target.startswith("abfs://"):
+        # For cloud storage, write data with metadata and checksums
+        if is_object_storage_path(target):
             # Extract storage options from self.storage_options (which may contain
             # s3_signature_version, s3_addressing_style from YAML config)
             storage_opts = _extract_storage_options(self.storage_options)

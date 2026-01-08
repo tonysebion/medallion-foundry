@@ -6,7 +6,10 @@ interactive terminal input.
 
 from __future__ import annotations
 
+import pytest
 
+# Skip all tests in this module if prompt_toolkit is not installed
+pytest.importorskip("prompt_toolkit", reason="prompt_toolkit not installed (install with: pip install -e .[tui])")
 
 from pipelines.tui.app import PipelineConfigApp, Field
 from pipelines.tui.models import PipelineState

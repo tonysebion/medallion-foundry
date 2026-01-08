@@ -19,9 +19,7 @@ install:  ## Install dependencies
 install-all:  ## Install all dependencies (including Azure, DB extras)
 	$(PIP) install -r requirements.txt
 	$(PIP) install -r requirements-dev.txt
-	$(PIP) install -r requirements-azure.txt
-	$(PIP) install -r requirements-db.txt
-	$(PIP) install -e .
+	$(PIP) install -e .[azure,db]
 
 test:  ## Run all tests
 	$(PYTEST) -v
@@ -63,13 +61,6 @@ clean:  ## Clean temporary files and caches
 
 clean-output:  ## Clean output directories
 	$(PYTHON) -c "import shutil; [shutil.rmtree(d, ignore_errors=True) for d in ['output', 'silver_output']]" || true
-
-pre-commit-install:  ## Install pre-commit hooks
-	$(PIP) install pre-commit
-	pre-commit install
-
-pre-commit-run:  ## Run pre-commit on all files
-	pre-commit run --all-files
 
 validate-config:  ## Validate sample configs
 	$(PYTHON) bronze_extract.py --config config/sample_api.yaml --validate-only

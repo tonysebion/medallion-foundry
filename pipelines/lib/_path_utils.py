@@ -20,7 +20,23 @@ __all__ = [
     "resolve_target_path",
     "path_has_data",
     "storage_path_exists",
+    "is_object_storage_path",
 ]
+
+
+def is_object_storage_path(path: str) -> bool:
+    """Check if a path uses object storage protocols (S3-compatible or Azure Blob).
+
+    This includes both cloud services (AWS S3, Azure Blob) and on-prem
+    S3-compatible storage (MinIO, Nutanix Objects, Ceph, etc.).
+
+    Args:
+        path: Path to check
+
+    Returns:
+        True if path uses S3 or Azure Blob storage protocols
+    """
+    return path.startswith(("s3://", "abfs://", "abfss://", "wasbs://", "az://"))
 
 def resolve_target_path(
     template: str,
@@ -75,8 +91,8 @@ def _local_has_data(path: str) -> bool:
 
 
 def path_has_data(path: str) -> bool:
-    """Return True if the path contains any files, supporting S3 and local."""
-    if path.startswith("s3://"):
+    """Return True if the path contains any files, supporting object storage and local."""
+    if is_object_storage_path(path):
         return _s3_has_data(path)
     return _local_has_data(path)
 

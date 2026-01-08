@@ -44,11 +44,13 @@ class TestGetFieldMetadata:
         assert meta["required"] is False
         assert meta["type"] == "integer"
 
-    def test_silver_required_field(self) -> None:
-        """Required silver fields have correct metadata."""
+    def test_silver_optional_field(self) -> None:
+        """Silver fields without schema-level required (validated at runtime based on model)."""
+        # natural_keys is optional in schema because periodic_snapshot doesn't need it
+        # Runtime validation enforces it for other models
         meta = get_field_metadata("silver", "natural_keys")
 
-        assert meta["required"] is True
+        assert meta["required"] is False  # Not required at schema level
 
     def test_nested_auth_field(self) -> None:
         """Nested auth fields return correct metadata."""
@@ -192,11 +194,14 @@ class TestHelperFunctions:
         assert "source_type" in required
 
     def test_get_required_fields_silver(self) -> None:
-        """Returns required silver fields."""
+        """Silver has no schema-level required fields (validated at runtime based on model)."""
+        # natural_keys and change_timestamp are validated at runtime, not in schema
+        # This allows periodic_snapshot to work without keys
         required = get_required_fields("silver")
 
-        assert "natural_keys" in required
-        assert "change_timestamp" in required
+        # Silver schema has no required fields - validation is model-dependent
+        assert "natural_keys" not in required
+        assert "change_timestamp" not in required
 
     def test_get_field_help_text(self) -> None:
         """Returns formatted help text."""

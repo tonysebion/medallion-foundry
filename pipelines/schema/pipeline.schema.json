@@ -58,6 +58,11 @@
           "description": "AWS region or region identifier for S3-compatible storage",
           "default": "us-east-1",
           "examples": ["us-east-1", "us-west-2", "eu-west-1"]
+        },
+        "s3_verify_ssl": {
+          "type": "boolean",
+          "description": "Enable SSL certificate verification. Defaults to false for self-signed certificates (MinIO, Nutanix Objects, local development).",
+          "default": false
         }
       }
     },
@@ -134,6 +139,11 @@
           "default": "us-east-1",
           "examples": ["us-east-1", "us-west-2", "eu-west-1"]
         },
+        "s3_verify_ssl": {
+          "type": "boolean",
+          "description": "Enable SSL certificate verification. Defaults to false for self-signed certificates (MinIO, Nutanix Objects, local development).",
+          "default": false
+        },
         "load_pattern": {
           "type": "string",
           "description": "How to load data from source",
@@ -182,7 +192,8 @@
         },
         "connection": {
           "type": "string",
-          "description": "Named connection for reuse across multiple entities"
+          "description": "Named connection for reuse across multiple entities",
+          "examples": ["crm_prod", "warehouse_readonly"]
         },
         "host": {
           "type": "string",
@@ -191,11 +202,13 @@
         },
         "database": {
           "type": "string",
-          "description": "Database name"
+          "description": "Database name",
+          "examples": ["SalesDB", "analytics_warehouse"]
         },
         "query": {
           "type": "string",
-          "description": "Custom SQL query (optional - defaults to SELECT * FROM entity)"
+          "description": "Custom SQL query (optional - defaults to SELECT * FROM entity)",
+          "examples": ["SELECT * FROM Customers WHERE active = 1", "SELECT id, name, updated_at FROM orders"]
         },
         "chunk_size": {
           "type": "integer",
@@ -274,6 +287,54 @@
               "description": "S3 URL addressing style. Use 'path' for most S3-compatible storage.",
               "enum": ["path", "virtual", "auto"],
               "examples": ["path"]
+            },
+            "s3_verify_ssl": {
+              "type": "boolean",
+              "description": "Enable SSL certificate verification. Defaults to false for self-signed certificates.",
+              "default": false
+            },
+            "record_type_position": {
+              "type": "array",
+              "items": {"type": "integer"},
+              "minItems": 2,
+              "maxItems": 2,
+              "description": "Character positions [start, end) that identify record type (0-indexed). E.g., [0, 1] means first character. Use with record_types for multi-record files.",
+              "examples": [[0, 1], [0, 2]]
+            },
+            "record_types": {
+              "type": "array",
+              "description": "Define how to parse each record type in a multi-record file (parent-child patterns like ABABBB)",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "Record type code found at record_type_position (e.g., 'A', 'B', 'H', 'D')"
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": ["parent", "child", "skip"],
+                    "description": "parent=master record, child=detail record (belongs to preceding parent), skip=ignore"
+                  },
+                  "columns": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Column names for this record type"
+                  },
+                  "widths": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "Column widths (characters) AFTER the type indicator"
+                  }
+                },
+                "required": ["type", "role"]
+              }
+            },
+            "output_mode": {
+              "type": "string",
+              "enum": ["flatten", "parent_only", "child_only"],
+              "default": "flatten",
+              "description": "How to output parent-child records. flatten=repeat parent columns on each child row, parent_only=extract only parent records, child_only=extract only child records"
             }
           }
         },
@@ -445,7 +506,7 @@
       "type": "object",
       "description": "Silver layer configuration - data curation",
       "additionalProperties": false,
-      "required": ["natural_keys", "change_timestamp"],
+      "comment": "natural_keys and change_timestamp are validated at runtime - required for most models but optional for periodic_snapshot",
       "properties": {
         "system": {
           "type": "string",
@@ -532,6 +593,15 @@
           "items": { "type": "string" },
           "description": "Columns to exclude (null = none). Cannot be used with attributes."
         },
+        "column_mapping": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Rename columns from Bronze to Silver. Keys are original column names, values are new names.",
+          "examples": [
+            { "ORDER_ID": "order_id", "CUST_NBR": "customer_number" },
+            { "LastModified": "updated_at" }
+          ]
+        },
         "partition_by": {
           "type": "array",
           "items": { "type": "string" },
@@ -580,6 +650,11 @@
           "description": "AWS region or region identifier for S3-compatible storage. Auto-wired from Bronze if not specified.",
           "default": "us-east-1",
           "examples": ["us-east-1", "us-west-2", "eu-west-1"]
+        },
+        "s3_verify_ssl": {
+          "type": "boolean",
+          "description": "Enable SSL certificate verification. Defaults to false for self-signed certificates. Auto-wired from Bronze if not specified.",
+          "default": false
         }
       }
     }

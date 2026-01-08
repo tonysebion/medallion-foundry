@@ -395,24 +395,32 @@ def validate_bronze_source(source: "BronzeSourceType") -> List[ValidationIssue]:
 
     # Fixed-width specific validation
     if source.source_type == SourceType.FILE_FIXED_WIDTH:
-        if "columns" not in source.options:
-            issues.append(
-                ValidationIssue(
-                    severity=ValidationSeverity.ERROR,
-                    field="options.columns",
-                    message="Fixed-width files require 'columns' list in options",
-                    suggestion='Add options={"columns": [...], "widths": [...]}',
+        # Multi-record-type mode uses record_types instead of columns/widths
+        has_multi_record = (
+            "record_type_position" in source.options
+            and "record_types" in source.options
+        )
+
+        if not has_multi_record:
+            # Standard single-record mode requires columns and widths
+            if "columns" not in source.options:
+                issues.append(
+                    ValidationIssue(
+                        severity=ValidationSeverity.ERROR,
+                        field="options.columns",
+                        message="Fixed-width files require 'columns' list in options",
+                        suggestion='Add options={"columns": [...], "widths": [...]} or use record_types for multi-record files',
+                    )
                 )
-            )
-        if "widths" not in source.options:
-            issues.append(
-                ValidationIssue(
-                    severity=ValidationSeverity.ERROR,
-                    field="options.widths",
-                    message="Fixed-width files require 'widths' list in options",
-                    suggestion='Add "widths": [10, 20, ...] to options',
+            if "widths" not in source.options:
+                issues.append(
+                    ValidationIssue(
+                        severity=ValidationSeverity.ERROR,
+                        field="options.widths",
+                        message="Fixed-width files require 'widths' list in options",
+                        suggestion='Add "widths": [10, 20, ...] to options or use record_types for multi-record files',
+                    )
                 )
-            )
 
     # Incremental load validation
     if source.load_pattern == LoadPattern.INCREMENTAL_APPEND:
@@ -885,13 +893,22 @@ def load_bronze_from_yaml(
     """
     config_dir = config_dir or Path.cwd()
 
-    # Required fields
+    # Collect ALL validation errors before failing (user-friendly!)
+    errors: List[str] = []
+
+    # Check required fields
     if "system" not in config:
-        raise YAMLConfigError("bronze.system is required")
+        errors.append("bronze.system is required (e.g., 'CRM', 'ERP', 'Salesforce')")
     if "entity" not in config:
-        raise YAMLConfigError("bronze.entity is required")
+        errors.append("bronze.entity is required (e.g., 'customers', 'orders')")
     if "source_type" not in config:
-        raise YAMLConfigError("bronze.source_type is required")
+        errors.append("bronze.source_type is required (e.g., 'file_csv', 'database_mssql')")
+
+    # If required fields are missing, report ALL of them at once
+    if errors:
+        raise YAMLConfigError(
+            "Missing required fields in bronze section:\n  - " + "\n  - ".join(errors)
+        )
 
     # Convert source_type string to enum
     source_type_str = config["source_type"].lower()
@@ -947,6 +964,7 @@ def load_bronze_from_yaml(
         ("s3_signature_version", "s3_signature_version"),
         ("s3_addressing_style", "s3_addressing_style"),
         ("s3_region", "region"),
+        ("s3_verify_ssl", "s3_verify_ssl"),
     ]
     for yaml_key, options_key in s3_option_keys:
         if yaml_key in config:
@@ -995,15 +1013,28 @@ def load_silver_from_yaml(
     """
     config_dir = config_dir or Path.cwd()
 
-    # Required fields
-    if "natural_keys" not in config:
-        raise YAMLConfigError("silver.natural_keys is required")
-    if "change_timestamp" not in config:
-        raise YAMLConfigError("silver.change_timestamp is required")
+    # Check if this is a periodic_snapshot model (keys are optional for this model)
+    model_str = config.get("model", "").lower()
+    is_periodic_snapshot = model_str == "periodic_snapshot"
 
-    # Ensure natural_keys is a list
-    natural_keys = config["natural_keys"]
-    if isinstance(natural_keys, str):
+    # Collect ALL validation errors before failing (user-friendly!)
+    errors: List[str] = []
+
+    # Check required fields (natural_keys and change_timestamp are optional for periodic_snapshot)
+    if "natural_keys" not in config and not is_periodic_snapshot:
+        errors.append("silver.natural_keys is required (e.g., ['id'] or ['customer_id', 'order_id'])")
+    if "change_timestamp" not in config and not is_periodic_snapshot:
+        errors.append("silver.change_timestamp is required (e.g., 'updated_at', 'modified_date')")
+
+    # If required fields are missing, report ALL of them at once
+    if errors:
+        raise YAMLConfigError(
+            "Missing required fields in silver section:\n  - " + "\n  - ".join(errors)
+        )
+
+    # Ensure natural_keys is a list (or None for periodic_snapshot)
+    natural_keys = config.get("natural_keys")
+    if natural_keys is not None and isinstance(natural_keys, str):
         natural_keys = [natural_keys]
 
     # Expand model preset if specified (before parsing individual settings)
@@ -1065,6 +1096,13 @@ def load_silver_from_yaml(
     if isinstance(exclude_columns, str):
         exclude_columns = [exclude_columns]
 
+    # Handle column_mapping - dictionary of old_name: new_name
+    column_mapping = config.get("column_mapping")
+    if column_mapping is not None and not isinstance(column_mapping, dict):
+        raise YAMLConfigError(
+            "column_mapping must be an object with {old_column: new_column} pairs"
+        )
+
     # Handle partition_by
     partition_by = config.get("partition_by")
     if isinstance(partition_by, str):
@@ -1119,6 +1157,7 @@ def load_silver_from_yaml(
         ("s3_signature_version", "s3_signature_version"),
         ("s3_addressing_style", "s3_addressing_style"),
         ("s3_region", "region"),
+        ("s3_verify_ssl", "s3_verify_ssl"),
     ]
     for yaml_key, storage_key in silver_s3_keys:
         if yaml_key in config:
@@ -1138,6 +1177,7 @@ def load_silver_from_yaml(
             storage_keys = [
                 "s3_signature_version",
                 "s3_addressing_style",
+                "s3_verify_ssl",
                 "endpoint_url",
                 "key",
                 "secret",
@@ -1152,13 +1192,14 @@ def load_silver_from_yaml(
     # Build SilverEntity
     return SilverEntity(
         natural_keys=natural_keys,
-        change_timestamp=config["change_timestamp"],
+        change_timestamp=config.get("change_timestamp"),
         system=system,
         entity=entity,
         source_path=source_path,
         target_path=target_path,
         attributes=attributes,
         exclude_columns=exclude_columns,
+        column_mapping=column_mapping,
         entity_kind=entity_kind,
         history_mode=history_mode,
         input_mode=input_mode,

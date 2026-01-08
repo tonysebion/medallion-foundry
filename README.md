@@ -11,14 +11,33 @@
 - **Pipeline-first CLI** — `python -m pipelines` discovers YAML and Python pipelines, supports Bronze-only/Silver-only runs, dry runs, pre-flight checks, and interactive pipeline creation.
 - **Sample data & helpers** — Scripts recreate canonical test data so you can exercise Bronze→Silver flows locally.
 
+## Requirements
+
+- **Python 3.9+** (tested on 3.9, 3.10, 3.11, 3.12, 3.13)
+- pip 21.0+ (for PEP 517 support)
+
 ## Quick start
 
 1. **Prepare the environment**
 
    ```powershell
+   # Windows
    python -m venv .venv
    .venv\Scripts\activate
    pip install -e .
+   ```
+
+   ```bash
+   # Linux/Mac
+   python -m venv .venv
+   source .venv/bin/activate
+   pip install -e .
+   ```
+
+   Or use the setup script for a complete development environment:
+
+   ```bash
+   python scripts/setup_dev.py
    ```
 
 2. **List the bundled pipelines**
