@@ -20,10 +20,11 @@ from typing import Any, Dict, List, Optional, Union
 
 import ibis
 
+from pipelines.lib.artifact_writer import write_artifacts
 from pipelines.lib.storage_config import InputMode, _configure_duckdb_s3, _extract_storage_options
 from pipelines.lib.env import utc_now_iso
 from pipelines.lib.curate import apply_cdc, build_history, dedupe_latest
-from pipelines.lib.io import maybe_dry_run
+from pipelines.lib.io import infer_column_types, maybe_dry_run
 from pipelines.lib._path_utils import is_object_storage_path, resolve_target_path, storage_path_exists
 from pipelines.lib.observability import get_structlog_logger
 
@@ -870,220 +871,134 @@ class SilverEntity:
         source: str,
     ) -> Dict[str, Any]:
         """Write to Silver target with metadata and checksums."""
-        from pipelines.lib.checksum import (
-            compute_bytes_sha256,
-            write_checksum_manifest_s3,
+        # Determine subject name for filename
+        subject_name = self.subject if self.subject else self._infer_subject_name(target)
+
+        # Infer column types for metadata
+        columns = infer_column_types(t, include_sql_types=False)
+
+        # Silver-specific metadata
+        silver_extra = {
+            "entity_kind": self.entity_kind.value,
+            "history_mode": self.history_mode.value,
+            "delete_mode": self.delete_mode.value,
+            "natural_keys": self.natural_keys,
+            "change_timestamp": self.change_timestamp,
+            "source_path": source,
+            "domain": self.domain,
+            "subject": self.subject,
+        }
+
+        # Silver-specific checksum metadata
+        checksum_extra = {
+            "entity_kind": self.entity_kind.value,
+            "history_mode": self.history_mode.value,
+            "natural_keys": self.natural_keys,
+        }
+
+        # Write using unified artifact writer
+        write_result = write_artifacts(
+            table=t,
+            target=target,
+            entity_name=subject_name,
+            columns=columns,
+            run_date=run_date,
+            extra_metadata=silver_extra,
+            storage_options=self.storage_options,
+            write_metadata=True,
+            write_checksums=True,
+            checksum_extra=checksum_extra,
+            partition_by=self.partition_by,
+            compression=self.parquet_compression or "snappy",
         )
-        from pipelines.lib.io import OutputMetadata, infer_column_types, write_silver_with_artifacts
-        from pipelines.lib.storage import get_storage
 
-        # Execute count before writing (Ibis is lazy)
-        row_count = t.count().execute()
-
-        if row_count == 0:
+        if write_result.row_count == 0:
             logger.warning("silver_no_rows_after_curation", target=target)
             return {
                 "row_count": 0,
                 "target": target,
             }
 
-        # For cloud storage, write data with metadata and checksums
+        # Write PolyBase DDL script for cloud storage
+        polybase_file = None
         if is_object_storage_path(target):
-            # Extract storage options from self.storage_options (which may contain
-            # s3_signature_version, s3_addressing_style from YAML config)
-            storage_opts = _extract_storage_options(self.storage_options)
-            storage = get_storage(target, **storage_opts)
-            storage.makedirs("")
+            polybase_file = self._write_polybase_ddl(target, columns)
 
-            write_opts = {}
-            if self.partition_by:
-                write_opts["partition_by"] = self.partition_by
-
-            # Determine subject name for filename
-            subject_name = self.subject if self.subject else self._infer_subject_name(target)
-
-            # Write parquet file with subject name
-            parquet_filename = f"{subject_name}.parquet"
-            written_files = []
-            if "parquet" in self.output_formats:
-                output_file = target.rstrip("/") + f"/{parquet_filename}"
-                if self.partition_by:
-                    # Partitioned writes - need DuckDB with S3 configured
-                    con = ibis.duckdb.connect()
-                    _configure_duckdb_s3(con, self.storage_options)
-                    arrow_table = t.to_pyarrow()
-                    duck_table = con.create_table("_temp_silver", arrow_table)
-                    duck_table.to_parquet(output_file, **write_opts)
-                else:
-                    # Non-partitioned - write via boto3 for reliable S3 endpoint handling
-                    import io
-                    import pyarrow.parquet as pq
-
-                    arrow_table = t.to_pyarrow()
-                    buffer = io.BytesIO()
-                    pq.write_table(
-                        arrow_table,
-                        buffer,
-                        compression=self.parquet_compression or "snappy",
-                    )
-                    parquet_bytes = buffer.getvalue()
-
-                    result = storage.write_bytes(parquet_filename, parquet_bytes)
-                    if not result.success:
-                        raise RuntimeError(f"Failed to write parquet to S3: {result.error}")
-                written_files.append(output_file)
-
-            # Infer column types for metadata
-            columns = infer_column_types(t, include_sql_types=False)
-            now = utc_now_iso()
-
-            # Write metadata to cloud storage
-            metadata = OutputMetadata(
-                row_count=int(row_count),
-                columns=columns,
-                written_at=now,
-                run_date=run_date,
-                data_files=[parquet_filename],
-                extra={
-                    "entity_kind": self.entity_kind.value,
-                    "history_mode": self.history_mode.value,
-                    "delete_mode": self.delete_mode.value,
-                    "natural_keys": self.natural_keys,
-                    "change_timestamp": self.change_timestamp,
-                    "source_path": source,
-                    "domain": self.domain,
-                    "subject": self.subject,
-                },
-            )
-            storage.write_text("_metadata.json", metadata.to_json())
-            logger.debug("silver_metadata_written", target=target)
-
-            # Write checksums to cloud storage
-            try:
-                # Read parquet file back to compute checksum
-                parquet_data = storage.read_bytes(parquet_filename)
-                file_checksum_data = [{
-                    "path": parquet_filename,
-                    "size_bytes": len(parquet_data),
-                    "sha256": compute_bytes_sha256(parquet_data),
-                }]
-                write_checksum_manifest_s3(
-                    storage,
-                    file_checksum_data,
-                    entity_kind=self.entity_kind.value,
-                    history_mode=self.history_mode.value,
-                    row_count=int(row_count),
-                    extra_metadata={
-                        "natural_keys": self.natural_keys,
-                    },
-                )
-                logger.debug("silver_checksums_written", target=target)
-            except Exception as e:
-                logger.warning("silver_checksum_write_failed", error=str(e))
-
-            # Write PolyBase DDL script to cloud storage
-            try:
-                from pipelines.lib.polybase import PolyBaseConfig, write_polybase_ddl_s3
-
-                # Extract entity name from target path (last non-empty segment)
-                target_parts = target.rstrip("/").split("/")
-                entity_name = target_parts[-1] if target_parts else "entity"
-
-                # Extract bucket/container from S3 URI for data source location
-                # s3://bucket/prefix/... -> s3://bucket/silver/
-                if target.startswith("s3://"):
-                    bucket = target.split("/")[2]
-                    data_source_location = f"s3://{bucket}/silver/"
-                    data_source_name = f"silver_{bucket}"
-                else:
-                    # ADLS: abfs://container@account.dfs.core.windows.net/...
-                    data_source_location = target.rsplit("/silver/", 1)[0] + "/silver/"
-                    data_source_name = "silver_adls"
-
-                # Build metadata dict for PolyBase generation
-                polybase_metadata = {
-                    "columns": columns,
-                    "entity_kind": self.entity_kind.value,
-                    "history_mode": self.history_mode.value,
-                    "delete_mode": self.delete_mode.value,
-                    "natural_keys": self.natural_keys,
-                    "change_timestamp": self.change_timestamp,
-                    "domain": self.domain,
-                    "subject": self.subject,
-                }
-
-                # Get S3 endpoint from environment if available
-                import os
-                s3_endpoint = os.environ.get("AWS_ENDPOINT_URL", "https://s3.amazonaws.com")
-                s3_access_key = os.environ.get("AWS_ACCESS_KEY_ID", "<your_access_key>")
-
-                polybase_config = PolyBaseConfig(
-                    data_source_name=data_source_name,
-                    data_source_location=data_source_location,
-                    credential_name="s3_credential",  # Placeholder - user must configure
-                    s3_endpoint=s3_endpoint,
-                    s3_access_key=s3_access_key,
-                )
-
-                write_polybase_ddl_s3(
-                    storage,
-                    polybase_metadata,
-                    polybase_config,
-                    entity_name=entity_name,
-                )
-                logger.debug("silver_polybase_ddl_written", target=target)
-            except Exception as e:
-                logger.warning("silver_polybase_write_failed", error=str(e))
-
-            logger.info("silver_curation_complete", row_count=row_count, target=target)
-
-            return {
-                "row_count": int(row_count),
-                "target": target,
-                "columns": list(t.columns),
-                "entity_kind": self.entity_kind.value,
-                "history_mode": self.history_mode.value,
-                "files": written_files,
-                "metadata_file": "_metadata.json",
-                "checksums_file": "_checksums.json",
-                "polybase_file": "_polybase.sql",
-            }
-
-        # Determine subject name for filename
-        subject_name = self.subject if self.subject else self._infer_subject_name(target)
-
-        # For local filesystem, use enhanced write with artifacts
-        silver_metadata = write_silver_with_artifacts(
-            t,
-            target,
-            entity_kind=self.entity_kind.value,
-            history_mode=self.history_mode.value,
-            natural_keys=self.natural_keys,
-            change_timestamp=self.change_timestamp,
-            format="parquet" if "parquet" in self.output_formats else "csv",
-            compression=self.parquet_compression,
-            partition_by=self.partition_by,
-            run_date=run_date,
-            source_path=source,
-            write_checksums=True,
-            subject_name=subject_name,
-            domain=self.domain,
-            subject=self.subject,
-        )
-
-        # Also write CSV if requested
+        # Also write CSV if requested (for local filesystem)
         if "csv" in self.output_formats and "parquet" in self.output_formats:
-            output_dir = Path(target)
-            csv_file = output_dir / f"{subject_name}.csv"
-            t.execute().to_csv(str(csv_file), index=False)
+            if not is_object_storage_path(target):
+                output_dir = Path(target)
+                csv_file = output_dir / f"{subject_name}.csv"
+                t.execute().to_csv(str(csv_file), index=False)
 
-        return {
-            "row_count": silver_metadata.row_count,
+        logger.info("silver_curation_complete", row_count=write_result.row_count, target=target)
+
+        result: Dict[str, Any] = {
+            "row_count": write_result.row_count,
             "target": target,
-            "columns": [c["name"] for c in silver_metadata.columns],
+            "columns": list(t.columns),
             "entity_kind": self.entity_kind.value,
             "history_mode": self.history_mode.value,
-            "files": silver_metadata.data_files,
-            "metadata_file": "_metadata.json",
-            "checksums_file": "_checksums.json",
+            "files": write_result.data_files,
         }
+
+        if write_result.metadata_file:
+            result["metadata_file"] = write_result.metadata_file
+        if write_result.checksums_file:
+            result["checksums_file"] = write_result.checksums_file
+        if polybase_file:
+            result["polybase_file"] = polybase_file
+
+        return result
+
+    def _write_polybase_ddl(self, target: str, columns: List[Dict[str, Any]]) -> Optional[str]:
+        """Write PolyBase DDL script to cloud storage."""
+        try:
+            import os
+            from pipelines.lib.polybase import PolyBaseConfig, write_polybase_ddl_s3
+            from pipelines.lib.storage import get_storage
+
+            storage_opts = _extract_storage_options(self.storage_options)
+            storage = get_storage(target, **storage_opts)
+
+            # Extract entity name from target path
+            target_parts = target.rstrip("/").split("/")
+            entity_name = target_parts[-1] if target_parts else "entity"
+
+            # Extract bucket/container from S3 URI
+            if target.startswith("s3://"):
+                bucket = target.split("/")[2]
+                data_source_location = f"s3://{bucket}/silver/"
+                data_source_name = f"silver_{bucket}"
+            else:
+                data_source_location = target.rsplit("/silver/", 1)[0] + "/silver/"
+                data_source_name = "silver_adls"
+
+            polybase_metadata = {
+                "columns": columns,
+                "entity_kind": self.entity_kind.value,
+                "history_mode": self.history_mode.value,
+                "delete_mode": self.delete_mode.value,
+                "natural_keys": self.natural_keys,
+                "change_timestamp": self.change_timestamp,
+                "domain": self.domain,
+                "subject": self.subject,
+            }
+
+            s3_endpoint = os.environ.get("AWS_ENDPOINT_URL", "https://s3.amazonaws.com")
+            s3_access_key = os.environ.get("AWS_ACCESS_KEY_ID", "<your_access_key>")
+
+            polybase_config = PolyBaseConfig(
+                data_source_name=data_source_name,
+                data_source_location=data_source_location,
+                credential_name="s3_credential",
+                s3_endpoint=s3_endpoint,
+                s3_access_key=s3_access_key,
+            )
+
+            write_polybase_ddl_s3(storage, polybase_metadata, polybase_config, entity_name=entity_name)
+            logger.debug("silver_polybase_ddl_written", target=target)
+            return "_polybase.sql"
+        except Exception as e:
+            logger.warning("silver_polybase_write_failed", error=str(e))
+            return None

@@ -13,16 +13,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import ibis
 import pandas as pd
 
+from pipelines.lib.artifact_writer import write_artifacts
 from pipelines.lib.connections import get_connection
 from pipelines.lib.env import expand_env_vars, expand_options, utc_now_iso
 from pipelines.lib.io import OutputMetadata, infer_column_types, maybe_dry_run, maybe_skip_if_exists
-from pipelines.lib.storage import get_storage
 from pipelines.lib.state import (
     WatermarkSource,
     delete_watermark,
@@ -859,33 +858,8 @@ class BronzeSource:
         last_watermark: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Write to Bronze target with optional checksums and metadata."""
-        from pipelines.lib.checksum import (
-            compute_bytes_sha256,
-            write_checksum_manifest,
-            write_checksum_manifest_s3,
-        )
-        from pipelines.lib.storage import parse_uri
-
-        # Execute count before writing (Ibis is lazy)
-        # Ibis count() returns different types depending on backend
-        count_result = t.count().execute()
-        row_count: int = int(count_result.iloc[0] if hasattr(count_result, "iloc") else count_result)
-
-        if row_count == 0:
-            logger.warning("bronze_no_rows", system=self.system, entity=self.entity)
-            return {
-                "row_count": 0,
-                "target": target,
-                "source_type": self.source_type.value,
-            }
-
-        # Infer column types for metadata using shared function
+        # Infer column types for metadata
         columns = infer_column_types(t, include_sql_types=False)
-        now = utc_now_iso()
-
-        # Determine output format based on target using storage backend
-        data_files: List[str] = []
-        scheme, _ = parse_uri(target)
 
         # Bronze-specific metadata fields
         bronze_extra = {
@@ -898,133 +872,62 @@ class BronzeSource:
             "last_watermark": last_watermark,
         }
 
-        if scheme in ("s3", "abfs"):
-            # Cloud storage - use boto3 via S3Storage for reliable S3 writes
-            # Note: Ibis to_parquet() may not respect S3 endpoint configuration
-            # when the table comes from a non-DuckDB backend (e.g., MSSQL)
-            import io
-            import pyarrow.parquet as pq
+        # Bronze-specific checksum metadata
+        checksum_extra = {
+            "entity_kind": "bronze",
+            "system": self.system,
+            "entity": self.entity,
+            "load_pattern": self.load_pattern.value,
+        }
 
-            storage_opts = _extract_storage_options(self.options)
-            storage = get_storage(target, **storage_opts)
-            storage.makedirs("")  # Ensure target exists
+        # Only partition for cloud storage (original behavior)
+        # Local writes use single file (partition_by only applies to S3/ADLS)
+        from pipelines.lib._path_utils import is_object_storage_path
+        partition_by = self.partition_by if is_object_storage_path(target) else None
 
-            parquet_filename = f"{self.entity}.parquet"
+        # Write using unified artifact writer
+        write_result = write_artifacts(
+            table=t,
+            target=target,
+            entity_name=self.entity,
+            columns=columns,
+            run_date=run_date,
+            extra_metadata=bronze_extra,
+            storage_options=self.options,
+            write_metadata=self.write_metadata,
+            write_checksums=self.write_checksums,
+            checksum_extra=checksum_extra,
+            partition_by=partition_by,
+        )
 
-            if self.partition_by:
-                # Partitioned writes - use Ibis to_parquet with DuckDB connection
-                # that has S3 configured (this path is less common for Bronze)
-                con = ibis.duckdb.connect()
-                _configure_duckdb_s3(con, self.options)
-                # Execute to PyArrow and re-bind to configured DuckDB
-                arrow_table = t.to_pyarrow()
-                duck_table = con.create_table("_temp_bronze", arrow_table)
-                duck_table.to_parquet(target, partition_by=self.partition_by)
-                data_files.append(target)
-            else:
-                # No partitioning - write via boto3 for reliable S3 endpoint handling
-                arrow_table = t.to_pyarrow()
-                buffer = io.BytesIO()
-                pq.write_table(arrow_table, buffer, compression="snappy")
-                parquet_bytes = buffer.getvalue()
-
-                result = storage.write_bytes(parquet_filename, parquet_bytes)
-                if not result.success:
-                    raise RuntimeError(f"Failed to write parquet to S3: {result.error}")
-                data_files.append(f"{target.rstrip('/')}/{parquet_filename}")
-
-            # Write metadata to cloud storage
-            if self.write_metadata:
-                metadata = OutputMetadata(
-                    row_count=row_count,
-                    columns=columns,
-                    written_at=now,
-                    run_date=run_date,
-                    data_files=[parquet_filename],
-                    extra=bronze_extra,
-                )
-                storage.write_text("_metadata.json", metadata.to_json())
-                logger.debug("bronze_metadata_written", target=target)
-
-            # Write checksums to cloud storage
-            if self.write_checksums:
-                try:
-                    # Read parquet file back to compute checksum
-                    parquet_data = storage.read_bytes(parquet_filename)
-                    file_checksum_data = [{
-                        "path": parquet_filename,
-                        "size_bytes": len(parquet_data),
-                        "sha256": compute_bytes_sha256(parquet_data),
-                    }]
-                    write_checksum_manifest_s3(
-                        storage,
-                        file_checksum_data,
-                        entity_kind="bronze",
-                        row_count=row_count,
-                        extra_metadata={
-                            "system": self.system,
-                            "entity": self.entity,
-                            "load_pattern": self.load_pattern.value,
-                        },
-                    )
-                    logger.debug("bronze_checksums_written", target=target)
-                except Exception as e:
-                    logger.warning("bronze_checksum_write_failed", error=str(e))
-        else:
-            # Local filesystem - write with artifacts
-            storage = get_storage(target)
-            storage.makedirs("")
-            local_output_file = Path(target) / f"{self.entity}.parquet"
-            t.to_parquet(str(local_output_file))
-            data_files.append(str(local_output_file))
-
-            # Write metadata
-            if self.write_metadata:
-                metadata = OutputMetadata(
-                    row_count=row_count,
-                    columns=columns,
-                    written_at=now,
-                    run_date=run_date,
-                    data_files=[Path(f).name for f in data_files],
-                    extra=bronze_extra,
-                )
-                storage.write_text("_metadata.json", metadata.to_json())
-                logger.debug("bronze_metadata_written", target=target)
-
-            # Write checksums
-            if self.write_checksums:
-                write_checksum_manifest(
-                    Path(target),
-                    [Path(f) for f in data_files],
-                    entity_kind="bronze",
-                    row_count=row_count,
-                    extra_metadata={
-                        "system": self.system,
-                        "entity": self.entity,
-                        "load_pattern": self.load_pattern.value,
-                    },
-                )
+        if write_result.row_count == 0:
+            logger.warning("bronze_no_rows", system=self.system, entity=self.entity)
+            return {
+                "row_count": 0,
+                "target": target,
+                "source_type": self.source_type.value,
+            }
 
         logger.info(
             "bronze_extraction_complete",
-            row_count=row_count,
+            row_count=write_result.row_count,
             system=self.system,
             entity=self.entity,
             target=target,
         )
 
         result: Dict[str, Any] = {
-            "row_count": row_count,
+            "row_count": write_result.row_count,
             "target": target,
             "source_type": self.source_type.value,
             "columns": [c["name"] for c in columns],
-            "files": [Path(f).name for f in data_files] if scheme == "local" else data_files,
+            "files": write_result.data_files,
         }
 
-        if self.write_metadata:
-            result["metadata_file"] = "_metadata.json"
-        if self.write_checksums:
-            result["checksums_file"] = "_checksums.json"
+        if write_result.metadata_file:
+            result["metadata_file"] = write_result.metadata_file
+        if write_result.checksums_file:
+            result["checksums_file"] = write_result.checksums_file
 
         return result
 

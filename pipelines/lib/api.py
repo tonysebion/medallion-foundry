@@ -45,7 +45,6 @@ from datetime import datetime
 from pipelines.lib.env import utc_now_iso
 from enum import Enum
 from functools import wraps
-from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
 
 import httpx
@@ -61,7 +60,7 @@ from tenacity import (
 )
 
 from pipelines.lib._path_utils import path_has_data, resolve_target_path
-from pipelines.lib.checksum import write_checksum_manifest
+from pipelines.lib.artifact_writer import write_artifacts
 from pipelines.lib.env import expand_env_vars, expand_options
 from pipelines.lib.io import OutputMetadata, infer_column_types, maybe_dry_run, maybe_skip_if_exists
 from pipelines.lib.state import get_watermark, save_watermark
@@ -1206,23 +1205,20 @@ class ApiSource:
         """Write records to target with metadata and checksums."""
         import ibis
 
+        if not records:
+            logger.warning("api_no_records", system=self.system, entity=self.entity)
+            return {
+                "row_count": 0,
+                "target": target,
+                "pages_fetched": pages_fetched,
+                "total_requests": total_requests,
+            }
+
         # Create Ibis table from records
         t = ibis.memtable(records)
-
-        row_count = len(records)
-        # Use shared column inference function
         columns = infer_column_types(records)
-        now = utc_now_iso()
 
-        # Write to target
-        output_dir = Path(target)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        output_file = output_dir / f"{self.entity}.parquet"
-        t.to_parquet(str(output_file))
-
-        data_files = [str(output_file)]
-
-        # API-specific metadata fields
+        # API-specific metadata
         api_extra = {
             "system": self.system,
             "entity": self.entity,
@@ -1234,55 +1230,44 @@ class ApiSource:
             "total_requests": total_requests,
         }
 
-        # Write metadata
-        if self.write_metadata:
-            metadata = OutputMetadata(
-                row_count=row_count,
-                columns=columns,
-                written_at=now,
-                run_date=run_date,
-                data_files=[Path(f).name for f in data_files],
-                extra=api_extra,
-            )
-            metadata_file = output_dir / "_metadata.json"
-            metadata_file.write_text(metadata.to_json(), encoding="utf-8")
-            logger.debug("Wrote metadata to %s", metadata_file)
-
-        # Write checksums
-        if self.write_checksums:
-            write_checksum_manifest(
-                output_dir,
-                [Path(f) for f in data_files],
-                entity_kind="bronze",
-                row_count=row_count,
-                extra_metadata={
-                    "system": self.system,
-                    "entity": self.entity,
-                    "source_type": "api_rest",
-                },
-            )
+        # Write using unified artifact writer
+        write_result = write_artifacts(
+            table=t,
+            target=target,
+            entity_name=self.entity,
+            columns=columns,
+            run_date=run_date,
+            extra_metadata=api_extra,
+            write_metadata=self.write_metadata,
+            write_checksums=self.write_checksums,
+            checksum_extra={
+                "system": self.system,
+                "entity": self.entity,
+                "source_type": "api_rest",
+            },
+        )
 
         logger.info(
-            "Wrote %d rows for %s.%s to %s",
-            row_count,
-            self.system,
-            self.entity,
-            target,
+            "api_extraction_complete",
+            row_count=write_result.row_count,
+            system=self.system,
+            entity=self.entity,
+            target=target,
         )
 
         result: Dict[str, Any] = {
-            "row_count": row_count,
+            "row_count": write_result.row_count,
             "target": target,
             "columns": [c["name"] for c in columns],
-            "files": [Path(f).name for f in data_files],
+            "files": write_result.data_files,
             "pages_fetched": pages_fetched,
             "total_requests": total_requests,
         }
 
-        if self.write_metadata:
-            result["metadata_file"] = "_metadata.json"
-        if self.write_checksums:
-            result["checksums_file"] = "_checksums.json"
+        if write_result.metadata_file:
+            result["metadata_file"] = write_result.metadata_file
+        if write_result.checksums_file:
+            result["checksums_file"] = write_result.checksums_file
 
         return result
 
