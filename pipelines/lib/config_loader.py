@@ -1090,15 +1090,21 @@ class PipelineFromYAML:
         self.logging_config = logging_config
 
         # If both bronze and silver are present, wire them together
-        if bronze and silver and not silver.source_path:
-            # Auto-wire Silver source from Bronze target
-            # Substitute {system} and {entity} placeholders with actual values
-            bronze_target = bronze.target_path.format(
-                system=bronze.system,
-                entity=bronze.entity,
-                run_date="{run_date}",  # Keep {run_date} for later substitution
-            )
-            silver.source_path = bronze_target.rstrip("/") + "/*.parquet"
+        if bronze and silver:
+            # Set Bronze references for source_path placeholder substitution
+            # This allows {system} and {entity} in Silver's source_path to resolve
+            silver._bronze_system = bronze.system
+            silver._bronze_entity = bronze.entity
+
+            if not silver.source_path:
+                # Auto-wire Silver source from Bronze target
+                # Substitute {system} and {entity} placeholders with actual values
+                bronze_target = bronze.target_path.format(
+                    system=bronze.system,
+                    entity=bronze.entity,
+                    run_date="{run_date}",  # Keep {run_date} for later substitution
+                )
+                silver.source_path = bronze_target.rstrip("/") + "/*.parquet"
 
         if silver and not silver.target_path:
             # Auto-generate Silver target using Hive-style partitioning

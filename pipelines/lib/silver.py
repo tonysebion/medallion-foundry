@@ -313,6 +313,11 @@ class SilverEntity:
     # Internal flag to track if this entity is used standalone or with Pipeline
     _standalone: bool = field(default=True, repr=False)
 
+    # Bronze layer references (set by Pipeline for source_path substitution)
+    # These allow {system} and {entity} placeholders in source_path
+    _bronze_system: Optional[str] = field(default=None, repr=False)
+    _bronze_entity: Optional[str] = field(default=None, repr=False)
+
     def __post_init__(self) -> None:
         """Validate configuration on instantiation.
 
@@ -422,6 +427,23 @@ class SilverEntity:
 
         return issues
 
+    def _get_source_format_vars(self, run_date: str) -> Dict[str, str]:
+        """Get format variables for source_path substitution.
+
+        Supports placeholders: {run_date}, {system}, {entity}, {domain}, {subject}
+        """
+        vars = {"run_date": run_date, "domain": self.domain, "subject": self.subject}
+        # Add Bronze system/entity if available (for source_path pointing to Bronze)
+        if self._bronze_system:
+            vars["system"] = self._bronze_system
+        if self._bronze_entity:
+            vars["entity"] = self._bronze_entity
+        return vars
+
+    def _resolve_source_path(self, run_date: str) -> str:
+        """Resolve source_path with placeholder substitution."""
+        return self.source_path.format(**self._get_source_format_vars(run_date))
+
     def _check_source(self, run_date: str) -> List[str]:
         """Check that source data exists.
 
@@ -429,7 +451,7 @@ class SilverEntity:
         """
         issues: List[str] = []
 
-        source_path = self.source_path.format(run_date=run_date)
+        source_path = self._resolve_source_path(run_date)
 
         if not storage_path_exists(source_path):
             issues.append(
@@ -475,7 +497,7 @@ class SilverEntity:
                     "  2. Use Pipeline(bronze=..., silver=...) to auto-wire from Bronze"
                 )
 
-            source = self.source_path.format(run_date=run_date)
+            source = self._resolve_source_path(run_date)
             target = self._resolve_target(target_override, run_date)
 
             dry_run_result = maybe_dry_run(

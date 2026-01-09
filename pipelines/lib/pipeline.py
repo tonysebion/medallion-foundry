@@ -115,9 +115,16 @@ class Pipeline:
 
         Only applies when both Bronze and Silver are configured and
         Silver's source_path is empty.
+
+        Also sets _bronze_system and _bronze_entity so Silver can resolve
+        {system} and {entity} placeholders in source_path.
         """
         if self.bronze is None or self.silver is None:
             return
+
+        # Always set Bronze references for source_path placeholder substitution
+        object.__setattr__(self.silver, "_bronze_system", self.bronze.system)
+        object.__setattr__(self.silver, "_bronze_entity", self.bronze.entity)
 
         # Check if Silver needs source_path auto-wiring (empty or placeholder)
         silver_source = getattr(self.silver, "source_path", "")
