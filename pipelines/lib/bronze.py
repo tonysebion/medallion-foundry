@@ -182,8 +182,8 @@ class BronzeSource:
         # Top-level params take precedence over options dict
         self._merge_top_level_params()
 
-        # Validate configuration (local import to avoid circular import)
-        from pipelines.lib.config_loader import validate_and_raise
+        # Validate configuration
+        from pipelines.lib.validators import validate_and_raise
         try:
             validate_and_raise(source=self)
         except ValueError as exc:

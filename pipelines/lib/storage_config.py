@@ -17,7 +17,22 @@ from pipelines.lib.observability import get_structlog_logger
 
 logger = get_structlog_logger(__name__)
 
-__all__ = ["InputMode", "_extract_storage_options", "_configure_duckdb_s3"]
+__all__ = [
+    "InputMode",
+    "S3_YAML_TO_STORAGE_OPTIONS",
+    "_configure_duckdb_s3",
+    "_extract_storage_options",
+]
+
+# S3 storage option mappings (YAML key -> storage backend key)
+# Used by both Bronze and Silver YAML loaders
+S3_YAML_TO_STORAGE_OPTIONS: tuple[tuple[str, str], ...] = (
+    ("s3_endpoint_url", "endpoint_url"),
+    ("s3_signature_version", "s3_signature_version"),
+    ("s3_addressing_style", "s3_addressing_style"),
+    ("s3_region", "region"),
+    ("s3_verify_ssl", "s3_verify_ssl"),
+)
 
 
 class InputMode(Enum):
