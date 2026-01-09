@@ -29,6 +29,8 @@ from pipelines.lib.config_loader import (
     load_silver_from_yaml,
     load_pipeline,
     YAMLConfigError,
+    MODELS_REQUIRING_KEYS,
+    CDC_MODELS,
 )
 
 
@@ -320,6 +322,8 @@ bronze:
   entity: customers
   source_type: file_csv
   source_path: ./data/customers.csv
+  load_pattern: incremental
+  watermark_column: updated_at
 
 silver:
   natural_keys: [customer_id]
@@ -344,6 +348,8 @@ bronze:
   entity: events
   source_type: file_csv
   source_path: ./data/events.csv
+  load_pattern: incremental
+  watermark_column: event_time
 
 silver:
   natural_keys: [event_id]
@@ -368,7 +374,9 @@ bronze:
   entity: orders
   source_type: file_csv
   source_path: ./data/orders.csv
-  input_mode: replace_daily  # Bronze specifies replace_daily
+  load_pattern: incremental
+  watermark_column: updated_at
+  input_mode: replace_daily  # Bronze specifies replace_daily (unusual but explicit)
 
 silver:
   natural_keys: [order_id]
@@ -378,7 +386,11 @@ silver:
         config_file = tmp_path / "pipeline.yaml"
         config_file.write_text(yaml_content)
 
-        pipeline = load_pipeline(config_file)
+        import warnings
+        # This will warn about input_mode mismatch, but we're testing the override
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            pipeline = load_pipeline(config_file)
 
         # Model's input_mode (append_log) should win over Bronze's (replace_daily)
         assert pipeline.silver.input_mode == InputMode.APPEND_LOG
@@ -547,3 +559,341 @@ silver:
         assert pipeline.silver.history_mode == HistoryMode.CURRENT_ONLY
         assert pipeline.silver.input_mode == InputMode.APPEND_LOG
         assert pipeline.silver.delete_mode == DeleteMode.TOMBSTONE
+
+
+class TestModelValidationRequirements:
+    """Tests for model-specific field requirements."""
+
+    @pytest.mark.parametrize("model", list(MODELS_REQUIRING_KEYS))
+    def test_model_requires_natural_keys(self, tmp_path: Path, model: str):
+        """Non-periodic models require natural_keys."""
+        config = {
+            "model": model,
+            "change_timestamp": "updated_at",
+            "source_path": "./bronze/*.parquet",
+            "target_path": "./silver/",
+        }
+        with pytest.raises(YAMLConfigError) as exc_info:
+            load_silver_from_yaml(config, tmp_path)
+        assert "natural_keys" in str(exc_info.value).lower()
+
+    @pytest.mark.parametrize("model", list(MODELS_REQUIRING_KEYS))
+    def test_model_requires_change_timestamp(self, tmp_path: Path, model: str):
+        """Non-periodic models require change_timestamp."""
+        config = {
+            "model": model,
+            "natural_keys": ["id"],
+            "source_path": "./bronze/*.parquet",
+            "target_path": "./silver/",
+        }
+        with pytest.raises(YAMLConfigError) as exc_info:
+            load_silver_from_yaml(config, tmp_path)
+        assert "change_timestamp" in str(exc_info.value).lower()
+
+    def test_periodic_snapshot_optional_keys(self, tmp_path: Path):
+        """periodic_snapshot does not require natural_keys or change_timestamp."""
+        config = {
+            "model": "periodic_snapshot",
+            "source_path": "./bronze/*.parquet",
+            "target_path": "./silver/",
+        }
+        silver = load_silver_from_yaml(config, tmp_path)
+        assert silver.natural_keys is None
+        assert silver.change_timestamp is None
+
+    def test_no_model_requires_keys(self, tmp_path: Path):
+        """When no model specified, natural_keys and change_timestamp are required."""
+        config = {
+            "source_path": "./bronze/*.parquet",
+            "target_path": "./silver/",
+        }
+        with pytest.raises(YAMLConfigError) as exc_info:
+            load_silver_from_yaml(config, tmp_path)
+        assert "natural_keys" in str(exc_info.value).lower()
+
+    def test_error_message_suggests_periodic_snapshot(self, tmp_path: Path):
+        """Error message suggests periodic_snapshot when keys missing."""
+        config = {
+            "model": "scd_type_2",
+            "source_path": "./bronze/*.parquet",
+            "target_path": "./silver/",
+        }
+        with pytest.raises(YAMLConfigError) as exc_info:
+            load_silver_from_yaml(config, tmp_path)
+        assert "periodic_snapshot" in str(exc_info.value)
+
+
+class TestCDCModelCrossValidation:
+    """Tests for CDC model cross-validation with Bronze layer."""
+
+    @pytest.mark.parametrize("model", list(CDC_MODELS))
+    def test_cdc_model_warns_without_cdc_load_pattern(self, tmp_path: Path, model: str):
+        """CDC models should error when bronze isn't using CDC load pattern."""
+        from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
+
+        bronze = BronzeSource(
+            system="test",
+            entity="orders",
+            source_type=SourceType.FILE_CSV,
+            source_path="./data/orders.csv",
+            target_path="./bronze/",
+            load_pattern=LoadPattern.FULL_SNAPSHOT,  # Not CDC!
+        )
+
+        config = {
+            "model": model,
+            "natural_keys": ["order_id"],
+            "change_timestamp": "updated_at",
+            "source_path": "./bronze/*.parquet",
+            "target_path": "./silver/",
+        }
+
+        with pytest.raises(YAMLConfigError) as exc_info:
+            load_silver_from_yaml(config, tmp_path, bronze=bronze)
+        assert "load_pattern" in str(exc_info.value).lower()
+        assert "cdc" in str(exc_info.value).lower()
+
+    @pytest.mark.parametrize("model", list(CDC_MODELS))
+    def test_cdc_model_accepts_cdc_load_pattern(self, tmp_path: Path, model: str):
+        """CDC models should accept bronze with CDC load pattern."""
+        from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
+
+        bronze = BronzeSource(
+            system="test",
+            entity="orders",
+            source_type=SourceType.FILE_CSV,
+            source_path="./data/orders.csv",
+            target_path="./bronze/",
+            load_pattern=LoadPattern.CDC,
+        )
+
+        config = {
+            "model": model,
+            "natural_keys": ["order_id"],
+            "change_timestamp": "updated_at",
+            "source_path": "./bronze/*.parquet",
+            "target_path": "./silver/",
+        }
+
+        # Should not raise
+        silver = load_silver_from_yaml(config, tmp_path, bronze=bronze)
+        assert silver is not None
+
+
+class TestBronzeSilverCrossValidation:
+    """Tests for Bronze-Silver consistency validation."""
+
+    # Rule 1: full_snapshot with append_log models is inefficient but works (warning)
+    @pytest.mark.parametrize("model", ["full_merge_dedupe", "incremental_merge", "scd_type_2", "event_log"])
+    def test_full_snapshot_with_append_log_models_warns(self, tmp_path: Path, model: str):
+        """full_snapshot Bronze + append_log Silver models = warning (inefficient but works)."""
+        from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
+
+        bronze = BronzeSource(
+            system="test",
+            entity="data",
+            source_type=SourceType.FILE_CSV,
+            source_path="./data.csv",
+            target_path="./bronze/",
+            load_pattern=LoadPattern.FULL_SNAPSHOT,
+        )
+        config = {
+            "model": model,
+            "natural_keys": ["id"],
+            "change_timestamp": "updated_at",
+            "source_path": "./bronze/*.parquet",
+            "target_path": "./silver/",
+        }
+        # Should warn about inefficiency, but allow it (produces correct results)
+        with pytest.warns(UserWarning, match="inefficient"):
+            silver = load_silver_from_yaml(config, tmp_path, bronze)
+        assert silver is not None
+
+    def test_full_snapshot_valid_with_periodic_snapshot(self, tmp_path: Path):
+        """full_snapshot Bronze + periodic_snapshot Silver = valid."""
+        from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
+
+        bronze = BronzeSource(
+            system="test",
+            entity="data",
+            source_type=SourceType.FILE_CSV,
+            source_path="./data.csv",
+            target_path="./bronze/",
+            load_pattern=LoadPattern.FULL_SNAPSHOT,
+        )
+        config = {
+            "model": "periodic_snapshot",
+            "source_path": "./bronze/*.parquet",
+            "target_path": "./silver/",
+        }
+        silver = load_silver_from_yaml(config, tmp_path, bronze)
+        assert silver is not None
+
+    # Rule 2: incremental with periodic_snapshot causes DATA LOSS - error
+    def test_incremental_with_periodic_snapshot_errors(self, tmp_path: Path):
+        """incremental Bronze + periodic_snapshot Silver = error (DATA LOSS)."""
+        from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
+
+        bronze = BronzeSource(
+            system="test",
+            entity="data",
+            source_type=SourceType.FILE_CSV,
+            source_path="./data.csv",
+            target_path="./bronze/",
+            load_pattern=LoadPattern.INCREMENTAL_APPEND,
+            watermark_column="updated_at",
+        )
+        config = {
+            "model": "periodic_snapshot",
+            "source_path": "./bronze/*.parquet",
+            "target_path": "./silver/",
+        }
+        with pytest.raises(YAMLConfigError) as exc_info:
+            load_silver_from_yaml(config, tmp_path, bronze)
+        # The error now explains which patterns are valid for periodic_snapshot
+        assert "periodic_snapshot" in str(exc_info.value).lower()
+        assert "full_snapshot" in str(exc_info.value).lower()  # Tells user the valid pattern
+
+    # Rule 3: CDC Bronze with non-CDC Silver warns
+    def test_cdc_bronze_warns_on_non_cdc_silver(self, tmp_path: Path):
+        """Warning when Bronze is CDC but Silver doesn't handle it."""
+        from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
+
+        bronze = BronzeSource(
+            system="test",
+            entity="data",
+            source_type=SourceType.FILE_CSV,
+            source_path="./data.csv",
+            target_path="./bronze/",
+            load_pattern=LoadPattern.CDC,
+        )
+        config = {
+            "model": "full_merge_dedupe",
+            "natural_keys": ["id"],
+            "change_timestamp": "updated_at",
+            "source_path": "./bronze/*.parquet",
+            "target_path": "./silver/",
+        }
+        with pytest.warns(UserWarning, match="not CDC-aware"):
+            load_silver_from_yaml(config, tmp_path, bronze)
+
+    # Rule 4: delete_mode requires CDC
+    def test_delete_mode_requires_cdc_pattern(self, tmp_path: Path):
+        """delete_mode: tombstone/hard_delete requires CDC."""
+        config = {
+            "model": "full_merge_dedupe",
+            "natural_keys": ["id"],
+            "change_timestamp": "updated_at",
+            "delete_mode": "tombstone",
+            "source_path": "./bronze/*.parquet",
+            "target_path": "./silver/",
+        }
+        with pytest.raises(YAMLConfigError) as exc_info:
+            load_silver_from_yaml(config, tmp_path)
+        assert "delete_mode" in str(exc_info.value).lower()
+        assert "cdc" in str(exc_info.value).lower()
+
+    def test_delete_mode_hard_delete_requires_cdc(self, tmp_path: Path):
+        """delete_mode: hard_delete also requires CDC."""
+        config = {
+            "model": "scd_type_2",
+            "natural_keys": ["id"],
+            "change_timestamp": "updated_at",
+            "delete_mode": "hard_delete",
+            "source_path": "./bronze/*.parquet",
+            "target_path": "./silver/",
+        }
+        with pytest.raises(YAMLConfigError) as exc_info:
+            load_silver_from_yaml(config, tmp_path)
+        assert "delete_mode" in str(exc_info.value).lower()
+        assert "cdc" in str(exc_info.value).lower()
+
+    def test_delete_mode_ignore_always_valid(self, tmp_path: Path):
+        """delete_mode: ignore is valid with any load pattern."""
+        config = {
+            "model": "full_merge_dedupe",
+            "natural_keys": ["id"],
+            "change_timestamp": "updated_at",
+            "delete_mode": "ignore",
+            "source_path": "./bronze/*.parquet",
+            "target_path": "./silver/",
+        }
+        silver = load_silver_from_yaml(config, tmp_path)
+        assert silver.delete_mode == DeleteMode.IGNORE
+
+    def test_delete_mode_valid_with_cdc_model(self, tmp_path: Path):
+        """delete_mode: tombstone is valid with CDC model (even without Bronze)."""
+        from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
+
+        bronze = BronzeSource(
+            system="test",
+            entity="data",
+            source_type=SourceType.FILE_CSV,
+            source_path="./data.csv",
+            target_path="./bronze/",
+            load_pattern=LoadPattern.CDC,
+        )
+        config = {
+            "model": "cdc_current_tombstone",
+            "natural_keys": ["id"],
+            "change_timestamp": "updated_at",
+            "source_path": "./bronze/*.parquet",
+            "target_path": "./silver/",
+        }
+        # Should not raise - CDC model inherently handles deletes
+        silver = load_silver_from_yaml(config, tmp_path, bronze)
+        assert silver.delete_mode == DeleteMode.TOMBSTONE
+
+    # Rule 5: input_mode mismatch warns
+    def test_input_mode_mismatch_warns_full_snapshot(self, tmp_path: Path):
+        """Warning when explicit append_log contradicts full_snapshot Bronze pattern."""
+        from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
+
+        bronze = BronzeSource(
+            system="test",
+            entity="data",
+            source_type=SourceType.FILE_CSV,
+            source_path="./data.csv",
+            target_path="./bronze/",
+            load_pattern=LoadPattern.FULL_SNAPSHOT,
+        )
+        # Use full_merge_dedupe (which uses append_log) but test the input_mode warning.
+        # Since Rule 1 now only warns (not errors), we'll get both:
+        # - Rule 1 warning: full_snapshot with append_log model is inefficient
+        # - Rule 5 warning: explicit input_mode conflicts with Bronze
+        # We use explicit input_mode to trigger Rule 5
+        config = {
+            "model": "full_merge_dedupe",
+            "natural_keys": ["id"],
+            "change_timestamp": "updated_at",
+            "input_mode": "append_log",  # Explicitly set (matches model default, conflicts with Bronze)
+            "source_path": "./bronze/*.parquet",
+            "target_path": "./silver/",
+        }
+        # Should get multiple warnings, we check for the input_mode conflict one
+        with pytest.warns(UserWarning, match="conflicts with"):
+            load_silver_from_yaml(config, tmp_path, bronze)
+
+    def test_input_mode_mismatch_warns_incremental(self, tmp_path: Path):
+        """Warning when explicit replace_daily contradicts incremental Bronze."""
+        from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
+
+        bronze = BronzeSource(
+            system="test",
+            entity="data",
+            source_type=SourceType.FILE_CSV,
+            source_path="./data.csv",
+            target_path="./bronze/",
+            load_pattern=LoadPattern.INCREMENTAL_APPEND,
+            watermark_column="updated_at",
+        )
+        config = {
+            "model": "full_merge_dedupe",
+            "natural_keys": ["id"],
+            "change_timestamp": "updated_at",
+            "input_mode": "replace_daily",  # Wrong for incremental!
+            "source_path": "./bronze/*.parquet",
+            "target_path": "./silver/",
+        }
+        with pytest.warns(UserWarning, match="conflicts with"):
+            load_silver_from_yaml(config, tmp_path, bronze)

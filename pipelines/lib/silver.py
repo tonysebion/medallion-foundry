@@ -35,6 +35,8 @@ __all__ = [
     "EntityKind",
     "HistoryMode",
     "InputMode",
+    "ModelSpec",
+    "MODEL_SPECS",
     "SilverEntity",
     "SilverModel",
     "SILVER_MODEL_PRESETS",
@@ -92,70 +94,140 @@ class DeleteMode(Enum):
     HARD_DELETE = "hard_delete"  # Remove from Silver
 
 
-# Mapping from SilverModel to its configuration settings
+@dataclass(frozen=True)
+class ModelSpec:
+    """Specification for a Silver model preset.
+
+    This is the single source of truth for model configuration AND validation rules.
+    Each model defines both its settings and its compatibility constraints.
+    """
+    # Configuration settings (applied to SilverEntity)
+    entity_kind: str
+    history_mode: str
+    input_mode: str
+    delete_mode: Optional[str] = None
+
+    # Validation constraints (used by config_loader)
+    requires_keys: bool = True  # Does this model require natural_keys and change_timestamp?
+    requires_cdc_bronze: bool = False  # Must Bronze use load_pattern: cdc?
+    valid_bronze_patterns: Optional[tuple[str, ...]] = None  # Allowed Bronze patterns (None = all)
+    warns_on_bronze_patterns: Optional[tuple[str, ...]] = None  # Works but warns (inefficient)
+
+    def to_dict(self) -> dict[str, str]:
+        """Return configuration dict for backward compatibility."""
+        result = {
+            "entity_kind": self.entity_kind,
+            "history_mode": self.history_mode,
+            "input_mode": self.input_mode,
+        }
+        if self.delete_mode:
+            result["delete_mode"] = self.delete_mode
+        return result
+
+
+# Model specifications - single source of truth for config AND validation
+MODEL_SPECS: dict[str, ModelSpec] = {
+    # Standard models
+    "periodic_snapshot": ModelSpec(
+        entity_kind="state",
+        history_mode="current_only",
+        input_mode="replace_daily",
+        requires_keys=False,  # No deduplication needed
+        valid_bronze_patterns=("full_snapshot",),  # Only valid with full_snapshot
+    ),
+    "full_merge_dedupe": ModelSpec(
+        entity_kind="state",
+        history_mode="current_only",
+        input_mode="append_log",
+        requires_keys=True,
+        valid_bronze_patterns=("incremental", "full_snapshot", "cdc"),
+        warns_on_bronze_patterns=("full_snapshot", "cdc"),  # cdc works but loses delete info
+    ),
+    "incremental_merge": ModelSpec(
+        entity_kind="state",
+        history_mode="current_only",
+        input_mode="append_log",
+        requires_keys=True,
+        valid_bronze_patterns=("incremental", "full_snapshot", "cdc"),
+        warns_on_bronze_patterns=("full_snapshot", "cdc"),
+    ),
+    "scd_type_2": ModelSpec(
+        entity_kind="state",
+        history_mode="full_history",
+        input_mode="append_log",
+        requires_keys=True,
+        valid_bronze_patterns=("incremental", "full_snapshot", "cdc"),
+        warns_on_bronze_patterns=("full_snapshot", "cdc"),
+    ),
+    "event_log": ModelSpec(
+        entity_kind="event",
+        history_mode="current_only",
+        input_mode="append_log",
+        requires_keys=True,
+        valid_bronze_patterns=("incremental", "full_snapshot", "cdc"),
+        warns_on_bronze_patterns=("full_snapshot", "cdc"),
+    ),
+    # CDC models - require Bronze CDC pattern
+    "cdc_current": ModelSpec(
+        entity_kind="state",
+        history_mode="current_only",
+        input_mode="append_log",
+        delete_mode="ignore",
+        requires_keys=True,
+        requires_cdc_bronze=True,
+        valid_bronze_patterns=("cdc",),
+    ),
+    "cdc_current_tombstone": ModelSpec(
+        entity_kind="state",
+        history_mode="current_only",
+        input_mode="append_log",
+        delete_mode="tombstone",
+        requires_keys=True,
+        requires_cdc_bronze=True,
+        valid_bronze_patterns=("cdc",),
+    ),
+    "cdc_current_hard_delete": ModelSpec(
+        entity_kind="state",
+        history_mode="current_only",
+        input_mode="append_log",
+        delete_mode="hard_delete",
+        requires_keys=True,
+        requires_cdc_bronze=True,
+        valid_bronze_patterns=("cdc",),
+    ),
+    "cdc_history": ModelSpec(
+        entity_kind="state",
+        history_mode="full_history",
+        input_mode="append_log",
+        delete_mode="ignore",
+        requires_keys=True,
+        requires_cdc_bronze=True,
+        valid_bronze_patterns=("cdc",),
+    ),
+    "cdc_history_tombstone": ModelSpec(
+        entity_kind="state",
+        history_mode="full_history",
+        input_mode="append_log",
+        delete_mode="tombstone",
+        requires_keys=True,
+        requires_cdc_bronze=True,
+        valid_bronze_patterns=("cdc",),
+    ),
+    "cdc_history_hard_delete": ModelSpec(
+        entity_kind="state",
+        history_mode="full_history",
+        input_mode="append_log",
+        delete_mode="hard_delete",
+        requires_keys=True,
+        requires_cdc_bronze=True,
+        valid_bronze_patterns=("cdc",),
+    ),
+}
+
+
+# Backward compatibility: dict-based presets derived from MODEL_SPECS
 SILVER_MODEL_PRESETS: dict[str, dict[str, str]] = {
-    "periodic_snapshot": {
-        "entity_kind": "state",
-        "history_mode": "current_only",
-        "input_mode": "replace_daily",
-    },
-    "full_merge_dedupe": {
-        "entity_kind": "state",
-        "history_mode": "current_only",
-        "input_mode": "append_log",
-    },
-    "incremental_merge": {
-        "entity_kind": "state",
-        "history_mode": "current_only",
-        "input_mode": "append_log",
-    },
-    "scd_type_2": {
-        "entity_kind": "state",
-        "history_mode": "full_history",
-        "input_mode": "append_log",
-    },
-    "event_log": {
-        "entity_kind": "event",
-        "history_mode": "current_only",
-        "input_mode": "append_log",
-    },
-    # CDC presets - simplify CDC configuration with pre-configured delete_mode
-    "cdc_current": {
-        "entity_kind": "state",
-        "history_mode": "current_only",
-        "input_mode": "append_log",
-        "delete_mode": "ignore",
-    },
-    "cdc_current_tombstone": {
-        "entity_kind": "state",
-        "history_mode": "current_only",
-        "input_mode": "append_log",
-        "delete_mode": "tombstone",
-    },
-    "cdc_current_hard_delete": {
-        "entity_kind": "state",
-        "history_mode": "current_only",
-        "input_mode": "append_log",
-        "delete_mode": "hard_delete",
-    },
-    "cdc_history": {
-        "entity_kind": "state",
-        "history_mode": "full_history",
-        "input_mode": "append_log",
-        "delete_mode": "ignore",
-    },
-    "cdc_history_tombstone": {
-        "entity_kind": "state",
-        "history_mode": "full_history",
-        "input_mode": "append_log",
-        "delete_mode": "tombstone",
-    },
-    "cdc_history_hard_delete": {
-        "entity_kind": "state",
-        "history_mode": "full_history",
-        "input_mode": "append_log",
-        "delete_mode": "hard_delete",
-    },
+    name: spec.to_dict() for name, spec in MODEL_SPECS.items()
 }
 
 

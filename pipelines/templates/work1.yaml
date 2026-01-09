@@ -186,7 +186,7 @@ silver:
   # MODEL: Pre-built transformation pattern (simplifies configuration)
   #   Options for standard data:
   #     periodic_snapshot  - Simple dimension refresh, no deduplication
-  #     full_merge_dedupe  - Deduplicated current view (SCD Type 1) - MOST COMMON
+  #     full_merge_dedupe  - Deduplicated current view (SCD Type 1) - requires incremental Bronze
   #     incremental_merge  - For incremental loads with change tracking
   #     scd_type_2         - Full history with effective dates (is_current flag)
   #     event_log          - Immutable event stream (no deduplication)
@@ -198,7 +198,10 @@ silver:
   #     cdc_history           - CDC with full history (SCD2)
   #     cdc_history_tombstone - CDC with full history and soft deletes
   #     cdc_history_hard_delete - CDC with full history, deletes removed
-  model: full_merge_dedupe
+  #
+  # For full_snapshot Bronze, use periodic_snapshot (simple dimension refresh).
+  # For incremental Bronze with watermark, use full_merge_dedupe or scd_type_2.
+  model: periodic_snapshot
 
   # VALIDATE_SOURCE: Should Silver verify Bronze checksums before processing?
   #   "skip"   - No validation (fastest, default)

@@ -43,6 +43,7 @@ from pipelines.lib.silver import (
     DeleteMode,
     EntityKind,
     HistoryMode,
+    MODEL_SPECS,
     SilverEntity,
     SilverModel,
     SILVER_MODEL_PRESETS,
@@ -53,6 +54,29 @@ if TYPE_CHECKING:
     from pipelines.lib.silver import SilverEntity as SilverEntityType
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================
+# Model Validation Constants - Derived from MODEL_SPECS (single source of truth)
+# ============================================
+
+# Models that require natural_keys and change_timestamp
+# Derived from MODEL_SPECS.requires_keys
+MODELS_REQUIRING_KEYS: frozenset[str] = frozenset(
+    name for name, spec in MODEL_SPECS.items() if spec.requires_keys
+)
+
+# CDC models that require bronze.load_pattern=cdc
+# Derived from MODEL_SPECS.requires_cdc_bronze
+CDC_MODELS: frozenset[str] = frozenset(
+    name for name, spec in MODEL_SPECS.items() if spec.requires_cdc_bronze
+)
+
+# Models that use append_log input_mode (accumulate data over time)
+# Derived from MODEL_SPECS.input_mode
+APPEND_LOG_MODELS: frozenset[str] = frozenset(
+    name for name, spec in MODEL_SPECS.items() if spec.input_mode == "append_log"
+)
 
 
 # ============================================
@@ -1013,24 +1037,112 @@ def load_silver_from_yaml(
     """
     config_dir = config_dir or Path.cwd()
 
-    # Check if this is a periodic_snapshot model (keys are optional for this model)
+    # Get model name and spec for validation
     model_str = config.get("model", "").lower()
-    is_periodic_snapshot = model_str == "periodic_snapshot"
+    model_spec = MODEL_SPECS.get(model_str) if model_str else None
+
+    # Determine if keys are required based on model spec
+    # When no model is specified, default behavior requires keys
+    requires_keys = (model_spec.requires_keys if model_spec else True)
 
     # Collect ALL validation errors before failing (user-friendly!)
     errors: List[str] = []
 
-    # Check required fields (natural_keys and change_timestamp are optional for periodic_snapshot)
-    if "natural_keys" not in config and not is_periodic_snapshot:
-        errors.append("silver.natural_keys is required (e.g., ['id'] or ['customer_id', 'order_id'])")
-    if "change_timestamp" not in config and not is_periodic_snapshot:
-        errors.append("silver.change_timestamp is required (e.g., 'updated_at', 'modified_date')")
+    # Check required fields based on model spec
+    if requires_keys:
+        if "natural_keys" not in config:
+            errors.append(
+                f"silver.natural_keys is required for model '{model_str or 'default'}'. "
+                "Use model: periodic_snapshot if you don't need deduplication."
+            )
+        if "change_timestamp" not in config:
+            errors.append(
+                f"silver.change_timestamp is required for model '{model_str or 'default'}'. "
+                "Use model: periodic_snapshot if you don't need change tracking."
+            )
 
-    # If required fields are missing, report ALL of them at once
+    # Bronze pattern validation using MODEL_SPECS (single source of truth)
+    if bronze is not None and model_spec:
+        bronze_pattern_name = bronze.load_pattern.value.lower()
+        # Normalize pattern names for comparison
+        if bronze_pattern_name == "incremental_append":
+            bronze_pattern_name = "incremental"
+
+        # Check if Bronze pattern is valid for this model
+        if model_spec.valid_bronze_patterns:
+            if bronze_pattern_name not in model_spec.valid_bronze_patterns:
+                valid_patterns = ", ".join(model_spec.valid_bronze_patterns)
+                errors.append(
+                    f"Model '{model_str}' requires bronze.load_pattern to be one of: {valid_patterns} "
+                    f"(currently: {bronze.load_pattern.value})"
+                )
+            # Check if this combination produces a warning (works but suboptimal)
+            elif model_spec.warns_on_bronze_patterns and bronze_pattern_name in model_spec.warns_on_bronze_patterns:
+                import warnings
+                # Different warning messages based on the Bronze pattern
+                if bronze_pattern_name == "full_snapshot":
+                    warnings.warn(
+                        f"bronze.load_pattern: {bronze.load_pattern.value} with silver.model: {model_str} is inefficient. "
+                        f"Each Bronze partition contains ALL records (overlapping data). Silver will union "
+                        "all partitions and dedupe, which works but wastes storage and processing time. "
+                        "Consider: 1) Use periodic_snapshot if you just need the latest snapshot, or "
+                        "2) Change Bronze to incremental with watermark_column for efficient accumulation.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                elif bronze_pattern_name == "cdc":
+                    warnings.warn(
+                        f"bronze.load_pattern: cdc but silver.model: {model_str or 'default'} is not CDC-aware. "
+                        "Consider using a cdc_* model (cdc_current, cdc_history, etc.) to properly handle "
+                        "insert/update/delete operations.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+
+    # Delete mode requires CDC load pattern or CDC model
+    delete_mode_str = config.get("delete_mode", "ignore").lower()
+    if delete_mode_str in ("tombstone", "hard_delete"):
+        is_cdc = (
+            (bronze is not None and bronze.load_pattern == LoadPattern.CDC) or
+            (model_spec is not None and model_spec.requires_cdc_bronze)
+        )
+        if not is_cdc:
+            errors.append(
+                f"delete_mode: {delete_mode_str} only makes sense with CDC data. "
+                "Either set bronze.load_pattern: cdc or use a cdc_* Silver model."
+            )
+
+    # If any errors accumulated, report ALL of them at once
     if errors:
         raise YAMLConfigError(
-            "Missing required fields in silver section:\n  - " + "\n  - ".join(errors)
+            "Configuration errors in silver section:\n  - " + "\n  - ".join(errors)
         )
+
+    # Warning: Bronze CDC pattern with no model specified should use CDC-aware config
+    if bronze is not None and bronze.load_pattern == LoadPattern.CDC and model_spec is None:
+        import warnings
+        warnings.warn(
+            f"bronze.load_pattern: cdc but silver.model: {model_str or 'default'} is not CDC-aware. "
+            "Consider using a cdc_* model (cdc_current, cdc_history, etc.) to properly handle "
+            "insert/update/delete operations.",
+            UserWarning,
+            stacklevel=2,
+        )
+
+    # Warning: Explicit input_mode should match Bronze pattern (deprecation candidate)
+    if bronze is not None and "input_mode" in config:
+        explicit_input = config["input_mode"].lower()
+        expected_input = "append_log" if bronze.load_pattern in (LoadPattern.INCREMENTAL_APPEND, LoadPattern.CDC) else "replace_daily"
+        if explicit_input != expected_input:
+            import warnings
+            warnings.warn(
+                f"Explicit silver.input_mode: {explicit_input} conflicts with "
+                f"bronze.load_pattern: {bronze.load_pattern.value} (expected: {expected_input}). "
+                "This may cause unexpected behavior. "
+                "Note: input_mode is typically auto-derived from the model and Bronze pattern.",
+                UserWarning,
+                stacklevel=2,
+            )
 
     # Ensure natural_keys is a list (or None for periodic_snapshot)
     natural_keys = config.get("natural_keys")

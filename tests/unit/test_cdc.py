@@ -192,21 +192,23 @@ class TestConfigLoaderCDC:
         assert silver.delete_mode == DeleteMode.IGNORE
 
     def test_load_silver_with_delete_mode_tombstone(self, tmp_path):
-        """Test loading Silver config with delete_mode=tombstone."""
+        """Test loading Silver config with delete_mode=tombstone requires CDC model."""
         config = {
+            "model": "cdc_current",  # CDC model is required for tombstone/hard_delete
             "natural_keys": ["customer_id"],
             "change_timestamp": "updated_at",
-            "delete_mode": "tombstone",
+            "delete_mode": "tombstone",  # Overrides the model default (ignore)
         }
         silver = load_silver_from_yaml(config, tmp_path)
         assert silver.delete_mode == DeleteMode.TOMBSTONE
 
     def test_load_silver_with_delete_mode_hard_delete(self, tmp_path):
-        """Test loading Silver config with delete_mode=hard_delete."""
+        """Test loading Silver config with delete_mode=hard_delete requires CDC model."""
         config = {
+            "model": "cdc_current",  # CDC model is required for tombstone/hard_delete
             "natural_keys": ["customer_id"],
             "change_timestamp": "updated_at",
-            "delete_mode": "hard_delete",
+            "delete_mode": "hard_delete",  # Overrides the model default (ignore)
         }
         silver = load_silver_from_yaml(config, tmp_path)
         assert silver.delete_mode == DeleteMode.HARD_DELETE

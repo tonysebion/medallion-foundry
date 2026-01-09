@@ -146,7 +146,7 @@
         },
         "load_pattern": {
           "type": "string",
-          "description": "How to load data from source",
+          "description": "How to load data from source. IMPORTANT: This affects which Silver models are compatible!\n\n- full_snapshot: Extract ALL records each run. Each Bronze partition contains a complete snapshot. Use with Silver model: periodic_snapshot.\n\n- incremental: Extract only NEW/CHANGED records since last run (requires watermark_column). Bronze partitions are additive. Use with Silver models: full_merge_dedupe, scd_type_2, event_log.\n\n- cdc: Change Data Capture with Insert/Update/Delete markers (requires cdc_operation_column). Use with Silver models: cdc_current, cdc_history, etc.\n\nSee docs/MODEL_SELECTION.md for detailed guidance.",
           "enum": ["full_snapshot", "incremental", "incremental_append", "cdc"],
           "default": "full_snapshot"
         },
@@ -506,7 +506,7 @@
       "type": "object",
       "description": "Silver layer configuration - data curation",
       "additionalProperties": false,
-      "comment": "natural_keys and change_timestamp are validated at runtime - required for most models but optional for periodic_snapshot",
+      "comment": "natural_keys and change_timestamp are required for all models except periodic_snapshot. Schema validation enforces this via allOf conditionals.",
       "properties": {
         "system": {
           "type": "string",
@@ -545,7 +545,7 @@
         },
         "model": {
           "type": "string",
-          "description": "Pre-built transformation pattern. Sets entity_kind, history_mode, input_mode, and delete_mode. Can be overridden by explicit settings.",
+          "description": "Pre-built transformation pattern. MUST be compatible with Bronze load_pattern!\n\nFor full_snapshot Bronze:\n- periodic_snapshot: Simple refresh, reads only today's Bronze partition\n\nFor incremental Bronze:\n- full_merge_dedupe: Reads ALL Bronze partitions, dedupes to current state (SCD1)\n- scd_type_2: Reads ALL Bronze partitions, keeps full history with effective dates\n- event_log: Reads ALL Bronze partitions, keeps immutable events\n\nFor cdc Bronze:\n- cdc_current: CDC → current state (ignores deletes)\n- cdc_current_tombstone: CDC → current state with soft deletes\n- cdc_current_hard_delete: CDC → current state, removes deleted records\n- cdc_history: CDC → full history (ignores deletes)\n- cdc_history_tombstone: CDC → full history with soft deletes\n- cdc_history_hard_delete: CDC → full history, removes deleted records\n\nSee docs/MODEL_SELECTION.md for detailed guidance.",
           "enum": [
             "periodic_snapshot",
             "full_merge_dedupe",
@@ -656,7 +656,43 @@
           "description": "Enable SSL certificate verification. Defaults to false for self-signed certificates. Auto-wired from Bronze if not specified.",
           "default": false
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "model": {
+                "enum": [
+                  "full_merge_dedupe",
+                  "incremental_merge",
+                  "scd_type_2",
+                  "event_log",
+                  "cdc_current",
+                  "cdc_current_tombstone",
+                  "cdc_current_hard_delete",
+                  "cdc_history",
+                  "cdc_history_tombstone",
+                  "cdc_history_hard_delete"
+                ]
+              }
+            },
+            "required": ["model"]
+          },
+          "then": {
+            "required": ["natural_keys", "change_timestamp"]
+          }
+        },
+        {
+          "if": {
+            "not": {
+              "required": ["model"]
+            }
+          },
+          "then": {
+            "required": ["natural_keys", "change_timestamp"]
+          }
+        }
+      ]
     }
   }
 }

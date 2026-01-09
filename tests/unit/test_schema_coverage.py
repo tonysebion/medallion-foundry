@@ -365,7 +365,11 @@ class TestSilverEnumFields:
         delete_modes = schema["definitions"]["silver"]["properties"]["delete_mode"]["enum"]
 
         for mode in delete_modes:
-            config = build_minimal_silver_config(delete_mode=mode)
+            # tombstone and hard_delete require CDC model; ignore works with any model
+            if mode in ("tombstone", "hard_delete"):
+                config = build_minimal_silver_config(model="cdc_current", delete_mode=mode)
+            else:
+                config = build_minimal_silver_config(delete_mode=mode)
             silver = load_silver_from_yaml(config)
             assert silver.delete_mode is not None
 
