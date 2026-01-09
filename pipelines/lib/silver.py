@@ -804,7 +804,15 @@ class SilverEntity:
             return self._curate_event(t)
 
     def _curate_state(self, t: ibis.Table) -> ibis.Table:
-        """Curate a STATE entity (slowly changing dimension)."""
+        """Curate a STATE entity (slowly changing dimension).
+
+        For periodic_snapshot model (no natural_keys/change_timestamp),
+        returns data as-is without deduplication.
+        """
+        # If no natural_keys or change_timestamp, skip deduplication (periodic_snapshot)
+        if not self.natural_keys or not self.change_timestamp:
+            return t
+
         if self.history_mode == HistoryMode.CURRENT_ONLY:
             # SCD1: Keep only the latest version per natural key
             return dedupe_latest(t, self.natural_keys, self.change_timestamp)
