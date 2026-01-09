@@ -24,8 +24,9 @@ from pipelines.lib.env import expand_env_vars, expand_options, utc_now_iso
 from pipelines.lib.io import OutputMetadata, infer_column_types, maybe_dry_run, maybe_skip_if_exists
 from pipelines.lib.storage import get_storage
 from pipelines.lib.state import (
+    WatermarkSource,
     delete_watermark,
-    get_watermark,
+    get_watermark_with_source,
     save_full_refresh,
     save_watermark,
     should_force_full_refresh,
@@ -46,8 +47,8 @@ from pipelines.lib.storage_config import (
 # Use structlog for structured logging with pipeline context
 logger = get_structlog_logger(__name__)
 
-# Re-export InputMode for backward compatibility (external code may import from bronze)
-__all__ = ["BronzeOutputMetadata", "BronzeSource", "InputMode", "LoadPattern", "SourceType"]
+# Re-export InputMode and WatermarkSource for backward compatibility (external code may import from bronze)
+__all__ = ["BronzeOutputMetadata", "BronzeSource", "InputMode", "LoadPattern", "SourceType", "WatermarkSource"]
 
 
 # Backwards compatibility: BronzeOutputMetadata is now OutputMetadata
@@ -147,6 +148,7 @@ class BronzeSource:
     load_pattern: LoadPattern = LoadPattern.FULL_SNAPSHOT
     input_mode: Optional[InputMode] = None  # How Silver interprets partitions (required in YAML)
     watermark_column: Optional[str] = None  # For incremental loads
+    watermark_source: WatermarkSource = WatermarkSource.DESTINATION  # Where to read watermarks
 
     # Database connection params (convenience - merged into options)
     # These are simpler than nesting in options dict
@@ -362,13 +364,21 @@ class BronzeSource:
                 self.load_pattern == LoadPattern.INCREMENTAL_APPEND
                 and self.watermark_column
             ):
-                last_watermark = get_watermark(self.system, self.entity)
+                last_watermark = get_watermark_with_source(
+                    system=self.system,
+                    entity=self.entity,
+                    source=self.watermark_source,
+                    target_path=target,
+                    watermark_column=self.watermark_column,
+                    storage_options=_extract_storage_options(self.options),
+                )
                 if last_watermark:
                     logger.info(
                         "bronze_incremental_load",
                         system=self.system,
                         entity=self.entity,
                         watermark=last_watermark,
+                        watermark_source=self.watermark_source.value,
                     )
 
             # Connect to DuckDB

@@ -420,7 +420,7 @@ class TestSchemaCompleteness:
         # (This list should be updated if schema changes)
         expected_handled = {
             "system", "entity", "source_type", "source_path", "target_path",
-            "load_pattern", "input_mode", "watermark_column",
+            "load_pattern", "input_mode", "watermark_column", "watermark_source",
             "connection", "host", "database", "query",
             "options", "partition_by", "chunk_size", "full_refresh_days",
             "write_checksums", "write_metadata",

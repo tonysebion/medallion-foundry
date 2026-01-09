@@ -22,12 +22,15 @@ __all__ = [
     "LateDataConfig",
     "LateDataMode",
     "LateDataResult",
+    "WatermarkSource",
     "detect_late_data",
     "filter_late_data",
     "get_late_records",
     "delete_watermark",
     "get_watermark",
     "get_watermark_age",
+    "get_watermark_from_destination",
+    "get_watermark_with_source",
     "list_watermarks",
     "clear_all_watermarks",
     "save_watermark",
@@ -45,6 +48,14 @@ class LateDataMode(Enum):
     WARN = "warn"
     REJECT = "reject"
     QUARANTINE = "quarantine"
+
+
+class WatermarkSource(Enum):
+    """Where to read watermark state from."""
+
+    DESTINATION = "destination"  # Read from Bronze _metadata.json (default)
+    LOCAL = "local"  # Read from .state/ directory (legacy)
+    AUTO = "auto"  # Try destination first, fall back to local
 
 
 @dataclass
@@ -550,3 +561,286 @@ def should_force_full_refresh(
         full_refresh_days,
     )
     return False
+
+
+# =============================================================================
+# Destination-Based Watermarks
+# =============================================================================
+
+
+def _find_latest_partition(
+    base_path: str,
+    partition_prefix: str = "dt=",
+    storage_options: Optional[Dict[str, Any]] = None,
+) -> Optional[str]:
+    """Find the latest partition directory by lexicographic sort of dt= values.
+
+    Uses get_storage() to work with any backend (local, S3, ADLS).
+
+    Args:
+        base_path: Base path to search for partitions
+        partition_prefix: Prefix for partition directories (default: "dt=")
+        storage_options: Storage credentials and configuration
+
+    Returns:
+        Full path to latest partition, or None if no partitions exist
+    """
+    from pipelines.lib.storage import get_storage, parse_uri
+
+    try:
+        scheme, _ = parse_uri(base_path)
+        partition_values = []
+
+        if scheme == "local":
+            # For local storage, use Path directly to list directories
+            base = Path(base_path)
+            if not base.exists():
+                logger.debug("Base path does not exist: %s", base_path)
+                return None
+
+            for item in base.iterdir():
+                if item.is_dir() and item.name.startswith(partition_prefix):
+                    value = item.name[len(partition_prefix) :]
+                    partition_values.append(value)
+        else:
+            # For cloud storage (S3, ADLS), use storage backend
+            # List files recursively and extract partition directories from paths
+            storage = get_storage(base_path, **(storage_options or {}))
+            items = storage.list_files(path="", recursive=True)
+
+            # Extract unique partition directories from file paths
+            seen_partitions = set()
+            for item in items:
+                # Path like "dt=2025-01-15/data.parquet" or "dt=2025-01-15/_metadata.json"
+                parts = item.path.replace("\\", "/").split("/")
+                for part in parts:
+                    if part.startswith(partition_prefix) and part not in seen_partitions:
+                        value = part[len(partition_prefix) :]
+                        partition_values.append(value)
+                        seen_partitions.add(part)
+
+        if not partition_values:
+            logger.debug("No partitions found at %s", base_path)
+            return None
+
+        # Sort and get latest (lexicographic sort works for ISO dates)
+        latest_value = sorted(partition_values)[-1]
+        latest_partition = f"{partition_prefix}{latest_value}"
+
+        # Return full path
+        if scheme == "local":
+            full_path = str(Path(base_path) / latest_partition)
+        else:
+            storage = get_storage(base_path, **(storage_options or {}))
+            full_path = storage.get_full_path(latest_partition)
+
+        logger.debug("Found latest partition: %s", full_path)
+        return full_path
+
+    except Exception as e:
+        logger.warning("Error finding latest partition at %s: %s", base_path, e)
+        return None
+
+
+def _scan_parquet_for_watermark(
+    partition_path: str,
+    watermark_column: str,
+    storage_options: Optional[Dict[str, Any]] = None,
+) -> Optional[str]:
+    """Scan parquet files to find MAX(watermark_column).
+
+    This is the fallback when _metadata.json is missing or corrupted.
+
+    Args:
+        partition_path: Path to the partition containing parquet files
+        watermark_column: Column to aggregate
+        storage_options: Storage credentials
+
+    Returns:
+        Maximum watermark value as string, or None
+    """
+    try:
+        import ibis
+
+        # Configure DuckDB for cloud storage if needed
+        con = ibis.duckdb.connect()
+
+        if partition_path.startswith("s3://"):
+            from pipelines.lib.storage_config import _configure_duckdb_s3
+
+            _configure_duckdb_s3(con, storage_options or {})
+
+        # Find parquet files in the partition
+        parquet_pattern = f"{partition_path.rstrip('/')}/*.parquet"
+
+        # Read and aggregate
+        t = con.read_parquet(parquet_pattern)
+        result = t.select(t[watermark_column].max().name("max_watermark")).execute()
+
+        if result.empty or result["max_watermark"].iloc[0] is None:
+            return None
+
+        max_val = result["max_watermark"].iloc[0]
+        logger.debug("Scanned parquet for watermark: %s", max_val)
+        return str(max_val)
+
+    except Exception as e:
+        logger.warning("Error scanning parquet for watermark: %s", e)
+        return None
+
+
+def get_watermark_from_destination(
+    target_path: str,
+    watermark_column: Optional[str] = None,
+    storage_options: Optional[Dict[str, Any]] = None,
+) -> Optional[str]:
+    """Read watermark from the latest Bronze partition metadata.
+
+    Works with any storage backend via get_storage().
+
+    Fallback chain:
+    1. Read _metadata.json from latest dt= partition
+    2. If metadata missing, scan parquet for MAX(watermark_column)
+    3. Return None if no data exists
+
+    Args:
+        target_path: Bronze target path (base path without dt= partition)
+        watermark_column: Column name for fallback parquet scan
+        storage_options: Storage credentials and configuration
+
+    Returns:
+        Watermark value from metadata or parquet scan, or None if not found
+    """
+    from pipelines.lib.storage import get_storage
+
+    # Strip the dt={run_date} part from target_path to get base path
+    # e.g., "s3://bucket/bronze/system=x/entity=y/dt={run_date}/" -> "s3://bucket/bronze/system=x/entity=y/"
+    base_path = target_path
+    if "/dt=" in base_path or "\\dt=" in base_path:
+        # Find the last occurrence of /dt= or \dt= and truncate
+        for sep in ["/dt=", "\\dt="]:
+            if sep in base_path:
+                base_path = base_path[: base_path.rfind(sep) + 1]
+                break
+
+    # Find the latest partition
+    latest_partition = _find_latest_partition(
+        base_path, partition_prefix="dt=", storage_options=storage_options
+    )
+
+    if latest_partition is None:
+        logger.debug("No partitions found, returning None for watermark")
+        return None
+
+    # Try to read _metadata.json from the latest partition
+    try:
+        storage = get_storage(latest_partition, **(storage_options or {}))
+        metadata_content = storage.read_text("_metadata.json")
+        metadata = json.loads(metadata_content)
+
+        # Extract watermark from metadata
+        # It can be in extra.last_watermark or directly as last_watermark
+        watermark = None
+        if "extra" in metadata and "last_watermark" in metadata["extra"]:
+            watermark = metadata["extra"]["last_watermark"]
+        elif "last_watermark" in metadata:
+            watermark = metadata["last_watermark"]
+
+        if watermark is not None:
+            logger.info(
+                "Found watermark from destination metadata: %s (partition: %s)",
+                watermark,
+                latest_partition,
+            )
+            return str(watermark)
+
+        logger.debug("No watermark in metadata, trying parquet scan fallback")
+
+    except FileNotFoundError:
+        logger.debug(
+            "No _metadata.json found at %s, trying parquet scan fallback",
+            latest_partition,
+        )
+    except (json.JSONDecodeError, KeyError) as e:
+        logger.warning(
+            "Error parsing _metadata.json at %s: %s, trying parquet scan fallback",
+            latest_partition,
+            e,
+        )
+    except Exception as e:
+        logger.warning(
+            "Error reading metadata from %s: %s, trying parquet scan fallback",
+            latest_partition,
+            e,
+        )
+
+    # Fallback: scan parquet for MAX(watermark_column)
+    if watermark_column:
+        scanned_watermark = _scan_parquet_for_watermark(
+            latest_partition, watermark_column, storage_options
+        )
+        if scanned_watermark:
+            logger.info(
+                "Found watermark from parquet scan: %s (partition: %s)",
+                scanned_watermark,
+                latest_partition,
+            )
+            return scanned_watermark
+
+    logger.debug("No watermark found in destination")
+    return None
+
+
+def get_watermark_with_source(
+    system: str,
+    entity: str,
+    source: WatermarkSource,
+    target_path: Optional[str] = None,
+    watermark_column: Optional[str] = None,
+    storage_options: Optional[Dict[str, Any]] = None,
+) -> Optional[str]:
+    """Get watermark value using the specified source strategy.
+
+    Main entry point that routes to appropriate watermark source.
+
+    Args:
+        system: Source system name
+        entity: Entity name
+        source: Where to read watermark from (DESTINATION, LOCAL, or AUTO)
+        target_path: Bronze target path (required for DESTINATION/AUTO)
+        watermark_column: Column name (for parquet fallback)
+        storage_options: Storage credentials
+
+    Returns:
+        Watermark value or None
+    """
+    if source == WatermarkSource.LOCAL:
+        return get_watermark(system, entity)
+
+    if source == WatermarkSource.DESTINATION:
+        if not target_path:
+            logger.warning(
+                "No target_path provided for DESTINATION watermark source, "
+                "falling back to local"
+            )
+            return get_watermark(system, entity)
+
+        return get_watermark_from_destination(
+            target_path, watermark_column, storage_options
+        )
+
+    # AUTO: try destination first, then local
+    if target_path:
+        result = get_watermark_from_destination(
+            target_path, watermark_column, storage_options
+        )
+        if result is not None:
+            return result
+
+        logger.info(
+            "No watermark found in destination for %s.%s, falling back to local",
+            system,
+            entity,
+        )
+
+    return get_watermark(system, entity)

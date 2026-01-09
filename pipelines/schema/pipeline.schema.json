@@ -190,6 +190,12 @@
           "description": "Column to use for incremental loads (required if load_pattern is incremental)",
           "examples": ["updated_at", "modified_date", "LastModified"]
         },
+        "watermark_source": {
+          "type": "string",
+          "description": "Where to read watermark state. 'destination' (default) reads from Bronze _metadata.json in the target location (S3, ADLS, or local). 'local' reads from .state/ directory. 'auto' tries destination first, then local.",
+          "enum": ["destination", "local", "auto"],
+          "default": "destination"
+        },
         "connection": {
           "type": "string",
           "description": "Named connection for reuse across multiple entities",

@@ -38,7 +38,7 @@ import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from pipelines.lib.bronze import BronzeSource, InputMode, LoadPattern, SourceType
+from pipelines.lib.bronze import BronzeSource, InputMode, LoadPattern, SourceType, WatermarkSource
 from pipelines.lib.silver import (
     DeleteMode,
     EntityKind,
@@ -358,6 +358,7 @@ ENTITY_KIND_MAP = _enum_to_map(EntityKind)
 DELETE_MODE_MAP = _enum_to_map(DeleteMode)
 SILVER_MODEL_MAP = _enum_to_map(SilverModel)
 INPUT_MODE_MAP = _enum_to_map(InputMode)
+WATERMARK_SOURCE_MAP = _enum_to_map(WatermarkSource)
 
 # Maps with aliases (base auto-generated + explicit aliases)
 LOAD_PATTERN_MAP = _enum_to_map(LoadPattern) | {"incremental_append": LoadPattern.INCREMENTAL_APPEND}
@@ -604,6 +605,18 @@ def load_bronze_from_yaml(
             )
         input_mode = INPUT_MODE_MAP[mode_str]
 
+    # Convert watermark_source string to enum (optional, default: destination)
+    watermark_source = WatermarkSource.DESTINATION
+    if "watermark_source" in config:
+        ws_str = config["watermark_source"].lower()
+        if ws_str not in WATERMARK_SOURCE_MAP:
+            valid = ", ".join(sorted(WATERMARK_SOURCE_MAP.keys()))
+            raise YAMLConfigError(
+                f"Invalid watermark_source '{config['watermark_source']}'. "
+                f"Valid options: {valid}"
+            )
+        watermark_source = WATERMARK_SOURCE_MAP[ws_str]
+
     # Resolve source_path relative to config file
     source_path = config.get("source_path", "")
     if source_path:
@@ -633,6 +646,7 @@ def load_bronze_from_yaml(
         load_pattern=load_pattern,
         input_mode=input_mode,
         watermark_column=config.get("watermark_column"),
+        watermark_source=watermark_source,
         connection=config.get("connection"),
         host=config.get("host"),
         database=config.get("database"),
