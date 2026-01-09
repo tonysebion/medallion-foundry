@@ -903,20 +903,39 @@ class BronzeSource:
         }
 
         if scheme in ("s3", "abfs"):
-            # Cloud storage - use storage backend for metadata writes
+            # Cloud storage - use boto3 via S3Storage for reliable S3 writes
+            # Note: Ibis to_parquet() may not respect S3 endpoint configuration
+            # when the table comes from a non-DuckDB backend (e.g., MSSQL)
+            import io
+            import pyarrow.parquet as pq
+
             storage_opts = _extract_storage_options(self.options)
             storage = get_storage(target, **storage_opts)
             storage.makedirs("")  # Ensure target exists
-            # Only pass partition_by if not empty (DuckDB doesn't handle empty list well)
+
             parquet_filename = f"{self.entity}.parquet"
+
             if self.partition_by:
-                t.to_parquet(target, partition_by=self.partition_by)
+                # Partitioned writes - use Ibis to_parquet with DuckDB connection
+                # that has S3 configured (this path is less common for Bronze)
+                con = ibis.duckdb.connect()
+                _configure_duckdb_s3(con, self.options)
+                # Execute to PyArrow and re-bind to configured DuckDB
+                arrow_table = t.to_pyarrow()
+                duck_table = con.create_table("_temp_bronze", arrow_table)
+                duck_table.to_parquet(target, partition_by=self.partition_by)
                 data_files.append(target)
             else:
-                # No partitioning - write a single file with explicit filename
-                output_file = target.rstrip("/") + f"/{parquet_filename}"
-                t.to_parquet(output_file)
-                data_files.append(output_file)
+                # No partitioning - write via boto3 for reliable S3 endpoint handling
+                arrow_table = t.to_pyarrow()
+                buffer = io.BytesIO()
+                pq.write_table(arrow_table, buffer, compression="snappy")
+                parquet_bytes = buffer.getvalue()
+
+                result = storage.write_bytes(parquet_filename, parquet_bytes)
+                if not result.success:
+                    raise RuntimeError(f"Failed to write parquet to S3: {result.error}")
+                data_files.append(f"{target.rstrip('/')}/{parquet_filename}")
 
             # Write metadata to cloud storage
             if self.write_metadata:

@@ -907,7 +907,30 @@ class SilverEntity:
             written_files = []
             if "parquet" in self.output_formats:
                 output_file = target.rstrip("/") + f"/{parquet_filename}"
-                t.to_parquet(output_file, **write_opts)
+                if self.partition_by:
+                    # Partitioned writes - need DuckDB with S3 configured
+                    con = ibis.duckdb.connect()
+                    _configure_duckdb_s3(con, self.storage_options)
+                    arrow_table = t.to_pyarrow()
+                    duck_table = con.create_table("_temp_silver", arrow_table)
+                    duck_table.to_parquet(output_file, **write_opts)
+                else:
+                    # Non-partitioned - write via boto3 for reliable S3 endpoint handling
+                    import io
+                    import pyarrow.parquet as pq
+
+                    arrow_table = t.to_pyarrow()
+                    buffer = io.BytesIO()
+                    pq.write_table(
+                        arrow_table,
+                        buffer,
+                        compression=self.parquet_compression or "snappy",
+                    )
+                    parquet_bytes = buffer.getvalue()
+
+                    result = storage.write_bytes(parquet_filename, parquet_bytes)
+                    if not result.success:
+                        raise RuntimeError(f"Failed to write parquet to S3: {result.error}")
                 written_files.append(output_file)
 
             # Infer column types for metadata

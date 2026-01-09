@@ -349,11 +349,11 @@ class TestCDCDeleteModes:
         # Check that id=3 has _deleted=True
         df = result.execute()
         charlie_row = df[df["id"] == 3]
-        assert charlie_row["_deleted"].iloc[0] is True
+        assert bool(charlie_row["_deleted"].iloc[0]) is True
 
         # Check that id=1 has _deleted=False
         alice_row = df[df["id"] == 1]
-        assert alice_row["_deleted"].iloc[0] is False
+        assert bool(alice_row["_deleted"].iloc[0]) is False
 
     def test_delete_mode_hard_delete(self):
         """delete_mode=hard_delete filters out delete records."""
