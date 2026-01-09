@@ -436,6 +436,20 @@ class BronzeSource:
         """Check if data already exists for this run."""
         return path_has_data(target)
 
+    # Database source types - grouped for dispatch
+    _DATABASE_TYPES = frozenset({
+        SourceType.DATABASE_MSSQL,
+        SourceType.DATABASE_POSTGRES,
+        SourceType.DATABASE_MYSQL,
+        SourceType.DATABASE_DB2,
+    })
+
+    # Fixed-width indicator keys in options
+    _FIXED_WIDTH_KEYS = frozenset({
+        "widths", "field_widths", "column_widths",
+        "colspecs", "column_specs", "column_specifications",
+    })
+
     def _read_source(
         self,
         con: ibis.BaseBackend,
@@ -444,55 +458,37 @@ class BronzeSource:
     ) -> ibis.Table:
         """Read from source based on source type."""
         source_path = self.source_path.format(run_date=run_date)
+        st = self.source_type
 
-        if self.source_type == SourceType.FILE_CSV:
-            return con.read_csv(source_path, **self.options.get("csv_options", {}))
-
-        elif self.source_type == SourceType.FILE_PARQUET:
-            return con.read_parquet(source_path)
-
-        elif self.source_type == SourceType.FILE_SPACE_DELIMITED:
-            csv_opts = dict(self.options.get("csv_options", {}))
-            fixed_width_keys = (
-                "widths",
-                "field_widths",
-                "column_widths",
-                "colspecs",
-                "column_specs",
-                "column_specifications",
-            )
-            if any(key in csv_opts for key in fixed_width_keys) or any(
-                key in self.options for key in fixed_width_keys
-            ):
-                return self._read_fixed_width(source_path)
-            return self._read_character_delimited(source_path)
-
-        elif self.source_type == SourceType.FILE_FIXED_WIDTH:
-            return self._read_fixed_width(source_path)
-
-        elif self.source_type == SourceType.FILE_JSON:
-            return self._read_json(con, source_path)
-
-        elif self.source_type == SourceType.FILE_JSONL:
-            return self._read_jsonl(con, source_path)
-
-        elif self.source_type == SourceType.FILE_EXCEL:
-            return self._read_excel(source_path)
-
-        elif self.source_type in (
-            SourceType.DATABASE_MSSQL,
-            SourceType.DATABASE_POSTGRES,
-            SourceType.DATABASE_MYSQL,
-            SourceType.DATABASE_DB2,
-        ):
+        # Database sources
+        if st in self._DATABASE_TYPES:
             return self._read_database(con, run_date, last_watermark)
 
-        elif self.source_type == SourceType.API_REST:
-            records = self._fetch_api(run_date, last_watermark)
-            return ibis.memtable(records)
+        # File sources - dispatch by type
+        if st == SourceType.FILE_CSV:
+            return con.read_csv(source_path, **self.options.get("csv_options", {}))
+        if st == SourceType.FILE_PARQUET:
+            return con.read_parquet(source_path)
+        if st == SourceType.FILE_FIXED_WIDTH:
+            return self._read_fixed_width(source_path)
+        if st == SourceType.FILE_JSON:
+            return self._read_json(con, source_path)
+        if st == SourceType.FILE_JSONL:
+            return self._read_jsonl(con, source_path)
+        if st == SourceType.FILE_EXCEL:
+            return self._read_excel(source_path)
 
-        else:
-            raise ValueError(f"Unsupported source type: {self.source_type}")
+        # Space-delimited can be fixed-width or character-delimited
+        if st == SourceType.FILE_SPACE_DELIMITED:
+            csv_opts = self.options.get("csv_options", {})
+            has_fixed_width = self._FIXED_WIDTH_KEYS & (csv_opts.keys() | self.options.keys())
+            return self._read_fixed_width(source_path) if has_fixed_width else self._read_character_delimited(source_path)
+
+        # API source
+        if st == SourceType.API_REST:
+            return ibis.memtable(self._fetch_api(run_date, last_watermark))
+
+        raise ValueError(f"Unsupported source type: {st}")
 
     def _get_expanded_options(self) -> Dict[str, Any]:
         """Get options with environment variables expanded."""

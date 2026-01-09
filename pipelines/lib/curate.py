@@ -278,28 +278,14 @@ def apply_cdc(
         cols = [c for c in table.columns if c != op_col]
         return table.select(*cols)
 
-    if delete_mode == "ignore":
-        # Filter out delete records, keep only I/U
-        filtered = deduped.filter(
-            (deduped[op_col] == insert_code) | (deduped[op_col] == update_code)
-        )
-        return drop_op_col(filtered)
-
-    elif delete_mode == "tombstone":
-        # Add _deleted column: true for deletes, false for I/U
-        with_flag = deduped.mutate(
-            _deleted=(deduped[op_col] == delete_code)
-        )
-        return drop_op_col(with_flag)
-
-    elif delete_mode == "hard_delete":
-        # Filter out deletes (same as ignore, but semantic difference:
-        # hard_delete implies records should be removed from existing Silver)
-        # The actual removal from existing data happens in Silver layer
-        filtered = deduped.filter(
-            (deduped[op_col] == insert_code) | (deduped[op_col] == update_code)
-        )
-        return drop_op_col(filtered)
-
+    # Apply delete mode handling
+    if delete_mode == "tombstone":
+        # Add _deleted flag column: true for deletes, false for I/U
+        result = deduped.mutate(_deleted=(deduped[op_col] == delete_code))
+    elif delete_mode in ("ignore", "hard_delete"):
+        # Filter out deletes, keep only I/U (hard_delete semantic handled in Silver layer)
+        result = deduped.filter((deduped[op_col] == insert_code) | (deduped[op_col] == update_code))
     else:
-        raise ValueError(f"Unknown delete_mode: {delete_mode}. Valid options: ignore, tombstone, hard_delete")
+        raise ValueError(f"Unknown delete_mode: {delete_mode}. Valid: ignore, tombstone, hard_delete")
+
+    return drop_op_col(result)

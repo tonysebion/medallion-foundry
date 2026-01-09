@@ -353,6 +353,51 @@ def _enum_to_map(enum_class: Type[Enum]) -> Dict[str, Enum]:
     return {member.value: member for member in enum_class}
 
 
+def _convert_enum(
+    config: Dict[str, Any],
+    key: str,
+    enum_map: Dict[str, Enum],
+    default: Optional[Enum] = None,
+    fallback_dict: Optional[Dict[str, str]] = None,
+) -> Optional[Enum]:
+    """Convert YAML string value to enum with validation.
+
+    This helper consolidates the repeated pattern of:
+    1. Get string value from config (with optional fallback dict)
+    2. Lowercase and validate against enum map
+    3. Raise YAMLConfigError with helpful message if invalid
+
+    Args:
+        config: Config dictionary to read from
+        key: Key to look up in config
+        enum_map: Map of lowercase strings to enum values
+        default: Default enum value if key not in config (None = required)
+        fallback_dict: Optional dict to check if key not in config (e.g., model_defaults)
+
+    Returns:
+        Enum value, or None if key not present and default is None
+
+    Raises:
+        YAMLConfigError: If value is invalid
+    """
+    # Get raw value from config or fallback dict
+    raw_value = config.get(key)
+    if raw_value is None and fallback_dict:
+        raw_value = fallback_dict.get(key)
+
+    # If still None, return default
+    if raw_value is None:
+        return default
+
+    # Normalize and validate
+    value_str = str(raw_value).lower()
+    if value_str not in enum_map:
+        valid = ", ".join(sorted(enum_map.keys()))
+        raise YAMLConfigError(f"Invalid {key} '{raw_value}'. Valid options: {valid}")
+
+    return enum_map[value_str]
+
+
 # Auto-generated from enum values (ensures maps stay in sync with enums)
 SOURCE_TYPE_MAP = _enum_to_map(SourceType)
 ENTITY_KIND_MAP = _enum_to_map(EntityKind)
@@ -572,51 +617,11 @@ def load_bronze_from_yaml(
             "Missing required fields in bronze section:\n  - " + "\n  - ".join(errors)
         )
 
-    # Convert source_type string to enum
-    source_type_str = config["source_type"].lower()
-    if source_type_str not in SOURCE_TYPE_MAP:
-        valid = ", ".join(sorted(SOURCE_TYPE_MAP.keys()))
-        raise YAMLConfigError(
-            f"Invalid source_type '{config['source_type']}'. "
-            f"Valid options: {valid}"
-        )
-    source_type = SOURCE_TYPE_MAP[source_type_str]
-
-    # Convert load_pattern string to enum (optional)
-    load_pattern = LoadPattern.FULL_SNAPSHOT
-    if "load_pattern" in config:
-        pattern_str = config["load_pattern"].lower()
-        if pattern_str not in LOAD_PATTERN_MAP:
-            valid = ", ".join(sorted(LOAD_PATTERN_MAP.keys()))
-            raise YAMLConfigError(
-                f"Invalid load_pattern '{config['load_pattern']}'. "
-                f"Valid options: {valid}"
-            )
-        load_pattern = LOAD_PATTERN_MAP[pattern_str]
-
-    # Convert input_mode string to enum (optional)
-    input_mode = None
-    if "input_mode" in config:
-        mode_str = config["input_mode"].lower()
-        if mode_str not in INPUT_MODE_MAP:
-            valid = ", ".join(sorted(INPUT_MODE_MAP.keys()))
-            raise YAMLConfigError(
-                f"Invalid input_mode '{config['input_mode']}'. "
-                f"Valid options: {valid}"
-            )
-        input_mode = INPUT_MODE_MAP[mode_str]
-
-    # Convert watermark_source string to enum (optional, default: destination)
-    watermark_source = WatermarkSource.DESTINATION
-    if "watermark_source" in config:
-        ws_str = config["watermark_source"].lower()
-        if ws_str not in WATERMARK_SOURCE_MAP:
-            valid = ", ".join(sorted(WATERMARK_SOURCE_MAP.keys()))
-            raise YAMLConfigError(
-                f"Invalid watermark_source '{config['watermark_source']}'. "
-                f"Valid options: {valid}"
-            )
-        watermark_source = WATERMARK_SOURCE_MAP[ws_str]
+    # Convert enum fields using shared helper
+    source_type = _convert_enum(config, "source_type", SOURCE_TYPE_MAP)
+    load_pattern = _convert_enum(config, "load_pattern", LOAD_PATTERN_MAP, LoadPattern.FULL_SNAPSHOT)
+    input_mode = _convert_enum(config, "input_mode", INPUT_MODE_MAP)
+    watermark_source = _convert_enum(config, "watermark_source", WATERMARK_SOURCE_MAP, WatermarkSource.DESTINATION)
 
     # Resolve source_path relative to config file
     source_path = config.get("source_path", "")
@@ -661,6 +666,184 @@ def load_bronze_from_yaml(
     )
 
 
+def _validate_silver_model_config(
+    config: Dict[str, Any],
+    bronze: Optional[BronzeSource],
+) -> None:
+    """Validate Silver config against model requirements and Bronze compatibility.
+
+    Collects all errors and raises once with all issues.
+
+    Args:
+        config: Silver section from YAML
+        bronze: Optional Bronze source for compatibility checks
+
+    Raises:
+        YAMLConfigError: If validation fails (with all errors listed)
+    """
+    model_str = config.get("model", "").lower()
+    model_spec = MODEL_SPECS.get(model_str) if model_str else None
+    requires_keys = model_spec.requires_keys if model_spec else True
+
+    errors: List[str] = []
+
+    # Check required fields based on model spec
+    if requires_keys:
+        if "natural_keys" not in config:
+            errors.append(
+                f"silver.natural_keys is required for model '{model_str or 'default'}'. "
+                "Use model: periodic_snapshot if you don't need deduplication."
+            )
+        if "change_timestamp" not in config:
+            errors.append(
+                f"silver.change_timestamp is required for model '{model_str or 'default'}'. "
+                "Use model: periodic_snapshot if you don't need change tracking."
+            )
+
+    # Bronze pattern validation using MODEL_SPECS
+    if bronze is not None and model_spec and model_spec.valid_bronze_patterns:
+        bronze_pattern_name = bronze.load_pattern.value.lower()
+        if bronze_pattern_name == "incremental_append":
+            bronze_pattern_name = "incremental"
+
+        if bronze_pattern_name not in model_spec.valid_bronze_patterns:
+            valid_patterns = ", ".join(model_spec.valid_bronze_patterns)
+            errors.append(
+                f"Model '{model_str}' requires bronze.load_pattern to be one of: {valid_patterns} "
+                f"(currently: {bronze.load_pattern.value})"
+            )
+
+    # Delete mode requires CDC
+    delete_mode_str = config.get("delete_mode", "ignore").lower()
+    if delete_mode_str in ("tombstone", "hard_delete"):
+        is_cdc = (
+            (bronze is not None and bronze.load_pattern == LoadPattern.CDC)
+            or (model_spec is not None and model_spec.requires_cdc_bronze)
+        )
+        if not is_cdc:
+            errors.append(
+                f"delete_mode: {delete_mode_str} only makes sense with CDC data. "
+                "Either set bronze.load_pattern: cdc or use a cdc_* Silver model."
+            )
+
+    # Validate required fields
+    if not config.get("domain"):
+        errors.append("silver.domain is required")
+    if not config.get("subject"):
+        errors.append("silver.subject is required")
+
+    if errors:
+        raise YAMLConfigError(
+            "Configuration errors in silver section:\n  - " + "\n  - ".join(errors)
+        )
+
+
+def _emit_silver_warnings(
+    config: Dict[str, Any],
+    bronze: Optional[BronzeSource],
+) -> None:
+    """Emit warnings for suboptimal Bronze/Silver configurations.
+
+    Args:
+        config: Silver section from YAML
+        bronze: Optional Bronze source for compatibility checks
+    """
+    model_str = config.get("model", "").lower()
+    model_spec = MODEL_SPECS.get(model_str) if model_str else None
+
+    # Warning for inefficient Bronze pattern with Silver model
+    if bronze is not None and model_spec and model_spec.warns_on_bronze_patterns:
+        bronze_pattern_name = bronze.load_pattern.value.lower()
+        if bronze_pattern_name == "incremental_append":
+            bronze_pattern_name = "incremental"
+
+        if bronze_pattern_name in model_spec.warns_on_bronze_patterns:
+            if bronze_pattern_name == "full_snapshot":
+                warnings.warn(
+                    f"bronze.load_pattern: {bronze.load_pattern.value} with silver.model: {model_str} is inefficient. "
+                    "Each Bronze partition contains ALL records (overlapping data). Silver will union "
+                    "all partitions and dedupe, which works but wastes storage and processing time. "
+                    "Consider: 1) Use periodic_snapshot if you just need the latest snapshot, or "
+                    "2) Change Bronze to incremental with watermark_column for efficient accumulation.",
+                    UserWarning,
+                    stacklevel=3,
+                )
+            elif bronze_pattern_name == "cdc":
+                warnings.warn(
+                    f"bronze.load_pattern: cdc but silver.model: {model_str or 'default'} is not CDC-aware. "
+                    "Consider using a cdc_* model (cdc_current, cdc_history, etc.) to properly handle "
+                    "insert/update/delete operations.",
+                    UserWarning,
+                    stacklevel=3,
+                )
+
+    # Warning: Bronze CDC pattern with no model specified
+    if bronze is not None and bronze.load_pattern == LoadPattern.CDC and model_spec is None:
+        warnings.warn(
+            f"bronze.load_pattern: cdc but silver.model: {model_str or 'default'} is not CDC-aware. "
+            "Consider using a cdc_* model (cdc_current, cdc_history, etc.) to properly handle "
+            "insert/update/delete operations.",
+            UserWarning,
+            stacklevel=3,
+        )
+
+    # Warning: Explicit input_mode conflicts with Bronze pattern
+    if bronze is not None and "input_mode" in config:
+        explicit_input = config["input_mode"].lower()
+        expected_input = "append_log" if bronze.load_pattern in (LoadPattern.INCREMENTAL_APPEND, LoadPattern.CDC) else "replace_daily"
+        if explicit_input != expected_input:
+            warnings.warn(
+                f"Explicit silver.input_mode: {explicit_input} conflicts with "
+                f"bronze.load_pattern: {bronze.load_pattern.value} (expected: {expected_input}). "
+                "This may cause unexpected behavior. "
+                "Note: input_mode is typically auto-derived from the model and Bronze pattern.",
+                UserWarning,
+                stacklevel=3,
+            )
+
+
+def _normalize_list_field(config: Dict[str, Any], key: str) -> Optional[List[str]]:
+    """Normalize a field that can be string or list to list or None."""
+    value = config.get(key)
+    if value is None:
+        return None
+    return [value] if isinstance(value, str) else value
+
+
+def _build_silver_storage_options(
+    config: Dict[str, Any],
+    bronze: Optional[BronzeSource],
+) -> Optional[Dict[str, Any]]:
+    """Build storage options from Silver config or Bronze fallback.
+
+    Args:
+        config: Silver section from YAML
+        bronze: Optional Bronze source for fallback options
+
+    Returns:
+        Storage options dict or None
+    """
+    # Build from Silver config's top-level S3 options
+    storage_options: Optional[Dict[str, Any]] = None
+    for yaml_key, storage_key in S3_YAML_TO_STORAGE_OPTIONS:
+        if yaml_key in config:
+            if storage_options is None:
+                storage_options = {}
+            storage_options[storage_key] = config[yaml_key]
+
+    # Auto-wire from Bronze if Silver doesn't have its own
+    if storage_options is None and bronze and bronze.options:
+        storage_keys = frozenset({
+            "s3_signature_version", "s3_addressing_style", "s3_verify_ssl",
+            "endpoint_url", "key", "secret", "region",
+        })
+        storage_options = {k: v for k, v in bronze.options.items() if k in storage_keys}
+        if not storage_options:
+            storage_options = None
+
+    return storage_options
+
+
 def load_silver_from_yaml(
     config: Dict[str, Any],
     config_dir: Optional[Path] = None,
@@ -681,220 +864,50 @@ def load_silver_from_yaml(
     """
     config_dir = config_dir or Path.cwd()
 
-    # Get model name and spec for validation
-    model_str = config.get("model", "").lower()
-    model_spec = MODEL_SPECS.get(model_str) if model_str else None
+    # Validate configuration (raises YAMLConfigError with all issues)
+    _validate_silver_model_config(config, bronze)
+    _emit_silver_warnings(config, bronze)
 
-    # Determine if keys are required based on model spec
-    # When no model is specified, default behavior requires keys
-    requires_keys = (model_spec.requires_keys if model_spec else True)
-
-    # Collect ALL validation errors before failing (user-friendly!)
-    errors: List[str] = []
-
-    # Check required fields based on model spec
-    if requires_keys:
-        if "natural_keys" not in config:
-            errors.append(
-                f"silver.natural_keys is required for model '{model_str or 'default'}'. "
-                "Use model: periodic_snapshot if you don't need deduplication."
-            )
-        if "change_timestamp" not in config:
-            errors.append(
-                f"silver.change_timestamp is required for model '{model_str or 'default'}'. "
-                "Use model: periodic_snapshot if you don't need change tracking."
-            )
-
-    # Bronze pattern validation using MODEL_SPECS (single source of truth)
-    if bronze is not None and model_spec:
-        bronze_pattern_name = bronze.load_pattern.value.lower()
-        # Normalize pattern names for comparison
-        if bronze_pattern_name == "incremental_append":
-            bronze_pattern_name = "incremental"
-
-        # Check if Bronze pattern is valid for this model
-        if model_spec.valid_bronze_patterns:
-            if bronze_pattern_name not in model_spec.valid_bronze_patterns:
-                valid_patterns = ", ".join(model_spec.valid_bronze_patterns)
-                errors.append(
-                    f"Model '{model_str}' requires bronze.load_pattern to be one of: {valid_patterns} "
-                    f"(currently: {bronze.load_pattern.value})"
-                )
-            # Check if this combination produces a warning (works but suboptimal)
-            elif model_spec.warns_on_bronze_patterns and bronze_pattern_name in model_spec.warns_on_bronze_patterns:
-                # Different warning messages based on the Bronze pattern
-                if bronze_pattern_name == "full_snapshot":
-                    warnings.warn(
-                        f"bronze.load_pattern: {bronze.load_pattern.value} with silver.model: {model_str} is inefficient. "
-                        f"Each Bronze partition contains ALL records (overlapping data). Silver will union "
-                        "all partitions and dedupe, which works but wastes storage and processing time. "
-                        "Consider: 1) Use periodic_snapshot if you just need the latest snapshot, or "
-                        "2) Change Bronze to incremental with watermark_column for efficient accumulation.",
-                        UserWarning,
-                        stacklevel=2,
-                    )
-                elif bronze_pattern_name == "cdc":
-                    warnings.warn(
-                        f"bronze.load_pattern: cdc but silver.model: {model_str or 'default'} is not CDC-aware. "
-                        "Consider using a cdc_* model (cdc_current, cdc_history, etc.) to properly handle "
-                        "insert/update/delete operations.",
-                        UserWarning,
-                        stacklevel=2,
-                    )
-
-    # Delete mode requires CDC load pattern or CDC model
-    delete_mode_str = config.get("delete_mode", "ignore").lower()
-    if delete_mode_str in ("tombstone", "hard_delete"):
-        is_cdc = (
-            (bronze is not None and bronze.load_pattern == LoadPattern.CDC) or
-            (model_spec is not None and model_spec.requires_cdc_bronze)
-        )
-        if not is_cdc:
-            errors.append(
-                f"delete_mode: {delete_mode_str} only makes sense with CDC data. "
-                "Either set bronze.load_pattern: cdc or use a cdc_* Silver model."
-            )
-
-    # If any errors accumulated, report ALL of them at once
-    if errors:
-        raise YAMLConfigError(
-            "Configuration errors in silver section:\n  - " + "\n  - ".join(errors)
-        )
-
-    # Warning: Bronze CDC pattern with no model specified should use CDC-aware config
-    if bronze is not None and bronze.load_pattern == LoadPattern.CDC and model_spec is None:
-        warnings.warn(
-            f"bronze.load_pattern: cdc but silver.model: {model_str or 'default'} is not CDC-aware. "
-            "Consider using a cdc_* model (cdc_current, cdc_history, etc.) to properly handle "
-            "insert/update/delete operations.",
-            UserWarning,
-            stacklevel=2,
-        )
-
-    # Warning: Explicit input_mode should match Bronze pattern (deprecation candidate)
-    if bronze is not None and "input_mode" in config:
-        explicit_input = config["input_mode"].lower()
-        expected_input = "append_log" if bronze.load_pattern in (LoadPattern.INCREMENTAL_APPEND, LoadPattern.CDC) else "replace_daily"
-        if explicit_input != expected_input:
-            warnings.warn(
-                f"Explicit silver.input_mode: {explicit_input} conflicts with "
-                f"bronze.load_pattern: {bronze.load_pattern.value} (expected: {expected_input}). "
-                "This may cause unexpected behavior. "
-                "Note: input_mode is typically auto-derived from the model and Bronze pattern.",
-                UserWarning,
-                stacklevel=2,
-            )
-
-    # Ensure natural_keys is a list (or None for periodic_snapshot)
-    natural_keys = config.get("natural_keys")
-    if natural_keys is not None and isinstance(natural_keys, str):
-        natural_keys = [natural_keys]
-
-    # Expand model preset if specified (before parsing individual settings)
-    # Model provides defaults; explicit settings can override them
+    # Expand model preset for defaults
     model_defaults: Dict[str, str] = {}
     if "model" in config:
-        model_str = config["model"].lower()
-        if model_str not in SILVER_MODEL_MAP:
-            valid = ", ".join(sorted(SILVER_MODEL_MAP.keys()))
-            raise YAMLConfigError(
-                f"Invalid model '{config['model']}'. "
-                f"Valid options: {valid}"
+        model = _convert_enum(config, "model", SILVER_MODEL_MAP)
+        if model:
+            model_defaults = SILVER_MODEL_PRESETS[model.value]
+            logger.debug(
+                "Expanding Silver model preset",
+                extra={"model": model.value, "defaults": model_defaults}
             )
-        model_defaults = SILVER_MODEL_PRESETS[model_str]
-        logger.debug(
-            "Expanding Silver model preset",
-            extra={"model": model_str, "defaults": model_defaults}
-        )
 
-    # Convert entity_kind string to enum (from config or model preset)
-    entity_kind_str = config.get("entity_kind") or model_defaults.get("entity_kind") or "state"
-    entity_kind_str = entity_kind_str.lower()
-    if entity_kind_str not in ENTITY_KIND_MAP:
-        valid = ", ".join(sorted(ENTITY_KIND_MAP.keys()))
-        raise YAMLConfigError(
-            f"Invalid entity_kind '{entity_kind_str}'. "
-            f"Valid options: {valid}"
-        )
-    entity_kind = ENTITY_KIND_MAP[entity_kind_str]
+    # Convert enum fields with model preset fallback
+    entity_kind = _convert_enum(config, "entity_kind", ENTITY_KIND_MAP, EntityKind.STATE, model_defaults)
+    history_mode = _convert_enum(config, "history_mode", HISTORY_MODE_MAP, HistoryMode.CURRENT_ONLY, model_defaults)
+    input_mode = _convert_enum(config, "input_mode", INPUT_MODE_MAP, None, model_defaults)
+    delete_mode = _convert_enum(config, "delete_mode", DELETE_MODE_MAP, DeleteMode.IGNORE, model_defaults)
 
-    # Convert history_mode string to enum (from config or model preset)
-    history_mode_str = config.get("history_mode") or model_defaults.get("history_mode") or "current_only"
-    history_mode_str = history_mode_str.lower()
-    if history_mode_str not in HISTORY_MODE_MAP:
-        valid = ", ".join(sorted(HISTORY_MODE_MAP.keys()))
-        raise YAMLConfigError(
-            f"Invalid history_mode '{history_mode_str}'. "
-            f"Valid options: {valid}"
-        )
-    history_mode = HISTORY_MODE_MAP[history_mode_str]
-
-    # Resolve source_path
+    # Resolve paths
     source_path = config.get("source_path", "")
     if source_path:
         source_path = _resolve_path(source_path, config_dir)
-
-    # Resolve target_path
     target_path = config.get("target_path", "")
     if target_path:
         target_path = _resolve_path(target_path, config_dir)
 
-    # Handle attributes - can be list or None
-    attributes = config.get("attributes")
-    if isinstance(attributes, str):
-        attributes = [attributes]
+    # Normalize list fields
+    natural_keys = _normalize_list_field(config, "natural_keys")
+    attributes = _normalize_list_field(config, "attributes")
+    exclude_columns = _normalize_list_field(config, "exclude_columns")
+    partition_by = _normalize_list_field(config, "partition_by")
+    output_formats = _normalize_list_field(config, "output_formats") or ["parquet"]
 
-    # Handle exclude_columns - can be list or None
-    exclude_columns = config.get("exclude_columns")
-    if isinstance(exclude_columns, str):
-        exclude_columns = [exclude_columns]
-
-    # Handle column_mapping - dictionary of old_name: new_name
+    # Validate column_mapping type
     column_mapping = config.get("column_mapping")
     if column_mapping is not None and not isinstance(column_mapping, dict):
         raise YAMLConfigError(
             "column_mapping must be an object with {old_column: new_column} pairs"
         )
 
-    # Handle partition_by
-    partition_by = config.get("partition_by")
-    if isinstance(partition_by, str):
-        partition_by = [partition_by]
-
-    # Handle output_formats
-    output_formats = config.get("output_formats", ["parquet"])
-    if isinstance(output_formats, str):
-        output_formats = [output_formats]
-
-    # Get domain and subject from config or infer from bronze
-    domain = config.get("domain", "")
-    subject = config.get("subject", "")
-
-    # Convert input_mode string to enum (from config, model preset, or auto-wired from Bronze)
-    input_mode = None
-    input_mode_str = config.get("input_mode") or model_defaults.get("input_mode")
-    if input_mode_str:
-        input_mode_str = input_mode_str.lower()
-        if input_mode_str not in INPUT_MODE_MAP:
-            valid = ", ".join(sorted(INPUT_MODE_MAP.keys()))
-            raise YAMLConfigError(
-                f"Invalid input_mode '{input_mode_str}'. "
-                f"Valid options: {valid}"
-            )
-        input_mode = INPUT_MODE_MAP[input_mode_str]
-
-    # Convert delete_mode string to enum (from config or model preset)
-    delete_mode_str = config.get("delete_mode") or model_defaults.get("delete_mode") or "ignore"
-    delete_mode_str = delete_mode_str.lower()
-    if delete_mode_str not in DELETE_MODE_MAP:
-        valid = ", ".join(sorted(DELETE_MODE_MAP.keys()))
-        raise YAMLConfigError(
-            f"Invalid delete_mode '{delete_mode_str}'. "
-            f"Valid options: {valid}"
-        )
-    delete_mode = DELETE_MODE_MAP[delete_mode_str]
-
-    # Parse cdc_options (for CDC load pattern)
+    # Parse cdc_options
     cdc_options = None
     if "cdc_options" in config:
         cdc_options = config["cdc_options"]
@@ -903,44 +916,11 @@ def load_silver_from_yaml(
         if "operation_column" not in cdc_options:
             raise YAMLConfigError("cdc_options.operation_column is required")
 
-    # Build storage options from Silver config's top-level S3 options
-    storage_options: Optional[Dict[str, Any]] = None
-    for yaml_key, storage_key in S3_YAML_TO_STORAGE_OPTIONS:
-        if yaml_key in config:
-            if storage_options is None:
-                storage_options = {}
-            storage_options[storage_key] = config[yaml_key]
-
-    # Validate required fields
-    if not domain:
-        raise YAMLConfigError("silver.domain is required")
-    if not subject:
-        raise YAMLConfigError("silver.subject is required")
-
-    # Auto-wire storage options from Bronze (for S3-compatible storage)
-    # Only if Silver doesn't have its own S3 options
-    if bronze and storage_options is None and bronze.options:
-            storage_keys = [
-                "s3_signature_version",
-                "s3_addressing_style",
-                "s3_verify_ssl",
-                "endpoint_url",
-                "key",
-                "secret",
-                "region",
-            ]
-            storage_options = {
-                k: v for k, v in bronze.options.items() if k in storage_keys
-            }
-            if not storage_options:
-                storage_options = None
-
-    # Build SilverEntity
     return SilverEntity(
         natural_keys=natural_keys,
         change_timestamp=config.get("change_timestamp"),
-        domain=domain,
-        subject=subject,
+        domain=config.get("domain", ""),
+        subject=config.get("subject", ""),
         source_path=source_path,
         target_path=target_path,
         attributes=attributes,
@@ -955,7 +935,7 @@ def load_silver_from_yaml(
         output_formats=output_formats,
         parquet_compression=config.get("parquet_compression", "snappy"),
         validate_source=config.get("validate_source", "skip"),
-        storage_options=storage_options,
+        storage_options=_build_silver_storage_options(config, bronze),
     )
 
 
