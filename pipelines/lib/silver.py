@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import ibis
 
-from pipelines.lib.bronze import _configure_duckdb_s3, _extract_storage_options, InputMode
+from pipelines.lib.storage_config import InputMode, _configure_duckdb_s3, _extract_storage_options
 from pipelines.lib.env import utc_now_iso
 from pipelines.lib.curate import apply_cdc, build_history, dedupe_latest
 from pipelines.lib.io import maybe_dry_run
