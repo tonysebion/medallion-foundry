@@ -31,76 +31,113 @@ Source → Bronze (raw) → Silver (curated)
 
 ## Quick Start (5 minutes)
 
-### 1. Create Your First Pipeline
+Pipelines are defined in **YAML** (recommended) or Python. YAML is simpler and provides editor autocomplete.
 
-Copy a template and customize it:
+### 1. Choose a Template
 
-```bash
-cp pipelines/templates/simple_pipeline.py pipelines/myteam/orders.py
-```
+| Your Situation | Template to Copy |
+|---------------|------------------|
+| CSV file, daily export | `csv_snapshot.yaml` |
+| Database table, full load | `mssql_dimension.yaml` |
+| Database table, incremental | `incremental_load.yaml` |
+| REST API | `api_rest.yaml` |
+| Fixed-width file | `fixed_width.yaml` |
+| Event/fact table (immutable) | `event_log.yaml` |
+| Not sure / General purpose | `pipeline_template.yaml` |
 
-Edit `pipelines/myteam/orders.py`:
-
-```python
-from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
-from pipelines.lib.silver import SilverEntity, EntityKind, HistoryMode
-
-# Bronze: Extract from source
-bronze = BronzeSource(
-    system="retail",
-    entity="orders",
-    source_type=SourceType.DATABASE_MSSQL,
-    source_path="",
-    options={
-        "host": "retail-db.company.com",
-        "database": "RetailDB",
-    },
-    target_path="s3://bronze/system={system}/entity={entity}/dt={run_date}/",
-    load_pattern=LoadPattern.FULL_SNAPSHOT,
-)
-
-# Silver: Curate the data
-silver = SilverEntity(
-    source_path="s3://bronze/system=retail/entity=orders/dt={run_date}/*.parquet",
-    target_path="s3://silver/retail/orders/",
-    natural_keys=["order_id"],
-    change_timestamp="last_updated",
-    entity_kind=EntityKind.EVENT,
-    history_mode=HistoryMode.CURRENT_ONLY,
-)
-
-def run_bronze(run_date: str, **kwargs):
-    return bronze.run(run_date, **kwargs)
-
-def run_silver(run_date: str, **kwargs):
-    return silver.run(run_date, **kwargs)
-
-def run(run_date: str, **kwargs):
-    bronze_result = run_bronze(run_date, **kwargs)
-    silver_result = run_silver(run_date, **kwargs)
-    return {"bronze": bronze_result, "silver": silver_result}
-```
-
-### 2. Test Your Pipeline
+### 2. Copy and Edit
 
 ```bash
-python -m pipelines myteam.orders --date 2025-01-15 --dry-run
+cp pipelines/templates/csv_snapshot.yaml my_pipeline.yaml
 ```
 
-### 3. Run the Pipeline
+Edit the file - the schema provides autocomplete in VSCode:
+- Set `system` and `entity` to identify your data source
+- Set `source_path` to your data location
+- Set `target_path` for output storage (local, S3, or ADLS)
+- Set `natural_keys` and `change_timestamp` for Silver deduplication
+
+Example `my_pipeline.yaml`:
+```yaml
+# yaml-language-server: $schema=pipelines/schema/pipeline.schema.json
+name: retail_orders
+description: Load retail orders from CSV
+
+bronze:
+  system: retail
+  entity: orders
+  source_type: file_csv
+  source_path: ./data/orders_{run_date}.csv
+
+  # Output location - uses Hive-style partitioning
+  # Local: ./bronze/system=retail/entity=orders/dt={run_date}/
+  # S3:    s3://my-bucket/bronze/system=retail/entity=orders/dt={run_date}/
+  # ADLS:  abfss://container@account.dfs.core.windows.net/bronze/...
+  target_path: ./bronze/system=retail/entity=orders/dt={run_date}/
+
+silver:
+  natural_keys: [order_id]
+  change_timestamp: updated_at
+  target_path: ./silver/system=retail/entity=orders/
+```
+
+**Output Structure:**
+```
+bronze/system=retail/entity=orders/dt=2025-01-15/
+  ├── orders.parquet      # Raw data
+  ├── _metadata.json      # Lineage and watermarks
+  └── _checksums.json     # Data integrity
+
+silver/system=retail/entity=orders/
+  ├── data.parquet        # Curated data
+  └── _metadata.json      # Schema info
+```
+
+### 3. Run
 
 ```bash
-# Full pipeline (Bronze + Silver)
-python -m pipelines myteam.orders --date 2025-01-15
+# Validate configuration
+python -m pipelines ./my_pipeline.yaml --date 2025-01-15 --dry-run
 
-# Bronze only
-python -m pipelines myteam.orders:bronze --date 2025-01-15
+# Run the pipeline
+python -m pipelines ./my_pipeline.yaml --date 2025-01-15
 
-# Silver only
-python -m pipelines myteam.orders:silver --date 2025-01-15
+# Run Bronze or Silver only
+python -m pipelines ./my_pipeline.yaml:bronze --date 2025-01-15
+python -m pipelines ./my_pipeline.yaml:silver --date 2025-01-15
+```
+
+### Storage Options
+
+**Local filesystem** (default):
+```yaml
+target_path: ./bronze/system=retail/entity=orders/dt={run_date}/
+```
+
+**AWS S3**:
+```yaml
+target_path: s3://my-bucket/bronze/system=retail/entity=orders/dt={run_date}/
+# Set: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
+```
+
+**S3-Compatible (MinIO, Nutanix Objects)**:
+```yaml
+target_path: s3://my-bucket/bronze/system=retail/entity=orders/dt={run_date}/
+s3_endpoint_url: ${S3_ENDPOINT_URL}
+s3_signature_version: s3v4
+s3_addressing_style: path
+# Set: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, S3_ENDPOINT_URL
+```
+
+**Azure Data Lake Storage (ADLS)**:
+```yaml
+target_path: abfss://container@account.dfs.core.windows.net/bronze/system=retail/entity=orders/
+# Set: AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY (or use service principal)
 ```
 
 CLI flags: `--dry-run` (validate), `--check` (test connectivity), `--explain` (show plan), `--target ./local/` (override paths), `-v` (verbose), `--json-log` (JSON output).
+
+**Tip:** The `# yaml-language-server: $schema=...` line enables autocomplete for all options in VSCode.
 
 ## Interactive Creator
 
@@ -119,11 +156,15 @@ python -m pipelines inspect-source --file ./data.csv
 python -m pipelines new myteam.orders --source-type database_mssql
 ```
 
-## Source Types
+## Advanced: Python Pipelines
+
+Use Python when you need complex logic, retry decorators, or runtime-computed configuration.
 
 ### Database (SQL Server)
 
 ```python
+from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
+
 bronze = BronzeSource(
     system="claims",
     entity="claims_header",
@@ -171,6 +212,8 @@ bronze = BronzeSource(
 For slowly changing entities (customers, products):
 
 ```python
+from pipelines.lib.silver import SilverEntity, EntityKind, HistoryMode
+
 silver = SilverEntity(
     natural_keys=["customer_id"],
     change_timestamp="updated_at",
