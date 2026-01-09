@@ -1,17 +1,13 @@
 """Tests for destination-based watermark functions in pipelines/lib/state.py."""
 
 import json
-import pytest
 
 from pipelines.lib.state import (
     WatermarkSource,
-    get_watermark,
     get_watermark_from_destination,
     get_watermark_with_source,
-    save_watermark,
     _find_latest_partition,
 )
-from pipelines.lib.storage import LocalStorage
 
 
 class TestWatermarkSourceEnum:

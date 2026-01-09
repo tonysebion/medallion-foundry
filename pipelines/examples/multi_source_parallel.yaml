@@ -24,9 +24,11 @@ bronze:
   # target_path auto-generates: ./bronze/system=ecommerce/entity=customers/dt={run_date}/
 
 silver:
+  domain: ecommerce
+  subject: customers
   natural_keys: [customer_id]
   change_timestamp: updated_at
-  # target_path auto-generates: ./silver/system=ecommerce/entity=customers/dt={run_date}/
+  # target_path auto-generates: ./silver/domain=ecommerce/subject=customers/dt={run_date}/
   entity_kind: state
   history_mode: current_only
   attributes:

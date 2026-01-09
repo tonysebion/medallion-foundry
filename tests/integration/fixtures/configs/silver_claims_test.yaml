@@ -18,10 +18,12 @@ bronze:
   # target_path auto-generates: ./bronze/system=synthetic/entity=claims/dt={run_date}/
 
 silver:
+  domain: synthetic
+  subject: claims
   natural_keys: [claim_id]
   change_timestamp: updated_at
   entity_kind: event
-  # target_path auto-generates: ./silver/system=synthetic/entity=claims/dt={run_date}/
+  # target_path auto-generates: ./silver/domain=synthetic/subject=claims/dt={run_date}/
   attributes:
     - patient_id
     - provider_id

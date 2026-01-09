@@ -64,8 +64,10 @@ bronze:
   # target_path: "abfss://bronze@datalake.dfs.core.windows.net/github/repo_events/dt={run_date}/"
 
 silver:
+  domain: github
+  subject: repo_events
   natural_keys: [id]
   change_timestamp: created_at
-  # target_path auto-generates: ./silver/system=github/entity=repo_events/dt={run_date}/
+  # target_path auto-generates: ./silver/domain=github/subject=repo_events/dt={run_date}/
   # For Azure ADLS:
   # target_path: "abfss://silver@datalake.dfs.core.windows.net/github/repo_events/dt={run_date}/"

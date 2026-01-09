@@ -865,9 +865,9 @@ def load_silver_from_yaml(
     if isinstance(output_formats, str):
         output_formats = [output_formats]
 
-    # Get system and entity from config or infer from bronze
-    system = config.get("system", "")
-    entity = config.get("entity", "")
+    # Get domain and subject from config or infer from bronze
+    domain = config.get("domain", "")
+    subject = config.get("subject", "")
 
     # Convert input_mode string to enum (from config, model preset, or auto-wired from Bronze)
     input_mode = None
@@ -910,15 +910,15 @@ def load_silver_from_yaml(
                 storage_options = {}
             storage_options[storage_key] = config[yaml_key]
 
-    # Auto-wire from Bronze if not specified in Silver config
-    if bronze:
-        if not system:
-            system = bronze.system
-        if not entity:
-            entity = bronze.entity
-        # Auto-wire storage options from Bronze (for S3-compatible storage)
-        # Only if Silver doesn't have its own S3 options
-        if storage_options is None and bronze.options:
+    # Validate required fields
+    if not domain:
+        raise YAMLConfigError("silver.domain is required")
+    if not subject:
+        raise YAMLConfigError("silver.subject is required")
+
+    # Auto-wire storage options from Bronze (for S3-compatible storage)
+    # Only if Silver doesn't have its own S3 options
+    if bronze and storage_options is None and bronze.options:
             storage_keys = [
                 "s3_signature_version",
                 "s3_addressing_style",
@@ -938,8 +938,8 @@ def load_silver_from_yaml(
     return SilverEntity(
         natural_keys=natural_keys,
         change_timestamp=config.get("change_timestamp"),
-        system=system,
-        entity=entity,
+        domain=domain,
+        subject=subject,
         source_path=source_path,
         target_path=target_path,
         attributes=attributes,
@@ -1100,10 +1100,9 @@ class PipelineFromYAML:
             )
             silver.source_path = bronze_target.rstrip("/") + "/*.parquet"
 
-        if bronze and silver and not silver.target_path:
-            # Auto-generate Silver target using Hive-style partitioning for consistency
-            # Include dt={run_date} to match Bronze date partitioning
-            silver.target_path = f"./silver/system={bronze.system}/entity={bronze.entity}/dt={{run_date}}/"
+        if silver and not silver.target_path:
+            # Auto-generate Silver target using Hive-style partitioning
+            silver.target_path = f"./silver/domain={silver.domain}/subject={silver.subject}/dt={{run_date}}/"
 
         # Auto-wire input_mode from Bronze to Silver if not explicitly set
         if bronze and silver and silver.input_mode is None and bronze.input_mode is not None:
@@ -1170,7 +1169,7 @@ class PipelineFromYAML:
             if self.bronze:
                 tracer.detail(f"Bronze: {self.bronze.system}.{self.bronze.entity}")
             if self.silver:
-                tracer.detail(f"Silver: {self.silver.entity}")
+                tracer.detail(f"Silver: {self.silver.domain}.{self.silver.subject}")
 
         result: Dict[str, Any] = {}
 

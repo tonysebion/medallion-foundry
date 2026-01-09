@@ -70,11 +70,13 @@ bronze:
   # target_path: "s3://data-lake/bronze/sales_dw/order_details/dt={run_date}/"
 
 silver:
+  domain: sales_dw
+  subject: order_details
   natural_keys: [OrderDetailID]
   change_timestamp: UpdatedAt
-  # target_path auto-generates: ./silver/system=sales_dw/entity=order_details/dt={run_date}/
+  # target_path auto-generates: ./silver/domain=sales_dw/subject=order_details/dt={run_date}/
   # For AWS S3:
-  # target_path: "s3://data-lake/silver/system=sales_dw/entity=order_details/dt={run_date}/"
+  # target_path: "s3://data-lake/silver/domain=sales_dw/subject=order_details/dt={run_date}/"
   attributes:
     - OrderID
     - ProductID

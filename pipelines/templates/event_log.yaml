@@ -29,11 +29,13 @@ bronze:
 
 # Silver layer - curate events (dedupe only)
 silver:
+  domain: your_domain               # Business domain (e.g., analytics, marketing)
+  subject: your_subject             # Subject area (e.g., page_views, clicks)
   # Event identity - what makes an event unique?
   natural_keys: [event_id]          # Usually a UUID or composite key
   change_timestamp: event_time      # When did the event occur?
-  # target_path auto-generates: ./silver/system=your_system/entity=your_entity/dt={run_date}/
-  # For S3: target_path: "s3://bucket/silver/system=your_system/entity=your_entity/dt={run_date}/"
+  # target_path auto-generates: ./silver/domain=your_domain/subject=your_subject/dt={run_date}/
+  # For S3: target_path: "s3://bucket/silver/domain=your_domain/subject=your_subject/dt={run_date}/"
 
   # Events are immutable - just dedupe exact duplicates
   entity_kind: event

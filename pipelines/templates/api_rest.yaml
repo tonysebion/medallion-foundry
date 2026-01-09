@@ -111,10 +111,12 @@ bronze:
   # For ADLS: target_path: "abfss://container@account.dfs.core.windows.net/bronze/your_system/your_entity/"
 
 silver:
+  domain: your_domain             # Business domain (e.g., crm, marketing)
+  subject: your_subject           # Subject area (e.g., contacts, leads)
   natural_keys: [id]
   change_timestamp: updated_at
-  # target_path auto-generates: ./silver/system=your_system/entity=your_entity/dt={run_date}/
-  # For S3: target_path: "s3://bucket/silver/system=your_system/entity=your_entity/dt={run_date}/"
+  # target_path auto-generates: ./silver/domain=your_domain/subject=your_subject/dt={run_date}/
+  # For S3: target_path: "s3://bucket/silver/domain=your_domain/subject=your_subject/dt={run_date}/"
   # attributes:
   #   - name
   #   - status

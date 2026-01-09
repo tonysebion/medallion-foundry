@@ -113,14 +113,13 @@ class Pipeline:
     def _auto_wire_silver_source(self) -> None:
         """Auto-wire Silver's source_path from Bronze's target_path.
 
-        Only applies when:
-        1. Both Bronze and Silver are configured
-        2. Silver's source_path is empty or uses the default pattern
+        Only applies when both Bronze and Silver are configured and
+        Silver's source_path is empty.
         """
         if self.bronze is None or self.silver is None:
             return
 
-        # Check if Silver needs auto-wiring (empty or placeholder source_path)
+        # Check if Silver needs source_path auto-wiring (empty or placeholder)
         silver_source = getattr(self.silver, "source_path", "")
         if not silver_source or silver_source == "":
             # Construct source_path from Bronze's target_path
@@ -303,9 +302,11 @@ class Pipeline:
             lines.extend([
                 "",
                 "SILVER LAYER:",
+                f"  Domain:       {self.silver.domain}",
+                f"  Subject:      {self.silver.subject}",
                 f"  Source:       {self.silver.source_path}",
                 f"  Target:       {self.silver.target_path}",
-                f"  Natural Keys: {', '.join(self.silver.natural_keys)}",
+                f"  Natural Keys: {', '.join(self.silver.natural_keys or [])}",
                 f"  Change Col:   {self.silver.change_timestamp}",
                 f"  Entity Kind:  {self.silver.entity_kind.value}",
                 f"  History Mode: {self.silver.history_mode.value}",

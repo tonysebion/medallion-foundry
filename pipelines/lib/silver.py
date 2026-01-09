@@ -232,8 +232,8 @@ SILVER_MODEL_PRESETS: dict[str, dict[str, str]] = {
 
 
 # Default target path template - can be overridden
-# Includes system= and dt= for consistency with Bronze layer
-DEFAULT_SILVER_TARGET = "./silver/system={system}/entity={entity}/dt={run_date}/"
+# Uses domain=/subject= to distinguish from Bronze's system=/entity=
+DEFAULT_SILVER_TARGET = "./silver/domain={domain}/subject={subject}/dt={run_date}/"
 
 
 @dataclass
@@ -274,9 +274,9 @@ class SilverEntity:
     # Temporal (required for most models, optional for periodic_snapshot)
     change_timestamp: Optional[str] = None  # When the source record changed
 
-    # Source system and entity (optional - auto-wired from Bronze or inferred from paths)
-    system: str = ""  # Source system name (e.g., "retail", "crm")
-    entity: str = ""  # Entity name (e.g., "orders", "customers")
+    # Business domain and subject (optional - auto-wired from Bronze or inferred from paths)
+    domain: str = ""  # Business domain name (e.g., "sales", "finance", "hr")
+    subject: str = ""  # Subject area name (e.g., "orders", "customers")
 
     # Source and target paths (optional when used with Pipeline)
     source_path: str = ""  # Path to Bronze data (auto-wired from Pipeline)
@@ -463,10 +463,10 @@ class SilverEntity:
 
         tracer = get_tracer()
 
-        # Determine entity name for tracing
-        entity_label = f"{self.system}.{self.entity}" if self.system and self.entity else self.entity or "silver"
+        # Determine subject name for tracing
+        subject_label = f"{self.domain}.{self.subject}" if self.domain and self.subject else self.subject or "silver"
 
-        with step(PipelineStep.SILVER_START, entity_label):
+        with step(PipelineStep.SILVER_START, subject_label):
             # Validate paths at runtime (they may have been set by Pipeline)
             if not self.source_path:
                 raise ValueError(
@@ -555,8 +555,8 @@ class SilverEntity:
             env_var="SILVER_TARGET_ROOT",
             format_vars={
                 "run_date": run_date,
-                "system": self.system,
-                "entity": self.entity,
+                "domain": self.domain,
+                "subject": self.subject,
             },
         )
 
@@ -796,20 +796,20 @@ class SilverEntity:
             _silver_run_date=ibis.literal(run_date),
         )
 
-    def _infer_entity_name(self, target: str) -> str:
-        """Infer entity name from target path.
+    def _infer_subject_name(self, target: str) -> str:
+        """Infer subject name from target path.
 
-        Extracts entity name from Hive-style partition paths like:
-        - 'silver/system=retail/entity=orders/' -> 'orders'
+        Extracts subject name from Hive-style partition paths like:
+        - 'silver/domain=sales/subject=orders/' -> 'orders'
         - 's3://bucket/silver/orders/' -> 'orders'
         - './silver/orders/' -> 'orders'
 
-        Falls back to 'data' if entity cannot be determined.
+        Falls back to 'data' if subject cannot be determined.
         """
         import re
 
-        # Try to extract from entity= partition
-        match = re.search(r"entity=([^/\\]+)", target)
+        # Try to extract from subject= partition (new Silver path format)
+        match = re.search(r"subject=([^/\\]+)", target)
         if match:
             return match.group(1)
 
@@ -860,11 +860,11 @@ class SilverEntity:
             if self.partition_by:
                 write_opts["partition_by"] = self.partition_by
 
-            # Determine entity name for filename
-            entity_name = self.entity if self.entity else self._infer_entity_name(target)
+            # Determine subject name for filename
+            subject_name = self.subject if self.subject else self._infer_subject_name(target)
 
-            # Write parquet file with entity name (consistent with Bronze)
-            parquet_filename = f"{entity_name}.parquet"
+            # Write parquet file with subject name
+            parquet_filename = f"{subject_name}.parquet"
             written_files = []
             if "parquet" in self.output_formats:
                 output_file = target.rstrip("/") + f"/{parquet_filename}"
@@ -983,8 +983,8 @@ class SilverEntity:
                 "polybase_file": "_polybase.sql",
             }
 
-        # Determine entity name for filename
-        entity_name = self.entity if self.entity else self._infer_entity_name(target)
+        # Determine subject name for filename
+        subject_name = self.subject if self.subject else self._infer_subject_name(target)
 
         # For local filesystem, use enhanced write with artifacts
         silver_metadata = write_silver_with_artifacts(
@@ -1000,13 +1000,13 @@ class SilverEntity:
             run_date=run_date,
             source_path=source,
             write_checksums=True,
-            entity_name=entity_name,
+            subject_name=subject_name,
         )
 
         # Also write CSV if requested
         if "csv" in self.output_formats and "parquet" in self.output_formats:
             output_dir = Path(target)
-            csv_file = output_dir / f"{entity_name}.csv"
+            csv_file = output_dir / f"{subject_name}.csv"
             t.execute().to_csv(str(csv_file), index=False)
 
         return {

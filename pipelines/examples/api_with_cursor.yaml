@@ -59,9 +59,11 @@ bronze:
   # Storage output location (optional - auto-generates ./bronze/system=events_api/entity=audit_events/dt={run_date}/)
 
 silver:
+  domain: events
+  subject: audit_events
   natural_keys: [event_id]
   change_timestamp: event_timestamp
-  # target_path auto-generates: ./silver/system=events_api/entity=audit_events/dt={run_date}/
+  # target_path auto-generates: ./silver/domain=events/subject=audit_events/dt={run_date}/
   entity_kind: event
   attributes:
     - event_type

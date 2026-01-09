@@ -78,7 +78,7 @@ bronze:
 silver:
   natural_keys: [order_id]
   change_timestamp: updated_at
-  target_path: ./silver/system=retail/entity=orders/
+  target_path: ./silver/domain=retail/subject=orders/
 ```
 
 **Output Structure:**
@@ -88,8 +88,8 @@ bronze/system=retail/entity=orders/dt=2025-01-15/
   ├── _metadata.json      # Lineage and watermarks
   └── _checksums.json     # Data integrity
 
-silver/system=retail/entity=orders/
-  ├── data.parquet        # Curated data
+silver/domain=retail/subject=orders/
+  ├── orders.parquet      # Curated data
   └── _metadata.json      # Schema info
 ```
 

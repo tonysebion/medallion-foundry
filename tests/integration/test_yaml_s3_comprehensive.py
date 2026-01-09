@@ -537,7 +537,7 @@ class TestYamlPatterns:
             print(f"Bronze checksum verification: {checksum_result}")
 
         # Verify Silver artifacts
-        silver_path = f"{test_prefix}/silver/system={pattern.system}/entity={pattern.entity}"
+        silver_path = f"{test_prefix}/silver/domain={pattern.system}/subject={pattern.entity}"
 
         silver_artifacts = verify_silver_artifacts(client, MINIO_BUCKET, silver_path)
         print(f"\nSilver artifacts: {silver_artifacts}")
@@ -644,7 +644,7 @@ class TestSpecializedScenarios:
             print(f"  Silver: {silver_result['row_count']} rows")
 
             bronze_path = f"{test_prefix}/bronze/system=retail/entity=orders/dt={run_date}"
-            silver_path = f"{test_prefix}/silver/system=retail/entity=orders"
+            silver_path = f"{test_prefix}/silver/domain=retail/subject=orders"
 
             bronze_paths.append(bronze_path)
             silver_paths.append(silver_path)
@@ -665,7 +665,7 @@ class TestSpecializedScenarios:
             assert len(files) == 0, f"Skipped date {skipped_date} should have no files"
 
         # Verify Silver output exists
-        silver_path = f"{test_prefix}/silver/system=retail/entity=orders"
+        silver_path = f"{test_prefix}/silver/domain=retail/subject=orders"
         silver_artifacts = verify_silver_artifacts(client, MINIO_BUCKET, silver_path)
         assert silver_artifacts["parquet_count"] > 0, "Silver should have parquet files"
 
@@ -777,7 +777,7 @@ class TestSpecializedScenarios:
         # Read Silver data
         import io
         client = get_s3_client()
-        silver_path = f"{test_prefix}/silver/system=crm/entity=customers"
+        silver_path = f"{test_prefix}/silver/domain=crm/subject=customers"
         silver_files = list_files_in_path(client, MINIO_BUCKET, silver_path)
 
         silver_parquet = next((f for f in silver_files if f.endswith(".parquet")), None)

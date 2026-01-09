@@ -47,10 +47,12 @@ bronze:
 
 # Silver layer - curate to clean format
 silver:
+  domain: your_domain               # Business domain (e.g., finance, banking)
+  subject: your_subject             # Subject area (e.g., transactions, payments)
   natural_keys: [txn_id]            # Primary key column
   change_timestamp: txn_date        # Timestamp column
-  # target_path auto-generates: ./silver/system=your_system/entity=your_entity/dt={run_date}/
-  # For S3: target_path: "s3://bucket/silver/system=your_system/entity=your_entity/dt={run_date}/"
+  # target_path auto-generates: ./silver/domain=your_domain/subject=your_subject/dt={run_date}/
+  # For S3: target_path: "s3://bucket/silver/domain=your_domain/subject=your_subject/dt={run_date}/"
 
   # Transactions/events are immutable
   entity_kind: event

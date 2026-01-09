@@ -208,7 +208,7 @@ class TestBronzeSilverMinIO:
 
         # ===== Step 3: Configure Silver to read from MinIO Bronze and write to MinIO =====
         silver_source = f"s3://{MINIO_BUCKET}/{test_prefix}/bronze/system=sales/entity=orders/dt={{run_date}}/*.parquet"
-        silver_target = f"s3://{MINIO_BUCKET}/{test_prefix}/silver/system=sales/entity=orders/dt={{run_date}}/"
+        silver_target = f"s3://{MINIO_BUCKET}/{test_prefix}/silver/domain=sales/subject=orders/dt={{run_date}}/"
         silver = SilverEntity(
             source_path=silver_source,
             target_path=silver_target,
@@ -254,7 +254,7 @@ class TestBronzeSilverMinIO:
         assert len(bronze_files) > 0, "Bronze should create files in MinIO"
 
         # List Silver files
-        silver_path_resolved = f"{test_prefix}/silver/system=sales/entity=orders/dt={run_date}"
+        silver_path_resolved = f"{test_prefix}/silver/domain=sales/subject=orders/dt={run_date}"
         silver_files = []
         for page in paginator.paginate(Bucket=MINIO_BUCKET, Prefix=silver_path_resolved):
             silver_files.extend([obj["Key"] for obj in page.get("Contents", [])])
@@ -321,7 +321,7 @@ class TestBronzeSilverMinIO:
 
         silver = SilverEntity(
             source_path=f"s3://{MINIO_BUCKET}/{test_prefix}/bronze/system=test/entity=items/dt={{run_date}}/*.parquet",
-            target_path=f"s3://{MINIO_BUCKET}/{test_prefix}/silver/system=test/entity=items/dt={{run_date}}/",
+            target_path=f"s3://{MINIO_BUCKET}/{test_prefix}/silver/domain=test/subject=items/dt={{run_date}}/",
             natural_keys=["id"],
             change_timestamp="updated_at",
             entity_kind=EntityKind.STATE,

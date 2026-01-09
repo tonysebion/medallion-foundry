@@ -159,6 +159,14 @@ bronze:
 # In a combined pipeline, Silver auto-wires settings from Bronze.
 
 silver:
+  # DOMAIN: Business domain this data belongs to
+  # Examples: "sales", "finance", "hr", "operations"
+  domain: crm
+
+  # SUBJECT: Subject area within the domain
+  # Examples: "orders", "customers", "employees", "transactions"
+  subject: education
+
   # NATURAL_KEYS: Column(s) that uniquely identify a record
   #   This is like a primary key in a database.
   #   Single key:   natural_keys: [customer_id]
@@ -177,11 +185,7 @@ silver:
   source_path: "s3://bronze-bucket/system=CRM/entity=education/dt={run_date}/"
 
   # TARGET_PATH: Where to write Silver output
-  target_path: "s3://silver-bucket/CRM/education/"
-
-  # SYSTEM and ENTITY: Inherited from Bronze, but can be overridden
-  system: CRM
-  entity: education
+  target_path: "s3://silver-bucket/domain=crm/subject=education/"
 
   # MODEL: Pre-built transformation pattern (simplifies configuration)
   #   Options for standard data:

@@ -173,6 +173,12 @@ bronze:
 #   - Simplest model - just pass through the data
 
 silver:
+  # DOMAIN: Business domain this data belongs to
+  domain: operations
+
+  # SUBJECT: Subject area within the domain
+  subject: order_details
+
   # MODEL: periodic_snapshot - Simple replacement, no deduplication
   #   Other options:
   #   - full_merge_dedupe: Deduplicate by natural_keys (SCD Type 1)
@@ -181,10 +187,7 @@ silver:
   model: periodic_snapshot
 
   source_path: "s3://bronze-bucket/system=mainframe/entity=order_details/dt={run_date}/"
-  target_path: "s3://silver-bucket/mainframe/order_details/"
-
-  system: mainframe
-  entity: order_details
+  target_path: "s3://silver-bucket/domain=operations/subject=order_details/"
 
   validate_source: skip
 

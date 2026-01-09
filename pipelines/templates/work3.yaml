@@ -165,6 +165,12 @@ bronze:
 #   - Simplest model - just pass through the data
 
 silver:
+  # DOMAIN: Business domain this data belongs to
+  domain: customers
+
+  # SUBJECT: Subject area within the domain
+  subject: addresses
+
   # MODEL: periodic_snapshot - Simple replacement, no deduplication
   #   Other options:
   #   - full_merge_dedupe: Deduplicate by natural_keys (SCD Type 1)
@@ -176,11 +182,7 @@ silver:
   source_path: "s3://bronze-bucket/system=legacy/entity=customer_addresses/dt={run_date}/"
 
   # TARGET_PATH: Where to write Silver output
-  target_path: "s3://silver-bucket/legacy/customer_addresses/"
-
-  # SYSTEM and ENTITY: Explicit for standalone execution
-  system: legacy
-  entity: customer_addresses
+  target_path: "s3://silver-bucket/domain=customers/subject=addresses/"
 
   # VALIDATE_SOURCE: Skip Bronze checksum validation for speed
   validate_source: skip

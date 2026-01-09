@@ -29,9 +29,11 @@ bronze:
   # target_path auto-generates: ./bronze/system=inventory/entity=products/dt={run_date}/
 
 silver:
+  domain: inventory
+  subject: products
   natural_keys: [product_id]
   change_timestamp: updated_at
-  # target_path auto-generates: ./silver/system=inventory/entity=products/dt={run_date}/
+  # target_path auto-generates: ./silver/domain=inventory/subject=products/dt={run_date}/
   entity_kind: state
   # SCD Type 2: Maintains full history with effective_from/effective_to dates
   history_mode: full_history

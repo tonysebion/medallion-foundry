@@ -512,17 +512,18 @@
       "type": "object",
       "description": "Silver layer configuration - data curation",
       "additionalProperties": false,
-      "comment": "natural_keys and change_timestamp are required for all models except periodic_snapshot. Schema validation enforces this via allOf conditionals.",
+      "required": ["domain", "subject"],
+      "comment": "domain and subject are required. natural_keys and change_timestamp are required for all models except periodic_snapshot.",
       "properties": {
-        "system": {
+        "domain": {
           "type": "string",
-          "description": "Source system name. Auto-wired from Bronze if not specified.",
-          "examples": ["retail", "crm", "hr_db"]
+          "description": "Business domain name (e.g., 'sales', 'finance', 'hr')",
+          "examples": ["sales", "finance", "hr", "customer_success"]
         },
-        "entity": {
+        "subject": {
           "type": "string",
-          "description": "Entity name. Auto-wired from Bronze if not specified.",
-          "examples": ["orders", "customers", "products"]
+          "description": "Subject area name (e.g., 'orders', 'customers', 'products')",
+          "examples": ["orders", "customers", "products", "transactions"]
         },
         "natural_keys": {
           "oneOf": [
@@ -546,8 +547,8 @@
         },
         "target_path": {
           "type": "string",
-          "description": "Where to write Silver output. Defaults to ./silver/system={system}/entity={entity}/",
-          "examples": ["./silver/system=retail/entity=orders/", "s3://bucket/silver/system=retail/entity=orders/"]
+          "description": "Where to write Silver output. Defaults to ./silver/domain={domain}/subject={subject}/",
+          "examples": ["./silver/domain=sales/subject=orders/", "s3://bucket/silver/domain=sales/subject=orders/"]
         },
         "model": {
           "type": "string",

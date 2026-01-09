@@ -202,7 +202,7 @@ class TestConfigLoaderInputMode:
     def test_load_silver_with_input_mode(self, tmp_path: Path):
         """Test loading Silver config with explicit input_mode."""
         config = {
-            "natural_keys": ["order_id"],
+            "domain": "test", "subject": "test", "natural_keys": ["order_id"],
             "change_timestamp": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/orders/",
@@ -227,6 +227,8 @@ bronze:
   input_mode: append_log
 
 silver:
+  domain: test
+  subject: orders
   natural_keys: [order_id]
   change_timestamp: updated_at
 """
@@ -250,6 +252,8 @@ bronze:
   input_mode: append_log
 
 silver:
+  domain: test
+  subject: orders
   natural_keys: [order_id]
   change_timestamp: updated_at
   input_mode: replace_daily
@@ -274,6 +278,8 @@ bronze:
   source_path: ./data/orders.csv
 
 silver:
+  domain: test
+  subject: orders
   natural_keys: [order_id]
   change_timestamp: updated_at
 """

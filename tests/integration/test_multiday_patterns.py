@@ -266,7 +266,7 @@ def run_silver_pipeline(
 
     silver = SilverEntity(
         source_path=source_path,
-        target_path=f"s3://{target_bucket}/{target_prefix}/silver/system={system}/entity={entity}/",
+        target_path=f"s3://{target_bucket}/{target_prefix}/silver/domain={system}/subject={entity}/",
         natural_keys=natural_keys,
         change_timestamp=change_timestamp,
         entity_kind=kind_map.get(entity_kind, EntityKind.STATE),
@@ -298,7 +298,7 @@ def get_silver_data(
     Returns:
         DataFrame with Silver data, or empty DataFrame if not found
     """
-    silver_prefix = f"{prefix}/silver/system={system}/entity={entity}/"
+    silver_prefix = f"{prefix}/silver/domain={system}/subject={entity}/"
     objects = list_objects_in_prefix(client, bucket, silver_prefix)
 
     parquet_files = [obj for obj in objects if obj.endswith(".parquet")]

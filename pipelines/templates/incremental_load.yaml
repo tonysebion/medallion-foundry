@@ -46,8 +46,10 @@ bronze:
 
 # Silver layer - curate with full history (SCD Type 2)
 silver:
+  domain: your_domain               # Business domain (e.g., sales, logistics)
+  subject: your_subject             # Subject area (e.g., orders, shipments)
   natural_keys: [OrderID]           # Primary key column(s)
   change_timestamp: LastUpdated     # When was the record changed?
-  # target_path auto-generates: ./silver/system=your_system/entity=your_entity/dt={run_date}/
-  # For S3: target_path: "s3://bucket/silver/system=your_system/entity=your_entity/dt={run_date}/"
+  # target_path auto-generates: ./silver/domain=your_domain/subject=your_subject/dt={run_date}/
+  # For S3: target_path: "s3://bucket/silver/domain=your_domain/subject=your_subject/dt={run_date}/"
   history_mode: full_history        # Keep all versions (SCD Type 2)

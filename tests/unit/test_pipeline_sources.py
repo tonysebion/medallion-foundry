@@ -105,13 +105,13 @@ def test_silver_entity_curates_state_entity(tmp_path: Path):
     ).to_parquet(bronze_dir / "data.parquet", index=False)
 
     source_template = tmp_path / "bronze" / "system=tests" / "entity=items" / "dt={run_date}" / "*.parquet"
-    silver_target = tmp_path / "silver" / "system=tests" / "entity=items"
+    silver_target = tmp_path / "silver" / "domain=tests" / "subject=items"
 
     silver = SilverEntity(
         source_path=source_template.as_posix(),
         target_path=silver_target.as_posix(),
-        system="tests",
-        entity="items",
+        domain="tests",
+        subject="items",
         natural_keys=["id"],
         change_timestamp="updated_at",
         entity_kind=EntityKind.STATE,

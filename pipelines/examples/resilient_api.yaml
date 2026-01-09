@@ -63,9 +63,11 @@ bronze:
   #   s3_addressing_style: path
 
 silver:
+  domain: crm
+  subject: contacts
   natural_keys: [contact_id]
   change_timestamp: updated_at
-  # target_path auto-generates: ./silver/system=crm/entity=contacts/dt={run_date}/
+  # target_path auto-generates: ./silver/domain=crm/subject=contacts/dt={run_date}/
   entity_kind: state
   history_mode: current_only
   attributes:

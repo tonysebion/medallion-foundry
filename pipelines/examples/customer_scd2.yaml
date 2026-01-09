@@ -34,9 +34,11 @@ bronze:
   # target_path defaults to: ./bronze/system=crm/entity=customers/dt={run_date}/
 
 silver:
+  domain: crm
+  subject: customers
   natural_keys: [customer_id]
   change_timestamp: updated_at
-  # target_path defaults to: ./silver/system=crm/entity=customers/dt={run_date}/
+  # target_path defaults to: ./silver/domain=crm/subject=customers/dt={run_date}/
   history_mode: full_history    # SCD Type 2!
   attributes:
     - name

@@ -157,6 +157,14 @@ bronze:
 # SILVER: How should data be curated?
 # ============================================================
 silver:
+  # DOMAIN: Business domain this data belongs to
+  # Examples: "sales", "finance", "hr", "operations"
+  domain: your_domain
+
+  # SUBJECT: Subject area within the domain
+  # Examples: "orders", "customers", "employees", "transactions"
+  subject: your_subject
+
   # NATURAL KEYS: What makes a record unique? (the primary key)
   # Examples: [id], [customer_id], [order_id, line_id]
   natural_keys: [id]
@@ -189,14 +197,14 @@ silver:
   # ============================================================
   # STORAGE OUTPUT: Where to write Silver data (optional)
   # ============================================================
-  # If omitted, auto-generates: ./silver/system=your_system/entity=your_entity/dt={run_date}/
+  # If omitted, auto-generates: ./silver/domain={domain}/subject={subject}/dt={run_date}/
 
   # AWS S3:
-  # target_path: "s3://my-bucket/silver/system=your_system/entity=your_entity/dt={run_date}/"
+  # target_path: "s3://my-bucket/silver/domain={domain}/subject={subject}/dt={run_date}/"
 
   # S3-Compatible (MinIO, Nutanix):
-  # target_path: "s3://my-bucket/silver/system=your_system/entity=your_entity/dt={run_date}/"
+  # target_path: "s3://my-bucket/silver/domain={domain}/subject={subject}/dt={run_date}/"
   # (Same options and env vars as Bronze section above)
 
   # Azure Data Lake Storage (ADLS):
-  # target_path: "abfss://container@account.dfs.core.windows.net/silver/system=your_system/entity=your_entity/dt={run_date}/"
+  # target_path: "abfss://container@account.dfs.core.windows.net/silver/domain={domain}/subject={subject}/dt={run_date}/"

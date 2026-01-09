@@ -105,7 +105,7 @@ def build_minimal_bronze_config(**overrides) -> Dict[str, Any]:
 def build_minimal_silver_config(**overrides) -> Dict[str, Any]:
     """Build a minimal valid Silver config with optional field overrides."""
     config = {
-        "natural_keys": ["id"],
+        "domain": "test", "subject": "test", "natural_keys": ["id"],
         "change_timestamp": "updated_at",
         "source_path": "./bronze/test/*.parquet",
         "target_path": "./silver/test/",
@@ -448,7 +448,7 @@ class TestSchemaCompleteness:
         schema_fields = {name for name, _ in get_silver_fields()}
 
         expected_handled = {
-            "system", "entity", "natural_keys", "change_timestamp",
+            "domain", "subject", "natural_keys", "change_timestamp",
             "source_path", "target_path",
             "model", "entity_kind", "history_mode", "input_mode", "delete_mode",
             "attributes", "exclude_columns", "column_mapping", "partition_by",

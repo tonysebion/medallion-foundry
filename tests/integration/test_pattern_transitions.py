@@ -202,7 +202,7 @@ def run_silver(
 
     silver = SilverEntity(
         source_path=source_path,
-        target_path=f"s3://{bucket}/{prefix}/silver/system=transitions/entity=test/dt={{run_date}}/",
+        target_path=f"s3://{bucket}/{prefix}/silver/domain=transitions/subject=test/dt={{run_date}}/",
         natural_keys=["id"],
         change_timestamp="ts",
         entity_kind=EntityKind.STATE,
@@ -216,7 +216,7 @@ def run_silver(
 
 def get_silver_data(client, bucket: str, prefix: str, run_date: str) -> pd.DataFrame:
     """Read Silver data from MinIO."""
-    silver_prefix = f"{prefix}/silver/system=transitions/entity=test/dt={run_date}/"
+    silver_prefix = f"{prefix}/silver/domain=transitions/subject=test/dt={run_date}/"
     objects = list_objects_in_prefix(client, bucket, silver_prefix)
 
     parquet_files = [o for o in objects if o.endswith(".parquet")]

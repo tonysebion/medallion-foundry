@@ -184,7 +184,7 @@ class TestConfigLoaderCDC:
     def test_load_silver_with_delete_mode_ignore(self, tmp_path):
         """Test loading Silver config with delete_mode=ignore."""
         config = {
-            "natural_keys": ["customer_id"],
+            "domain": "test", "subject": "test", "natural_keys": ["customer_id"],
             "change_timestamp": "updated_at",
             "delete_mode": "ignore",
         }
@@ -195,7 +195,7 @@ class TestConfigLoaderCDC:
         """Test loading Silver config with delete_mode=tombstone requires CDC model."""
         config = {
             "model": "cdc_current",  # CDC model is required for tombstone/hard_delete
-            "natural_keys": ["customer_id"],
+            "domain": "test", "subject": "test", "natural_keys": ["customer_id"],
             "change_timestamp": "updated_at",
             "delete_mode": "tombstone",  # Overrides the model default (ignore)
         }
@@ -206,7 +206,7 @@ class TestConfigLoaderCDC:
         """Test loading Silver config with delete_mode=hard_delete requires CDC model."""
         config = {
             "model": "cdc_current",  # CDC model is required for tombstone/hard_delete
-            "natural_keys": ["customer_id"],
+            "domain": "test", "subject": "test", "natural_keys": ["customer_id"],
             "change_timestamp": "updated_at",
             "delete_mode": "hard_delete",  # Overrides the model default (ignore)
         }
@@ -216,7 +216,7 @@ class TestConfigLoaderCDC:
     def test_load_silver_default_delete_mode(self, tmp_path):
         """Test default delete_mode is ignore."""
         config = {
-            "natural_keys": ["customer_id"],
+            "domain": "test", "subject": "test", "natural_keys": ["customer_id"],
             "change_timestamp": "updated_at",
         }
         silver = load_silver_from_yaml(config, tmp_path)
@@ -225,7 +225,7 @@ class TestConfigLoaderCDC:
     def test_load_silver_invalid_delete_mode_raises(self, tmp_path):
         """Test invalid delete_mode raises error."""
         config = {
-            "natural_keys": ["customer_id"],
+            "domain": "test", "subject": "test", "natural_keys": ["customer_id"],
             "change_timestamp": "updated_at",
             "delete_mode": "invalid",
         }
@@ -235,7 +235,7 @@ class TestConfigLoaderCDC:
     def test_load_silver_with_cdc_options(self, tmp_path):
         """Test loading Silver config with cdc_options."""
         config = {
-            "natural_keys": ["customer_id"],
+            "domain": "test", "subject": "test", "natural_keys": ["customer_id"],
             "change_timestamp": "updated_at",
             "cdc_options": {
                 "operation_column": "op",
@@ -248,7 +248,7 @@ class TestConfigLoaderCDC:
     def test_load_silver_cdc_options_with_custom_codes(self, tmp_path):
         """Test loading Silver config with custom CDC codes."""
         config = {
-            "natural_keys": ["customer_id"],
+            "domain": "test", "subject": "test", "natural_keys": ["customer_id"],
             "change_timestamp": "updated_at",
             "cdc_options": {
                 "operation_column": "operation",
@@ -266,7 +266,7 @@ class TestConfigLoaderCDC:
     def test_load_silver_cdc_options_missing_operation_column_raises(self, tmp_path):
         """Test cdc_options without operation_column raises error."""
         config = {
-            "natural_keys": ["customer_id"],
+            "domain": "test", "subject": "test", "natural_keys": ["customer_id"],
             "change_timestamp": "updated_at",
             "cdc_options": {
                 "insert_code": "I",
@@ -292,6 +292,8 @@ bronze:
   input_mode: append_log
 
 silver:
+  domain: test
+  subject: customers
   natural_keys: [customer_id]
   change_timestamp: updated_at
   delete_mode: tombstone
@@ -320,6 +322,8 @@ bronze:
   input_mode: append_log
 
 silver:
+  domain: test
+  subject: products
   natural_keys: [product_id]
   change_timestamp: updated_at
   model: scd_type_2
