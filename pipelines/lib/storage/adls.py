@@ -8,6 +8,7 @@ import os
 from typing import Any, List, Optional
 
 from pipelines.lib.storage.base import FileInfo, StorageBackend, StorageResult
+from pipelines.lib.storage_config import get_config_value
 
 logger = logging.getLogger(__name__)
 
@@ -104,37 +105,28 @@ class ADLSStorage(StorageBackend):
                 )
 
             # Build options from environment and passed options
+            # Using shared helper that handles ${VAR} expansion from YAML
             fs_options = {}
 
             # Account name
-            account_name = (
-                self.options.get("account_name")
-                or self._account
-                or os.environ.get("AZURE_STORAGE_ACCOUNT")
-            )
+            account_name = get_config_value(self.options, "account_name", "AZURE_STORAGE_ACCOUNT") or self._account
             if account_name:
                 fs_options["account_name"] = account_name
 
             # Account key
-            account_key = (
-                self.options.get("account_key")
-                or os.environ.get("AZURE_STORAGE_KEY")
-            )
+            account_key = get_config_value(self.options, "account_key", "AZURE_STORAGE_KEY")
             if account_key:
                 fs_options["account_key"] = account_key
 
             # Connection string
-            connection_string = (
-                self.options.get("connection_string")
-                or os.environ.get("AZURE_STORAGE_CONNECTION_STRING")
-            )
+            connection_string = get_config_value(self.options, "connection_string", "AZURE_STORAGE_CONNECTION_STRING")
             if connection_string:
                 fs_options["connection_string"] = connection_string
 
             # Service principal auth
-            client_id = self.options.get("client_id") or os.environ.get("AZURE_CLIENT_ID")
-            client_secret = self.options.get("client_secret") or os.environ.get("AZURE_CLIENT_SECRET")
-            tenant_id = self.options.get("tenant_id") or os.environ.get("AZURE_TENANT_ID")
+            client_id = get_config_value(self.options, "client_id", "AZURE_CLIENT_ID")
+            client_secret = get_config_value(self.options, "client_secret", "AZURE_CLIENT_SECRET")
+            tenant_id = get_config_value(self.options, "tenant_id", "AZURE_TENANT_ID")
 
             if client_id and client_secret and tenant_id:
                 fs_options["client_id"] = client_id

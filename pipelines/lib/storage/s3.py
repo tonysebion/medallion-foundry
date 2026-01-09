@@ -12,6 +12,7 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from pipelines.lib.storage.base import FileInfo, StorageBackend, StorageResult
+from pipelines.lib.storage_config import get_config_value
 
 logger = logging.getLogger(__name__)
 
@@ -93,19 +94,19 @@ class S3Storage(StorageBackend):
             # Build client configuration
             client_kwargs = {}
 
-            # Credentials
-            key = self.options.get("key") or os.environ.get("AWS_ACCESS_KEY_ID")
-            secret = self.options.get("secret") or os.environ.get("AWS_SECRET_ACCESS_KEY")
+            # Credentials (using shared helper that handles ${VAR} expansion)
+            key = get_config_value(self.options, "key", "AWS_ACCESS_KEY_ID")
+            secret = get_config_value(self.options, "secret", "AWS_SECRET_ACCESS_KEY")
             if key and secret:
                 client_kwargs["aws_access_key_id"] = key
                 client_kwargs["aws_secret_access_key"] = secret
 
             # Region
-            region = self.options.get("region") or os.environ.get("AWS_REGION", "us-east-1")
+            region = get_config_value(self.options, "region", "AWS_REGION", "us-east-1")
             client_kwargs["region_name"] = region
 
             # Custom endpoint (MinIO, LocalStack, Nutanix Objects, etc.)
-            endpoint_url = self.options.get("endpoint_url") or os.environ.get("AWS_ENDPOINT_URL")
+            endpoint_url = get_config_value(self.options, "endpoint_url", "AWS_ENDPOINT_URL")
             if endpoint_url:
                 client_kwargs["endpoint_url"] = endpoint_url
 
@@ -122,17 +123,11 @@ class S3Storage(StorageBackend):
             # Build botocore Config for signature version and addressing style
             config_kwargs = {}
 
-            signature_version = (
-                self.options.get("signature_version")
-                or os.environ.get("AWS_S3_SIGNATURE_VERSION")
-            )
+            signature_version = get_config_value(self.options, "signature_version", "AWS_S3_SIGNATURE_VERSION")
             if signature_version:
                 config_kwargs["signature_version"] = signature_version
 
-            addressing_style = (
-                self.options.get("addressing_style")
-                or os.environ.get("AWS_S3_ADDRESSING_STYLE")
-            )
+            addressing_style = get_config_value(self.options, "addressing_style", "AWS_S3_ADDRESSING_STYLE")
             if addressing_style:
                 config_kwargs["s3"] = {"addressing_style": addressing_style}
 

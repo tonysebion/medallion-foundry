@@ -23,6 +23,7 @@ __all__ = [
     "S3_YAML_TO_STORAGE_OPTIONS",
     "_configure_duckdb_s3",
     "_extract_storage_options",
+    "get_config_value",
 ]
 
 # S3 storage option mappings (YAML key -> storage backend key)
@@ -51,6 +52,43 @@ class InputMode(Enum):
 
     REPLACE_DAILY = "replace_daily"  # Each partition is complete snapshot
     APPEND_LOG = "append_log"  # Partitions are additive (CDC/events)
+
+
+def get_config_value(
+    options: Optional[Dict[str, Any]],
+    key: str,
+    env_var: str,
+    default: str = "",
+) -> str:
+    """Get a configuration value from options dict or environment variable.
+
+    Handles ${VAR} expansion for values from YAML configs, then falls back
+    to environment variable, then to default value.
+
+    This is the canonical way to read config values that may contain
+    environment variable references from YAML (like ${AWS_ENDPOINT_URL}).
+
+    Args:
+        options: Dict of options (may be None)
+        key: Key to look up in options dict
+        env_var: Environment variable to fall back to
+        default: Default value if neither options nor env var provides a value
+
+    Returns:
+        The resolved configuration value
+
+    Example:
+        >>> options = {"endpoint_url": "${AWS_ENDPOINT_URL}"}
+        >>> os.environ["AWS_ENDPOINT_URL"] = "http://localhost:9000"
+        >>> get_config_value(options, "endpoint_url", "AWS_ENDPOINT_URL")
+        'http://localhost:9000'
+    """
+    value = options.get(key) if options else None
+    if value and isinstance(value, str):
+        value = expand_env_vars(value)
+    if not value:
+        value = os.environ.get(env_var, default)
+    return value
 
 
 def _extract_storage_options(options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -127,10 +165,8 @@ def _configure_duckdb_s3(con: ibis.BaseBackend, options: Optional[Dict[str, Any]
         con: Ibis DuckDB connection
         options: Optional dict with endpoint_url, key, secret, region
     """
-    options = options or {}
-
-    # Get endpoint URL from options or environment
-    endpoint_url = options.get("endpoint_url") or os.environ.get("AWS_ENDPOINT_URL")
+    # Get endpoint URL using shared helper (handles ${VAR} expansion)
+    endpoint_url = get_config_value(options, "endpoint_url", "AWS_ENDPOINT_URL")
     if not endpoint_url:
         # No custom endpoint - DuckDB will use AWS defaults
         return
@@ -154,10 +190,10 @@ def _configure_duckdb_s3(con: ibis.BaseBackend, options: Optional[Dict[str, Any]
     else:
         endpoint = host
 
-    # Get credentials from options or environment
-    access_key = options.get("key") or os.environ.get("AWS_ACCESS_KEY_ID", "")
-    secret_key = options.get("secret") or os.environ.get("AWS_SECRET_ACCESS_KEY", "")
-    region = options.get("region") or os.environ.get("AWS_REGION", "us-east-1")
+    # Get credentials using shared helper (handles ${VAR} expansion)
+    access_key = get_config_value(options, "key", "AWS_ACCESS_KEY_ID")
+    secret_key = get_config_value(options, "secret", "AWS_SECRET_ACCESS_KEY")
+    region = get_config_value(options, "region", "AWS_REGION", "us-east-1")
 
     # Handle SSL certificate verification
     # Check options first, then environment variable, default to False for self-signed certs
