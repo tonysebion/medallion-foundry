@@ -271,7 +271,7 @@ def generate_polybase_setup(
 
 def generate_state_views(
     external_table_name: str,
-    natural_keys: List[str],
+    natural_keys: Optional[List[str]],
     config: PolyBaseConfig,
     *,
     history_mode: str = "current_only",
@@ -282,7 +282,7 @@ def generate_state_views(
 
     Args:
         external_table_name: Name of the external table
-        natural_keys: Primary key columns
+        natural_keys: Primary key columns (None for periodic_snapshot without keys)
         config: PolyBase configuration
         history_mode: "current_only" or "full_history"
         change_timestamp: Timestamp column name
@@ -293,7 +293,9 @@ def generate_state_views(
     """
     schema = config.schema_name
     base_name = external_table_name.replace("_external", "")
-    pk_cols = ", ".join([f"[{col}]" for col in natural_keys])
+    # Handle None natural_keys (periodic_snapshot without deduplication)
+    natural_keys = natural_keys or []
+    pk_cols = ", ".join([f"[{col}]" for col in natural_keys]) if natural_keys else ""
 
     # For tombstone mode, we need to filter out deleted records in views
     deleted_filter = ""
@@ -353,10 +355,12 @@ RETURN
 """
         views.append(pit_function)
 
-        # History lookup function - supports single or composite keys
-        if len(natural_keys) == 1:
-            # Single key: simple parameter
-            history_function = f"""
+        # History lookup function - only if natural_keys are defined
+        if natural_keys:
+            # History lookup function - supports single or composite keys
+            if len(natural_keys) == 1:
+                # Single key: simple parameter
+                history_function = f"""
 -- Entity History Function
 -- Usage: SELECT * FROM [{schema}].[fn_{base_name}_history]('KEY_VALUE')
 CREATE OR ALTER FUNCTION [{schema}].[fn_{base_name}_history]
@@ -371,12 +375,12 @@ RETURN
     WHERE [{natural_keys[0]}] = @key_value
     ORDER BY effective_from DESC;
 """
-        else:
-            # Composite key: multiple parameters
-            params = ", ".join([f"@key_{i} NVARCHAR(255)" for i in range(len(natural_keys))])
-            where_clauses = " AND ".join([f"[{key}] = @key_{i}" for i, key in enumerate(natural_keys)])
-            param_list = ", ".join([f"@key_{i}" for i in range(len(natural_keys))])
-            history_function = f"""
+            else:
+                # Composite key: multiple parameters
+                params = ", ".join([f"@key_{i} NVARCHAR(255)" for i in range(len(natural_keys))])
+                where_clauses = " AND ".join([f"[{key}] = @key_{i}" for i, key in enumerate(natural_keys)])
+                param_list = ", ".join([f"@key_{i}" for i in range(len(natural_keys))])
+                history_function = f"""
 -- Entity History Function (Composite Key)
 -- Usage: SELECT * FROM [{schema}].[fn_{base_name}_history]({param_list})
 CREATE OR ALTER FUNCTION [{schema}].[fn_{base_name}_history]
@@ -391,10 +395,10 @@ RETURN
     WHERE {where_clauses}
     ORDER BY effective_from DESC;
 """
-        views.append(history_function)
+            views.append(history_function)
 
-        # History summary view
-        summary_view = f"""
+            # History summary view - only if natural_keys are defined
+            summary_view = f"""
 -- History Summary View
 CREATE OR ALTER VIEW [{schema}].[vw_{base_name}_history_summary]
 AS
@@ -407,14 +411,14 @@ SELECT
 FROM [{schema}].[{external_table_name}]
 GROUP BY {pk_cols};
 """
-        views.append(summary_view)
+            views.append(summary_view)
 
     return "\n".join(views)
 
 
 def generate_event_views(
     external_table_name: str,
-    natural_keys: List[str],
+    natural_keys: Optional[List[str]],
     config: PolyBaseConfig,
     *,
     change_timestamp: str = "event_ts",
@@ -424,7 +428,7 @@ def generate_event_views(
 
     Args:
         external_table_name: Name of the external table
-        natural_keys: Primary key columns
+        natural_keys: Primary key columns (None for entities without keys)
         config: PolyBase configuration
         change_timestamp: Event timestamp column
         partition_columns: Partition columns
@@ -435,6 +439,8 @@ def generate_event_views(
     schema = config.schema_name
     base_name = external_table_name.replace("_external", "")
     partition_col = partition_columns[0] if partition_columns else "event_date"
+    # Handle None natural_keys
+    natural_keys = natural_keys or []
 
     views = []
 
@@ -474,8 +480,9 @@ RETURN
 """
     views.append(single_date_function)
 
-    # Daily aggregation view
-    daily_view = f"""
+    # Daily aggregation view - only if natural_keys are defined
+    if natural_keys:
+        daily_view = f"""
 -- Daily Summary View
 CREATE OR ALTER VIEW [{schema}].[vw_{base_name}_daily_summary]
 AS
@@ -486,7 +493,20 @@ SELECT
 FROM [{schema}].[{external_table_name}]
 GROUP BY CAST([{change_timestamp}] AS DATE);
 """
-    views.append(daily_view)
+        views.append(daily_view)
+    else:
+        # Simpler daily view without unique entity count
+        daily_view = f"""
+-- Daily Summary View
+CREATE OR ALTER VIEW [{schema}].[vw_{base_name}_daily_summary]
+AS
+SELECT
+    CAST([{change_timestamp}] AS DATE) as event_date,
+    COUNT(*) as event_count
+FROM [{schema}].[{external_table_name}]
+GROUP BY CAST([{change_timestamp}] AS DATE);
+"""
+        views.append(daily_view)
 
     return "\n".join(views)
 
