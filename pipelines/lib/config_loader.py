@@ -31,7 +31,8 @@ import logging
 import os
 import warnings
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from enum import Enum
+from typing import Any, Dict, List, Optional, Type, Union
 
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -341,66 +342,26 @@ class YAMLConfigError(Exception):
     pass
 
 
-# Mapping from YAML string values to enum types
-SOURCE_TYPE_MAP = {
-    "file_csv": SourceType.FILE_CSV,
-    "file_parquet": SourceType.FILE_PARQUET,
-    "file_space_delimited": SourceType.FILE_SPACE_DELIMITED,
-    "file_fixed_width": SourceType.FILE_FIXED_WIDTH,
-    "file_json": SourceType.FILE_JSON,
-    "file_jsonl": SourceType.FILE_JSONL,
-    "file_excel": SourceType.FILE_EXCEL,
-    "database_mssql": SourceType.DATABASE_MSSQL,
-    "database_postgres": SourceType.DATABASE_POSTGRES,
-    "database_mysql": SourceType.DATABASE_MYSQL,
-    "database_db2": SourceType.DATABASE_DB2,
-    "api_rest": SourceType.API_REST,
-}
+# ============================================
+# YAML String to Enum Mappings (auto-generated)
+# ============================================
 
-LOAD_PATTERN_MAP = {
-    "full_snapshot": LoadPattern.FULL_SNAPSHOT,
-    "incremental": LoadPattern.INCREMENTAL_APPEND,
-    "incremental_append": LoadPattern.INCREMENTAL_APPEND,
-    "cdc": LoadPattern.CDC,
-}
 
-INPUT_MODE_MAP = {
-    "replace_daily": InputMode.REPLACE_DAILY,
-    "append_log": InputMode.APPEND_LOG,
-}
+def _enum_to_map(enum_class: Type[Enum]) -> Dict[str, Enum]:
+    """Generate YAML key -> enum mapping from enum values."""
+    return {member.value: member for member in enum_class}
 
-ENTITY_KIND_MAP = {
-    "state": EntityKind.STATE,
-    "event": EntityKind.EVENT,
-}
 
-HISTORY_MODE_MAP = {
-    "current_only": HistoryMode.CURRENT_ONLY,
-    "scd1": HistoryMode.CURRENT_ONLY,
-    "full_history": HistoryMode.FULL_HISTORY,
-    "scd2": HistoryMode.FULL_HISTORY,
-}
+# Auto-generated from enum values (ensures maps stay in sync with enums)
+SOURCE_TYPE_MAP = _enum_to_map(SourceType)
+ENTITY_KIND_MAP = _enum_to_map(EntityKind)
+DELETE_MODE_MAP = _enum_to_map(DeleteMode)
+SILVER_MODEL_MAP = _enum_to_map(SilverModel)
+INPUT_MODE_MAP = _enum_to_map(InputMode)
 
-SILVER_MODEL_MAP = {
-    "periodic_snapshot": SilverModel.PERIODIC_SNAPSHOT,
-    "full_merge_dedupe": SilverModel.FULL_MERGE_DEDUPE,
-    "incremental_merge": SilverModel.INCREMENTAL_MERGE,
-    "scd_type_2": SilverModel.SCD_TYPE_2,
-    "event_log": SilverModel.EVENT_LOG,
-    # CDC presets
-    "cdc_current": SilverModel.CDC_CURRENT,
-    "cdc_current_tombstone": SilverModel.CDC_CURRENT_TOMBSTONE,
-    "cdc_current_hard_delete": SilverModel.CDC_CURRENT_HARD_DELETE,
-    "cdc_history": SilverModel.CDC_HISTORY,
-    "cdc_history_tombstone": SilverModel.CDC_HISTORY_TOMBSTONE,
-    "cdc_history_hard_delete": SilverModel.CDC_HISTORY_HARD_DELETE,
-}
-
-DELETE_MODE_MAP = {
-    "ignore": DeleteMode.IGNORE,
-    "tombstone": DeleteMode.TOMBSTONE,
-    "hard_delete": DeleteMode.HARD_DELETE,
-}
+# Maps with aliases (base auto-generated + explicit aliases)
+LOAD_PATTERN_MAP = _enum_to_map(LoadPattern) | {"incremental_append": LoadPattern.INCREMENTAL_APPEND}
+HISTORY_MODE_MAP = _enum_to_map(HistoryMode) | {"scd1": HistoryMode.CURRENT_ONLY, "scd2": HistoryMode.FULL_HISTORY}
 
 
 def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
