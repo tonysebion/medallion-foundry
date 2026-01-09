@@ -1415,6 +1415,18 @@ class PipelineFromYAML:
         Returns:
             Dictionary with results from both layers
         """
+        from pipelines.lib.trace import step, get_tracer, PipelineStep
+
+        tracer = get_tracer()
+
+        # Log config loaded (config was already loaded in __init__)
+        with step(PipelineStep.LOAD_CONFIG, str(self.config_path)):
+            tracer.detail(f"Pipeline: {self.name}")
+            if self.bronze:
+                tracer.detail(f"Bronze: {self.bronze.system}.{self.bronze.entity}")
+            if self.silver:
+                tracer.detail(f"Silver: {self.silver.entity}")
+
         result: Dict[str, Any] = {}
 
         if self.bronze:

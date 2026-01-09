@@ -387,69 +387,93 @@ class SilverEntity:
         Raises:
             ValueError: If source_path or target_path is not configured
         """
-        # Validate paths at runtime (they may have been set by Pipeline)
-        if not self.source_path:
-            raise ValueError(
-                "source_path is not configured. Either:\n"
-                "  1. Set source_path explicitly, or\n"
-                "  2. Use Pipeline(bronze=..., silver=...) to auto-wire from Bronze"
+        from pipelines.lib.trace import step, get_tracer, PipelineStep
+
+        tracer = get_tracer()
+
+        # Determine entity name for tracing
+        entity_label = f"{self.system}.{self.entity}" if self.system and self.entity else self.entity or "silver"
+
+        with step(PipelineStep.SILVER_START, entity_label):
+            # Validate paths at runtime (they may have been set by Pipeline)
+            if not self.source_path:
+                raise ValueError(
+                    "source_path is not configured. Either:\n"
+                    "  1. Set source_path explicitly, or\n"
+                    "  2. Use Pipeline(bronze=..., silver=...) to auto-wire from Bronze"
+                )
+
+            source = self.source_path.format(run_date=run_date)
+            target = self._resolve_target(target_override, run_date)
+
+            dry_run_result = maybe_dry_run(
+                dry_run=dry_run,
+                logger=logger,
+                message="[DRY RUN] Would curate %s to %s",
+                message_args=(source, target),
+                target=target,
+                extra={
+                    "source": source,
+                    "entity_kind": self.entity_kind.value,
+                    "history_mode": self.history_mode.value,
+                },
             )
+            if dry_run_result:
+                return dry_run_result
 
-        source = self.source_path.format(run_date=run_date)
-        target = self._resolve_target(target_override, run_date)
+            # Validate Bronze source checksums (if configured)
+            validation_result = None
+            if self.validate_source != "skip":
+                with step(PipelineStep.SILVER_VALIDATE_SOURCE):
+                    validation_result = self._validate_source(source)
+                    if validation_result:
+                        tracer.detail(f"Validated {len(validation_result.get('verified_files', []))} files")
 
-        dry_run_result = maybe_dry_run(
-            dry_run=dry_run,
-            logger=logger,
-            message="[DRY RUN] Would curate %s to %s",
-            message_args=(source, target),
-            target=target,
-            extra={
-                "source": source,
-                "entity_kind": self.entity_kind.value,
-                "history_mode": self.history_mode.value,
-            },
-        )
-        if dry_run_result:
-            return dry_run_result
+            # Read from Bronze
+            with step(PipelineStep.SILVER_READ_BRONZE):
+                con = ibis.duckdb.connect()
 
-        # Validate Bronze source checksums (if configured)
-        validation_result = self._validate_source(source)
+                # Configure S3 if source or target is cloud storage
+                if is_object_storage_path(source) or is_object_storage_path(target):
+                    _configure_duckdb_s3(con, self.storage_options)  # Pass storage_options for MinIO/custom endpoints
 
-        # Read from Bronze
-        con = ibis.duckdb.connect()
+                t = self._read_source(con, source)
+                row_count = t.count().execute()
+                tracer.detail(f"Read {row_count:,} records from Bronze")
 
-        # Configure S3 if source or target is cloud storage
-        if is_object_storage_path(source) or is_object_storage_path(target):
-            _configure_duckdb_s3(con, self.storage_options)  # Pass storage_options for MinIO/custom endpoints
+            if row_count == 0:
+                logger.warning("silver_no_source_rows", source=source)
+                return {
+                    "row_count": 0,
+                    "source": source,
+                    "target": target,
+                }
 
-        t = self._read_source(con, source)
+            # Select columns (if specified)
+            with step(PipelineStep.SILVER_SELECT_COLUMNS):
+                t = self._select_columns(t)
+                tracer.detail(f"Selected {len(t.columns)} columns")
 
-        if t.count().execute() == 0:
-            logger.warning("silver_no_source_rows", source=source)
-            return {
-                "row_count": 0,
-                "source": source,
-                "target": target,
-            }
+            # Apply curation based on entity kind and history mode
+            with step(PipelineStep.SILVER_DEDUPLICATE):
+                t = self._curate(t)
+                curated_count = t.count().execute()
+                tracer.detail(f"Curated to {curated_count:,} records")
 
-        # Select columns (if specified)
-        t = self._select_columns(t)
+            # Add Silver metadata
+            with step(PipelineStep.SILVER_ADD_METADATA):
+                t = self._add_metadata(t, run_date)
 
-        # Apply curation based on entity kind and history mode
-        t = self._curate(t)
+            # Write output
+            with step(PipelineStep.SILVER_WRITE_OUTPUT):
+                result = self._write(t, target, run_date, source)
+                tracer.detail(f"Wrote {result.get('row_count', 0):,} records to {target}")
 
-        # Add Silver metadata
-        t = self._add_metadata(t, run_date)
+            # Include validation result if performed
+            if validation_result:
+                result["source_validation"] = validation_result
 
-        # Write output
-        result = self._write(t, target, run_date, source)
-
-        # Include validation result if performed
-        if validation_result:
-            result["source_validation"] = validation_result
-
-        return result
+            return result
 
     def _resolve_target(self, target_override: Optional[str], run_date: str) -> str:
         """Resolve the target path."""

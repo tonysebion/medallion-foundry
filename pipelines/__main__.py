@@ -1377,6 +1377,11 @@ Examples:
         help="Write logs to a file in addition to console",
     )
     parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable step-by-step execution tracing with timing",
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="Validate pipeline configuration without running (checks connectivity)",
@@ -1524,6 +1529,11 @@ Examples:
     # Parse pipeline specification and determine type (YAML vs Python)
     pipeline_spec, layer = parse_pipeline_spec(args.pipeline)
 
+    # Initialize debug tracer if requested
+    if args.debug:
+        from pipelines.lib.trace import init_tracer
+        init_tracer(enabled=True)
+
     # Check if CLI logging flags were explicitly set
     cli_logging_override = args.verbose or args.json_log or args.log_file
 
@@ -1569,6 +1579,11 @@ Examples:
 
             print_result(result, args.pipeline)
 
+            # Print debug summary if enabled
+            if args.debug:
+                from pipelines.lib.trace import get_tracer
+                get_tracer().print_summary()
+
         except KeyboardInterrupt:
             print("\nInterrupted by user")
             sys.exit(130)
@@ -1612,6 +1627,11 @@ Examples:
             )
 
             print_result(result, args.pipeline)
+
+            # Print debug summary if enabled
+            if args.debug:
+                from pipelines.lib.trace import get_tracer
+                get_tracer().print_summary()
 
         except KeyboardInterrupt:
             print("\nInterrupted by user")

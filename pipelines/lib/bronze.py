@@ -451,84 +451,98 @@ class BronzeSource:
         Returns:
             Dictionary with extraction results including row_count, target path
         """
-        target = self._resolve_target(run_date, target_override)
+        from pipelines.lib.trace import step, get_tracer, PipelineStep
 
-        skip_result = maybe_skip_if_exists(
-            skip_if_exists=skip_if_exists,
-            exists_fn=lambda: self._already_ran(target),
-            target=target,
-            logger=logger,
-            context=f"{self.system}.{self.entity}",
-        )
-        if skip_result:
-            return skip_result
+        tracer = get_tracer()
 
-        dry_run_result = maybe_dry_run(
-            dry_run=dry_run,
-            logger=logger,
-            message="[DRY RUN] Would extract %s.%s to %s",
-            message_args=(self.system, self.entity, target),
-            target=target,
-            extra={"source_type": self.source_type.value},
-        )
-        if dry_run_result:
-            return dry_run_result
+        with step(PipelineStep.BRONZE_START, f"{self.system}.{self.entity}"):
+            target = self._resolve_target(run_date, target_override)
 
-        # Check if periodic full refresh is due
-        is_full_refresh = False
-        if should_force_full_refresh(self.system, self.entity, self.full_refresh_days):
-            logger.info(
-                "bronze_full_refresh_triggered",
-                system=self.system,
-                entity=self.entity,
-                reason="periodic_refresh",
+            skip_result = maybe_skip_if_exists(
+                skip_if_exists=skip_if_exists,
+                exists_fn=lambda: self._already_ran(target),
+                target=target,
+                logger=logger,
+                context=f"{self.system}.{self.entity}",
             )
-            delete_watermark(self.system, self.entity)
-            is_full_refresh = True
+            if skip_result:
+                return skip_result
 
-        # Get watermark for incremental loads
-        last_watermark = None
-        if (
-            self.load_pattern == LoadPattern.INCREMENTAL_APPEND
-            and self.watermark_column
-        ):
-            last_watermark = get_watermark(self.system, self.entity)
-            if last_watermark:
+            dry_run_result = maybe_dry_run(
+                dry_run=dry_run,
+                logger=logger,
+                message="[DRY RUN] Would extract %s.%s to %s",
+                message_args=(self.system, self.entity, target),
+                target=target,
+                extra={"source_type": self.source_type.value},
+            )
+            if dry_run_result:
+                return dry_run_result
+
+            # Check if periodic full refresh is due
+            is_full_refresh = False
+            if should_force_full_refresh(self.system, self.entity, self.full_refresh_days):
                 logger.info(
-                    "bronze_incremental_load",
+                    "bronze_full_refresh_triggered",
                     system=self.system,
                     entity=self.entity,
-                    watermark=last_watermark,
+                    reason="periodic_refresh",
                 )
+                delete_watermark(self.system, self.entity)
+                is_full_refresh = True
 
-        # Read from source
-        con = ibis.duckdb.connect()
+            # Get watermark for incremental loads
+            last_watermark = None
+            if (
+                self.load_pattern == LoadPattern.INCREMENTAL_APPEND
+                and self.watermark_column
+            ):
+                last_watermark = get_watermark(self.system, self.entity)
+                if last_watermark:
+                    logger.info(
+                        "bronze_incremental_load",
+                        system=self.system,
+                        entity=self.entity,
+                        watermark=last_watermark,
+                    )
 
-        # Configure S3 if target is object storage
-        if is_object_storage_path(target):
-            _configure_duckdb_s3(con, self.options)
+            # Connect to DuckDB
+            with step(PipelineStep.BRONZE_CONNECT_SOURCE, self.source_type.value):
+                con = ibis.duckdb.connect()
+                # Configure S3 if target is object storage
+                if is_object_storage_path(target):
+                    _configure_duckdb_s3(con, self.options)
 
-        t = self._read_source(con, run_date, last_watermark)
+            # Read from source
+            with step(PipelineStep.BRONZE_READ_SOURCE):
+                t = self._read_source(con, run_date, last_watermark)
+                row_count = t.count().execute()
+                tracer.detail(f"Read {row_count:,} records from source")
 
-        # Add Bronze technical metadata (the ONLY transforms allowed)
-        t = self._add_metadata(t, run_date)
+            # Add Bronze technical metadata (the ONLY transforms allowed)
+            with step(PipelineStep.BRONZE_ADD_METADATA):
+                t = self._add_metadata(t, run_date)
 
-        # Write to target
-        result = self._write(t, target, run_date, last_watermark)
+            # Write to target
+            with step(PipelineStep.BRONZE_WRITE_OUTPUT):
+                result = self._write(t, target, run_date, last_watermark)
+                tracer.detail(f"Wrote {result.get('row_count', 0):,} records to {target}")
 
-        # Save new watermark for incremental
-        if self.watermark_column and result.get("row_count", 0) > 0:
-            new_watermark = self._get_max_watermark(t)
-            if new_watermark:
-                save_watermark(self.system, self.entity, str(new_watermark))
-                result["new_watermark"] = str(new_watermark)
+            # Save new watermark for incremental
+            if self.watermark_column and result.get("row_count", 0) > 0:
+                with step(PipelineStep.BRONZE_SAVE_WATERMARK):
+                    new_watermark = self._get_max_watermark(t)
+                    if new_watermark:
+                        save_watermark(self.system, self.entity, str(new_watermark))
+                        result["new_watermark"] = str(new_watermark)
+                        tracer.detail(f"Saved watermark: {new_watermark}")
 
-        # Record full refresh if it was triggered
-        if is_full_refresh and result.get("row_count", 0) > 0:
-            save_full_refresh(self.system, self.entity)
-            result["full_refresh"] = True
+            # Record full refresh if it was triggered
+            if is_full_refresh and result.get("row_count", 0) > 0:
+                save_full_refresh(self.system, self.entity)
+                result["full_refresh"] = True
 
-        return result
+            return result
 
     def _resolve_target(self, run_date: str, target_override: Optional[str]) -> str:
         """Resolve the target path with template substitution."""
