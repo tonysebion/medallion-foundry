@@ -639,6 +639,15 @@ class SilverEntity:
             source = self._expand_to_all_partitions(source)
             logger.debug("silver_append_log_mode", expanded_source=source)
 
+        # For S3 paths without glob patterns, add /*.parquet to avoid DuckDB's URL encoding issues
+        # DuckDB's httpfs URL-encodes '=' in paths (to %3D), which causes 404 errors with some
+        # S3-compatible storage. Using S3Storage.glob() with boto3 avoids this issue.
+        if source.startswith("s3://") and "*" not in source and "?" not in source:
+            # Add glob pattern if source looks like a directory (ends with / or no extension)
+            if source.endswith("/") or not source.split("/")[-1].count("."):
+                source = source.rstrip("/") + "/*.parquet"
+                logger.debug("silver_added_glob_pattern", source=source)
+
         # Expand glob patterns if present
         source_to_read: Union[str, List[str]] = source
         if "*" in source or "?" in source:

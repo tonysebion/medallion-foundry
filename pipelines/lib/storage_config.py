@@ -154,6 +154,13 @@ def _configure_duckdb_s3(con: ibis.BaseBackend, options: Optional[Dict[str, Any]
     secret_key = options.get("secret") or os.environ.get("AWS_SECRET_ACCESS_KEY", "")
     region = options.get("region") or os.environ.get("AWS_REGION", "us-east-1")
 
+    # Handle SSL certificate verification
+    # Check options first, then environment variable, default to False for self-signed certs
+    verify_ssl = options.get("verify_ssl")
+    if verify_ssl is None:
+        env_verify = os.environ.get("AWS_S3_VERIFY_SSL", "").lower()
+        verify_ssl = env_verify in ("true", "1", "yes")
+
     # Configure DuckDB S3 settings
     settings = [
         f"SET s3_endpoint = '{endpoint}';",
@@ -163,6 +170,11 @@ def _configure_duckdb_s3(con: ibis.BaseBackend, options: Optional[Dict[str, Any]
         f"SET s3_use_ssl = {str(use_ssl).lower()};",
         "SET s3_url_style = 'path';",  # Use path-style URLs for MinIO compatibility
     ]
+
+    # Disable SSL certificate verification for self-signed certificates
+    if not verify_ssl:
+        settings.append("SET enable_server_cert_verification = false;")
+        settings.append("SET enable_curl_server_cert_verification = false;")
 
     for setting in settings:
         try:
