@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 
 import ibis
 
+from pipelines.lib.env import expand_env_vars
 from pipelines.lib.observability import get_structlog_logger
 
 logger = get_structlog_logger(__name__)
@@ -104,7 +105,11 @@ def _extract_storage_options(options: Optional[Dict[str, Any]] = None) -> Dict[s
 
     for key in pass_through:
         if key in options:
-            storage_opts[key] = options[key]
+            value = options[key]
+            # Expand ${VAR} patterns in string values
+            if isinstance(value, str):
+                value = expand_env_vars(value)
+            storage_opts[key] = value
         elif env_mapping.get(key) and os.environ.get(env_mapping[key]):
             storage_opts[key] = os.environ[env_mapping[key]]
 
