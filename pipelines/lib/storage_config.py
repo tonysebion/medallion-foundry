@@ -23,6 +23,7 @@ __all__ = [
     "S3_YAML_TO_STORAGE_OPTIONS",
     "_configure_duckdb_s3",
     "_extract_storage_options",
+    "get_bool_config_value",
     "get_config_value",
 ]
 
@@ -91,6 +92,54 @@ def get_config_value(
     return value
 
 
+def get_bool_config_value(
+    options: Optional[Dict[str, Any]],
+    key: str,
+    env_var: str,
+    default: bool = False,
+) -> bool:
+    """Get a boolean configuration value from options dict or environment variable.
+
+    Handles truthy strings ('true', '1', 'yes') case-insensitively.
+    Returns options value if it's already a bool, otherwise parses string.
+
+    Args:
+        options: Dict of options (may be None)
+        key: Key to look up in options dict
+        env_var: Environment variable to fall back to
+        default: Default value if neither options nor env var provides a value
+
+    Returns:
+        The resolved boolean configuration value
+
+    Example:
+        >>> options = {"verify_ssl": "true"}
+        >>> get_bool_config_value(options, "verify_ssl", "AWS_S3_VERIFY_SSL", False)
+        True
+
+        >>> os.environ["AWS_S3_VERIFY_SSL"] = "yes"
+        >>> get_bool_config_value(None, "verify_ssl", "AWS_S3_VERIFY_SSL", False)
+        True
+    """
+    value = options.get(key) if options else None
+
+    # If value is already a boolean, return it
+    if isinstance(value, bool):
+        return value
+
+    # If value is a string, parse it
+    if value is not None and isinstance(value, str):
+        return value.lower() in ("true", "1", "yes")
+
+    # Fall back to environment variable
+    env_value = os.environ.get(env_var, "").lower()
+    if env_value:
+        return env_value in ("true", "1", "yes")
+
+    # Return default
+    return default
+
+
 def _extract_storage_options(options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Extract S3/ADLS storage options from pipeline options.
 
@@ -122,15 +171,12 @@ def _extract_storage_options(options: Optional[Dict[str, Any]] = None) -> Dict[s
         if yaml_key in options:
             storage_opts[storage_key] = options[yaml_key]
 
-    # Check environment variable for verify_ssl if not in options
+    # Get verify_ssl using shared helper (handles bool/string/env var)
     # Default to False for self-signed certificates
     if "verify_ssl" not in storage_opts:
-        env_verify = os.environ.get("AWS_S3_VERIFY_SSL", "").lower()
-        # Default to False unless explicitly set to true
-        if env_verify in ("true", "1", "yes"):
-            storage_opts["verify_ssl"] = True
-        else:
-            storage_opts["verify_ssl"] = False
+        storage_opts["verify_ssl"] = get_bool_config_value(
+            options, "verify_ssl", "AWS_S3_VERIFY_SSL", default=False
+        )
 
     # Pass through standard S3 options (also check environment variables)
     pass_through = ["endpoint_url", "key", "secret", "region"]
@@ -195,12 +241,9 @@ def _configure_duckdb_s3(con: ibis.BaseBackend, options: Optional[Dict[str, Any]
     secret_key = get_config_value(options, "secret", "AWS_SECRET_ACCESS_KEY")
     region = get_config_value(options, "region", "AWS_REGION", "us-east-1")
 
-    # Handle SSL certificate verification
-    # Check options first, then environment variable, default to False for self-signed certs
-    verify_ssl = options.get("verify_ssl")
-    if verify_ssl is None:
-        env_verify = os.environ.get("AWS_S3_VERIFY_SSL", "").lower()
-        verify_ssl = env_verify in ("true", "1", "yes")
+    # Get verify_ssl using shared helper (handles bool/string/env var)
+    # Default to False for self-signed certificates
+    verify_ssl = get_bool_config_value(options, "verify_ssl", "AWS_S3_VERIFY_SSL", default=False)
 
     # Configure DuckDB S3 settings
     settings = [

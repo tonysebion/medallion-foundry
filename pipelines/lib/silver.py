@@ -951,6 +951,8 @@ class SilverEntity:
                     "natural_keys": self.natural_keys,
                     "change_timestamp": self.change_timestamp,
                     "source_path": source,
+                    "domain": self.domain,
+                    "subject": self.subject,
                 },
             )
             storage.write_text("_metadata.json", metadata.to_json())
@@ -1006,6 +1008,8 @@ class SilverEntity:
                     "delete_mode": self.delete_mode.value,
                     "natural_keys": self.natural_keys,
                     "change_timestamp": self.change_timestamp,
+                    "domain": self.domain,
+                    "subject": self.subject,
                 }
 
                 # Get S3 endpoint from environment if available
@@ -1063,6 +1067,8 @@ class SilverEntity:
             source_path=source,
             write_checksums=True,
             subject_name=subject_name,
+            domain=self.domain,
+            subject=self.subject,
         )
 
         # Also write CSV if requested

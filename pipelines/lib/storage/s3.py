@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import fnmatch
 import logging
-import os
 from typing import Any, List, Optional
 
 import boto3
@@ -12,7 +11,7 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from pipelines.lib.storage.base import FileInfo, StorageBackend, StorageResult
-from pipelines.lib.storage_config import get_config_value
+from pipelines.lib.storage_config import get_bool_config_value, get_config_value
 
 logger = logging.getLogger(__name__)
 
@@ -111,12 +110,10 @@ class S3Storage(StorageBackend):
                 client_kwargs["endpoint_url"] = endpoint_url
 
             # SSL Verification - default to False for self-signed certificates
-            verify_ssl = self.options.get("verify_ssl")
-            if verify_ssl is None:
-                env_verify = os.environ.get("AWS_S3_VERIFY_SSL", "").lower()
-                # Default to False unless explicitly set to true
-                verify_ssl = env_verify in ("true", "1", "yes")
-            if verify_ssl is False:
+            verify_ssl = get_bool_config_value(
+                self.options, "verify_ssl", "AWS_S3_VERIFY_SSL", default=False
+            )
+            if not verify_ssl:
                 client_kwargs["verify"] = False
                 logger.debug("s3_ssl_verification_disabled", endpoint=endpoint_url)
 

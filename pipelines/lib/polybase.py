@@ -541,10 +541,6 @@ def generate_from_metadata(
     with open(metadata_path, encoding="utf-8") as f:
         metadata = json.load(f)
 
-    # Derive entity name if not provided
-    if not entity_name:
-        entity_name = metadata_path.parent.name
-
     # Extract required fields
     columns = metadata.get("columns", [])
     entity_kind = metadata.get("entity_kind", "state")
@@ -553,6 +549,21 @@ def generate_from_metadata(
     change_timestamp = metadata.get("change_timestamp", "updated_at")
     partition_by = metadata.get("partition_by")
     delete_mode = metadata.get("delete_mode", "ignore")
+
+    # Derive entity name from domain/subject if not explicitly provided
+    # This avoids using path-derived names that may contain invalid chars like "dt=20250117"
+    if not entity_name:
+        domain = metadata.get("domain")
+        subject = metadata.get("subject")
+        if domain and subject:
+            entity_name = f"{domain}_{subject}"
+        elif subject:
+            entity_name = subject
+        else:
+            # Fallback to parent directory name, but sanitize to remove invalid chars
+            parent_name = metadata_path.parent.name
+            # Remove characters that are invalid in SQL identifiers (like '=')
+            entity_name = parent_name.replace("=", "_").replace("-", "_")
 
     # Generate full setup
     return generate_polybase_setup(
@@ -606,25 +617,21 @@ def generate_from_metadata_dict(
     Args:
         metadata: Metadata dictionary (same structure as _metadata.json)
         config: PolyBase configuration
-        entity_name: Entity name (required since no file path to derive from)
+        entity_name: Entity name (optional, derived from domain/subject if not provided)
 
     Returns:
         Complete SQL setup script
 
     Example:
-        >>> metadata = {"columns": [...], "entity_kind": "state", ...}
+        >>> metadata = {"columns": [...], "entity_kind": "state", "domain": "sales", "subject": "orders"}
         >>> ddl = generate_from_metadata_dict(
         ...     metadata,
         ...     PolyBaseConfig(
         ...         data_source_name="silver_source",
         ...         data_source_location="s3://bucket/silver/",
         ...     ),
-        ...     entity_name="orders",
-        ... )
+        ... )  # entity_name derived as "sales_orders"
     """
-    if not entity_name:
-        raise ValueError("entity_name is required when generating from dict")
-
     # Extract required fields
     columns = metadata.get("columns", [])
     entity_kind = metadata.get("entity_kind", "state")
@@ -633,6 +640,19 @@ def generate_from_metadata_dict(
     change_timestamp = metadata.get("change_timestamp", "updated_at")
     partition_by = metadata.get("partition_by")
     delete_mode = metadata.get("delete_mode", "ignore")
+
+    # Derive entity name from domain/subject if not explicitly provided
+    if not entity_name:
+        domain = metadata.get("domain")
+        subject = metadata.get("subject")
+        if domain and subject:
+            entity_name = f"{domain}_{subject}"
+        elif subject:
+            entity_name = subject
+        else:
+            raise ValueError(
+                "entity_name is required when metadata lacks domain/subject fields"
+            )
 
     # Generate full setup
     return generate_polybase_setup(

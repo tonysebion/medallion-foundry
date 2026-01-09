@@ -23,6 +23,23 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["close_all_connections", "get_connection"]
 
+
+def _expand_credentials(options: Dict[str, Any]) -> Dict[str, str]:
+    """Expand environment variables in database credentials.
+
+    Args:
+        options: Connection options dict
+
+    Returns:
+        Dict with expanded host, database, user, password values
+    """
+    return {
+        "host": expand_env_vars(options.get("host", "")),
+        "database": expand_env_vars(options.get("database", "")),
+        "user": expand_env_vars(options.get("user", "")),
+        "password": expand_env_vars(options.get("password", "")),
+    }
+
 # Connection registry - keyed by connection_name
 _connections: Dict[str, ibis.BaseBackend] = {}
 
@@ -83,10 +100,7 @@ def _create_mssql_connection(options: Dict[str, Any]) -> ibis.BaseBackend:
 
     Supports environment variable substitution for credentials.
     """
-    host = expand_env_vars(options.get("host", ""))
-    database = expand_env_vars(options.get("database", ""))
-    user = expand_env_vars(options.get("user", ""))
-    password = expand_env_vars(options.get("password", ""))
+    creds = _expand_credentials(options)
     port = options.get("port", 1433)
 
     # Build connection string for pyodbc
@@ -95,11 +109,11 @@ def _create_mssql_connection(options: Dict[str, Any]) -> ibis.BaseBackend:
     # Check if Ibis MSSQL backend is available
     try:
         return ibis.mssql.connect(
-            host=host,
+            host=creds["host"],
             port=port,
-            database=database,
-            user=user if user else None,
-            password=password if password else None,
+            database=creds["database"],
+            user=creds["user"] if creds["user"] else None,
+            password=creds["password"] if creds["password"] else None,
             driver=driver,
         )
     except AttributeError:
@@ -119,19 +133,19 @@ def _create_postgres_connection(options: Dict[str, Any]) -> ibis.BaseBackend:
 
     Supports environment variable substitution for credentials.
     """
-    host = expand_env_vars(options.get("host", "localhost"))
-    database = expand_env_vars(options.get("database", ""))
-    user = expand_env_vars(options.get("user", ""))
-    password = expand_env_vars(options.get("password", ""))
+    creds = _expand_credentials(options)
+    # Default host to localhost if not provided
+    if not creds["host"]:
+        creds["host"] = "localhost"
     port = options.get("port", 5432)
 
     try:
         return ibis.postgres.connect(
-            host=host,
+            host=creds["host"],
             port=port,
-            database=database,
-            user=user if user else None,
-            password=password if password else None,
+            database=creds["database"],
+            user=creds["user"] if creds["user"] else None,
+            password=creds["password"] if creds["password"] else None,
         )
     except AttributeError:
         logger.warning(
@@ -156,19 +170,19 @@ def _create_mysql_connection(options: Dict[str, Any]) -> ibis.BaseBackend:
         user: Username
         password: Password
     """
-    host = expand_env_vars(options.get("host", "localhost"))
-    database = expand_env_vars(options.get("database", ""))
-    user = expand_env_vars(options.get("user", ""))
-    password = expand_env_vars(options.get("password", ""))
+    creds = _expand_credentials(options)
+    # Default host to localhost if not provided
+    if not creds["host"]:
+        creds["host"] = "localhost"
     port = options.get("port", 3306)
 
     try:
         return ibis.mysql.connect(
-            host=host,
+            host=creds["host"],
             port=port,
-            database=database,
-            user=user if user else None,
-            password=password if password else None,
+            database=creds["database"],
+            user=creds["user"] if creds["user"] else None,
+            password=creds["password"] if creds["password"] else None,
         )
     except AttributeError:
         logger.warning(
@@ -207,28 +221,25 @@ def _create_db2_connection(options: Dict[str, Any]) -> ibis.BaseBackend:
             "Install with: pip install pyodbc"
         )
 
-    host = expand_env_vars(options.get("host", ""))
-    database = expand_env_vars(options.get("database", ""))
-    user = expand_env_vars(options.get("user", ""))
-    password = expand_env_vars(options.get("password", ""))
+    creds = _expand_credentials(options)
     port = options.get("port", 50000)
     driver = options.get("driver", "IBM DB2 ODBC DRIVER")
 
     # Build DB2 connection string
     conn_str = (
         f"DRIVER={{{driver}}};"
-        f"DATABASE={database};"
-        f"HOSTNAME={host};"
+        f"DATABASE={creds['database']};"
+        f"HOSTNAME={creds['host']};"
         f"PORT={port};"
         f"PROTOCOL=TCPIP;"
-        f"UID={user};"
-        f"PWD={password};"
+        f"UID={creds['user']};"
+        f"PWD={creds['password']};"
     )
 
     # Store the pyodbc connection in options for later use by _read_database
     # We return a DuckDB connection that will be used for Ibis operations
     # The actual DB2 query execution happens in bronze.py._read_database
-    logger.info("Creating DB2 connection to %s:%s/%s", host, port, database)
+    logger.info("Creating DB2 connection to %s:%s/%s", creds["host"], port, creds["database"])
 
     # Create a wrapper that holds both the ODBC connection and DuckDB
     class DB2Connection:

@@ -927,6 +927,102 @@ class TestNoneNaturalKeysEdgeCases:
         assert "CREATE EXTERNAL TABLE" in ddl
 
 
+class TestDomainSubjectNaming:
+    """Tests for domain/subject-based entity naming (Category 4e, 4f)."""
+
+    @pytest.fixture
+    def config(self):
+        return PolyBaseConfig(
+            data_source_name="silver",
+            data_source_location="s3://silver/",
+        )
+
+    def test_from_metadata_dict_uses_domain_subject(self, config):
+        """generate_from_metadata_dict uses domain/subject for table naming."""
+        metadata = {
+            "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
+            "entity_kind": "state",
+            "natural_keys": ["id"],
+            "history_mode": "current_only",
+            "domain": "sales",
+            "subject": "orders",
+        }
+        ddl = generate_from_metadata_dict(metadata, config)  # No entity_name!
+        # Should derive entity_name as "sales_orders"
+        assert "sales_orders_state_external" in ddl
+        assert "CREATE EXTERNAL TABLE" in ddl
+
+    def test_from_metadata_dict_uses_subject_only(self, config):
+        """generate_from_metadata_dict uses subject alone if domain is missing."""
+        metadata = {
+            "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
+            "entity_kind": "state",
+            "natural_keys": ["id"],
+            "subject": "customers",  # No domain
+        }
+        ddl = generate_from_metadata_dict(metadata, config)
+        assert "customers_state_external" in ddl
+
+    def test_from_metadata_dict_explicit_entity_name_overrides(self, config):
+        """Explicit entity_name takes precedence over domain/subject."""
+        metadata = {
+            "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
+            "entity_kind": "state",
+            "natural_keys": ["id"],
+            "domain": "sales",
+            "subject": "orders",
+        }
+        ddl = generate_from_metadata_dict(metadata, config, entity_name="my_custom_name")
+        # Should use explicit entity_name, not domain/subject
+        assert "my_custom_name_state_external" in ddl
+        assert "sales_orders_state_external" not in ddl
+
+    def test_from_metadata_dict_requires_name_when_no_domain_subject(self, config):
+        """generate_from_metadata_dict raises when no entity_name and no domain/subject."""
+        metadata = {
+            "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
+            "entity_kind": "state",
+            # No domain, subject, or entity_name
+        }
+        with pytest.raises(ValueError) as exc_info:
+            generate_from_metadata_dict(metadata, config)
+        assert "entity_name is required" in str(exc_info.value)
+
+    def test_from_metadata_file_uses_domain_subject(self, config, tmp_path):
+        """generate_from_metadata uses domain/subject from _metadata.json."""
+        metadata = {
+            "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
+            "entity_kind": "state",
+            "natural_keys": ["id"],
+            "domain": "retail",
+            "subject": "products",
+        }
+        metadata_path = tmp_path / "_metadata.json"
+        metadata_path.write_text(json.dumps(metadata))
+
+        ddl = generate_from_metadata(metadata_path, config)
+        assert "retail_products_state_external" in ddl
+
+    def test_from_metadata_file_sanitizes_path_fallback(self, config, tmp_path):
+        """generate_from_metadata sanitizes path-derived names when no domain/subject."""
+        # Create a directory with invalid chars in name (like dt=20250117)
+        bad_dir = tmp_path / "dt=20250117"
+        bad_dir.mkdir()
+
+        metadata = {
+            "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
+            "entity_kind": "state",
+            # No domain or subject - will fallback to directory name
+        }
+        metadata_path = bad_dir / "_metadata.json"
+        metadata_path.write_text(json.dumps(metadata))
+
+        ddl = generate_from_metadata(metadata_path, config)
+        # Should sanitize "dt=20250117" to "dt_20250117" (replacing =)
+        assert "dt_20250117_state_external" in ddl
+        assert "dt=20250117" not in ddl  # Invalid char should be removed
+
+
 class TestEmptyColumnsEdgeCases:
     """Tests for handling empty columns list."""
 

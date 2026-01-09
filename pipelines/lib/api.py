@@ -215,12 +215,16 @@ def build_auth_headers_from_dict(
         - password: Password (for auth_type=basic)
 
     Args:
-        api_options: Dictionary with auth configuration
+        api_options: Dictionary with auth configuration (supports ${VAR} expansion)
 
     Returns:
         Tuple of (headers dict, optional basic auth tuple)
     """
-    auth_type_str = api_options.get("auth_type", "none").lower()
+    # Expand ${VAR} patterns BEFORE creating AuthConfig
+    # This ensures validation happens on actual values, not placeholders
+    expanded = expand_options(api_options)
+
+    auth_type_str = expanded.get("auth_type", "none").lower()
 
     try:
         auth_type = AuthType(auth_type_str)
@@ -232,14 +236,14 @@ def build_auth_headers_from_dict(
 
     config = AuthConfig(
         auth_type=auth_type,
-        token=api_options.get("token"),
-        api_key=api_options.get("api_key"),
-        api_key_header=api_options.get("api_key_header", "X-API-Key"),
-        username=api_options.get("username"),
-        password=api_options.get("password"),
+        token=expanded.get("token"),
+        api_key=expanded.get("api_key"),
+        api_key_header=expanded.get("api_key_header", "X-API-Key"),
+        username=expanded.get("username"),
+        password=expanded.get("password"),
     )
 
-    raw_headers: Any = api_options.get("headers", {})
+    raw_headers: Any = expanded.get("headers", {})
     extra_headers: Dict[str, str] = raw_headers if isinstance(raw_headers, dict) else {}
     return build_auth_headers(config, extra_headers=extra_headers)
 

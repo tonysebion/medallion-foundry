@@ -419,6 +419,10 @@ class SilverOutputMetadata:
     natural_keys: List[str]
     change_timestamp: str
 
+    # Domain/subject for table naming (matches YAML config field names)
+    domain: Optional[str] = None
+    subject: Optional[str] = None
+
     # Partitioning
     partition_by: Optional[List[str]] = None
 
@@ -619,6 +623,8 @@ def write_silver_with_artifacts(
     source_path: Optional[str] = None,
     write_checksums: bool = True,
     subject_name: Optional[str] = None,
+    domain: Optional[str] = None,
+    subject: Optional[str] = None,
 ) -> SilverOutputMetadata:
     """Write Silver layer data with metadata and checksums.
 
@@ -640,6 +646,8 @@ def write_silver_with_artifacts(
         source_path: Source path for lineage tracking
         write_checksums: Whether to write _checksums.json
         subject_name: Subject name for filename (defaults to 'data' for backwards compat)
+        domain: Business domain name (for PolyBase table naming)
+        subject: Subject area name (for PolyBase table naming)
 
     Returns:
         SilverOutputMetadata with comprehensive details
@@ -691,6 +699,8 @@ def write_silver_with_artifacts(
         history_mode=history_mode,
         natural_keys=natural_keys,
         change_timestamp=change_timestamp,
+        domain=domain,
+        subject=subject,
         partition_by=partition_by,
         source_path=source_path,
         pipeline_name=pipeline_name,
