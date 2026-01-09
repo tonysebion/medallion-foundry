@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import os
+import warnings
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -76,6 +77,16 @@ CDC_MODELS: frozenset[str] = frozenset(
 # Derived from MODEL_SPECS.input_mode
 APPEND_LOG_MODELS: frozenset[str] = frozenset(
     name for name, spec in MODEL_SPECS.items() if spec.input_mode == "append_log"
+)
+
+# S3 storage option mappings (YAML key -> storage backend key)
+# Used by both Bronze and Silver YAML loaders
+S3_YAML_TO_STORAGE_OPTIONS: tuple[tuple[str, str], ...] = (
+    ("s3_endpoint_url", "endpoint_url"),
+    ("s3_signature_version", "s3_signature_version"),
+    ("s3_addressing_style", "s3_addressing_style"),
+    ("s3_region", "region"),
+    ("s3_verify_ssl", "s3_verify_ssl"),
 )
 
 
@@ -983,14 +994,7 @@ def load_bronze_from_yaml(
 
     # Merge top-level S3 storage options into options dict
     # These take precedence over options.s3_* for cleaner YAML syntax
-    s3_option_keys = [
-        ("s3_endpoint_url", "endpoint_url"),
-        ("s3_signature_version", "s3_signature_version"),
-        ("s3_addressing_style", "s3_addressing_style"),
-        ("s3_region", "region"),
-        ("s3_verify_ssl", "s3_verify_ssl"),
-    ]
-    for yaml_key, options_key in s3_option_keys:
+    for yaml_key, options_key in S3_YAML_TO_STORAGE_OPTIONS:
         if yaml_key in config:
             options[options_key] = config[yaml_key]
 
@@ -1078,7 +1082,6 @@ def load_silver_from_yaml(
                 )
             # Check if this combination produces a warning (works but suboptimal)
             elif model_spec.warns_on_bronze_patterns and bronze_pattern_name in model_spec.warns_on_bronze_patterns:
-                import warnings
                 # Different warning messages based on the Bronze pattern
                 if bronze_pattern_name == "full_snapshot":
                     warnings.warn(
@@ -1120,7 +1123,6 @@ def load_silver_from_yaml(
 
     # Warning: Bronze CDC pattern with no model specified should use CDC-aware config
     if bronze is not None and bronze.load_pattern == LoadPattern.CDC and model_spec is None:
-        import warnings
         warnings.warn(
             f"bronze.load_pattern: cdc but silver.model: {model_str or 'default'} is not CDC-aware. "
             "Consider using a cdc_* model (cdc_current, cdc_history, etc.) to properly handle "
@@ -1134,7 +1136,6 @@ def load_silver_from_yaml(
         explicit_input = config["input_mode"].lower()
         expected_input = "append_log" if bronze.load_pattern in (LoadPattern.INCREMENTAL_APPEND, LoadPattern.CDC) else "replace_daily"
         if explicit_input != expected_input:
-            import warnings
             warnings.warn(
                 f"Explicit silver.input_mode: {explicit_input} conflicts with "
                 f"bronze.load_pattern: {bronze.load_pattern.value} (expected: {expected_input}). "
@@ -1264,14 +1265,7 @@ def load_silver_from_yaml(
 
     # Build storage options from Silver config's top-level S3 options
     storage_options: Optional[Dict[str, Any]] = None
-    silver_s3_keys = [
-        ("s3_endpoint_url", "endpoint_url"),
-        ("s3_signature_version", "s3_signature_version"),
-        ("s3_addressing_style", "s3_addressing_style"),
-        ("s3_region", "region"),
-        ("s3_verify_ssl", "s3_verify_ssl"),
-    ]
-    for yaml_key, storage_key in silver_s3_keys:
+    for yaml_key, storage_key in S3_YAML_TO_STORAGE_OPTIONS:
         if yaml_key in config:
             if storage_options is None:
                 storage_options = {}
