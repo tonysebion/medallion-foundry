@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=../schema/pipeline.schema.json
+#
+# Example Pipeline: S3 with Environment File
+# ==========================================
+# Demonstrates loading S3 credentials from a .env file.
+#
+# This example shows:
+# - Using env_file to load environment variables
+# - Referencing env vars with ${VAR_NAME} syntax
+# - S3-compatible storage configuration (MinIO, Nutanix Objects, etc.)
+#
+# Setup:
+#   1. Create a .env file in the same directory as this YAML:
+#
+#      AWS_ENDPOINT_URL=https://objects.nutanix.local:443
+#      AWS_ACCESS_KEY_ID=your-access-key
+#      AWS_SECRET_ACCESS_KEY=your-secret-key
+#      AWS_REGION=us-east-1
+#
+#   2. Or copy the .env.example file:
+#      cp pipelines/examples/.env.example pipelines/examples/.env
+#
+# Run:
+#   python -m pipelines ./pipelines/examples/s3_with_env.yaml --date 2025-01-15
+#
+# The env_file is loaded BEFORE any ${VAR} substitution happens,
+# so credentials are available when paths are resolved.
+
+name: s3_orders_example
+description: Load orders from S3 using credentials from .env file
+env_file: ./.env  # Relative to this YAML file
+
+bronze:
+  system: retail
+  entity: orders
+  source_type: file_parquet
+  source_path: s3://my-bucket/raw/orders/*.parquet
+  target_path: s3://my-bucket/bronze/
+
+  # S3-compatible storage options
+  s3_endpoint_url: ${AWS_ENDPOINT_URL}
+  s3_addressing_style: path        # Required for MinIO/Nutanix Objects
+  s3_signature_version: s3v4       # Required for most S3-compatible storage
+  s3_verify_ssl: false             # Set to true if using valid SSL certs
+  s3_region: ${AWS_REGION}
+
+silver:
+  domain: sales
+  subject: orders
+  natural_keys: [order_id]
+  change_timestamp: updated_at
+  target_path: s3://my-bucket/silver/
+
+  # S3 options are auto-wired from Bronze, but can be overridden here:
+  # s3_endpoint_url: ${AWS_ENDPOINT_URL}
+  # s3_addressing_style: path

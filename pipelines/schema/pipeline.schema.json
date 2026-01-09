@@ -11,6 +11,11 @@
       "description": "Path to parent config file for inheritance. Child values override parent values.",
       "examples": ["./base_config.yaml", "../shared/database_defaults.yaml"]
     },
+    "env_file": {
+      "type": "string",
+      "description": "Path to .env file to load before processing. Environment variables from this file will be available for ${VAR} substitution. Path is relative to the YAML config file.",
+      "examples": ["./.env", "./.env.production", "../shared/.env"]
+    },
     "name": {
       "type": "string",
       "description": "Optional pipeline name (defaults to filename)"

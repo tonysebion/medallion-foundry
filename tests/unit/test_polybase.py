@@ -767,3 +767,196 @@ class TestWritePolybaseScript:
         assert output_path.exists()
         content = output_path.read_text()
         assert "CREATE EXTERNAL TABLE" in content
+
+
+# ============================================
+# Edge Case Tests - None/Empty natural_keys
+# ============================================
+
+
+class TestNoneNaturalKeysEdgeCases:
+    """Tests for handling None/empty natural_keys (periodic_snapshot model)."""
+
+    @pytest.fixture
+    def config(self):
+        return PolyBaseConfig(
+            data_source_name="silver",
+            data_source_location="s3://silver/",
+        )
+
+    def test_state_views_none_keys_current_only(self, config):
+        """State views work with None natural_keys in current_only mode."""
+        ddl = generate_state_views(
+            "periodic_data_state_external",
+            None,  # None keys (periodic_snapshot without deduplication)
+            config,
+            history_mode="current_only",
+        )
+        # Should generate current view without errors
+        assert "vw_periodic_data_state_current" in ddl
+        assert "CREATE OR ALTER VIEW" in ddl
+        # Should NOT contain GROUP BY with empty columns
+        assert "GROUP BY ," not in ddl
+
+    def test_state_views_empty_keys_current_only(self, config):
+        """State views work with empty natural_keys list in current_only mode."""
+        ddl = generate_state_views(
+            "snapshot_state_external",
+            [],  # Empty list (treated as None)
+            config,
+            history_mode="current_only",
+        )
+        assert "vw_snapshot_state_current" in ddl
+        assert "CREATE OR ALTER VIEW" in ddl
+
+    def test_state_views_none_keys_full_history(self, config):
+        """State views work with None keys in full_history mode."""
+        ddl = generate_state_views(
+            "history_state_external",
+            None,
+            config,
+            history_mode="full_history",
+        )
+        # Should generate current view and point-in-time function
+        assert "vw_history_state_current" in ddl
+        assert "fn_history_state_as_of" in ddl
+        # Should NOT generate history function (requires keys)
+        assert "fn_history_state_history" not in ddl
+        # Should NOT generate history summary (requires keys)
+        assert "vw_history_state_history_summary" not in ddl
+
+    def test_state_views_none_keys_tombstone(self, config):
+        """State views with tombstone mode work with None keys."""
+        ddl = generate_state_views(
+            "tombstone_state_external",
+            None,
+            config,
+            history_mode="current_only",
+            delete_mode="tombstone",
+        )
+        assert "vw_tombstone_state_current" in ddl
+        # Should still apply deleted filter
+        assert "_deleted = 0" in ddl
+
+    def test_event_views_none_keys(self, config):
+        """Event views work with None natural_keys."""
+        ddl = generate_event_views(
+            "logs_events_external",
+            None,  # None keys
+            config,
+            change_timestamp="event_ts",
+        )
+        # Should generate date range functions
+        assert "fn_logs_events_for_dates" in ddl
+        assert "fn_logs_events_for_date" in ddl
+        # Daily summary still generated (counts all events)
+        assert "vw_logs_events_daily_summary" in ddl
+
+    def test_event_views_empty_keys(self, config):
+        """Event views work with empty natural_keys list."""
+        ddl = generate_event_views(
+            "audit_events_external",
+            [],  # Empty list
+            config,
+        )
+        assert "fn_audit_events_for_dates" in ddl
+        assert "fn_audit_events_for_date" in ddl
+
+    def test_polybase_setup_none_keys_state(self, config):
+        """Full polybase setup works with None keys for state entity."""
+        columns = [
+            {"name": "id", "sql_type": "BIGINT", "nullable": False},
+            {"name": "value", "sql_type": "NVARCHAR(255)", "nullable": True},
+        ]
+        ddl = generate_polybase_setup(
+            "periodic_snapshot",
+            columns,
+            "state",
+            None,  # None natural_keys
+            config,
+            history_mode="current_only",
+        )
+        assert "CREATE EXTERNAL TABLE" in ddl
+        assert "CREATE EXTERNAL DATA SOURCE" in ddl
+        assert "periodic_snapshot_state_external" in ddl
+        # Should generate valid SQL without errors
+        assert "GROUP BY ," not in ddl
+
+    def test_polybase_setup_none_keys_event(self, config):
+        """Full polybase setup works with None keys for event entity."""
+        columns = [
+            {"name": "event_id", "sql_type": "BIGINT", "nullable": False},
+            {"name": "payload", "sql_type": "NVARCHAR(MAX)", "nullable": True},
+        ]
+        ddl = generate_polybase_setup(
+            "raw_events",
+            columns,
+            "event",
+            None,  # None natural_keys
+            config,
+        )
+        assert "CREATE EXTERNAL TABLE" in ddl
+        assert "raw_events_events_external" in ddl
+        assert "fn_raw_events_events_for_dates" in ddl
+
+    def test_from_metadata_dict_none_keys(self, config):
+        """generate_from_metadata_dict handles None natural_keys."""
+        metadata = {
+            "columns": [
+                {"name": "id", "sql_type": "BIGINT", "nullable": False},
+            ],
+            "entity_kind": "state",
+            "natural_keys": None,  # Explicitly None
+            "history_mode": "current_only",
+        }
+        ddl = generate_from_metadata_dict(metadata, config, entity_name="snapshot")
+        assert "CREATE EXTERNAL TABLE" in ddl
+        assert "snapshot" in ddl
+
+    def test_from_metadata_dict_missing_keys(self, config):
+        """generate_from_metadata_dict handles missing natural_keys field."""
+        metadata = {
+            "columns": [
+                {"name": "id", "sql_type": "BIGINT", "nullable": False},
+            ],
+            "entity_kind": "state",
+            # natural_keys field not present
+            "history_mode": "current_only",
+        }
+        ddl = generate_from_metadata_dict(metadata, config, entity_name="snapshot")
+        assert "CREATE EXTERNAL TABLE" in ddl
+
+
+class TestEmptyColumnsEdgeCases:
+    """Tests for handling empty columns list."""
+
+    @pytest.fixture
+    def config(self):
+        return PolyBaseConfig(
+            data_source_name="silver",
+            data_source_location="s3://silver/",
+        )
+
+    def test_external_table_empty_columns(self, config):
+        """External table DDL handles empty columns list."""
+        # Empty columns is unusual but should not crash
+        ddl = generate_external_table_ddl(
+            "empty_table",
+            [],  # Empty columns
+            "empty/",
+            config,
+        )
+        assert "CREATE EXTERNAL TABLE" in ddl
+        # Should have empty column block
+        assert "[dbo].[empty_table]" in ddl
+
+    def test_polybase_setup_empty_columns(self, config):
+        """Full setup handles empty columns list."""
+        ddl = generate_polybase_setup(
+            "empty_entity",
+            [],  # Empty columns
+            "state",
+            ["id"],  # Keys still specified
+            config,
+        )
+        assert "CREATE EXTERNAL TABLE" in ddl

@@ -39,6 +39,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from pipelines.lib.bronze import BronzeSource, InputMode, LoadPattern, SourceType, WatermarkSource
+from pipelines.lib.env import load_env_file
 from pipelines.lib.silver import (
     DeleteMode,
     EntityKind,
@@ -1004,6 +1005,33 @@ def load_pipeline(
 
     if not config:
         raise YAMLConfigError("Empty configuration file")
+
+    # Load environment file if specified (before any ${VAR} expansion happens)
+    if "env_file" in config:
+        env_file_path = config["env_file"]
+        # Resolve relative to config file directory
+        if not os.path.isabs(env_file_path):
+            env_file_path = config_dir / env_file_path
+        else:
+            env_file_path = Path(env_file_path)
+
+        if not env_file_path.exists():
+            raise YAMLConfigError(
+                f"Environment file not found: {env_file_path} "
+                f"(referenced from {config_path})"
+            )
+
+        loaded = load_env_file(env_file_path)
+        if loaded:
+            logger.info(
+                "Loaded environment variables from file",
+                extra={"env_file": str(env_file_path)}
+            )
+        else:
+            logger.warning(
+                "Failed to load environment file",
+                extra={"env_file": str(env_file_path)}
+            )
 
     # Parse logging section (optional)
     logging_config = None
