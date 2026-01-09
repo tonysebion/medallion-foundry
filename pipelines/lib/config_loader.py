@@ -332,6 +332,16 @@ class ValidationIssue:
     field: str
     suggestion: Optional[str] = None
 
+    @classmethod
+    def error(cls, field: str, message: str, suggestion: Optional[str] = None) -> "ValidationIssue":
+        """Create an ERROR severity issue."""
+        return cls(ValidationSeverity.ERROR, message, field, suggestion)
+
+    @classmethod
+    def warning(cls, field: str, message: str, suggestion: Optional[str] = None) -> "ValidationIssue":
+        """Create a WARNING severity issue."""
+        return cls(ValidationSeverity.WARNING, message, field, suggestion)
+
     def __str__(self) -> str:
         prefix = "ERROR" if self.severity == ValidationSeverity.ERROR else "WARNING"
         result = f"[{prefix}] {self.field}: {self.message}"
@@ -361,56 +371,31 @@ def validate_bronze_source(source: "BronzeSourceType") -> List[ValidationIssue]:
 
     # Check required fields
     if not source.system:
-        issues.append(
-            ValidationIssue(
-                severity=ValidationSeverity.ERROR,
-                field="system",
-                message="System name is required",
-                suggestion="Add system='your_system_name' to your BronzeSource",
-            )
-        )
+        issues.append(ValidationIssue.error(
+            "system", "System name is required",
+            "Add system='your_system_name' to your BronzeSource"))
 
     if not source.entity:
-        issues.append(
-            ValidationIssue(
-                severity=ValidationSeverity.ERROR,
-                field="entity",
-                message="Entity name is required",
-                suggestion="Add entity='your_table_name' to your BronzeSource",
-            )
-        )
+        issues.append(ValidationIssue.error(
+            "entity", "Entity name is required",
+            "Add entity='your_table_name' to your BronzeSource"))
 
     if not source.target_path:
-        issues.append(
-            ValidationIssue(
-                severity=ValidationSeverity.ERROR,
-                field="target_path",
-                message="Target path is required",
-                suggestion="Add target_path='s3://bronze/system={system}/entity={entity}/dt={run_date}/'",
-            )
-        )
+        issues.append(ValidationIssue.error(
+            "target_path", "Target path is required",
+            "Add target_path='s3://bronze/system={system}/entity={entity}/dt={run_date}/'"))
 
     # Database-specific validation
     if source.source_type in (SourceType.DATABASE_MSSQL, SourceType.DATABASE_POSTGRES):
         if "host" not in source.options:
-            issues.append(
-                ValidationIssue(
-                    severity=ValidationSeverity.ERROR,
-                    field="options.host",
-                    message="Database sources require 'host' in options",
-                    suggestion='Add options={"host": "your-server.database.com", ...}',
-                )
-            )
+            issues.append(ValidationIssue.error(
+                "options.host", "Database sources require 'host' in options",
+                'Add options={"host": "your-server.database.com", ...}'))
 
         if "database" not in source.options:
-            issues.append(
-                ValidationIssue(
-                    severity=ValidationSeverity.ERROR,
-                    field="options.database",
-                    message="Database sources require 'database' in options",
-                    suggestion='Add "database": "YourDatabase" to options',
-                )
-            )
+            issues.append(ValidationIssue.error(
+                "options.database", "Database sources require 'database' in options",
+                'Add "database": "YourDatabase" to options'))
 
     # File-specific validation
     if source.source_type in (
@@ -419,14 +404,9 @@ def validate_bronze_source(source: "BronzeSourceType") -> List[ValidationIssue]:
         SourceType.FILE_SPACE_DELIMITED,
     ):
         if not source.source_path:
-            issues.append(
-                ValidationIssue(
-                    severity=ValidationSeverity.ERROR,
-                    field="source_path",
-                    message="File sources require a source_path",
-                    suggestion="Add source_path='/path/to/files/{run_date}/*.csv'",
-                )
-            )
+            issues.append(ValidationIssue.error(
+                "source_path", "File sources require a source_path",
+                "Add source_path='/path/to/files/{run_date}/*.csv'"))
 
     # Fixed-width specific validation
     if source.source_type == SourceType.FILE_FIXED_WIDTH:
@@ -439,46 +419,26 @@ def validate_bronze_source(source: "BronzeSourceType") -> List[ValidationIssue]:
         if not has_multi_record:
             # Standard single-record mode requires columns and widths
             if "columns" not in source.options:
-                issues.append(
-                    ValidationIssue(
-                        severity=ValidationSeverity.ERROR,
-                        field="options.columns",
-                        message="Fixed-width files require 'columns' list in options",
-                        suggestion='Add options={"columns": [...], "widths": [...]} or use record_types for multi-record files',
-                    )
-                )
+                issues.append(ValidationIssue.error(
+                    "options.columns", "Fixed-width files require 'columns' list in options",
+                    'Add options={"columns": [...], "widths": [...]} or use record_types for multi-record files'))
             if "widths" not in source.options:
-                issues.append(
-                    ValidationIssue(
-                        severity=ValidationSeverity.ERROR,
-                        field="options.widths",
-                        message="Fixed-width files require 'widths' list in options",
-                        suggestion='Add "widths": [10, 20, ...] to options or use record_types for multi-record files',
-                    )
-                )
+                issues.append(ValidationIssue.error(
+                    "options.widths", "Fixed-width files require 'widths' list in options",
+                    'Add "widths": [10, 20, ...] to options or use record_types for multi-record files'))
 
     # Incremental load validation
     if source.load_pattern == LoadPattern.INCREMENTAL_APPEND:
         if not source.watermark_column:
-            issues.append(
-                ValidationIssue(
-                    severity=ValidationSeverity.ERROR,
-                    field="watermark_column",
-                    message="Incremental loads require a watermark_column",
-                    suggestion="Add watermark_column='LastUpdated'",
-                )
-            )
+            issues.append(ValidationIssue.error(
+                "watermark_column", "Incremental loads require a watermark_column",
+                "Add watermark_column='LastUpdated'"))
 
     # Warnings
     if source.load_pattern == LoadPattern.FULL_SNAPSHOT and source.watermark_column:
-        issues.append(
-            ValidationIssue(
-                severity=ValidationSeverity.WARNING,
-                field="watermark_column",
-                message="watermark_column is set but load_pattern is FULL_SNAPSHOT",
-                suggestion="Use INCREMENTAL_APPEND or remove watermark_column",
-            )
-        )
+        issues.append(ValidationIssue.warning(
+            "watermark_column", "watermark_column is set but load_pattern is FULL_SNAPSHOT",
+            "Use INCREMENTAL_APPEND or remove watermark_column"))
 
     return issues
 
@@ -504,67 +464,37 @@ def validate_silver_entity(entity: "SilverEntityType") -> List[ValidationIssue]:
 
     # Check required fields
     if not entity.source_path:
-        issues.append(
-            ValidationIssue(
-                severity=ValidationSeverity.ERROR,
-                field="source_path",
-                message="Source path is required",
-                suggestion="Add source_path='s3://bronze/system=x/entity=y/dt={run_date}/*.parquet'",
-            )
-        )
+        issues.append(ValidationIssue.error(
+            "source_path", "Source path is required",
+            "Add source_path='s3://bronze/system=x/entity=y/dt={run_date}/*.parquet'"))
 
     if not entity.target_path:
-        issues.append(
-            ValidationIssue(
-                severity=ValidationSeverity.ERROR,
-                field="target_path",
-                message="Target path is required",
-                suggestion="Add target_path='s3://silver/your/path/'",
-            )
-        )
+        issues.append(ValidationIssue.error(
+            "target_path", "Target path is required",
+            "Add target_path='s3://silver/your/path/'"))
 
     if not entity.natural_keys:
-        issues.append(
-            ValidationIssue(
-                severity=ValidationSeverity.ERROR,
-                field="natural_keys",
-                message="At least one natural key is required",
-                suggestion="Add natural_keys=['id_column']",
-            )
-        )
+        issues.append(ValidationIssue.error(
+            "natural_keys", "At least one natural key is required",
+            "Add natural_keys=['id_column']"))
 
     if not entity.change_timestamp:
-        issues.append(
-            ValidationIssue(
-                severity=ValidationSeverity.ERROR,
-                field="change_timestamp",
-                message="Change timestamp column is required",
-                suggestion="Add change_timestamp='LastUpdated'",
-            )
-        )
+        issues.append(ValidationIssue.error(
+            "change_timestamp", "Change timestamp column is required",
+            "Add change_timestamp='LastUpdated'"))
 
     # Event-specific warnings
     if entity.entity_kind == EntityKind.EVENT:
         if entity.history_mode == HistoryMode.FULL_HISTORY:
-            issues.append(
-                ValidationIssue(
-                    severity=ValidationSeverity.WARNING,
-                    field="history_mode",
-                    message="FULL_HISTORY is typically not needed for EVENT entities",
-                    suggestion="Events are immutable; use CURRENT_ONLY",
-                )
-            )
+            issues.append(ValidationIssue.warning(
+                "history_mode", "FULL_HISTORY is typically not needed for EVENT entities",
+                "Events are immutable; use CURRENT_ONLY"))
 
     # Attribute warnings
     if entity.attributes and entity.exclude_columns:
-        issues.append(
-            ValidationIssue(
-                severity=ValidationSeverity.WARNING,
-                field="attributes/exclude_columns",
-                message="Both attributes and exclude_columns are set",
-                suggestion="Use only one: attributes OR exclude_columns",
-            )
-        )
+        issues.append(ValidationIssue.warning(
+            "attributes/exclude_columns", "Both attributes and exclude_columns are set",
+            "Use only one: attributes OR exclude_columns"))
 
     return issues
 
