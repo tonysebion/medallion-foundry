@@ -11,6 +11,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
+from pipelines.lib._path_utils import is_s3_path
 from pipelines.lib.env import parse_iso_datetime, utc_now_iso
 
 if TYPE_CHECKING:
@@ -653,7 +654,7 @@ def _scan_parquet_for_watermark(
         # Configure DuckDB for cloud storage if needed
         con = ibis.duckdb.connect()
 
-        if partition_path.startswith("s3://"):
+        if is_s3_path(partition_path):
             from pipelines.lib.storage_config import _configure_duckdb_s3
 
             _configure_duckdb_s3(con, storage_options or {})

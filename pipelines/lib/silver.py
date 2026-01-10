@@ -25,7 +25,7 @@ from pipelines.lib.storage_config import InputMode, _configure_duckdb_s3, _extra
 from pipelines.lib.env import utc_now_iso
 from pipelines.lib.curate import apply_cdc, build_history, dedupe_latest
 from pipelines.lib.io import infer_column_types, maybe_dry_run
-from pipelines.lib._path_utils import is_object_storage_path, resolve_target_path, storage_path_exists
+from pipelines.lib._path_utils import is_object_storage_path, is_s3_path, parse_s3_uri, resolve_target_path, storage_path_exists
 from pipelines.lib.observability import get_structlog_logger
 
 # Use structlog for structured logging with pipeline context
@@ -635,9 +635,9 @@ class SilverEntity:
         if "*" not in source and "?" not in source:
             return [source]
 
-        if source.startswith("s3://"):
+        if is_s3_path(source):
             from pipelines.lib.storage import S3Storage
-            bucket = source[5:].split("/")[0]
+            bucket, _ = parse_s3_uri(source)
             storage_opts = _extract_storage_options(self.storage_options)
             storage = S3Storage(f"s3://{bucket}/", **storage_opts)
             matches = storage.glob(source)
@@ -658,7 +658,7 @@ class SilverEntity:
             logger.debug("silver_append_log_mode", expanded_source=source)
 
         # For S3 paths, add glob pattern to avoid DuckDB's URL encoding issues
-        if source.startswith("s3://") and "*" not in source and "?" not in source:
+        if is_s3_path(source) and "*" not in source and "?" not in source:
             if source.endswith("/") or not source.split("/")[-1].count("."):
                 source = source.rstrip("/") + "/*.parquet"
                 logger.debug("silver_added_glob_pattern", source=source)
@@ -938,69 +938,17 @@ class SilverEntity:
 
     def _write_polybase_ddl(self, target: str, columns: List[Dict[str, Any]]) -> Optional[str]:
         """Write PolyBase DDL script to cloud storage."""
-        try:
-            import os
-            from pipelines.lib.polybase import PolyBaseConfig, write_polybase_ddl_s3
-            from pipelines.lib.storage import get_storage
+        from pipelines.lib.polybase import write_polybase_artifacts
 
-            storage_opts = _extract_storage_options(self.storage_options)
-            storage = get_storage(target, **storage_opts)
-
-            # Derive entity name from domain/subject (preferred) or fall back to inference
-            if self.domain and self.subject:
-                entity_name = f"{self.domain}_{self.subject}"
-            elif self.subject:
-                entity_name = self.subject
-            else:
-                entity_name = self._infer_subject_name(target)
-
-            # Extract optional environment prefix between /silver/ and /domain=
-            # e.g., "s3://bucket/silver/production/domain=..." -> "production"
-            import re
-
-            env_match = re.search(r"/silver/([^/]+)/domain=", target)
-            env_prefix = env_match.group(1) if env_match else None
-
-            # Extract bucket/container from S3 URI
-            if target.startswith("s3://"):
-                bucket = target.split("/")[2]
-                data_source_location = f"s3://{bucket}/silver/"
-                data_source_name = f"silver_{bucket}"
-            else:
-                data_source_location = target.rsplit("/silver/", 1)[0] + "/silver/"
-                data_source_name = "silver_adls"
-
-            polybase_metadata = {
-                "columns": columns,
-                "entity_kind": self.entity_kind.value,
-                "history_mode": self.history_mode.value,
-                "delete_mode": self.delete_mode.value,
-                "natural_keys": self.natural_keys,
-                "change_timestamp": self.change_timestamp,
-                "domain": self.domain,
-                "subject": self.subject,
-            }
-
-            s3_endpoint = os.environ.get("AWS_ENDPOINT_URL", "https://s3.amazonaws.com")
-            s3_access_key = os.environ.get("AWS_ACCESS_KEY_ID", "<your_access_key>")
-
-            polybase_config = PolyBaseConfig(
-                data_source_name=data_source_name,
-                data_source_location=data_source_location,
-                credential_name="s3_credential",
-                s3_endpoint=s3_endpoint,
-                s3_access_key=s3_access_key,
-            )
-
-            write_polybase_ddl_s3(
-                storage,
-                polybase_metadata,
-                polybase_config,
-                entity_name=entity_name,
-                env_prefix=env_prefix,
-            )
-            logger.debug("silver_polybase_ddl_written", target=target)
-            return "_polybase.sql"
-        except Exception as e:
-            logger.warning("silver_polybase_write_failed", error=str(e))
-            return None
+        return write_polybase_artifacts(
+            target,
+            columns,
+            domain=self.domain,
+            subject=self.subject,
+            entity_kind=self.entity_kind.value,
+            history_mode=self.history_mode.value,
+            delete_mode=self.delete_mode.value,
+            natural_keys=self.natural_keys,
+            change_timestamp=self.change_timestamp,
+            storage_options=_extract_storage_options(self.storage_options),
+        )

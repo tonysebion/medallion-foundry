@@ -10,7 +10,13 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
-from pipelines.lib.storage.base import FileInfo, StorageBackend, StorageResult
+from pipelines.lib.storage.base import (
+    FileInfo,
+    StorageBackend,
+    StorageResult,
+    is_glob_pattern,
+    join_storage_path,
+)
 from pipelines.lib.storage_config import get_bool_config_value, get_config_value
 
 logger = logging.getLogger(__name__)
@@ -146,11 +152,7 @@ class S3Storage(StorageBackend):
         if not path:
             return self._prefix.rstrip("/")
 
-        prefix = self._prefix.rstrip("/")
-        if prefix:
-            return f"{prefix}/{path.lstrip('/')}"
-        else:
-            return path.lstrip("/")
+        return join_storage_path(self._prefix, path)
 
     def _glob_to_prefix_and_pattern(self, glob_pattern: str) -> tuple:
         """Convert glob pattern to S3 prefix and fnmatch pattern.
@@ -203,7 +205,7 @@ class S3Storage(StorageBackend):
         s3_key = self._get_s3_key(path)
 
         # Handle glob patterns
-        if "*" in s3_key or "?" in s3_key:
+        if is_glob_pattern(s3_key):
             try:
                 matches = self.glob(path)
                 return len(matches) > 0

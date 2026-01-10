@@ -13,7 +13,109 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["StorageBackend", "StorageResult", "FileInfo"]
+__all__ = [
+    "StorageBackend",
+    "StorageResult",
+    "FileInfo",
+    "join_storage_path",
+    "is_glob_pattern",
+    "extract_file_size",
+    "extract_modified_time",
+    "extract_filename",
+]
+
+
+# =============================================================================
+# Storage Path Utilities
+# =============================================================================
+
+
+def join_storage_path(base: str, *parts: str) -> str:
+    """Join storage path components, handling leading/trailing slashes.
+
+    Args:
+        base: Base path (may have trailing slash)
+        *parts: Additional path components
+
+    Returns:
+        Joined path with single slashes between components
+
+    Example:
+        >>> join_storage_path("s3://bucket/prefix/", "subdir", "file.txt")
+        's3://bucket/prefix/subdir/file.txt'
+        >>> join_storage_path("", "relative/path")
+        'relative/path'
+    """
+    result = base.rstrip("/")
+    for part in parts:
+        if part:
+            cleaned = part.lstrip("/")
+            result = f"{result}/{cleaned}" if result else cleaned
+    return result
+
+
+def is_glob_pattern(path: str) -> bool:
+    """Check if path contains glob wildcards.
+
+    Args:
+        path: Path to check
+
+    Returns:
+        True if path contains * or ? wildcards
+    """
+    return "*" in path or "?" in path
+
+
+def extract_file_size(info: Dict[str, Any]) -> int:
+    """Extract file size from metadata dict with common key fallbacks.
+
+    Handles various metadata formats from different storage backends:
+    - 'size' (fsspec, generic)
+    - 'Size' (boto3 S3)
+    - 'ContentLength' (S3 HeadObject)
+
+    Args:
+        info: Metadata dictionary from storage backend
+
+    Returns:
+        File size in bytes, or 0 if not found
+    """
+    return info.get("size") or info.get("Size") or info.get("ContentLength") or 0
+
+
+def extract_modified_time(info: Dict[str, Any]) -> Optional[float]:
+    """Extract modification time from metadata dict with common key fallbacks.
+
+    Handles various metadata formats from different storage backends:
+    - 'mtime' (fsspec, local filesystem)
+    - 'LastModified' (boto3 S3)
+    - 'last_modified' (generic)
+
+    Args:
+        info: Metadata dictionary from storage backend
+
+    Returns:
+        Modification time as Unix timestamp, or None if not found
+    """
+    return info.get("mtime") or info.get("LastModified") or info.get("last_modified")
+
+
+def extract_filename(path: str) -> str:
+    """Extract filename from path (handles both / and \\ separators).
+
+    Args:
+        path: Full path or relative path
+
+    Returns:
+        Just the filename component
+
+    Example:
+        >>> extract_filename("s3://bucket/prefix/file.parquet")
+        'file.parquet'
+        >>> extract_filename("C:\\\\data\\\\file.csv")
+        'file.csv'
+    """
+    return path.replace("\\", "/").split("/")[-1]
 
 
 @dataclass

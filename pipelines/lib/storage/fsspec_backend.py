@@ -17,7 +17,16 @@ from typing import Any, Dict, List, Optional
 import fsspec
 from fsspec.spec import AbstractFileSystem
 
-from pipelines.lib.storage.base import FileInfo, StorageBackend, StorageResult
+from pipelines.lib.storage.base import (
+    FileInfo,
+    StorageBackend,
+    StorageResult,
+    extract_file_size,
+    extract_filename,
+    extract_modified_time,
+    is_glob_pattern,
+    join_storage_path,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -162,15 +171,14 @@ class FsspecStorage(StorageBackend):
             return f"{base}/{path.lstrip('/')}"
 
         # For cloud protocols, join with base_path
-        base = self.base_path.rstrip("/")
-        return f"{base}/{path.lstrip('/')}"
+        return join_storage_path(self.base_path, path)
 
     def exists(self, path: str) -> bool:
         """Check if a path exists."""
         full_path = self._normalize_path(path)
 
         # Handle glob patterns
-        if "*" in full_path or "?" in full_path:
+        if is_glob_pattern(full_path):
             try:
                 matches = self.fs.glob(full_path)
                 return len(matches) > 0
@@ -222,13 +230,13 @@ class FsspecStorage(StorageBackend):
                     continue
 
                 # Apply pattern filter
-                basename = name.split("/")[-1]
+                basename = extract_filename(name)
                 if pattern and not fnmatch.fnmatch(basename, pattern):
                     continue
 
-                # Extract file info
-                size = info.get("size", info.get("Size", 0))
-                modified = info.get("mtime", info.get("LastModified"))
+                # Extract file info using helpers
+                size = extract_file_size(info)
+                modified = extract_modified_time(info)
 
                 # Convert mtime to datetime if it's a timestamp
                 if isinstance(modified, (int, float)):

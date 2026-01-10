@@ -27,6 +27,7 @@ __all__ = [
     "generate_from_metadata",
     "generate_from_metadata_dict",
     "write_polybase_ddl_s3",
+    "write_polybase_artifacts",
 ]
 
 
@@ -94,8 +95,11 @@ def generate_external_table_ddl(
         column_defs.append(f"    [{col_name}] {col_type}{nullable}")
 
     # Add dt partition column for Hive-style partition pruning
+    # Only add if dt is not already in the column definitions
     if include_dt_partition:
-        column_defs.append("    [dt] DATE NULL  -- Hive partition column (inferred from folder path)")
+        existing_names = {col.get("name") for col in columns}
+        if "dt" not in existing_names:
+            column_defs.append("    [dt] DATE NULL  -- Hive partition column (inferred from folder path)")
 
     columns_sql = ",\n".join(column_defs)
 
@@ -655,7 +659,8 @@ def generate_from_metadata(
     entity_kind = metadata.get("entity_kind", "state")
     history_mode = metadata.get("history_mode", "current_only")
     natural_keys = metadata.get("natural_keys", [])
-    change_timestamp = metadata.get("change_timestamp", "updated_at")
+    # Handle None explicitly - use "or" so explicit None uses default
+    change_timestamp = metadata.get("change_timestamp") or "updated_at"
     partition_by = metadata.get("partition_by")
     delete_mode = metadata.get("delete_mode", "ignore")
 
@@ -751,7 +756,8 @@ def generate_from_metadata_dict(
     entity_kind = metadata.get("entity_kind", "state")
     history_mode = metadata.get("history_mode", "current_only")
     natural_keys = metadata.get("natural_keys", [])
-    change_timestamp = metadata.get("change_timestamp", "updated_at")
+    # Handle None explicitly - use "or" so explicit None uses default
+    change_timestamp = metadata.get("change_timestamp") or "updated_at"
     partition_by = metadata.get("partition_by")
     delete_mode = metadata.get("delete_mode", "ignore")
     domain = metadata.get("domain")
@@ -842,3 +848,121 @@ def write_polybase_ddl_s3(
     except Exception as e:
         logger.warning("Error writing PolyBase DDL to S3: %s", e)
         return False
+
+
+def write_polybase_artifacts(
+    target: str,
+    columns: List[Dict[str, Any]],
+    *,
+    domain: Optional[str] = None,
+    subject: Optional[str] = None,
+    entity_kind: str = "state",
+    history_mode: str = "current_only",
+    delete_mode: str = "ignore",
+    natural_keys: Optional[List[str]] = None,
+    change_timestamp: Optional[str] = None,
+    storage_options: Optional[Dict[str, Any]] = None,
+) -> Optional[str]:
+    """Generate and write PolyBase DDL artifacts to cloud storage.
+
+    This is a high-level convenience function that handles the complete workflow:
+    1. Parses target path to extract bucket/container and environment prefix
+    2. Derives entity name from domain/subject
+    3. Creates PolyBaseConfig with appropriate settings
+    4. Writes the DDL script to cloud storage
+
+    Args:
+        target: Target path (s3:// or abfss://)
+        columns: List of column dicts with name, sql_type, nullable
+        domain: Business domain (optional)
+        subject: Subject area (optional)
+        entity_kind: "state" or "event"
+        history_mode: "current_only" or "full_history"
+        delete_mode: "ignore", "tombstone", or "hard_delete"
+        natural_keys: Primary key columns
+        change_timestamp: Timestamp column name
+        storage_options: Storage backend options (credentials, endpoint, etc.)
+
+    Returns:
+        Filename of the DDL script if written successfully ("_polybase.sql"), None on failure
+
+    Example:
+        >>> path = write_polybase_artifacts(
+        ...     "s3://bucket/silver/domain=sales/subject=orders/",
+        ...     columns=[{"name": "id", "sql_type": "INT"}],
+        ...     domain="sales",
+        ...     subject="orders",
+        ... )
+    """
+    import os
+    import re
+
+    from pipelines.lib._path_utils import is_s3_path, parse_s3_uri
+    from pipelines.lib.storage import get_storage
+
+    try:
+        storage_opts = storage_options or {}
+        storage = get_storage(target, **storage_opts)
+
+        # Derive entity name from domain/subject (preferred) or fall back to inference
+        if domain and subject:
+            entity_name = f"{domain}_{subject}"
+        elif subject:
+            entity_name = subject
+        else:
+            # Infer from path - extract last meaningful segment
+            parts = target.rstrip("/").split("/")
+            entity_name = parts[-1] if parts else "unknown"
+            # Sanitize for SQL identifiers
+            entity_name = entity_name.replace("=", "_").replace("-", "_")
+
+        # Extract optional environment prefix between /silver/ and /domain=
+        # e.g., "s3://bucket/silver/production/domain=..." -> "production"
+        env_match = re.search(r"/silver/([^/]+)/domain=", target)
+        env_prefix = env_match.group(1) if env_match else None
+
+        # Extract bucket/container from S3 URI
+        if is_s3_path(target):
+            bucket, _ = parse_s3_uri(target)
+            data_source_location = f"s3://{bucket}/silver/"
+            data_source_name = f"silver_{bucket}"
+        else:
+            data_source_location = target.rsplit("/silver/", 1)[0] + "/silver/"
+            data_source_name = "silver_adls"
+
+        polybase_metadata = {
+            "columns": columns,
+            "entity_kind": entity_kind,
+            "history_mode": history_mode,
+            "delete_mode": delete_mode,
+            "natural_keys": natural_keys or [],
+            "change_timestamp": change_timestamp,
+            "domain": domain,
+            "subject": subject,
+        }
+
+        s3_endpoint = os.environ.get("AWS_ENDPOINT_URL", "https://s3.amazonaws.com")
+        s3_access_key = os.environ.get("AWS_ACCESS_KEY_ID", "<your_access_key>")
+
+        polybase_config = PolyBaseConfig(
+            data_source_name=data_source_name,
+            data_source_location=data_source_location,
+            credential_name="s3_credential",
+            s3_endpoint=s3_endpoint,
+            s3_access_key=s3_access_key,
+        )
+
+        success = write_polybase_ddl_s3(
+            storage,
+            polybase_metadata,
+            polybase_config,
+            entity_name=entity_name,
+            env_prefix=env_prefix,
+        )
+        if success:
+            logger.debug("polybase_artifacts_written", target=target)
+            return "_polybase.sql"
+        return None
+    except Exception as e:
+        logger.warning("polybase_artifacts_failed", error=str(e))
+        return None

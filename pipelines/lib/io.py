@@ -501,16 +501,15 @@ def _infer_column_types_from_ibis(
 
     for name in schema.names:
         dtype = schema[name]
-        type_str = str(dtype)
 
         col_info: Dict[str, Any] = {
             "name": name,
-            "ibis_type": type_str,
+            "ibis_type": str(dtype),
             "nullable": dtype.nullable if hasattr(dtype, "nullable") else True,
         }
 
         if include_sql_types:
-            col_info["sql_type"] = _map_ibis_type_to_sql(type_str)
+            col_info["sql_type"] = _map_ibis_type_to_sql(dtype)  # Pass dtype object
 
         columns.append(col_info)
 
@@ -566,11 +565,11 @@ def _infer_column_types(t: "ibis.Table") -> List[Dict[str, Any]]:
     return infer_column_types(t, include_sql_types=True)
 
 
-def _map_ibis_type_to_sql(ibis_type: str) -> str:
-    """Map Ibis type string to SQL Server type.
+def _map_ibis_type_string_to_sql(ibis_type: str) -> str:
+    """Map Ibis type string to SQL Server type (internal fallback).
 
     Args:
-        ibis_type: Ibis type name
+        ibis_type: Ibis type name as string
 
     Returns:
         SQL Server type string
@@ -591,7 +590,6 @@ def _map_ibis_type_to_sql(ibis_type: str) -> str:
     elif "float32" in type_lower or "float" in type_lower:
         return "REAL"
     elif "decimal" in type_lower:
-        # Try to extract precision/scale
         return "DECIMAL(18,2)"
     elif "bool" in type_lower:
         return "BIT"
@@ -605,6 +603,34 @@ def _map_ibis_type_to_sql(ibis_type: str) -> str:
         return "VARBINARY(MAX)"
     else:
         return "NVARCHAR(4000)"
+
+
+def _map_ibis_type_to_sql(ibis_dtype: Any) -> str:
+    """Map Ibis type to SQL Server type.
+
+    Accepts either an Ibis dtype object (preferred) or a string (legacy).
+    When given a dtype object, extracts precision/scale for decimal types.
+
+    Args:
+        ibis_dtype: Ibis dtype object or type name string
+
+    Returns:
+        SQL Server type string
+    """
+    # Backward compat: handle string input
+    if isinstance(ibis_dtype, str):
+        return _map_ibis_type_string_to_sql(ibis_dtype)
+
+    dtype = ibis_dtype
+
+    # Decimal with actual precision/scale from dtype object
+    if hasattr(dtype, "is_decimal") and dtype.is_decimal():
+        precision = dtype.precision if dtype.precision else 18
+        scale = dtype.scale if dtype.scale else 2
+        return f"DECIMAL({precision},{scale})"
+
+    # Other types: convert to string and use existing logic
+    return _map_ibis_type_string_to_sql(str(dtype))
 
 
 def write_silver_with_artifacts(

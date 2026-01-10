@@ -60,14 +60,12 @@ def parse_uri(path: str) -> tuple[str, str]:
     """
     if path.startswith("s3://"):
         return ("s3", path[5:])
-    elif path.startswith("abfss://"):
-        return ("abfs", path[8:])
-    elif path.startswith("wasbs://"):
-        return ("abfs", path[8:])
-    elif path.startswith("az://"):
-        return ("abfs", path[5:])
-    else:
-        return ("local", path)
+    if path.startswith(("abfs://", "abfss://", "wasbs://", "az://")):
+        # All ADLS schemes map to "abfs" for storage backend selection
+        # abfss:// and wasbs:// have 8-char prefix, az:// has 5-char prefix
+        prefix_len = 5 if path.startswith("az://") else 8
+        return ("abfs", path[prefix_len:])
+    return ("local", path)
 
 
 def get_storage(path: str, **options) -> StorageBackend:

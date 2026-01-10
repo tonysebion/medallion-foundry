@@ -7,7 +7,14 @@ import logging
 import os
 from typing import Any, List, Optional
 
-from pipelines.lib.storage.base import FileInfo, StorageBackend, StorageResult
+from pipelines.lib.storage.base import (
+    FileInfo,
+    StorageBackend,
+    StorageResult,
+    extract_filename,
+    is_glob_pattern,
+    join_storage_path,
+)
 from pipelines.lib.storage_config import get_config_value
 
 logger = logging.getLogger(__name__)
@@ -158,18 +165,14 @@ class ADLSStorage(StorageBackend):
         if not path:
             return f"{self._container}/{self._prefix}".rstrip("/")
 
-        prefix = self._prefix.rstrip("/") if self._prefix else ""
-        if prefix:
-            return f"{self._container}/{prefix}/{path.lstrip('/')}"
-        else:
-            return f"{self._container}/{path.lstrip('/')}"
+        return join_storage_path(f"{self._container}/{self._prefix}" if self._prefix else self._container, path)
 
     def exists(self, path: str) -> bool:
         """Check if a path exists."""
         adls_path = self._get_adls_path(path)
 
         # Handle glob patterns
-        if "*" in adls_path or "?" in adls_path:
+        if is_glob_pattern(adls_path):
             try:
                 matches = self.fs.glob(adls_path)
                 return len(matches) > 0
@@ -204,7 +207,7 @@ class ADLSStorage(StorageBackend):
             if isinstance(items, dict):
                 for key, info in items.items():
                     if info.get("type") == "file":
-                        name = key.split("/")[-1]
+                        name = extract_filename(key)
                         if pattern and not fnmatch.fnmatch(name, pattern):
                             continue
 
@@ -218,7 +221,7 @@ class ADLSStorage(StorageBackend):
             else:
                 for info in items:
                     if isinstance(info, dict) and info.get("type") == "file":
-                        name = info.get("name", "").split("/")[-1]
+                        name = extract_filename(info.get("name", ""))
                         if pattern and not fnmatch.fnmatch(name, pattern):
                             continue
                         files.append(

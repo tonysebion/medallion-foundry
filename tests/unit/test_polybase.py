@@ -926,6 +926,22 @@ class TestNoneNaturalKeysEdgeCases:
         ddl = generate_from_metadata_dict(metadata, config, entity_name="snapshot")
         assert "CREATE EXTERNAL TABLE" in ddl
 
+    def test_from_metadata_dict_none_change_timestamp(self, config):
+        """Explicit None change_timestamp uses default, not literal 'None' in SQL."""
+        metadata = {
+            "columns": [
+                {"name": "id", "sql_type": "BIGINT", "nullable": False},
+            ],
+            "entity_kind": "event",
+            "natural_keys": ["id"],
+            "change_timestamp": None,  # Explicitly None (periodic_snapshot model)
+        }
+        ddl = generate_from_metadata_dict(metadata, config, entity_name="snapshot_events")
+        # Should NOT have literal [None] in the SQL - should use default "updated_at"
+        assert "[None]" not in ddl
+        # Should use the default fallback instead
+        assert "[updated_at]" in ddl or "updated_at" in ddl
+
 
 class TestDomainSubjectNaming:
     """Tests for domain/subject-based entity naming (Category 4e, 4f)."""
@@ -1248,6 +1264,24 @@ class TestDtPartitionColumn:
             include_dt_partition=False,
         )
         assert "[dt]" not in ddl
+
+    def test_dt_column_not_duplicated_when_already_in_columns(self, config):
+        """External table does not duplicate dt column if already present in columns."""
+        columns_with_dt = [
+            {"name": "id", "sql_type": "BIGINT", "nullable": False},
+            {"name": "name", "sql_type": "NVARCHAR(255)", "nullable": True},
+            {"name": "dt", "sql_type": "DATE", "nullable": True},  # dt already in data
+        ]
+        ddl = generate_external_table_ddl(
+            "orders_external",
+            columns_with_dt,
+            "orders/",
+            config,
+            include_dt_partition=True,  # Would normally add dt
+        )
+        # Count occurrences of [dt] - should be exactly 1, not 2
+        dt_count = ddl.count("[dt]")
+        assert dt_count == 1, f"Expected 1 [dt] column, found {dt_count}"
 
 
 # ============================================
