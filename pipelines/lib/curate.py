@@ -24,6 +24,33 @@ __all__ = [
 ]
 
 
+def _keep_first_per_group(
+    t: ibis.Table,
+    keys: List[str],
+    order_by: str,
+    descending: bool = True,
+) -> ibis.Table:
+    """Keep first row per key group after ordering (internal helper).
+
+    Args:
+        t: Input table
+        keys: Columns to partition by
+        order_by: Column to order by within partitions
+        descending: If True, keep latest (highest value); if False, keep earliest
+
+    Returns:
+        Table with first row per partition kept
+    """
+    original_cols = t.columns
+    order_expr = ibis.desc(order_by) if descending else order_by
+    window = ibis.window(group_by=keys, order_by=order_expr)
+    return (
+        t.mutate(_rn=ibis.row_number().over(window))
+        .filter(lambda tbl: tbl._rn == 0)
+        .select(*original_cols)
+    )
+
+
 def dedupe_latest(t: ibis.Table, keys: List[str], order_by: str) -> ibis.Table:
     """Keep only the latest record per natural key combination.
 
@@ -42,13 +69,7 @@ def dedupe_latest(t: ibis.Table, keys: List[str], order_by: str) -> ibis.Table:
         >>> t = con.read_parquet("bronze/customers/*.parquet")
         >>> deduped = dedupe_latest(t, ["customer_id"], "updated_at")
     """
-    original_cols = t.columns
-    window = ibis.window(group_by=keys, order_by=ibis.desc(order_by))
-    return (
-        t.mutate(_rn=ibis.row_number().over(window))
-        .filter(lambda tbl: tbl._rn == 0)  # row_number() starts at 0 in DuckDB
-        .select(*original_cols)  # Use select to drop _rn, works better with lambda filter
-    )
+    return _keep_first_per_group(t, keys, order_by, descending=True)
 
 
 def dedupe_earliest(t: ibis.Table, keys: List[str], order_by: str) -> ibis.Table:
@@ -64,13 +85,7 @@ def dedupe_earliest(t: ibis.Table, keys: List[str], order_by: str) -> ibis.Table
     Returns:
         Table with duplicates removed, keeping earliest record per key
     """
-    original_cols = t.columns
-    window = ibis.window(group_by=keys, order_by=order_by)
-    return (
-        t.mutate(_rn=ibis.row_number().over(window))
-        .filter(lambda tbl: tbl._rn == 0)  # row_number() starts at 0 in DuckDB
-        .select(*original_cols)  # Use select to drop _rn, works better with lambda filter
-    )
+    return _keep_first_per_group(t, keys, order_by, descending=False)
 
 
 def build_history(

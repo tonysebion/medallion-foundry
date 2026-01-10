@@ -249,6 +249,15 @@ def _create_db2_connection(options: Dict[str, Any]) -> ibis.BaseBackend:
             """Alias for disconnect."""
             self.disconnect()
 
+        def __enter__(self):
+            """Context manager entry."""
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            """Context manager exit - ensures cleanup."""
+            self.close()
+            return False
+
     return DB2Connection(conn_str)
 
 

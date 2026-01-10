@@ -290,6 +290,24 @@ def get_late_records(
 DEFAULT_STATE_DIR = ".state"
 
 
+def _load_json_safe(path: Path, default: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Load JSON file, returning default if missing or invalid.
+
+    Args:
+        path: Path to JSON file
+        default: Value to return if file doesn't exist or is invalid (default: {})
+
+    Returns:
+        Parsed JSON data or default value
+    """
+    if default is None:
+        default = {}
+    try:
+        return json.loads(path.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return default
+
+
 def _get_state_dir() -> Path:
     state_dir = os.environ.get("PIPELINE_STATE_DIR", DEFAULT_STATE_DIR)
     return Path(state_dir)
@@ -302,32 +320,25 @@ def _get_watermark_path(system: str, entity: str) -> Path:
 
 def get_watermark(system: str, entity: str) -> Optional[str]:
     """Return the last saved watermark value."""
-
     path = _get_watermark_path(system, entity)
-
     if not path.exists():
         logger.debug("No watermark found for %s.%s", system, entity)
         return None
 
-    try:
-        data = json.loads(path.read_text())
-        value = data.get("last_value")
-        logger.debug(
-            "Found watermark for %s.%s: %s (updated %s)",
-            system,
-            entity,
-            value,
-            data.get("updated_at", "unknown"),
-        )
-        return str(value) if value is not None else None
-    except (json.JSONDecodeError, KeyError) as exc:
-        logger.warning(
-            "Invalid watermark file for %s.%s: %s",
-            system,
-            entity,
-            exc,
-        )
+    data = _load_json_safe(path)
+    if not data:
+        logger.warning("Invalid watermark file for %s.%s", system, entity)
         return None
+
+    value = data.get("last_value")
+    logger.debug(
+        "Found watermark for %s.%s: %s (updated %s)",
+        system,
+        entity,
+        value,
+        data.get("updated_at", "unknown"),
+    )
+    return str(value) if value is not None else None
 
 
 def save_watermark(system: str, entity: str, value: str) -> None:
@@ -363,23 +374,19 @@ def delete_watermark(system: str, entity: str) -> bool:
 
 def list_watermarks() -> Dict[str, Dict[str, Any]]:
     """List all stored watermark entries."""
-
     state_dir = _get_state_dir()
-
     if not state_dir.exists():
         return {}
 
     watermarks: Dict[str, Dict[str, Any]] = {}
-
     for path in state_dir.glob("*_watermark.json"):
-        try:
-            data = json.loads(path.read_text())
+        data = _load_json_safe(path)
+        if data:
             system = data.get("system", "unknown")
             entity = data.get("entity", "unknown")
-            key = f"{system}.{entity}"
-            watermarks[key] = data
-        except (json.JSONDecodeError, KeyError) as exc:
-            logger.warning("Invalid watermark file %s: %s", path, exc)
+            watermarks[f"{system}.{entity}"] = data
+        else:
+            logger.warning("Invalid watermark file %s", path)
 
     return watermarks
 
@@ -403,30 +410,21 @@ def clear_all_watermarks() -> int:
 
 def get_watermark_age(system: str, entity: str) -> Optional[float]:
     """Return the age of the watermark in hours."""
-
     path = _get_watermark_path(system, entity)
-
     if not path.exists():
         return None
 
-    try:
-        data = json.loads(path.read_text())
-        updated_at = data.get("updated_at")
-        if not updated_at:
-            return None
+    data = _load_json_safe(path)
+    updated_at = data.get("updated_at")
+    if not updated_at:
+        return None
 
+    try:
         updated_dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
         now = datetime.now(timezone.utc)
-        delta = now - updated_dt
-
-        return delta.total_seconds() / 3600
-    except (json.JSONDecodeError, ValueError) as exc:
-        logger.warning(
-            "Could not calculate watermark age for %s.%s: %s",
-            system,
-            entity,
-            exc,
-        )
+        return (now - updated_dt).total_seconds() / 3600
+    except ValueError as exc:
+        logger.warning("Could not parse updated_at for %s.%s: %s", system, entity, exc)
         return None
 
 
@@ -452,23 +450,18 @@ def get_last_full_refresh(system: str, entity: str) -> Optional[datetime]:
         Datetime of last full refresh, or None if never run
     """
     path = _get_full_refresh_path(system, entity)
-
     if not path.exists():
         return None
 
-    try:
-        data = json.loads(path.read_text())
-        last_full = data.get("last_full_refresh")
-        if last_full:
-            return datetime.fromisoformat(last_full.replace("Z", "+00:00"))
+    data = _load_json_safe(path)
+    last_full = data.get("last_full_refresh")
+    if not last_full:
         return None
-    except (json.JSONDecodeError, ValueError) as exc:
-        logger.warning(
-            "Invalid full refresh file for %s.%s: %s",
-            system,
-            entity,
-            exc,
-        )
+
+    try:
+        return datetime.fromisoformat(last_full.replace("Z", "+00:00"))
+    except ValueError as exc:
+        logger.warning("Invalid full refresh timestamp for %s.%s: %s", system, entity, exc)
         return None
 
 
@@ -485,14 +478,9 @@ def save_full_refresh(system: str, entity: str) -> None:
     path = _get_full_refresh_path(system, entity)
     now = datetime.now(timezone.utc)
 
-    # Load existing data if present to preserve run count
-    run_count = 1
-    if path.exists():
-        try:
-            existing = json.loads(path.read_text())
-            run_count = existing.get("full_refresh_count", 0) + 1
-        except (json.JSONDecodeError, KeyError):
-            pass
+    # Load existing data to preserve run count
+    existing = _load_json_safe(path)
+    run_count = existing.get("full_refresh_count", 0) + 1
 
     data = {
         "system": system,

@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, List, Optional, Type, TypeVar
 
 if TYPE_CHECKING:
     from pipelines.lib.bronze import BronzeSource as BronzeSourceType
@@ -24,8 +24,41 @@ __all__ = [
     "validate_bronze_source",
     "validate_silver_entity",
     "validate_and_raise",
+    "validate_enum",
     "format_validation_report",
 ]
+
+# TypeVar for enum validation
+E = TypeVar("E", bound=Enum)
+
+
+def validate_enum(value: str, enum_class: Type[E], field_name: str) -> E:
+    """Validate and convert string to enum member.
+
+    Case-insensitive lookup that raises ValueError with helpful message
+    listing all valid options if the value is invalid.
+
+    Args:
+        value: String value to convert
+        enum_class: Enum class to validate against
+        field_name: Name of field for error messages
+
+    Returns:
+        The matching enum member
+
+    Raises:
+        ValueError: If value is not a valid member of the enum
+
+    Example:
+        >>> validate_enum("full_snapshot", LoadPattern, "load_pattern")
+        <LoadPattern.FULL_SNAPSHOT: 'full_snapshot'>
+    """
+    normalized = value.upper().replace("-", "_")
+    try:
+        return enum_class[normalized]
+    except KeyError:
+        valid = ", ".join(e.name.lower() for e in enum_class)
+        raise ValueError(f"Invalid {field_name} '{value}'. Must be one of: {valid}")
 
 
 class ValidationSeverity(Enum):
