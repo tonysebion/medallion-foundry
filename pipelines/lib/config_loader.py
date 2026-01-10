@@ -410,6 +410,18 @@ WATERMARK_SOURCE_MAP = _enum_to_map(WatermarkSource)
 LOAD_PATTERN_MAP = _enum_to_map(LoadPattern) | {"incremental_append": LoadPattern.INCREMENTAL_APPEND}
 HISTORY_MODE_MAP = _enum_to_map(HistoryMode) | {"scd1": HistoryMode.CURRENT_ONLY, "scd2": HistoryMode.FULL_HISTORY}
 
+# Pattern name aliases for validation (incremental_append is internal, exposed as "incremental")
+_LOAD_PATTERN_ALIASES = {"incremental_append": "incremental"}
+
+
+def _normalize_load_pattern_name(name: str) -> str:
+    """Normalize load pattern name for validation comparisons.
+
+    Maps internal enum values (e.g., 'incremental_append') to their canonical
+    names used in MODEL_SPECS validation (e.g., 'incremental').
+    """
+    return _LOAD_PATTERN_ALIASES.get(name.lower(), name.lower())
+
 
 def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
     """Deep merge two dictionaries, with override taking precedence.
@@ -702,10 +714,7 @@ def _validate_silver_model_config(
 
     # Bronze pattern validation using MODEL_SPECS
     if bronze is not None and model_spec and model_spec.valid_bronze_patterns:
-        bronze_pattern_name = bronze.load_pattern.value.lower()
-        if bronze_pattern_name == "incremental_append":
-            bronze_pattern_name = "incremental"
-
+        bronze_pattern_name = _normalize_load_pattern_name(bronze.load_pattern.value)
         if bronze_pattern_name not in model_spec.valid_bronze_patterns:
             valid_patterns = ", ".join(model_spec.valid_bronze_patterns)
             errors.append(
@@ -753,10 +762,7 @@ def _emit_silver_warnings(
 
     # Warning for inefficient Bronze pattern with Silver model
     if bronze is not None and model_spec and model_spec.warns_on_bronze_patterns:
-        bronze_pattern_name = bronze.load_pattern.value.lower()
-        if bronze_pattern_name == "incremental_append":
-            bronze_pattern_name = "incremental"
-
+        bronze_pattern_name = _normalize_load_pattern_name(bronze.load_pattern.value)
         if bronze_pattern_name in model_spec.warns_on_bronze_patterns:
             if bronze_pattern_name == "full_snapshot":
                 warnings.warn(

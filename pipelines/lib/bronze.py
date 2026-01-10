@@ -20,7 +20,7 @@ import pandas as pd
 
 from pipelines.lib.artifact_writer import write_artifacts
 from pipelines.lib.connections import get_connection
-from pipelines.lib.env import expand_env_vars, expand_options, utc_now_iso
+from pipelines.lib.env import expand_env_vars, expand_options, extract_nested_value, utc_now_iso
 from pipelines.lib.io import OutputMetadata, infer_column_types, maybe_dry_run, maybe_skip_if_exists
 from pipelines.lib.state import (
     WatermarkSource,
@@ -621,11 +621,10 @@ class BronzeSource:
         # Navigate to nested data if data_path specified
         data_path = self.options.get("data_path")
         if data_path:
-            for key in data_path.split("."):
-                if isinstance(data, dict) and key in data:
-                    data = data[key]
-                else:
-                    raise ValueError(f"Path '{data_path}' not found in JSON structure")
+            try:
+                data = extract_nested_value(data, data_path, raise_on_missing=True)
+            except KeyError:
+                raise ValueError(f"Path '{data_path}' not found in JSON structure")
 
         # Ensure we have a list of records
         if isinstance(data, dict):

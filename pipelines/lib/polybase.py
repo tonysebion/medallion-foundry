@@ -62,6 +62,42 @@ class PolyBaseConfig:
         return f"{prefix}{entity_name}_{suffix}_external"
 
 
+def _validate_column_references(
+    columns: List[Dict[str, Any]],
+    natural_keys: Optional[List[str]],
+    change_timestamp: Optional[str],
+    history_mode: str,
+    delete_mode: str,
+) -> List[str]:
+    """Validate that all columns referenced in DDL views exist in metadata.
+
+    Returns list of missing column descriptions (empty if all columns exist).
+    """
+    column_names = {col["name"] for col in columns}
+    missing = []
+
+    # Check natural keys
+    for key in (natural_keys or []):
+        if key not in column_names:
+            missing.append(f"natural_key '{key}'")
+
+    # Check change_timestamp
+    if change_timestamp and change_timestamp not in column_names:
+        missing.append(f"change_timestamp '{change_timestamp}'")
+
+    # Check SCD2 temporal columns
+    if history_mode == "full_history":
+        for col in ["effective_from", "effective_to", "is_current"]:
+            if col not in column_names:
+                missing.append(f"SCD2 column '{col}'")
+
+    # Check tombstone column
+    if delete_mode == "tombstone" and "_deleted" not in column_names:
+        missing.append("'_deleted' (tombstone mode)")
+
+    return missing
+
+
 def generate_external_table_ddl(
     table_name: str,
     columns: List[Dict[str, Any]],
@@ -219,6 +255,19 @@ def generate_polybase_setup(
         Complete SQL setup script
     """
     parts = []
+
+    # Validate that all referenced columns exist in metadata
+    missing_cols = _validate_column_references(
+        columns, natural_keys, change_timestamp, history_mode, delete_mode
+    )
+    if missing_cols:
+        missing_list = "\n".join(f"  - {col}" for col in missing_cols)
+        parts.append(f"""/*
+WARNING: The following columns are referenced in views but not found in metadata:
+{missing_list}
+Views referencing these columns may fail at runtime.
+*/
+""")
 
     # Header with credential setup instructions
     credential_setup = ""

@@ -16,7 +16,66 @@ from typing import Any, Dict, Optional, Union
 
 from dotenv import load_dotenv
 
-__all__ = ["expand_env_vars", "expand_options", "load_env_file", "parse_iso_datetime", "utc_now_iso"]
+__all__ = [
+    "expand_env_vars",
+    "expand_options",
+    "extract_nested_value",
+    "load_env_file",
+    "parse_iso_datetime",
+    "utc_now_iso",
+]
+
+
+def extract_nested_value(
+    data: Any, path: str, *, default: Any = None, raise_on_missing: bool = False
+) -> Any:
+    """Extract value from nested dict using dot-notation path.
+
+    Navigates through nested dictionaries using a dot-separated path string.
+    Handles list indexing with numeric path components.
+
+    Args:
+        data: Dict or nested structure to navigate
+        path: Dot-separated path like "data.customers.items" or "items.0.name"
+        default: Value to return if path not found (default: None)
+        raise_on_missing: If True, raise KeyError for missing paths
+
+    Returns:
+        Value at path, or default if not found
+
+    Raises:
+        KeyError: If raise_on_missing=True and path not found
+
+    Example:
+        >>> data = {"response": {"items": [{"id": 1}, {"id": 2}]}}
+        >>> extract_nested_value(data, "response.items")
+        [{'id': 1}, {'id': 2}]
+        >>> extract_nested_value(data, "response.items.0.id")
+        1
+        >>> extract_nested_value(data, "missing.path", default=[])
+        []
+    """
+    for key in path.split("."):
+        if isinstance(data, dict):
+            if key in data:
+                data = data[key]
+            elif raise_on_missing:
+                raise KeyError(f"Path '{path}' not found in structure")
+            else:
+                return default
+        elif isinstance(data, list) and key.isdigit():
+            idx = int(key)
+            if idx < len(data):
+                data = data[idx]
+            elif raise_on_missing:
+                raise KeyError(f"Path '{path}' not found in structure")
+            else:
+                return default
+        elif raise_on_missing:
+            raise KeyError(f"Path '{path}' not found in structure")
+        else:
+            return default
+    return data
 
 
 def parse_iso_datetime(value: str) -> datetime:

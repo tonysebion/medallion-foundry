@@ -42,7 +42,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from pipelines.lib.env import utc_now_iso
+from pipelines.lib.env import extract_nested_value, utc_now_iso
 from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
@@ -531,21 +531,11 @@ class CursorPaginationState(PaginationState):
         if not isinstance(data, dict):
             return None
 
-        obj: Any = data
-        for key in self.config.cursor_path.split("."):
-            if isinstance(obj, dict):
-                obj = obj.get(key)
-            else:
-                return None
-            if obj is None:
-                return None
+        obj = extract_nested_value(data, self.config.cursor_path)
+        if obj is None:
+            return None
 
-        if isinstance(obj, str):
-            return obj
-        elif obj is not None:
-            # Try to convert to string
-            return str(obj)
-        return None
+        return str(obj) if not isinstance(obj, str) else obj
 
 
 def build_pagination_state(
@@ -1101,12 +1091,10 @@ class ApiSource:
         """
         # Navigate to data using data_path
         if self.data_path:
-            for key in self.data_path.split("."):
-                if isinstance(data, dict):
-                    data = data.get(key, [])
-                else:
-                    logger.warning("Cannot navigate path '%s' in response", self.data_path)
-                    break
+            extracted = extract_nested_value(data, self.data_path, default=[])
+            if extracted == [] and isinstance(data, dict):
+                logger.warning("Cannot navigate path '%s' in response", self.data_path)
+            data = extracted
 
         # Convert to list of records
         if isinstance(data, list):
