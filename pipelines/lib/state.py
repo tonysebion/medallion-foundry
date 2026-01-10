@@ -11,7 +11,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
-from pipelines.lib.env import utc_now_iso
+from pipelines.lib.env import parse_iso_datetime, utc_now_iso
 
 if TYPE_CHECKING:
     import ibis
@@ -123,7 +123,7 @@ def detect_late_data(
     if max_lateness is not None:
         try:
             # Parse watermark as datetime to apply max_lateness
-            watermark_dt = datetime.fromisoformat(watermark.replace('Z', '+00:00'))
+            watermark_dt = parse_iso_datetime(watermark)
             cutoff_dt = watermark_dt - max_lateness
             cutoff = cutoff_dt.isoformat()
             logger.debug(
@@ -200,7 +200,7 @@ def filter_late_data(
     # Calculate the effective cutoff for filtering
     if config.max_lateness is not None:
         try:
-            watermark_dt = datetime.fromisoformat(watermark.replace('Z', '+00:00'))
+            watermark_dt = parse_iso_datetime(watermark)
             cutoff_dt = watermark_dt - config.max_lateness
             cutoff = cutoff_dt.isoformat()
         except (ValueError, TypeError):
@@ -420,7 +420,7 @@ def get_watermark_age(system: str, entity: str) -> Optional[float]:
         return None
 
     try:
-        updated_dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+        updated_dt = parse_iso_datetime(updated_at)
         now = datetime.now(timezone.utc)
         return (now - updated_dt).total_seconds() / 3600
     except ValueError as exc:
@@ -459,7 +459,7 @@ def get_last_full_refresh(system: str, entity: str) -> Optional[datetime]:
         return None
 
     try:
-        return datetime.fromisoformat(last_full.replace("Z", "+00:00"))
+        return parse_iso_datetime(last_full)
     except ValueError as exc:
         logger.warning("Invalid full refresh timestamp for %s.%s: %s", system, entity, exc)
         return None

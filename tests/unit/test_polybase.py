@@ -938,7 +938,7 @@ class TestDomainSubjectNaming:
         )
 
     def test_from_metadata_dict_uses_domain_subject(self, config):
-        """generate_from_metadata_dict uses domain/subject for table naming."""
+        """generate_from_metadata_dict uses domain as schema and subject as table name."""
         metadata = {
             "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
             "entity_kind": "state",
@@ -948,8 +948,8 @@ class TestDomainSubjectNaming:
             "subject": "orders",
         }
         ddl = generate_from_metadata_dict(metadata, config)  # No entity_name!
-        # Should derive entity_name as "sales_orders"
-        assert "sales_orders_state_external" in ddl
+        # Should use domain as schema and subject as table base name
+        assert "[sales].[orders_state_external]" in ddl
         assert "CREATE EXTERNAL TABLE" in ddl
 
     def test_from_metadata_dict_uses_subject_only(self, config):
@@ -964,7 +964,7 @@ class TestDomainSubjectNaming:
         assert "customers_state_external" in ddl
 
     def test_from_metadata_dict_explicit_entity_name_overrides(self, config):
-        """Explicit entity_name takes precedence over domain/subject."""
+        """Explicit entity_name takes precedence over domain/subject for table naming."""
         metadata = {
             "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
             "entity_kind": "state",
@@ -973,9 +973,11 @@ class TestDomainSubjectNaming:
             "subject": "orders",
         }
         ddl = generate_from_metadata_dict(metadata, config, entity_name="my_custom_name")
-        # Should use explicit entity_name, not domain/subject
-        assert "my_custom_name_state_external" in ddl
-        assert "sales_orders_state_external" not in ddl
+        # When domain is provided, it's still used as schema
+        # But entity_name affects the internal name only (shown in header)
+        # Table name uses subject as base since domain is present
+        assert "[sales].[orders_state_external]" in ddl
+        assert "PolyBase Setup for: my_custom_name" in ddl
 
     def test_from_metadata_dict_requires_name_when_no_domain_subject(self, config):
         """generate_from_metadata_dict raises when no entity_name and no domain/subject."""
@@ -1081,8 +1083,8 @@ class TestLocationPathConstruction:
         )
         # Location should be Hive-style, not entity_name/
         assert "LOCATION = 'domain=sales/subject=orders/'" in ddl
-        # Table name should still use entity_name
-        assert "sales_orders_state_external" in ddl
+        # Table name uses domain as schema and subject as base
+        assert "[sales].[orders_state_external]" in ddl
 
     def test_location_with_env_prefix(self, config):
         """Location should include env_prefix when provided."""
@@ -1098,8 +1100,8 @@ class TestLocationPathConstruction:
         )
         # Location should include env_prefix
         assert "LOCATION = 'production/domain=sales/subject=orders/'" in ddl
-        # Table name should NOT include env_prefix
-        assert "sales_orders_state_external" in ddl
+        # Table name uses domain as schema and subject as base
+        assert "[sales].[orders_state_external]" in ddl
         assert "production_sales" not in ddl
 
     def test_location_fallback_without_domain_subject(self, config):
@@ -1126,8 +1128,8 @@ class TestLocationPathConstruction:
         ddl = generate_from_metadata_dict(metadata, config)
         # Should use Hive-style location
         assert "LOCATION = 'domain=retail/subject=products/'" in ddl
-        # Table name derived from domain_subject
-        assert "retail_products_state_external" in ddl
+        # Table name uses domain as schema and subject as base
+        assert "[retail].[products_state_external]" in ddl
 
     def test_from_metadata_dict_with_env_prefix(self, config):
         """generate_from_metadata_dict should accept env_prefix parameter."""
@@ -1141,8 +1143,8 @@ class TestLocationPathConstruction:
         ddl = generate_from_metadata_dict(metadata, config, env_prefix="staging")
         # Should include env_prefix in location
         assert "LOCATION = 'staging/domain=retail/subject=products/'" in ddl
-        # Table name should NOT include env_prefix
-        assert "retail_products_state_external" in ddl
+        # Table name uses domain as schema and subject as base
+        assert "[retail].[products_state_external]" in ddl
         assert "staging_retail" not in ddl
 
     def test_write_polybase_ddl_s3_with_env_prefix(self, config):
@@ -1176,3 +1178,276 @@ class TestLocationPathConstruction:
         ddl_content = mock_storage.write_text.call_args[0][1]
         # Check env_prefix is in location
         assert "production/domain=sales/subject=orders/" in ddl_content
+
+
+# ============================================
+# dt Partition Column Tests
+# ============================================
+
+
+class TestDtPartitionColumn:
+    """Tests for dt partition column in external tables (Hive partition pruning)."""
+
+    @pytest.fixture
+    def config(self):
+        return PolyBaseConfig(
+            data_source_name="silver",
+            data_source_location="s3://silver/",
+        )
+
+    @pytest.fixture
+    def columns(self):
+        return [
+            {"name": "id", "sql_type": "BIGINT", "nullable": False},
+            {"name": "name", "sql_type": "NVARCHAR(255)", "nullable": True},
+        ]
+
+    def test_dt_column_added_when_enabled(self, config, columns):
+        """External table includes dt DATE column when include_dt_partition=True."""
+        ddl = generate_external_table_ddl(
+            "orders_external",
+            columns,
+            "orders/",
+            config,
+            include_dt_partition=True,
+        )
+        assert "[dt] DATE NULL" in ddl
+        assert "Hive partition column" in ddl
+
+    def test_dt_column_omitted_when_disabled(self, config, columns):
+        """External table excludes dt column when include_dt_partition=False."""
+        ddl = generate_external_table_ddl(
+            "orders_external",
+            columns,
+            "orders/",
+            config,
+            include_dt_partition=False,
+        )
+        assert "[dt]" not in ddl
+
+    def test_polybase_setup_includes_dt_by_default(self, config, columns):
+        """generate_polybase_setup includes dt column by default."""
+        ddl = generate_polybase_setup(
+            "orders",
+            columns,
+            "state",
+            ["id"],
+            config,
+        )
+        # Default is include_dt_partition=True
+        assert "[dt] DATE NULL" in ddl
+
+    def test_polybase_setup_excludes_dt_when_disabled(self, config, columns):
+        """generate_polybase_setup excludes dt when include_dt_partition=False."""
+        ddl = generate_polybase_setup(
+            "orders",
+            columns,
+            "state",
+            ["id"],
+            config,
+            include_dt_partition=False,
+        )
+        assert "[dt]" not in ddl
+
+
+# ============================================
+# Date-Filtered Views Tests
+# ============================================
+
+
+class TestDateFilteredViews:
+    """Tests for date-filtered views using dt partition column."""
+
+    @pytest.fixture
+    def config(self):
+        return PolyBaseConfig(
+            data_source_name="silver",
+            data_source_location="s3://silver/",
+        )
+
+    def test_state_views_include_date_range_function(self, config):
+        """State views include fn_*_for_dates function when include_dt_views=True."""
+        ddl = generate_state_views(
+            "orders_state_external",
+            ["order_id"],
+            config,
+            history_mode="current_only",
+            include_dt_views=True,
+        )
+        assert "fn_orders_state_for_dates" in ddl
+        assert "@start_date DATE" in ddl
+        assert "@end_date DATE" in ddl
+        assert "[dt] >= @start_date" in ddl
+        assert "[dt] <= @end_date" in ddl
+
+    def test_state_views_include_single_date_function(self, config):
+        """State views include fn_*_for_date function when include_dt_views=True."""
+        ddl = generate_state_views(
+            "orders_state_external",
+            ["order_id"],
+            config,
+            history_mode="current_only",
+            include_dt_views=True,
+        )
+        assert "fn_orders_state_for_date" in ddl
+        assert "@target_date DATE" in ddl
+        assert "[dt] = @target_date" in ddl
+
+    def test_state_views_exclude_date_views_when_disabled(self, config):
+        """State views exclude date functions when include_dt_views=False."""
+        ddl = generate_state_views(
+            "orders_state_external",
+            ["order_id"],
+            config,
+            history_mode="current_only",
+            include_dt_views=False,
+        )
+        assert "fn_orders_state_for_dates" not in ddl
+        assert "fn_orders_state_for_date" not in ddl
+
+    def test_state_views_date_functions_respect_tombstone_filter(self, config):
+        """Date functions include tombstone filter when delete_mode=tombstone."""
+        ddl = generate_state_views(
+            "orders_state_external",
+            ["order_id"],
+            config,
+            history_mode="current_only",
+            delete_mode="tombstone",
+            include_dt_views=True,
+        )
+        # Date functions should include deleted filter
+        assert "fn_orders_state_for_dates" in ddl
+        assert "_deleted = 0 OR _deleted IS NULL" in ddl
+
+    def test_event_views_use_dt_partition_by_default(self, config):
+        """Event views use dt column for partition-aware queries by default."""
+        ddl = generate_event_views(
+            "audit_events_external",
+            ["event_id"],
+            config,
+            use_dt_partition=True,
+        )
+        assert "[dt] >= @start_date" in ddl
+        assert "[dt] <= @end_date" in ddl
+        assert "[dt] = @target_date" in ddl
+
+    def test_event_views_use_custom_partition_when_dt_disabled(self, config):
+        """Event views use custom partition column when use_dt_partition=False."""
+        ddl = generate_event_views(
+            "audit_events_external",
+            ["event_id"],
+            config,
+            partition_columns=["event_date"],
+            use_dt_partition=False,
+        )
+        assert "[event_date] >= @start_date" in ddl
+        assert "[event_date] <= @end_date" in ddl
+        assert "[dt]" not in ddl
+
+
+# ============================================
+# Domain-Based Schema Naming Tests
+# ============================================
+
+
+class TestDomainBasedSchemaNaming:
+    """Tests for using domain as schema name and subject as table name."""
+
+    @pytest.fixture
+    def config(self):
+        return PolyBaseConfig(
+            data_source_name="silver",
+            data_source_location="s3://silver/",
+        )
+
+    @pytest.fixture
+    def columns(self):
+        return [
+            {"name": "id", "sql_type": "BIGINT", "nullable": False},
+            {"name": "name", "sql_type": "NVARCHAR(255)", "nullable": True},
+        ]
+
+    def test_uses_domain_as_schema(self, config, columns):
+        """External table uses domain as schema name when provided."""
+        ddl = generate_polybase_setup(
+            "sales_orders",
+            columns,
+            "state",
+            ["id"],
+            config,
+            domain="sales",
+            subject="orders",
+        )
+        # Should use sales as schema, not dbo
+        assert "[sales].[orders_state_external]" in ddl
+        # Views should also be in sales schema
+        assert "[sales].[vw_orders_state_current]" in ddl
+
+    def test_creates_schema_ddl_when_domain_provided(self, config, columns):
+        """Generates CREATE SCHEMA statement when domain is provided."""
+        ddl = generate_polybase_setup(
+            "sales_orders",
+            columns,
+            "state",
+            ["id"],
+            config,
+            domain="sales",
+            subject="orders",
+        )
+        assert "CREATE SCHEMA [sales]" in ddl
+        assert "IF NOT EXISTS" in ddl
+
+    def test_uses_dbo_schema_without_domain(self, config, columns):
+        """Falls back to dbo schema when domain is not provided."""
+        ddl = generate_polybase_setup(
+            "orders",
+            columns,
+            "state",
+            ["id"],
+            config,
+            # No domain specified
+        )
+        assert "[dbo].[orders_state_external]" in ddl
+        assert "CREATE SCHEMA" not in ddl
+
+    def test_date_functions_use_domain_schema(self, config, columns):
+        """Date-filtered functions use domain as schema."""
+        ddl = generate_polybase_setup(
+            "retail_products",
+            columns,
+            "state",
+            ["id"],
+            config,
+            domain="retail",
+            subject="products",
+            include_dt_partition=True,
+        )
+        assert "[retail].[fn_products_state_for_dates]" in ddl
+        assert "[retail].[fn_products_state_for_date]" in ddl
+
+    def test_event_views_use_domain_schema(self, config, columns):
+        """Event views use domain as schema."""
+        ddl = generate_polybase_setup(
+            "audit_events",
+            columns,
+            "event",
+            ["id"],
+            config,
+            domain="audit",
+            subject="events",
+        )
+        assert "[audit].[events_events_external]" in ddl
+        assert "[audit].[fn_events_events_for_dates]" in ddl
+
+    def test_header_shows_schema_info(self, config, columns):
+        """DDL header includes schema information."""
+        ddl = generate_polybase_setup(
+            "sales_orders",
+            columns,
+            "state",
+            ["id"],
+            config,
+            domain="sales",
+            subject="orders",
+        )
+        assert "Schema: sales (domain-based)" in ddl

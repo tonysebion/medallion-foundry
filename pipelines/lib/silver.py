@@ -859,8 +859,8 @@ class SilverEntity:
         # Determine subject name for filename
         subject_name = self.subject if self.subject else self._infer_subject_name(target)
 
-        # Infer column types for metadata
-        columns = infer_column_types(t, include_sql_types=False)
+        # Infer column types for metadata (include SQL types for PolyBase DDL)
+        columns = infer_column_types(t, include_sql_types=True)
 
         # Silver-specific metadata
         silver_extra = {

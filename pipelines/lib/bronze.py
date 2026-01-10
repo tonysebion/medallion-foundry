@@ -858,8 +858,8 @@ class BronzeSource:
         last_watermark: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Write to Bronze target with optional checksums and metadata."""
-        # Infer column types for metadata
-        columns = infer_column_types(t, include_sql_types=False)
+        # Infer column types for metadata (include SQL types for PolyBase DDL)
+        columns = infer_column_types(t, include_sql_types=True)
 
         # Bronze-specific metadata fields
         bronze_extra = {

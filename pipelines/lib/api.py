@@ -61,7 +61,7 @@ from tenacity import (
 
 from pipelines.lib._path_utils import path_has_data, resolve_target_path
 from pipelines.lib.artifact_writer import write_artifacts
-from pipelines.lib.env import expand_env_vars, expand_options
+from pipelines.lib.env import expand_env_vars, expand_options, parse_iso_datetime
 from pipelines.lib.io import OutputMetadata, infer_column_types, maybe_dry_run, maybe_skip_if_exists
 from pipelines.lib.state import get_watermark, save_watermark
 
@@ -1130,7 +1130,7 @@ class ApiSource:
             return value
         # Try parsing string as datetime
         try:
-            return datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+            return parse_iso_datetime(value)
         except ValueError:
             try:
                 return datetime.strptime(str(value)[:10], '%Y-%m-%d')

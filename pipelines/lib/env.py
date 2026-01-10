@@ -16,7 +16,28 @@ from typing import Any, Dict, Optional, Union
 
 from dotenv import load_dotenv
 
-__all__ = ["expand_env_vars", "expand_options", "load_env_file", "utc_now_iso"]
+__all__ = ["expand_env_vars", "expand_options", "load_env_file", "parse_iso_datetime", "utc_now_iso"]
+
+
+def parse_iso_datetime(value: str) -> datetime:
+    """Parse ISO format datetime string, handling 'Z' timezone marker.
+
+    Converts 'Z' suffix to '+00:00' for compatibility with Python's
+    datetime.fromisoformat() which doesn't handle 'Z' directly.
+
+    Args:
+        value: ISO format datetime string (may end with 'Z' or '+00:00')
+
+    Returns:
+        Timezone-aware datetime object
+
+    Example:
+        >>> parse_iso_datetime("2025-01-15T10:30:00Z")
+        datetime.datetime(2025, 1, 15, 10, 30, tzinfo=datetime.timezone.utc)
+        >>> parse_iso_datetime("2025-01-15T10:30:00+00:00")
+        datetime.datetime(2025, 1, 15, 10, 30, tzinfo=datetime.timezone.utc)
+    """
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
 
 
 def utc_now_iso() -> str:

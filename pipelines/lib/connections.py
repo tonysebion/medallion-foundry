@@ -21,7 +21,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["close_all_connections", "get_connection"]
+__all__ = [
+    "close_all_connections",
+    "close_connection",
+    "get_connection",
+    "get_connection_count",
+    "list_connections",
+]
 
 
 def _expand_credentials(options: Dict[str, Any]) -> Dict[str, str]:
