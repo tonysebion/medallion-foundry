@@ -1,0 +1,217 @@
+# yaml-language-server: $schema=../schema/pipeline.schema.json
+# ============================================================================
+# PIPELINE: Multi-Record Fixed-Width File to S3 (Parent-Child Pattern)
+# ============================================================================
+#
+# WHAT THIS DOES:
+#   1. Reads a fixed-width text file with MULTIPLE record types (ABABAB pattern)
+#   2. Parses parent (A) and child (B) records with different column layouts
+#   3. Flattens parent-child relationships into a single output table
+#   4. Writes to S3 bronze and silver buckets
+#
+# WHAT IS A MULTI-RECORD FIXED-WIDTH FILE?
+#   A file where different line types have different layouts. Common patterns:
+#     - ABABAB: Alternating parent-child records
+#     - ABBAB:  One parent followed by multiple children
+#     - HAD:    Header, multiple data lines, trailer
+#
+#   Example file (parent=H for Header, child=D for Detail):
+#   ============================================================================
+#   HORD0001   CUST1234   2025-01-15
+#   DITEM001   Widget A        10     25.99
+#   DITEM002   Widget B         5     15.50
+#   HORD0002   CUST5678   2025-01-16
+#   DITEM003   Gadget X         2     99.99
+#   ============================================================================
+#
+#   The first character (H or D) identifies the record type.
+#   Parent (H) and child (D) lines have completely different column layouts.
+#
+# OUTPUT (Flattened - each child row includes its parent's data):
+#   | order_id | customer | order_date | item_id | product  | qty | price |
+#   | ORD0001  | CUST1234 | 2025-01-15 | ITEM001 | Widget A | 10  | 25.99 |
+#   | ORD0001  | CUST1234 | 2025-01-15 | ITEM002 | Widget B | 5   | 15.50 |
+#   | ORD0002  | CUST5678 | 2025-01-16 | ITEM003 | Gadget X | 2   | 99.99 |
+#
+# ============================================================================
+# BEFORE YOU RUN - Set these 3 environment variables:
+# ============================================================================
+#
+#   Windows (PowerShell):
+#     $env:S3_ENDPOINT_URL = "https://your-minio-server:9000"
+#     $env:AWS_ACCESS_KEY_ID = "your-access-key"
+#     $env:AWS_SECRET_ACCESS_KEY = "your-secret-key"
+#
+#   Linux/Mac:
+#     export S3_ENDPOINT_URL=https://your-minio-server:9000
+#     export AWS_ACCESS_KEY_ID=your-access-key
+#     export AWS_SECRET_ACCESS_KEY=your-secret-key
+#
+# ============================================================================
+# TO RUN:
+# ============================================================================
+#
+#   python -m pipelines ./pipelines/examples/work2.yaml --date 2025-01-15
+#
+#   Options:
+#     --dry-run    Validate configuration without writing data
+#     --check      Pre-flight check (verify source exists, S3 is reachable)
+#     --explain    Show what the pipeline will do without running it
+#
+# ============================================================================
+
+name: multi_record_fixed_width_to_s3
+description: Load multi-record fixed-width files (ABABAB pattern) to S3-compatible storage
+
+# ============================================================================
+# BRONZE LAYER - Raw Data Extraction
+# ============================================================================
+# For multi-record files, Bronze parses each record type separately
+# and flattens parent-child relationships.
+
+bronze:
+  system: mainframe
+  entity: order_details
+
+  source_type: file_fixed_width
+  source_path: "./pipelines/examples/data/{entity}_{run_date}.txt"
+  target_path: "s3://bronze-bucket/system={system}/entity={entity}/dt={run_date}/"
+  load_pattern: full_snapshot
+
+  # ============================================================================
+  # MULTI-RECORD FIXED-WIDTH CONFIGURATION
+  # ============================================================================
+  # For files with multiple record types (ABABAB pattern), you need:
+  #   1. record_type_position: Where to find the type indicator
+  #   2. record_types: Definition for each record type
+
+  options:
+    # RECORD_TYPE_POSITION: Character positions that identify the record type
+    #   [start, end] - 0-indexed, like Python slicing
+    #
+    #   Example: If the first character is the type indicator:
+    #     "H" = Header/Parent record
+    #     "D" = Detail/Child record
+    #   Then: record_type_position: [0, 1]
+    #
+    #   Example: If characters 5-7 contain a 2-char type code:
+    #     "HD" = Header
+    #     "DT" = Detail
+    #   Then: record_type_position: [5, 7]
+    record_type_position: [0, 1]
+
+    # RECORD_TYPES: Define each record type's layout
+    #   Each record type needs:
+    #     - type: The value at record_type_position (e.g., "H", "D")
+    #     - role: How this record relates to others
+    #         "parent" - Master record (like an order header)
+    #         "child"  - Detail record (like order line items)
+    #         "skip"   - Ignore this record type (like trailers)
+    #     - columns: Column names for this record type
+    #     - widths: Character widths for each column
+    #
+    # IMPORTANT: Widths are measured AFTER the record type indicator!
+    #   If record_type_position is [0, 1], widths start at position 1.
+    record_types:
+      # PARENT RECORD (H = Header/Order)
+      # Example line: "HORD0001   CUST1234   2025-01-15"
+      #               H|--10----|---10-----|---10-----|
+      #               ^ type indicator (excluded from widths)
+      - type: "H"
+        role: parent
+        columns:
+          - order_id       # Characters 1-10 (10 chars)
+          - customer_id    # Characters 11-20 (10 chars)
+          - order_date     # Characters 21-30 (10 chars)
+        widths: [10, 10, 10]
+
+      # CHILD RECORD (D = Detail/Line Item)
+      # Example line: "DITEM001   Widget A        10     25.99"
+      #               D|--10----|------15-------|--6--|--8---|
+      #               ^ type indicator (excluded from widths)
+      - type: "D"
+        role: child
+        columns:
+          - item_id        # Characters 1-10 (10 chars)
+          - product_name   # Characters 11-25 (15 chars)
+          - quantity       # Characters 26-31 (6 chars)
+          - unit_price     # Characters 32-39 (8 chars)
+        widths: [10, 15, 6, 8]
+
+      # OPTIONAL: Skip trailer records
+      # - type: "T"
+      #   role: skip
+
+    # OUTPUT_MODE: How to combine parent and child records
+    #   "flatten"     - Each child row includes parent columns (DEFAULT, most useful)
+    #   "parent_only" - Output only parent records
+    #   "child_only"  - Output only child records (no parent context)
+    output_mode: flatten
+
+    # S3 CREDENTIALS
+    key: ${AWS_ACCESS_KEY_ID}
+    secret: ${AWS_SECRET_ACCESS_KEY}
+
+  # ============================================================================
+  # S3-COMPATIBLE STORAGE CONFIGURATION
+  # ============================================================================
+
+  s3_endpoint_url: ${S3_ENDPOINT_URL}
+  s3_signature_version: s3v4
+  s3_addressing_style: path
+  s3_verify_ssl: false
+
+# ============================================================================
+# SILVER LAYER - Data Curation
+# ============================================================================
+# After flattening, the Silver layer has columns from BOTH parent and child.
+#
+# Using periodic_snapshot because:
+#   - Full snapshots from Bronze replace all data each run
+#   - No deduplication needed (source handles that)
+#   - No change history tracking required
+#   - Simplest model - just pass through the data
+
+silver:
+  # DOMAIN: Business domain this data belongs to
+  domain: operations
+
+  # SUBJECT: Subject area within the domain
+  subject: order_details
+
+  # MODEL: periodic_snapshot - Simple replacement, no deduplication
+  #   Other options:
+  #   - full_merge_dedupe: Deduplicate by natural_keys (SCD Type 1)
+  #   - scd_type_2: Track full history with effective dates
+  #   - event_log: Immutable append-only stream
+  model: periodic_snapshot
+
+  source_path: "s3://bronze-bucket/system=mainframe/entity=order_details/dt={run_date}/"
+  target_path: "s3://silver-bucket/domain=operations/subject=order_details/"
+
+  validate_source: skip
+
+  # S3 CONFIGURATION
+  s3_endpoint_url: ${S3_ENDPOINT_URL}
+  s3_signature_version: s3v4
+  s3_addressing_style: path
+  s3_verify_ssl: false
+
+# ============================================================================
+# SAMPLE DATA FILE FORMAT
+# ============================================================================
+# Create a test file at: ./pipelines/examples/data/order_details_2025-01-15.txt
+#
+# HORD0001   CUST1234   2025-01-15
+# DITEM001   Widget A        10     25.99
+# DITEM002   Widget B         5     15.50
+# HORD0002   CUST5678   2025-01-16
+# DITEM003   Gadget X         2     99.99
+# DITEM004   Gadget Y         1    149.00
+#
+# This will produce 4 flattened rows:
+# | order_id | customer_id | order_date | item_id | product_name | quantity | unit_price |
+# | ORD0001  | CUST1234    | 2025-01-15 | ITEM001 | Widget A     | 10       | 25.99      |
+# | ORD0001  | CUST1234    | 2025-01-15 | ITEM002 | Widget B     | 5        | 15.50      |
+# | ORD0002  | CUST5678    | 2025-01-16 | ITEM003 | Gadget X     | 2        | 99.99      |
+# | ORD0002  | CUST5678    | 2025-01-16 | ITEM004 | Gadget Y     | 1        | 149.00     |

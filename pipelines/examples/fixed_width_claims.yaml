@@ -1,0 +1,64 @@
+# yaml-language-server: $schema=../schema/pipeline.schema.json
+#
+# Example Pipeline: Fixed-Width Claims File
+# ==========================================
+# Demonstrates fixed-width file parsing for legacy/mainframe data with:
+# - Column positions defined by character widths
+# - Headerless file processing
+# - Simple fixed-width format (no parent-child records)
+#
+# Fixed-width files are common when:
+# - Processing mainframe data extracts
+# - Reading bank statement files
+# - Ingesting legacy system exports
+# - Handling EDI or regulatory report formats
+#
+# File Format (claims_2025-01-15.dat):
+#   Positions: [0-10] claim_id, [10-20] patient_id, [20-30] amount, [30-40] service_date, [40-80] description
+#   Total line width: 80 characters
+#
+# Setup:
+#   Sample data is provided in sample_data/claims_2025-01-15.dat
+#
+# Run:
+#   python -m pipelines ./pipelines/examples/fixed_width_claims.yaml --date 2025-01-15
+#
+# Explain (see execution plan):
+#   python -m pipelines ./pipelines/examples/fixed_width_claims.yaml --date 2025-01-15 --explain
+#
+# Output:
+#   bronze/system=claims/entity=claims_raw/dt=2025-01-15/
+#   silver/domain=healthcare/subject=claims/dt=2025-01-15/
+
+name: fixed_width_claims
+description: Parse fixed-width claims file from legacy claims system
+
+bronze:
+  system: claims
+  entity: claims_raw
+  source_type: file_fixed_width
+  source_path: "./pipelines/examples/sample_data/claims_{run_date}.dat"
+
+  options:
+    # Column names (file has no header)
+    columns:
+      - claim_id
+      - patient_id
+      - amount
+      - service_date
+      - description
+
+    # Column widths in characters
+    # claim_id(10) + patient_id(10) + amount(10) + service_date(10) + description(40) = 80 chars
+    widths: [10, 10, 10, 10, 40]
+
+silver:
+  domain: healthcare
+  subject: claims
+  model: full_merge_dedupe  # SCD Type 1 - keep latest version
+  natural_keys: [claim_id]
+  change_timestamp: service_date
+  attributes:
+    - patient_id
+    - amount
+    - description

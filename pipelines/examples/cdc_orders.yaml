@@ -1,0 +1,70 @@
+# yaml-language-server: $schema=../schema/pipeline.schema.json
+#
+# Example Pipeline: CDC Orders Processing
+# =======================================
+# Demonstrates Change Data Capture (CDC) processing with:
+# - CDC load pattern in Bronze (captures I/U/D operations)
+# - Tombstone delete handling in Silver (soft deletes with _deleted flag)
+# - SCD Type 1 (current state only)
+#
+# CDC data includes operation codes:
+#   I = Insert (new record)
+#   U = Update (modified record)
+#   D = Delete (removed record)
+#
+# This pattern is common when:
+# - Extracting from database transaction logs
+# - Processing Debezium/Kafka CDC streams
+# - Receiving change feeds from source systems
+#
+# Setup:
+#   Sample data is provided in sample_data/orders_cdc_2025-01-15.csv
+#
+# Run:
+#   python -m pipelines ./pipelines/examples/cdc_orders.yaml --date 2025-01-15
+#
+# Explain (see execution plan):
+#   python -m pipelines ./pipelines/examples/cdc_orders.yaml --date 2025-01-15 --explain
+#
+# Output:
+#   bronze/system=sales/entity=orders_cdc/dt=2025-01-15/
+#   silver/domain=sales/subject=orders/dt=2025-01-15/
+#
+# Expected Silver Result:
+#   After processing the CDC stream, Silver will contain:
+#   - ORD001: confirmed (updated from pending)
+#   - ORD002: _deleted=true (soft deleted)
+#   - ORD003: shipped (updated from pending)
+
+name: cdc_orders
+description: Process CDC stream from orders with soft deletes (tombstone mode)
+
+bronze:
+  system: sales
+  entity: orders_cdc
+  source_type: file_csv
+  source_path: "./pipelines/examples/sample_data/orders_cdc_{run_date}.csv"
+  load_pattern: cdc
+  cdc_options:
+    operation_column: op
+    insert_codes: ["I"]
+    update_codes: ["U"]
+    delete_codes: ["D"]
+
+silver:
+  domain: sales
+  subject: orders
+  # cdc_current_tombstone: CDC -> SCD1 with soft deletes (_deleted flag)
+  # Other CDC models available:
+  #   - cdc_current: ignores deletes
+  #   - cdc_current_hard_delete: removes deleted records
+  #   - cdc_history: full SCD2 history, ignores deletes
+  #   - cdc_history_tombstone: full SCD2 with soft deletes
+  #   - cdc_history_hard_delete: full SCD2, removes deleted records
+  model: cdc_current_tombstone
+  natural_keys: [order_id]
+  change_timestamp: updated_at
+  attributes:
+    - customer_id
+    - order_total
+    - status

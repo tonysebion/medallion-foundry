@@ -1,0 +1,123 @@
+# yaml-language-server: $schema=../schema/pipeline.schema.json
+#
+# TEMPLATE: REST API Extraction
+# =============================
+# Use this for extracting data from REST APIs:
+# - SaaS applications (Salesforce, HubSpot, Zendesk, etc.)
+# - Internal APIs
+# - Public data APIs
+#
+# Supports:
+# - Multiple authentication types (bearer, api_key, basic)
+# - Pagination strategies (offset, page, cursor)
+# - Rate limiting
+# - Incremental loads with watermarks
+#
+# To run:
+#   python -m pipelines ./your_pipeline.yaml --date 2025-01-15
+#
+# To validate:
+#   python -m pipelines ./your_pipeline.yaml --date 2025-01-15 --dry-run
+
+name: your_api_pipeline
+description: Extract data from REST API
+
+bronze:
+  system: your_system           # e.g., "salesforce", "hubspot", "internal_api"
+  entity: your_entity           # e.g., "contacts", "deals", "events"
+  source_type: api_rest
+
+  # API endpoint
+  base_url: https://api.example.com
+  endpoint: /v1/your_resource
+
+  # ========================================
+  # AUTHENTICATION (choose one)
+  # ========================================
+
+  # Option 1: Bearer token
+  auth:
+    auth_type: bearer
+    token: ${API_TOKEN}           # Environment variable
+
+  # Option 2: API key
+  # auth:
+  #   auth_type: api_key
+  #   api_key_header: X-API-Key   # Header name (default: X-API-Key)
+  #   api_key: ${API_KEY}
+
+  # Option 3: Basic auth
+  # auth:
+  #   auth_type: basic
+  #   username: ${API_USERNAME}
+  #   password: ${API_PASSWORD}
+
+  # ========================================
+  # PAGINATION (choose one, or omit for single request)
+  # ========================================
+
+  # Option 1: Offset-based pagination
+  # pagination:
+  #   strategy: offset
+  #   page_size: 100
+  #   offset_param: offset
+  #   limit_param: limit
+
+  # Option 2: Page-based pagination
+  pagination:
+    strategy: page
+    page_size: 100
+    page_param: page
+    page_size_param: per_page
+
+  # Option 3: Cursor-based pagination
+  # pagination:
+  #   strategy: cursor
+  #   cursor_param: cursor
+  #   cursor_path: meta.next_cursor  # Path in JSON response
+
+  # ========================================
+  # OPTIONAL SETTINGS
+  # ========================================
+
+  # Navigate nested JSON response (e.g., {"data": {"items": [...]}})
+  # data_path: data.items
+
+  # Rate limiting (requests per second)
+  requests_per_second: 10.0
+
+  # Request timeout in seconds
+  timeout: 30.0
+
+  # Extra headers
+  # headers:
+  #   Accept: application/json
+  #   Custom-Header: value
+
+  # ========================================
+  # INCREMENTAL LOADS (optional)
+  # ========================================
+
+  # For incremental loads, specify watermark
+  # load_pattern: incremental
+  # watermark_column: updated_at       # Column to track
+  # watermark_param: since             # Query param to send watermark
+
+  # ========================================
+  # STORAGE OUTPUT
+  # ========================================
+  # target_path auto-generates: ./bronze/system=your_system/entity=your_entity/dt={run_date}/
+  # For S3: target_path: "s3://bucket/bronze/your_system/your_entity/dt={run_date}/"
+  # For ADLS: target_path: "abfss://container@account.dfs.core.windows.net/bronze/your_system/your_entity/"
+
+silver:
+  domain: your_domain             # Business domain (e.g., crm, marketing)
+  subject: your_subject           # Subject area (e.g., contacts, leads)
+  natural_keys: [id]
+  change_timestamp: updated_at
+  # target_path auto-generates: ./silver/domain=your_domain/subject=your_subject/dt={run_date}/
+  # For S3: target_path: "s3://bucket/silver/domain=your_domain/subject=your_subject/dt={run_date}/"
+  # attributes:
+  #   - name
+  #   - status
+  #   - created_at

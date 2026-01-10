@@ -1,0 +1,58 @@
+# yaml-language-server: $schema=../schema/pipeline.schema.json
+#
+# TEMPLATE: Fixed-Width File
+# ===========================
+# Use this for files where each column is at a fixed character position:
+# - Mainframe reports
+# - Bank statements with positional fields
+# - Legacy feeds with no delimiters
+#
+# To run:
+#   python -m pipelines ./pipelines/examples/fixed_width.yaml --date 2025-01-15
+
+# Optional metadata
+name: fixed_width_template
+description: Template for fixed-width file processing
+
+# Bronze layer - load from fixed-width file
+bronze:
+  system: your_system           # e.g., "mainframe", "legacy_bank"
+  entity: your_entity           # e.g., "daily_transactions", "statements"
+  source_type: file_fixed_width
+  source_path: "./data/{entity}_{run_date}.txt"
+
+  # Fixed-width file configuration
+  options:
+    # Column names (required for headerless files)
+    columns:
+      - txn_id
+      - account_id
+      - amount
+      - txn_date
+      - description
+
+    # Define column widths (characters per field)
+    widths: [10, 20, 12, 10, 40]
+
+    # OR use column specifications (start, end positions) instead of widths
+    # colspecs:
+    #   - [0, 10]
+    #   - [10, 30]
+    #   - [30, 42]
+    #   - [42, 52]
+    #   - [52, 92]
+
+  # Storage output location (optional - auto-generates ./bronze/system=your_system/entity=your_entity/dt={run_date}/)
+  # For S3: target_path: "s3://bucket/bronze/your_system/your_entity/dt={run_date}/"
+
+# Silver layer - curate to clean format
+silver:
+  domain: your_domain               # Business domain (e.g., finance, banking)
+  subject: your_subject             # Subject area (e.g., transactions, payments)
+  natural_keys: [txn_id]            # Primary key column
+  change_timestamp: txn_date        # Timestamp column
+  # target_path auto-generates: ./silver/domain=your_domain/subject=your_subject/dt={run_date}/
+  # For S3: target_path: "s3://bucket/silver/domain=your_domain/subject=your_subject/dt={run_date}/"
+
+  # Transactions/events are immutable
+  entity_kind: event

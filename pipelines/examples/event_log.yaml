@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=../schema/pipeline.schema.json
+#
+# TEMPLATE: Event Log / Fact Table
+# =================================
+# Use this for immutable event/fact data:
+# - Click streams, page views
+# - Transaction logs
+# - Audit trails
+# - IoT sensor readings
+#
+# Events are immutable - once recorded, they don't change.
+# Silver just deduplicates exact duplicates.
+#
+# To run:
+#   python -m pipelines ./pipelines/examples/event_log.yaml --date 2025-01-15
+
+# Optional metadata
+name: event_log_template
+description: Template for immutable event/fact data
+
+# Bronze layer - load events from source
+bronze:
+  system: your_system           # e.g., "clickstream", "iot", "audit"
+  entity: your_entity           # e.g., "page_views", "sensor_readings"
+  source_type: file_parquet
+  source_path: "./data/{entity}/{run_date}/*.parquet"
+  # target_path auto-generates: ./bronze/system=your_system/entity=your_entity/dt={run_date}/
+  # For S3: target_path: "s3://bucket/bronze/your_system/your_entity/dt={run_date}/"
+
+# Silver layer - curate events (dedupe only)
+silver:
+  domain: your_domain               # Business domain (e.g., analytics, marketing)
+  subject: your_subject             # Subject area (e.g., page_views, clicks)
+  # Event identity - what makes an event unique?
+  natural_keys: [event_id]          # Usually a UUID or composite key
+  change_timestamp: event_time      # When did the event occur?
+  # target_path auto-generates: ./silver/domain=your_domain/subject=your_subject/dt={run_date}/
+  # For S3: target_path: "s3://bucket/silver/domain=your_domain/subject=your_subject/dt={run_date}/"
+
+  # Events are immutable - just dedupe exact duplicates
+  entity_kind: event
+
+  # Optional: specify columns to include
+  # attributes:
+  #   - user_id
+  #   - session_id
+  #   - page_url
+  #   - device_type
+
+  # Optional: partition for efficient querying
+  # partition_by: [event_date]

@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=../schema/pipeline.schema.json
+#
+# TEMPLATE: SQL Server Dimension Table (SCD Type 1)
+# ==================================================
+# Use this for dimension tables from SQL Server:
+# - Customer, Product, Account, Employee, etc.
+# - Keeps only the latest version of each record
+#
+# Prerequisites:
+#   export DB_HOST="your-server.database.com"
+#
+# For S3 output (optional):
+#   export AWS_ACCESS_KEY_ID="your_key"
+#   export AWS_SECRET_ACCESS_KEY="your_secret"
+#   export AWS_REGION="us-east-1"
+#
+# To run:
+#   python -m pipelines ./pipelines/examples/mssql_dimension.yaml --date 2025-01-15
+
+# Optional metadata
+name: mssql_dimension_template
+description: Template for SQL Server dimension tables with SCD Type 1
+
+# Bronze layer - extract from SQL Server
+bronze:
+  system: your_system           # e.g., "crm", "erp", "hr_db"
+  entity: your_table            # e.g., "customers", "products"
+  source_type: database_mssql
+
+  # Database connection (uses environment variables)
+  host: ${DB_HOST}              # Set via: export DB_HOST=your-server.com
+  database: YourDatabase
+
+  # Optional: custom SQL query (uncomment if needed)
+  # query: |
+  #   SELECT CustomerID, Name, Email, Status, LastUpdated
+  #   FROM dbo.Customers
+  #   WHERE IsActive = 1
+
+  # Storage output location (optional - auto-generates ./bronze/system=your_system/entity=your_table/dt={run_date}/)
+  # For S3: target_path: "s3://bucket/bronze/your_system/your_table/dt={run_date}/"
+
+# Silver layer - curate as SCD Type 1 (current only)
+silver:
+  domain: your_domain               # Business domain (e.g., sales, finance, hr)
+  subject: your_subject             # Subject area (e.g., orders, customers)
+  natural_keys: [id]                # What makes a record unique?
+  change_timestamp: LastUpdated     # When was the record last changed?
+  # target_path auto-generates: ./silver/domain=your_domain/subject=your_subject/dt={run_date}/
+  # For S3: target_path: "s3://bucket/silver/domain=your_domain/subject=your_subject/dt={run_date}/"
+  # history_mode: current_only      # Default - only keep latest version
