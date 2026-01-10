@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 import ibis
 
@@ -626,69 +626,54 @@ class SilverEntity:
             "verification_time_ms": result.verification_time_ms,
         }
 
+    def _expand_glob(self, source: str) -> List[str]:
+        """Expand glob patterns for S3 or local paths.
+
+        Returns list of matching file paths, or [source] if no glob pattern.
+        Returns empty list if pattern matches no files.
+        """
+        if "*" not in source and "?" not in source:
+            return [source]
+
+        if source.startswith("s3://"):
+            from pipelines.lib.storage import S3Storage
+            bucket = source[5:].split("/")[0]
+            storage_opts = _extract_storage_options(self.storage_options)
+            storage = S3Storage(f"s3://{bucket}/", **storage_opts)
+            matches = storage.glob(source)
+            return [f"s3://{bucket}/{m}" for m in matches] if matches else []
+
+        import glob as glob_module
+        return glob_module.glob(source) or []
+
     def _read_source(self, con: ibis.BaseBackend, source: str) -> ibis.Table:
         """Read from Bronze source.
 
         Handles glob patterns (e.g., *.parquet) by expanding them first.
         Works with both local and S3/cloud paths.
-
-        When input_mode=APPEND_LOG, reads ALL Bronze partitions and unions them.
-        When input_mode=REPLACE_DAILY (or None), reads just the specified partition.
         """
         # For APPEND_LOG mode, expand to read all partitions
         if self.input_mode == InputMode.APPEND_LOG:
             source = self._expand_to_all_partitions(source)
             logger.debug("silver_append_log_mode", expanded_source=source)
 
-        # For S3 paths without glob patterns, add /*.parquet to avoid DuckDB's URL encoding issues
-        # DuckDB's httpfs URL-encodes '=' in paths (to %3D), which causes 404 errors with some
-        # S3-compatible storage. Using S3Storage.glob() with boto3 avoids this issue.
+        # For S3 paths, add glob pattern to avoid DuckDB's URL encoding issues
         if source.startswith("s3://") and "*" not in source and "?" not in source:
-            # Add glob pattern if source looks like a directory (ends with / or no extension)
             if source.endswith("/") or not source.split("/")[-1].count("."):
                 source = source.rstrip("/") + "/*.parquet"
                 logger.debug("silver_added_glob_pattern", source=source)
 
-        # Expand glob patterns if present
-        source_to_read: Union[str, List[str]] = source
-        if "*" in source or "?" in source:
-            if source.startswith("s3://"):
-                # Use S3Storage for S3 glob operations
-                from pipelines.lib.storage import S3Storage
+        # Expand glob and read files
+        files = self._expand_glob(source)
+        if not files:
+            logger.warning("silver_no_files_found", pattern=source)
+            import pandas as pd
+            return con.create_table("empty", pd.DataFrame())
 
-                # Extract bucket from source path
-                s3_path = source[5:]  # Remove s3://
-                bucket = s3_path.split("/")[0]
-
-                # Build storage options from self.storage_options and environment
-                storage_opts = _extract_storage_options(self.storage_options)
-
-                storage = S3Storage(f"s3://{bucket}/", **storage_opts)
-                matches = storage.glob(source)
-
-                if not matches:
-                    logger.warning("silver_no_files_found", pattern=source)
-                    # Return empty DataFrame as Ibis table
-                    import pandas as pd
-                    return con.create_table("empty", pd.DataFrame())
-
-                # glob returns keys without bucket prefix, add full s3:// path back
-                source_to_read = [f"s3://{bucket}/{m}" for m in matches]
-            else:
-                # Use standard glob for local paths
-                import glob as glob_module
-                local_files = glob_module.glob(source)
-                if not local_files:
-                    logger.warning("silver_no_files_found", pattern=source)
-                    import pandas as pd
-                    return con.create_table("empty", pd.DataFrame())
-                source_to_read = local_files
-
-        if isinstance(source_to_read, str) and source_to_read.endswith(".csv"):
-            return con.read_csv(source_to_read)
-        else:
-            # Default to parquet
-            return con.read_parquet(source_to_read)
+        # Read as CSV or parquet based on extension
+        if len(files) == 1 and files[0].endswith(".csv"):
+            return con.read_csv(files[0])
+        return con.read_parquet(files if len(files) > 1 else files[0])
 
     def _expand_to_all_partitions(self, source: str) -> str:
         """Expand a single-partition source path to read all partitions.
@@ -961,9 +946,20 @@ class SilverEntity:
             storage_opts = _extract_storage_options(self.storage_options)
             storage = get_storage(target, **storage_opts)
 
-            # Extract entity name from target path
-            target_parts = target.rstrip("/").split("/")
-            entity_name = target_parts[-1] if target_parts else "entity"
+            # Derive entity name from domain/subject (preferred) or fall back to inference
+            if self.domain and self.subject:
+                entity_name = f"{self.domain}_{self.subject}"
+            elif self.subject:
+                entity_name = self.subject
+            else:
+                entity_name = self._infer_subject_name(target)
+
+            # Extract optional environment prefix between /silver/ and /domain=
+            # e.g., "s3://bucket/silver/production/domain=..." -> "production"
+            import re
+
+            env_match = re.search(r"/silver/([^/]+)/domain=", target)
+            env_prefix = env_match.group(1) if env_match else None
 
             # Extract bucket/container from S3 URI
             if target.startswith("s3://"):
@@ -996,7 +992,13 @@ class SilverEntity:
                 s3_access_key=s3_access_key,
             )
 
-            write_polybase_ddl_s3(storage, polybase_metadata, polybase_config, entity_name=entity_name)
+            write_polybase_ddl_s3(
+                storage,
+                polybase_metadata,
+                polybase_config,
+                entity_name=entity_name,
+                env_prefix=env_prefix,
+            )
             logger.debug("silver_polybase_ddl_written", target=target)
             return "_polybase.sql"
         except Exception as e:

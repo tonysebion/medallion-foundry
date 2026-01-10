@@ -181,13 +181,16 @@ def generate_polybase_setup(
     partition_columns: Optional[List[str]] = None,
     change_timestamp: str = "updated_at",
     delete_mode: str = "ignore",
+    domain: Optional[str] = None,
+    subject: Optional[str] = None,
+    env_prefix: Optional[str] = None,
 ) -> str:
     """Generate complete PolyBase setup DDL for a Silver entity.
 
     Includes data source, file format, external table, and helper views.
 
     Args:
-        entity_name: Name of the entity
+        entity_name: Name of the entity (used in SQL object names)
         columns: List of column dicts
         entity_kind: "state" or "event"
         natural_keys: Primary key columns
@@ -196,6 +199,9 @@ def generate_polybase_setup(
         partition_columns: Columns used for partitioning
         change_timestamp: Timestamp column name
         delete_mode: "ignore", "tombstone", or "hard_delete"
+        domain: Business domain (used for Hive-style location path)
+        subject: Subject area (used for Hive-style location path)
+        env_prefix: Optional environment prefix (e.g., "production")
 
     Returns:
         Complete SQL setup script
@@ -236,7 +242,17 @@ def generate_polybase_setup(
 
     # External table
     table_name = config.external_table_name(entity_name, entity_kind)
-    location = f"{entity_name}/"
+
+    # Construct location path using Hive-style partitioning when domain/subject available
+    if domain and subject:
+        # Use Hive-style path: [env_prefix/]domain=X/subject=Y/
+        if env_prefix:
+            location = f"{env_prefix}/domain={domain}/subject={subject}/"
+        else:
+            location = f"domain={domain}/subject={subject}/"
+    else:
+        # Fallback to simple entity name path
+        location = f"{entity_name}/"
 
     parts.append(generate_external_table_ddl(
         table_name,
@@ -608,6 +624,7 @@ def generate_from_metadata_dict(
     config: PolyBaseConfig,
     *,
     entity_name: Optional[str] = None,
+    env_prefix: Optional[str] = None,
 ) -> str:
     """Generate PolyBase DDL from metadata dictionary.
 
@@ -618,6 +635,7 @@ def generate_from_metadata_dict(
         metadata: Metadata dictionary (same structure as _metadata.json)
         config: PolyBase configuration
         entity_name: Entity name (optional, derived from domain/subject if not provided)
+        env_prefix: Optional environment prefix for location path (e.g., "production")
 
     Returns:
         Complete SQL setup script
@@ -640,11 +658,11 @@ def generate_from_metadata_dict(
     change_timestamp = metadata.get("change_timestamp", "updated_at")
     partition_by = metadata.get("partition_by")
     delete_mode = metadata.get("delete_mode", "ignore")
+    domain = metadata.get("domain")
+    subject = metadata.get("subject")
 
     # Derive entity name from domain/subject if not explicitly provided
     if not entity_name:
-        domain = metadata.get("domain")
-        subject = metadata.get("subject")
         if domain and subject:
             entity_name = f"{domain}_{subject}"
         elif subject:
@@ -665,6 +683,9 @@ def generate_from_metadata_dict(
         partition_columns=partition_by,
         change_timestamp=change_timestamp,
         delete_mode=delete_mode,
+        domain=domain,
+        subject=subject,
+        env_prefix=env_prefix,
     )
 
 
@@ -674,6 +695,7 @@ def write_polybase_ddl_s3(
     config: PolyBaseConfig,
     *,
     entity_name: str,
+    env_prefix: Optional[str] = None,
     filename: str = "_polybase.sql",
 ) -> bool:
     """Write PolyBase DDL script to S3/cloud storage.
@@ -687,6 +709,7 @@ def write_polybase_ddl_s3(
         metadata: Metadata dictionary with columns, entity_kind, etc.
         config: PolyBase configuration with data source details
         entity_name: Name of the entity (used in table/view names)
+        env_prefix: Optional environment prefix for location path (e.g., "production")
         filename: Output filename (default: _polybase.sql)
 
     Returns:
@@ -705,7 +728,9 @@ def write_polybase_ddl_s3(
         >>> write_polybase_ddl_s3(storage, metadata, config, entity_name="orders")
     """
     try:
-        ddl = generate_from_metadata_dict(metadata, config, entity_name=entity_name)
+        ddl = generate_from_metadata_dict(
+            metadata, config, entity_name=entity_name, env_prefix=env_prefix
+        )
         result = storage.write_text(filename, ddl)
         if result.success:
             logger.info(

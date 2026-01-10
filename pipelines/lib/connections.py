@@ -80,12 +80,15 @@ def get_connection(
         source_type.value if hasattr(source_type, "value") else str(source_type)
     )
 
-    if source_type_str == "database_mssql":
-        con = _create_mssql_connection(options)
-    elif source_type_str == "database_postgres":
-        con = _create_postgres_connection(options)
-    elif source_type_str == "database_mysql":
-        con = _create_mysql_connection(options)
+    # Map source type to database type
+    db_type_map = {
+        "database_mssql": "mssql",
+        "database_postgres": "postgres",
+        "database_mysql": "mysql",
+    }
+
+    if source_type_str in db_type_map:
+        con = _create_ibis_connection(db_type_map[source_type_str], options)
     elif source_type_str == "database_db2":
         con = _create_db2_connection(options)
     else:
@@ -95,103 +98,64 @@ def get_connection(
     return con
 
 
-def _create_mssql_connection(options: Dict[str, Any]) -> ibis.BaseBackend:
-    """Create an MSSQL connection.
+# Database configuration for unified connection factory
+_DB_CONFIGS: Dict[str, Dict[str, Any]] = {
+    "mssql": {
+        "default_port": 1433,
+        "backend": "mssql",
+        "package": "ibis-framework[mssql]",
+        "extra": lambda opts: {"driver": opts.get("driver", "ODBC Driver 17 for SQL Server")},
+    },
+    "postgres": {
+        "default_port": 5432,
+        "backend": "postgres",
+        "package": "ibis-framework[postgres]",
+        "default_host": "localhost",
+    },
+    "mysql": {
+        "default_port": 3306,
+        "backend": "mysql",
+        "package": "ibis-framework[mysql]",
+        "default_host": "localhost",
+    },
+}
 
+
+def _create_ibis_connection(db_type: str, options: Dict[str, Any]) -> ibis.BaseBackend:
+    """Create database connection using Ibis backend.
+
+    Unified factory for MSSQL, PostgreSQL, and MySQL connections.
     Supports environment variable substitution for credentials.
     """
+    config = _DB_CONFIGS[db_type]
     creds = _expand_credentials(options)
-    port = options.get("port", 1433)
 
-    # Build connection string for pyodbc
-    driver = options.get("driver", "ODBC Driver 17 for SQL Server")
+    if not creds["host"] and config.get("default_host"):
+        creds["host"] = config["default_host"]
 
-    # Check if Ibis MSSQL backend is available
-    try:
-        return ibis.mssql.connect(
-            host=creds["host"],
-            port=port,
-            database=creds["database"],
-            user=creds["user"] if creds["user"] else None,
-            password=creds["password"] if creds["password"] else None,
-            driver=driver,
-        )
-    except AttributeError:
-        # Ibis MSSQL backend may not be installed
-        logger.warning(
-            "Ibis MSSQL backend not available. "
-            "Consider installing ibis-framework[mssql]"
-        )
-        raise ImportError(
-            "MSSQL support requires ibis-framework[mssql]. "
-            "Install with: pip install ibis-framework[mssql]"
-        )
+    connect_args: Dict[str, Any] = {
+        "host": creds["host"],
+        "port": options.get("port", config["default_port"]),
+        "database": creds["database"],
+        "user": creds["user"] or None,
+        "password": creds["password"] or None,
+    }
 
-
-def _create_postgres_connection(options: Dict[str, Any]) -> ibis.BaseBackend:
-    """Create a PostgreSQL connection.
-
-    Supports environment variable substitution for credentials.
-    """
-    creds = _expand_credentials(options)
-    # Default host to localhost if not provided
-    if not creds["host"]:
-        creds["host"] = "localhost"
-    port = options.get("port", 5432)
+    if "extra" in config:
+        connect_args.update(config["extra"](options))
 
     try:
-        return ibis.postgres.connect(
-            host=creds["host"],
-            port=port,
-            database=creds["database"],
-            user=creds["user"] if creds["user"] else None,
-            password=creds["password"] if creds["password"] else None,
-        )
+        backend = getattr(ibis, config["backend"])
+        return backend.connect(**connect_args)
     except AttributeError:
         logger.warning(
-            "Ibis PostgreSQL backend not available. "
-            "Consider installing ibis-framework[postgres]"
+            "Ibis %s backend not available. Consider installing %s",
+            config["backend"].upper(),
+            config["package"],
         )
         raise ImportError(
-            "PostgreSQL support requires ibis-framework[postgres]. "
-            "Install with: pip install ibis-framework[postgres]"
-        )
-
-
-def _create_mysql_connection(options: Dict[str, Any]) -> ibis.BaseBackend:
-    """Create a MySQL/MariaDB connection.
-
-    Supports environment variable substitution for credentials.
-
-    Options:
-        host: Database host (default: localhost)
-        port: Database port (default: 3306)
-        database: Database name
-        user: Username
-        password: Password
-    """
-    creds = _expand_credentials(options)
-    # Default host to localhost if not provided
-    if not creds["host"]:
-        creds["host"] = "localhost"
-    port = options.get("port", 3306)
-
-    try:
-        return ibis.mysql.connect(
-            host=creds["host"],
-            port=port,
-            database=creds["database"],
-            user=creds["user"] if creds["user"] else None,
-            password=creds["password"] if creds["password"] else None,
-        )
-    except AttributeError:
-        logger.warning(
-            "Ibis MySQL backend not available. "
-            "Consider installing ibis-framework[mysql]"
-        )
-        raise ImportError(
-            "MySQL support requires ibis-framework[mysql]. "
-            "Install with: pip install ibis-framework[mysql]"
+            f"{config['backend'].upper()} support requires {config['package']}. "
+            f"Install with: pip install {config['package']}"
         )
 
 

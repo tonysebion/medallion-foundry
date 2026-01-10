@@ -1056,3 +1056,123 @@ class TestEmptyColumnsEdgeCases:
             config,
         )
         assert "CREATE EXTERNAL TABLE" in ddl
+
+
+class TestLocationPathConstruction:
+    """Tests for Hive-style location path construction with domain/subject/env_prefix."""
+
+    @pytest.fixture
+    def config(self):
+        return PolyBaseConfig(
+            data_source_name="silver",
+            data_source_location="s3://bucket/silver/",
+        )
+
+    def test_location_uses_domain_subject_hive_style(self, config):
+        """Location should use domain=X/subject=Y/ format when both provided."""
+        ddl = generate_polybase_setup(
+            "sales_orders",
+            [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
+            "state",
+            ["id"],
+            config,
+            domain="sales",
+            subject="orders",
+        )
+        # Location should be Hive-style, not entity_name/
+        assert "LOCATION = 'domain=sales/subject=orders/'" in ddl
+        # Table name should still use entity_name
+        assert "sales_orders_state_external" in ddl
+
+    def test_location_with_env_prefix(self, config):
+        """Location should include env_prefix when provided."""
+        ddl = generate_polybase_setup(
+            "sales_orders",
+            [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
+            "state",
+            ["id"],
+            config,
+            domain="sales",
+            subject="orders",
+            env_prefix="production",
+        )
+        # Location should include env_prefix
+        assert "LOCATION = 'production/domain=sales/subject=orders/'" in ddl
+        # Table name should NOT include env_prefix
+        assert "sales_orders_state_external" in ddl
+        assert "production_sales" not in ddl
+
+    def test_location_fallback_without_domain_subject(self, config):
+        """Location should fall back to entity_name/ when domain/subject missing."""
+        ddl = generate_polybase_setup(
+            "my_entity",
+            [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
+            "state",
+            ["id"],
+            config,
+            # No domain or subject
+        )
+        assert "LOCATION = 'my_entity/'" in ddl
+
+    def test_from_metadata_dict_passes_domain_subject_to_setup(self, config):
+        """generate_from_metadata_dict should pass domain/subject for location."""
+        metadata = {
+            "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
+            "entity_kind": "state",
+            "natural_keys": ["id"],
+            "domain": "retail",
+            "subject": "products",
+        }
+        ddl = generate_from_metadata_dict(metadata, config)
+        # Should use Hive-style location
+        assert "LOCATION = 'domain=retail/subject=products/'" in ddl
+        # Table name derived from domain_subject
+        assert "retail_products_state_external" in ddl
+
+    def test_from_metadata_dict_with_env_prefix(self, config):
+        """generate_from_metadata_dict should accept env_prefix parameter."""
+        metadata = {
+            "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
+            "entity_kind": "state",
+            "natural_keys": ["id"],
+            "domain": "retail",
+            "subject": "products",
+        }
+        ddl = generate_from_metadata_dict(metadata, config, env_prefix="staging")
+        # Should include env_prefix in location
+        assert "LOCATION = 'staging/domain=retail/subject=products/'" in ddl
+        # Table name should NOT include env_prefix
+        assert "retail_products_state_external" in ddl
+        assert "staging_retail" not in ddl
+
+    def test_write_polybase_ddl_s3_with_env_prefix(self, config):
+        """write_polybase_ddl_s3 should pass env_prefix to DDL generation."""
+        from unittest.mock import Mock
+
+        # Mock storage backend
+        mock_storage = Mock()
+        mock_storage.write_text.return_value = Mock(success=True)
+        mock_storage.base_path = "s3://bucket/silver/"
+
+        metadata = {
+            "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
+            "entity_kind": "state",
+            "natural_keys": ["id"],
+            "domain": "sales",
+            "subject": "orders",
+        }
+
+        result = write_polybase_ddl_s3(
+            mock_storage,
+            metadata,
+            config,
+            entity_name="sales_orders",
+            env_prefix="production",
+        )
+
+        assert result is True
+        # Verify write was called
+        assert mock_storage.write_text.called
+        ddl_content = mock_storage.write_text.call_args[0][1]
+        # Check env_prefix is in location
+        assert "production/domain=sales/subject=orders/" in ddl_content

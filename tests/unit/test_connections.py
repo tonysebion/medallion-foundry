@@ -145,10 +145,10 @@ class TestGetConnection:
         """Handles SourceType enum correctly."""
         from pipelines.lib.bronze import SourceType
 
-        with patch("pipelines.lib.connections._create_mssql_connection") as mock_create:
+        with patch("pipelines.lib.connections._create_ibis_connection") as mock_create:
             mock_create.return_value = MagicMock()
             get_connection("test_mssql", SourceType.DATABASE_MSSQL, {})
-            mock_create.assert_called_once()
+            mock_create.assert_called_once_with("mssql", {})
 
 
 class TestCreateMssqlConnection:

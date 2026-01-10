@@ -138,59 +138,56 @@ class AuthConfig:
             )
 
 
+def _handle_bearer_auth(config: AuthConfig, headers: Dict[str, str]) -> Tuple[Dict[str, str], None]:
+    """Handle bearer token authentication."""
+    token = expand_env_vars(config.token or "", strict=True)
+    if not token:
+        raise ValueError("Bearer token resolved to empty string")
+    headers["Authorization"] = f"Bearer {token}"
+    logger.debug("Added bearer token authentication")
+    return headers, None
+
+
+def _handle_api_key_auth(config: AuthConfig, headers: Dict[str, str]) -> Tuple[Dict[str, str], None]:
+    """Handle API key authentication."""
+    api_key = expand_env_vars(config.api_key or "", strict=True)
+    if not api_key:
+        raise ValueError("API key resolved to empty string")
+    headers[config.api_key_header] = api_key
+    logger.debug("Added API key authentication in header '%s'", config.api_key_header)
+    return headers, None
+
+
+def _handle_basic_auth(config: AuthConfig, headers: Dict[str, str]) -> Tuple[Dict[str, str], Tuple[str, str]]:
+    """Handle basic authentication."""
+    username = expand_env_vars(config.username or "", strict=True)
+    password = expand_env_vars(config.password or "", strict=True)
+    if not (username and password):
+        raise ValueError("Basic auth username or password resolved to empty string")
+    logger.debug("Prepared basic authentication")
+    return headers, (username, password)
+
+
+_AUTH_HANDLERS = {
+    AuthType.BEARER: _handle_bearer_auth,
+    AuthType.API_KEY: _handle_api_key_auth,
+    AuthType.BASIC: _handle_basic_auth,
+}
+
+
 def build_auth_headers(
     config: Optional[AuthConfig],
     *,
     extra_headers: Optional[Dict[str, str]] = None,
 ) -> Tuple[Dict[str, str], Optional[Tuple[str, str]]]:
-    """Build HTTP headers and auth tuple from authentication config.
-
-    Args:
-        config: Authentication configuration (None = no auth)
-        extra_headers: Additional headers to include
-
-    Returns:
-        Tuple of (headers dict, optional basic auth tuple)
-
-    Raises:
-        ValueError: If environment variables cannot be resolved
-
-    Example:
-        auth = AuthConfig(auth_type=AuthType.BEARER, token="${MY_TOKEN}")
-        headers, auth_tuple = build_auth_headers(auth)
-        response = requests.get(url, headers=headers, auth=auth_tuple)
-    """
+    """Build HTTP headers and auth tuple from authentication config."""
     headers: Dict[str, str] = {"Accept": "application/json"}
     auth_tuple: Optional[Tuple[str, str]] = None
 
-    if config is None or config.auth_type == AuthType.NONE:
-        logger.debug("No authentication configured")
+    if config and config.auth_type in _AUTH_HANDLERS:
+        headers, auth_tuple = _AUTH_HANDLERS[config.auth_type](config, headers)
 
-    elif config.auth_type == AuthType.BEARER:
-        token = expand_env_vars(config.token or "", strict=True)
-        if not token:
-            raise ValueError("Bearer token resolved to empty string")
-        headers["Authorization"] = f"Bearer {token}"
-        logger.debug("Added bearer token authentication")
-
-    elif config.auth_type == AuthType.API_KEY:
-        api_key = expand_env_vars(config.api_key or "", strict=True)
-        if not api_key:
-            raise ValueError("API key resolved to empty string")
-        headers[config.api_key_header] = api_key
-        logger.debug("Added API key authentication in header '%s'", config.api_key_header)
-
-    elif config.auth_type == AuthType.BASIC:
-        username = expand_env_vars(config.username or "", strict=True)
-        password = expand_env_vars(config.password or "", strict=True)
-        if not (username and password):
-            raise ValueError("Basic auth username or password resolved to empty string")
-        auth_tuple = (username, password)
-        logger.debug("Prepared basic authentication")
-
-    # Add any extra headers
     if extra_headers:
-        # Expand env vars in extra headers too
         for key, value in extra_headers.items():
             headers[key] = expand_env_vars(value, strict=False)
 
@@ -1125,72 +1122,40 @@ class ApiSource:
             logger.warning("Unexpected data type: %s", type(data))
             return []
 
-    def _compute_max_watermark(self, records: List[Dict[str, Any]]) -> Optional[str]:
-        """Compute the maximum watermark value from records.
+    def _watermark_sort_key(self, value: Any) -> Any:
+        """Convert watermark value to comparable form for sorting."""
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, (int, float)):
+            return value
+        # Try parsing string as datetime
+        try:
+            return datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+        except ValueError:
+            try:
+                return datetime.strptime(str(value)[:10], '%Y-%m-%d')
+            except ValueError:
+                return str(value)
 
-        Handles different value types appropriately:
-        - datetime objects: compared directly
-        - ISO 8601 strings: parsed to datetime for comparison
-        - numeric values: compared numerically
-        - other strings: compared lexicographically (fallback)
-        """
+    def _compute_max_watermark(self, records: List[Dict[str, Any]]) -> Optional[str]:
+        """Compute the maximum watermark value from records."""
         if not self.watermark_column:
             return None
 
-        watermark_values = [
+        values = [
             r[self.watermark_column]
             for r in records
             if self.watermark_column in r and r[self.watermark_column] is not None
         ]
 
-        if not watermark_values:
+        if not values:
             return None
 
         try:
-            # Try to determine the type and compare appropriately
-            sample = watermark_values[0]
-
-            # If already datetime, compare directly
-            if isinstance(sample, datetime):
-                max_val = max(watermark_values)
-                return max_val.isoformat() if hasattr(max_val, 'isoformat') else str(max_val)
-
-            # If numeric, compare numerically
-            if isinstance(sample, (int, float)):
-                return str(max(watermark_values))
-
-            # If string, try to parse as ISO 8601 datetime
-            if isinstance(sample, str):
-                # Try parsing as datetime for proper temporal comparison
-                try:
-                    parsed_values = []
-                    for v in watermark_values:
-                        # Handle various ISO formats
-                        v_str = str(v)
-                        # Try fromisoformat (handles most ISO 8601 formats)
-                        try:
-                            parsed = datetime.fromisoformat(v_str.replace('Z', '+00:00'))
-                        except ValueError:
-                            # Try parsing date-only format
-                            parsed = datetime.strptime(v_str[:10], '%Y-%m-%d')
-                        parsed_values.append((parsed, v_str))
-
-                    # Find max by parsed datetime, return original string
-                    max_parsed, max_original = max(parsed_values, key=lambda x: x[0])
-                    return max_original
-                except (ValueError, TypeError):
-                    # Fall back to string comparison if parsing fails
-                    pass
-
-            # Fallback: convert to strings and compare
-            str_values = [str(v) for v in watermark_values]
-            return max(str_values)
+            max_val = max(values, key=self._watermark_sort_key)
+            return max_val.isoformat() if hasattr(max_val, 'isoformat') else str(max_val)
         except (TypeError, ValueError) as e:
-            logger.warning(
-                "Could not compute max watermark from '%s': %s",
-                self.watermark_column,
-                e,
-            )
+            logger.warning("Could not compute max watermark from '%s': %s", self.watermark_column, e)
             return None
 
     def _write(
