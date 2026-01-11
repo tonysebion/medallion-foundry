@@ -26,8 +26,8 @@ bronze:
 silver:
   domain: ecommerce
   subject: customers
-  natural_keys: [customer_id]
-  change_timestamp: updated_at
+  unique_columns: [customer_id]
+  last_updated_column: updated_at
   # target_path auto-generates: ./silver/domain=ecommerce/subject=customers/dt={run_date}/
   entity_kind: state
   history_mode: current_only

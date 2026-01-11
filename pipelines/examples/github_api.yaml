@@ -66,8 +66,8 @@ bronze:
 silver:
   domain: github
   subject: repo_events
-  natural_keys: [id]
-  change_timestamp: created_at
+  unique_columns: [id]
+  last_updated_column: created_at
   # target_path auto-generates: ./silver/domain=github/subject=repo_events/dt={run_date}/
   # For Azure ADLS:
   # target_path: "abfss://silver@datalake.dfs.core.windows.net/github/repo_events/dt={run_date}/"

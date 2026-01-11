@@ -63,7 +63,7 @@ bronze:
 
   # Incremental load settings
   load_pattern: incremental
-  watermark_column: UpdatedAt
+  incremental_column: UpdatedAt
 
   # Storage output location (optional - auto-generates ./bronze/system=sales_dw/entity=order_details/dt={run_date}/)
   # For AWS S3:
@@ -72,8 +72,8 @@ bronze:
 silver:
   domain: sales_dw
   subject: order_details
-  natural_keys: [OrderDetailID]
-  change_timestamp: UpdatedAt
+  unique_columns: [OrderDetailID]
+  last_updated_column: UpdatedAt
   # target_path auto-generates: ./silver/domain=sales_dw/subject=order_details/dt={run_date}/
   # For AWS S3:
   # target_path: "s3://data-lake/silver/domain=sales_dw/subject=order_details/dt={run_date}/"

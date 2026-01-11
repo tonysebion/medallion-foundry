@@ -38,7 +38,7 @@ bronze:
 
   # Incremental load settings
   load_pattern: incremental
-  watermark_column: LastUpdated  # Column to track for incremental
+  incremental_column: LastUpdated  # Column to track for incremental
   # watermark_source: destination  # Where to read last watermark (default: destination)
 
   # Storage output location (optional - auto-generates ./bronze/system=your_system/entity=your_entity/dt={run_date}/)
@@ -48,8 +48,8 @@ bronze:
 silver:
   domain: your_domain               # Business domain (e.g., sales, logistics)
   subject: your_subject             # Subject area (e.g., orders, shipments)
-  natural_keys: [OrderID]           # Primary key column(s)
-  change_timestamp: LastUpdated     # When was the record changed?
+  unique_columns: [OrderID]           # Primary key column(s)
+  last_updated_column: LastUpdated     # When was the record changed?
   # target_path auto-generates: ./silver/domain=your_domain/subject=your_subject/dt={run_date}/
   # For S3: target_path: "s3://bucket/silver/domain=your_domain/subject=your_subject/dt={run_date}/"
   history_mode: full_history        # Keep all versions (SCD Type 2)

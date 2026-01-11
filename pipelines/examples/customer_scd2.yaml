@@ -36,8 +36,8 @@ bronze:
 silver:
   domain: crm
   subject: customers
-  natural_keys: [customer_id]
-  change_timestamp: updated_at
+  unique_columns: [customer_id]
+  last_updated_column: updated_at
   # target_path defaults to: ./silver/domain=crm/subject=customers/dt={run_date}/
   history_mode: full_history    # SCD Type 2!
   attributes:

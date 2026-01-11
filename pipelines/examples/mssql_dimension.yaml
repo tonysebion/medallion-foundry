@@ -44,8 +44,8 @@ bronze:
 silver:
   domain: your_domain               # Business domain (e.g., sales, finance, hr)
   subject: your_subject             # Subject area (e.g., orders, customers)
-  natural_keys: [id]                # What makes a record unique?
-  change_timestamp: LastUpdated     # When was the record last changed?
+  unique_columns: [id]                # What makes a record unique?
+  last_updated_column: LastUpdated     # When was the record last changed?
   # target_path auto-generates: ./silver/domain=your_domain/subject=your_subject/dt={run_date}/
   # For S3: target_path: "s3://bucket/silver/domain=your_domain/subject=your_subject/dt={run_date}/"
   # history_mode: current_only      # Default - only keep latest version

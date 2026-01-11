@@ -47,8 +47,8 @@ bronze:
 silver:
   domain: sales
   subject: orders
-  natural_keys: [order_id]
-  change_timestamp: updated_at
+  unique_columns: [order_id]
+  last_updated_column: updated_at
   target_path: s3://my-bucket/silver/
 
   # S3 options are auto-wired from Bronze, but can be overridden here:

@@ -102,7 +102,7 @@ bronze:
   load_pattern: full_snapshot
 
   # WATERMARK: For incremental loads, which column tracks changes?
-  # watermark_column: updated_at
+  # incremental_column: updated_at
 
   # PERIODIC FULL REFRESH: Force full reload every N days (optional)
   # full_refresh_days: 7
@@ -165,23 +165,43 @@ silver:
   # Examples: "orders", "customers", "employees", "transactions"
   subject: your_subject
 
-  # NATURAL KEYS: What makes a record unique? (the primary key)
-  # Examples: [id], [customer_id], [order_id, line_id]
-  natural_keys: [id]
+  # UNIQUE COLUMNS: What makes each row unique?
+  # This is like a primary key - if two rows have the same values here,
+  # they're considered the same record. Examples:
+  #   - [order_id] for an orders table
+  #   - [customer_id] for a customers table
+  #   - [order_id, line_id] for order line items
+  #
+  # TIP: Run 'python -m pipelines inspect-source --file your_data.csv'
+  # to get suggestions for which column(s) to use.
+  unique_columns: [id]
 
-  # CHANGE TIMESTAMP: Which column has the "last updated" time?
-  # This is used to detect changes and order records
-  change_timestamp: updated_at
+  # LAST UPDATED COLUMN: Which column shows when each row was modified?
+  # When duplicate rows are found, the most recent one (by this column) is kept.
+  # Common names: updated_at, modified_date, LastModified
+  #
+  # TIP: Run 'python -m pipelines inspect-source --file your_data.csv'
+  # to get suggestions for which column to use.
+  last_updated_column: updated_at
 
-  # ENTITY KIND: What type of data is this?
-  # state = Dimension (customer, product, account) - can change over time
-  # event = Fact/Log (orders, clicks, payments) - immutable
-  entity_kind: state
-
-  # HISTORY MODE: How to handle changes over time?
-  # current_only (or scd1) = Only keep latest version
-  # full_history (or scd2) = Keep all versions with effective dates
-  history_mode: current_only
+  # MODEL: How should data be processed?
+  # Choose based on your Bronze load_pattern:
+  #
+  # For full_snapshot (most common):
+  #   - model: periodic_snapshot   # Simple refresh, no deduplication needed
+  #
+  # For incremental data:
+  #   - model: full_merge_dedupe   # Keep latest version of each record (SCD Type 1)
+  #   - model: scd_type_2          # Keep full history with effective dates
+  #   - model: event_log           # Immutable events (no deduplication)
+  #
+  # For CDC (change data capture):
+  #   - model: cdc_current         # Current state only
+  #   - model: cdc_current_tombstone  # Current state with soft deletes
+  #   - model: cdc_history         # Full history
+  #
+  # Uncomment one of these (or omit for default SCD Type 1 behavior):
+  # model: full_merge_dedupe
 
   # OPTIONAL: Specify which columns to include (default: all)
   # attributes:

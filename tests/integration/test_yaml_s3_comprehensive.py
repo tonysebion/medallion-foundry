@@ -103,7 +103,7 @@ class PatternConfig:
     data_type: str  # orders, customers, or events
     system: str  # Source system name
     entity: str  # Entity name
-    natural_key: str  # Primary key column
+    unique_columns: str  # Primary key column(s)
     last_updated_column: str  # Timestamp column
     entity_kind: str  # state or event
     history_mode: str  # current_only or full_history
@@ -119,7 +119,7 @@ PATTERNS = [
         data_type="orders",
         system="retail",
         entity="orders",
-        natural_key="order_id",
+        unique_columns="order_id",
         last_updated_column="updated_at",
         entity_kind="state",
         history_mode="current_only",
@@ -131,7 +131,7 @@ PATTERNS = [
         data_type="customers",
         system="crm",
         entity="customers",
-        natural_key="customer_id",
+        unique_columns="customer_id",
         last_updated_column="updated_at",
         entity_kind="state",
         history_mode="full_history",
@@ -144,7 +144,7 @@ PATTERNS = [
         data_type="orders",
         system="retail",
         entity="order_events",
-        natural_key="order_id",
+        unique_columns="order_id",
         last_updated_column="updated_at",
         entity_kind="event",
         history_mode="current_only",
@@ -509,7 +509,7 @@ class TestYamlPatterns:
             "run_date": run_date,
             "system": pattern.system,
             "entity": pattern.entity,
-            "natural_key": pattern.natural_key,
+            "unique_columns": pattern.unique_columns,
             "last_updated_column": pattern.last_updated_column,
         }
 
@@ -656,7 +656,7 @@ class TestSpecializedScenarios:
                 "run_date": run_date,
                 "system": "retail",
                 "entity": "orders",
-                "natural_key": "order_id",
+                "unique_columns": "order_id",
                 "last_updated_column": "updated_at",
             }
 
@@ -745,7 +745,7 @@ class TestSpecializedScenarios:
             "run_date": run_date,
             "system": "test",
             "entity": "orders",
-            "natural_key": "order_id",
+            "unique_columns": "order_id",
             "last_updated_column": "updated_at",
         }
 
@@ -802,7 +802,7 @@ class TestSpecializedScenarios:
             "run_date": run_date,
             "system": "crm",
             "entity": "customers",
-            "natural_key": "customer_id",
+            "unique_columns": "customer_id",
             "last_updated_column": "updated_at",
         }
 
@@ -881,7 +881,7 @@ class TestSpecializedScenarios:
             "run_date": run_date,
             "system": "test",
             "entity": "orders",
-            "natural_key": "order_id",
+            "unique_columns": "order_id",
             "last_updated_column": "updated_at",
         }
 

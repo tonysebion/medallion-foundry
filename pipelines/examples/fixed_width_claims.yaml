@@ -56,8 +56,8 @@ silver:
   domain: healthcare
   subject: claims
   model: full_merge_dedupe  # SCD Type 1 - keep latest version
-  natural_keys: [claim_id]
-  change_timestamp: service_date
+  unique_columns: [claim_id]
+  last_updated_column: service_date
   attributes:
     - patient_id
     - amount

@@ -100,7 +100,7 @@ bronze:
 
   # For incremental loads, specify watermark
   # load_pattern: incremental
-  # watermark_column: updated_at       # Column to track
+  # incremental_column: updated_at       # Column to track
   # watermark_param: since             # Query param to send watermark
 
   # ========================================
@@ -113,8 +113,8 @@ bronze:
 silver:
   domain: your_domain             # Business domain (e.g., crm, marketing)
   subject: your_subject           # Subject area (e.g., contacts, leads)
-  natural_keys: [id]
-  change_timestamp: updated_at
+  unique_columns: [id]
+  last_updated_column: updated_at
   # target_path auto-generates: ./silver/domain=your_domain/subject=your_subject/dt={run_date}/
   # For S3: target_path: "s3://bucket/silver/domain=your_domain/subject=your_subject/dt={run_date}/"
   # attributes:

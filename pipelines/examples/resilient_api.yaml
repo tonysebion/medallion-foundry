@@ -52,7 +52,7 @@ bronze:
 
   # Incremental loading
   load_pattern: incremental
-  watermark_column: updated_at
+  incremental_column: updated_at
   watermark_param: modified_since
 
   # Storage output location (optional - auto-generates ./bronze/system=crm/entity=contacts/dt={run_date}/)
@@ -65,8 +65,8 @@ bronze:
 silver:
   domain: crm
   subject: contacts
-  natural_keys: [contact_id]
-  change_timestamp: updated_at
+  unique_columns: [contact_id]
+  last_updated_column: updated_at
   # target_path auto-generates: ./silver/domain=crm/subject=contacts/dt={run_date}/
   entity_kind: state
   history_mode: current_only

@@ -233,10 +233,10 @@ class TestValidate:
             )
 
     def test_validate_bronze_source_incremental_missing_watermark(self):
-        """Should raise error when incremental load has no watermark column."""
+        """Should raise error when incremental load has no incremental_column."""
         from pipelines.lib.bronze import BronzeSource, LoadPattern, SourceType
 
-        with pytest.raises(ValueError, match="watermark"):
+        with pytest.raises(ValueError, match="incremental_column"):
             BronzeSource(
                 system="test_system",
                 entity="test_entity",

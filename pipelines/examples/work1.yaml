@@ -169,14 +169,14 @@ silver:
 
   # NATURAL_KEYS: Column(s) that uniquely identify a record
   #   This is like a primary key in a database.
-  #   Single key:   natural_keys: [customer_id]
-  #   Composite:    natural_keys: [order_id, line_number]
-  natural_keys: [id]
+  #   Single key:   unique_columns: [customer_id]
+  #   Composite:    unique_columns: [order_id, line_number]
+  unique_columns: [id]
 
   # CHANGE_TIMESTAMP: Column containing when the record was last modified
   #   This is used to determine which version of a record is newest.
   #   Common names: updated_at, modified_date, LastModified, _timestamp
-  change_timestamp: updated_at
+  last_updated_column: updated_at
 
   # SOURCE_PATH: Where to read Bronze data from
   #   This points to the Bronze output location.

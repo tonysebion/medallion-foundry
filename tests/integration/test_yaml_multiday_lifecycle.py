@@ -108,7 +108,7 @@ def create_yaml_config(
     cdc_operation_column: Optional[str] = None,
 ) -> Path:
     """Create a YAML config file from template with substitutions."""
-    watermark_line = f"incremental_column: {incremental_column}" if watermark_column else ""
+    watermark_line = f"incremental_column: {incremental_column}" if incremental_column else ""
     delete_mode_line = f"delete_mode: {delete_mode}" if delete_mode else ""
     cdc_options_line = ""
     if cdc_operation_column:
@@ -346,7 +346,7 @@ class TestYamlSnapshotIncrementalCycle:
             prefix=lifecycle_prefix,
             load_pattern="incremental",
             silver_model="full_merge_dedupe",
-            watermark_column="ts",
+            incremental_column="ts",
         )
 
         result = run_yaml_pipeline(yaml_path_incr, "2025-01-11")
@@ -389,7 +389,7 @@ class TestYamlSnapshotIncrementalCycle:
             prefix=lifecycle_prefix,
             load_pattern="incremental",
             silver_model="full_merge_dedupe",
-            watermark_column="ts",
+            incremental_column="ts",
         )
 
         result = run_yaml_pipeline(yaml_path_incr2, "2025-01-12")
@@ -504,7 +504,7 @@ class TestYamlSCD2HistoryBuilding:
             prefix=lifecycle_prefix,
             load_pattern="incremental",
             silver_model="scd_type_2",
-            watermark_column="ts",
+            incremental_column="ts",
         )
 
         result = run_yaml_pipeline(yaml_path_incr, "2025-01-11")

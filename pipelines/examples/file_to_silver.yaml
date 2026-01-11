@@ -31,8 +31,8 @@ bronze:
 silver:
   domain: inventory
   subject: products
-  natural_keys: [product_id]
-  change_timestamp: updated_at
+  unique_columns: [product_id]
+  last_updated_column: updated_at
   # target_path auto-generates: ./silver/domain=inventory/subject=products/dt={run_date}/
   entity_kind: state
   # SCD Type 2: Maintains full history with effective_from/effective_to dates

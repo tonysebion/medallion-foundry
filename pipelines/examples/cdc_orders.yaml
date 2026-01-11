@@ -62,8 +62,8 @@ silver:
   #   - cdc_history_tombstone: full SCD2 with soft deletes
   #   - cdc_history_hard_delete: full SCD2, removes deleted records
   model: cdc_current_tombstone
-  natural_keys: [order_id]
-  change_timestamp: updated_at
+  unique_columns: [order_id]
+  last_updated_column: updated_at
   attributes:
     - customer_id
     - order_total

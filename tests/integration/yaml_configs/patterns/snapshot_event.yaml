@@ -23,7 +23,7 @@ silver:
   subject: "{entity}"
   source_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt={run_date}/*.parquet"
   target_path: "s3://{bucket}/{prefix}/silver/domain={domain}/subject={subject}/dt={run_date}/"
-  unique_columns: [{unique_column}]
+  unique_columns: [{unique_columns}]
   last_updated_column: {last_updated_column}
   entity_kind: event
   history_mode: current_only

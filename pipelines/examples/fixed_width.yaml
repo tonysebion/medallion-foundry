@@ -49,8 +49,8 @@ bronze:
 silver:
   domain: your_domain               # Business domain (e.g., finance, banking)
   subject: your_subject             # Subject area (e.g., transactions, payments)
-  natural_keys: [txn_id]            # Primary key column
-  change_timestamp: txn_date        # Timestamp column
+  unique_columns: [txn_id]            # Primary key column
+  last_updated_column: txn_date        # Timestamp column
   # target_path auto-generates: ./silver/domain=your_domain/subject=your_subject/dt={run_date}/
   # For S3: target_path: "s3://bucket/silver/domain=your_domain/subject=your_subject/dt={run_date}/"
 
