@@ -48,7 +48,7 @@ Pipelines are defined in **YAML** (recommended) or Python. YAML is simpler and p
 ### 2. Copy and Edit
 
 ```bash
-cp pipelines/templates/csv_snapshot.yaml my_pipeline.yaml
+cp pipelines/examples/csv_snapshot.yaml my_pipeline.yaml
 ```
 
 Edit the file - the schema provides autocomplete in VSCode:
@@ -296,6 +296,5 @@ pipelines/
 
 ## Next Steps
 
-- Browse `pipelines/templates/` for ready-to-edit scaffolds
-- Check `pipelines/examples/` for advanced patterns
+- Browse `pipelines/examples/` for ready-to-use templates and advanced patterns
 - Run `python -m pipelines --list` to verify pipelines are discoverable
