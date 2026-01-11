@@ -14,6 +14,7 @@ import pandas as pd
 @dataclass
 class ValidationResult:
     """Result of a validation check."""
+
     passed: bool
     message: str
     details: Optional[dict] = None
@@ -48,11 +49,11 @@ class SCD1Assertions:
             return ValidationResult(True, f"All {len(df)} records have unique keys")
 
         dup_count = len(duplicates)
-        dup_keys = duplicates[keys].drop_duplicates().to_dict('records')[:5]
+        dup_keys = duplicates[keys].drop_duplicates().to_dict("records")[:5]
         return ValidationResult(
             False,
             f"Found {dup_count} records with duplicate keys",
-            {"duplicate_keys": dup_keys, "total_duplicates": dup_count}
+            {"duplicate_keys": dup_keys, "total_duplicates": dup_count},
         )
 
     @staticmethod
@@ -60,7 +61,7 @@ class SCD1Assertions:
         df: pd.DataFrame,
         effective_from: str = "effective_from",
         effective_to: str = "effective_to",
-        is_current: str = "is_current"
+        is_current: str = "is_current",
     ) -> ValidationResult:
         """Assert that SCD2 temporal columns are NOT present.
 
@@ -82,7 +83,7 @@ class SCD1Assertions:
         return ValidationResult(
             False,
             f"SCD2 columns found in SCD1 data: {present_cols}",
-            {"unexpected_columns": list(present_cols)}
+            {"unexpected_columns": list(present_cols)},
         )
 
     @staticmethod
@@ -132,9 +133,7 @@ class SCD1Assertions:
             return ValidationResult(True, "All expected values match")
 
         return ValidationResult(
-            False,
-            f"{len(failures)} value mismatches found",
-            {"failures": failures}
+            False, f"{len(failures)} value mismatches found", {"failures": failures}
         )
 
 
@@ -154,7 +153,7 @@ class SCD2Assertions:
         df: pd.DataFrame,
         effective_from: str = "effective_from",
         effective_to: str = "effective_to",
-        is_current: str = "is_current"
+        is_current: str = "is_current",
     ) -> ValidationResult:
         """Assert that all required SCD2 columns are present.
 
@@ -171,14 +170,12 @@ class SCD2Assertions:
         return ValidationResult(
             False,
             f"Missing SCD2 columns: {missing}",
-            {"missing_columns": list(missing)}
+            {"missing_columns": list(missing)},
         )
 
     @staticmethod
     def assert_effective_from_equals_ts(
-        df: pd.DataFrame,
-        ts_col: str,
-        effective_from: str = "effective_from"
+        df: pd.DataFrame, ts_col: str, effective_from: str = "effective_from"
     ) -> ValidationResult:
         """Assert effective_from equals the timestamp column for all rows.
 
@@ -190,19 +187,19 @@ class SCD2Assertions:
 
         mismatches = df[df[effective_from] != df[ts_col]]
         if len(mismatches) == 0:
-            return ValidationResult(True, "effective_from equals timestamp for all rows")
+            return ValidationResult(
+                True, "effective_from equals timestamp for all rows"
+            )
 
         return ValidationResult(
             False,
             f"{len(mismatches)} rows have effective_from != {ts_col}",
-            {"mismatch_count": len(mismatches)}
+            {"mismatch_count": len(mismatches)},
         )
 
     @staticmethod
     def assert_current_view_unique(
-        df: pd.DataFrame,
-        keys: List[str],
-        is_current: str = "is_current"
+        df: pd.DataFrame, keys: List[str], is_current: str = "is_current"
     ) -> ValidationResult:
         """Assert current records (is_current=1) have unique natural keys.
 
@@ -217,22 +214,19 @@ class SCD2Assertions:
         duplicates = current[current.duplicated(subset=keys, keep=False)]
         if len(duplicates) == 0:
             return ValidationResult(
-                True,
-                f"All {len(current)} current records have unique keys"
+                True, f"All {len(current)} current records have unique keys"
             )
 
-        dup_keys = duplicates[keys].drop_duplicates().to_dict('records')[:5]
+        dup_keys = duplicates[keys].drop_duplicates().to_dict("records")[:5]
         return ValidationResult(
             False,
             f"{len(duplicates)} current records have duplicate keys",
-            {"duplicate_keys": dup_keys}
+            {"duplicate_keys": dup_keys},
         )
 
     @staticmethod
     def assert_one_current_per_key(
-        df: pd.DataFrame,
-        keys: List[str],
-        is_current: str = "is_current"
+        df: pd.DataFrame, keys: List[str], is_current: str = "is_current"
     ) -> ValidationResult:
         """Assert exactly one is_current=1 per natural key.
 
@@ -248,8 +242,7 @@ class SCD2Assertions:
 
         if len(invalid) == 0:
             return ValidationResult(
-                True,
-                f"All {len(grouped)} keys have exactly one current record"
+                True, f"All {len(grouped)} keys have exactly one current record"
             )
 
         # Keys with 0 or multiple current records
@@ -262,8 +255,8 @@ class SCD2Assertions:
             {
                 "zero_current": len(zero_current),
                 "multiple_current": len(multiple_current),
-                "sample_invalid": invalid[keys].head().to_dict('records')
-            }
+                "sample_invalid": invalid[keys].head().to_dict("records"),
+            },
         )
 
     @staticmethod
@@ -271,7 +264,7 @@ class SCD2Assertions:
         df: pd.DataFrame,
         keys: List[str],
         effective_from: str = "effective_from",
-        effective_to: str = "effective_to"
+        effective_to: str = "effective_to",
     ) -> ValidationResult:
         """Assert effective_to equals next effective_from (no gaps).
 
@@ -295,11 +288,13 @@ class SCD2Assertions:
                     continue
 
                 if current[effective_to] != next_ver[effective_from]:
-                    gaps.append({
-                        "key": key_vals,
-                        "gap_from": str(current[effective_to]),
-                        "gap_to": str(next_ver[effective_from])
-                    })
+                    gaps.append(
+                        {
+                            "key": key_vals,
+                            "gap_from": str(current[effective_to]),
+                            "gap_to": str(next_ver[effective_from]),
+                        }
+                    )
 
         if not gaps:
             return ValidationResult(True, "Effective dates are contiguous")
@@ -307,14 +302,14 @@ class SCD2Assertions:
         return ValidationResult(
             False,
             f"Found {len(gaps)} gaps in effective date ranges",
-            {"gaps": gaps[:5]}  # First 5 gaps
+            {"gaps": gaps[:5]},  # First 5 gaps
         )
 
     @staticmethod
     def assert_current_has_null_effective_to(
         df: pd.DataFrame,
         effective_to: str = "effective_to",
-        is_current: str = "is_current"
+        is_current: str = "is_current",
     ) -> ValidationResult:
         """Assert current records have NULL effective_to.
 
@@ -328,21 +323,18 @@ class SCD2Assertions:
         non_null = current[~current[effective_to].isna()]
         if len(non_null) == 0:
             return ValidationResult(
-                True,
-                f"All {len(current)} current records have NULL effective_to"
+                True, f"All {len(current)} current records have NULL effective_to"
             )
 
         return ValidationResult(
             False,
             f"{len(non_null)} current records have non-NULL effective_to",
-            {"non_null_count": len(non_null)}
+            {"non_null_count": len(non_null)},
         )
 
     @staticmethod
     def assert_history_preserved(
-        df: pd.DataFrame,
-        keys: List[str],
-        expected_counts: dict
+        df: pd.DataFrame, keys: List[str], expected_counts: dict
     ) -> ValidationResult:
         """Assert expected number of versions per key.
 
@@ -374,7 +366,7 @@ class SCD2Assertions:
         return ValidationResult(
             False,
             f"{len(failures)} keys have wrong version counts",
-            {"failures": failures}
+            {"failures": failures},
         )
 
 
@@ -393,7 +385,7 @@ class EventAssertions:
         df: pd.DataFrame,
         effective_from: str = "effective_from",
         effective_to: str = "effective_to",
-        is_current: str = "is_current"
+        is_current: str = "is_current",
     ) -> ValidationResult:
         """Assert that SCD2 temporal columns are NOT present.
 
@@ -406,9 +398,7 @@ class EventAssertions:
 
     @staticmethod
     def assert_records_immutable(
-        before_df: pd.DataFrame,
-        after_df: pd.DataFrame,
-        event_key: str
+        before_df: pd.DataFrame, after_df: pd.DataFrame, event_key: str
     ) -> ValidationResult:
         """Assert existing records are unchanged between batches.
 
@@ -432,8 +422,12 @@ class EventAssertions:
             return ValidationResult(True, "No common keys - append only")
 
         # Compare records with common keys
-        before_common = before_df[before_df[event_key].isin(common_keys)].sort_values(event_key)
-        after_common = after_df[after_df[event_key].isin(common_keys)].sort_values(event_key)
+        before_common = before_df[before_df[event_key].isin(common_keys)].sort_values(
+            event_key
+        )
+        after_common = after_df[after_df[event_key].isin(common_keys)].sort_values(
+            event_key
+        )
 
         # Reset index for comparison
         before_common = before_common.reset_index(drop=True)
@@ -442,21 +436,16 @@ class EventAssertions:
         try:
             pd.testing.assert_frame_equal(before_common, after_common)
             return ValidationResult(
-                True,
-                f"All {len(common_keys)} existing records unchanged"
+                True, f"All {len(common_keys)} existing records unchanged"
             )
         except AssertionError as e:
             return ValidationResult(
-                False,
-                "Existing records were modified",
-                {"assertion_error": str(e)}
+                False, "Existing records were modified", {"assertion_error": str(e)}
             )
 
     @staticmethod
     def assert_append_only(
-        before_df: pd.DataFrame,
-        after_df: pd.DataFrame,
-        event_key: str
+        before_df: pd.DataFrame, after_df: pd.DataFrame, event_key: str
     ) -> ValidationResult:
         """Assert new batch only adds records, never removes.
 
@@ -469,14 +458,13 @@ class EventAssertions:
         removed = before_keys - after_keys
         if not removed:
             return ValidationResult(
-                True,
-                f"Append-only: {len(after_keys - before_keys)} new records added"
+                True, f"Append-only: {len(after_keys - before_keys)} new records added"
             )
 
         return ValidationResult(
             False,
             f"{len(removed)} records were removed",
-            {"removed_keys": list(removed)[:10]}
+            {"removed_keys": list(removed)[:10]},
         )
 
     @staticmethod
@@ -499,5 +487,5 @@ class EventAssertions:
         return ValidationResult(
             False,
             f"{dup_count} rows are exact duplicates ({unique_dup_groups} unique patterns)",
-            {"duplicate_row_count": dup_count}
+            {"duplicate_row_count": dup_count},
         )

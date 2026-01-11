@@ -10,7 +10,10 @@ from datetime import datetime
 
 
 from tests.data_validation.assertions import SCD1Assertions, SCD2Assertions
-from tests.combination.helpers import simulate_incremental_to_scd1, simulate_incremental_to_scd2
+from tests.combination.helpers import (
+    simulate_incremental_to_scd1,
+    simulate_incremental_to_scd2,
+)
 from tests.combination.conftest import create_memtable
 
 
@@ -19,10 +22,22 @@ class TestIncrementalToSCD1:
 
     def test_single_batch_produces_unique_keys(self, con):
         """Single incremental batch produces unique keys."""
-        batch = create_memtable([
-            {"id": 1, "name": "Alice", "status": "active", "ts": datetime(2025, 1, 10)},
-            {"id": 2, "name": "Bob", "status": "pending", "ts": datetime(2025, 1, 10)},
-        ])
+        batch = create_memtable(
+            [
+                {
+                    "id": 1,
+                    "name": "Alice",
+                    "status": "active",
+                    "ts": datetime(2025, 1, 10),
+                },
+                {
+                    "id": 2,
+                    "name": "Bob",
+                    "status": "pending",
+                    "ts": datetime(2025, 1, 10),
+                },
+            ]
+        )
 
         result = simulate_incremental_to_scd1([batch], ["id"], "ts")
         result_df = result.execute()
@@ -33,15 +48,39 @@ class TestIncrementalToSCD1:
 
     def test_multiple_batches_keeps_latest(self, con):
         """Incremental batches keep latest version per key."""
-        batch_t0 = create_memtable([
-            {"id": 1, "name": "Alice", "status": "active", "ts": datetime(2025, 1, 10)},
-            {"id": 2, "name": "Bob", "status": "active", "ts": datetime(2025, 1, 10)},
-        ])
+        batch_t0 = create_memtable(
+            [
+                {
+                    "id": 1,
+                    "name": "Alice",
+                    "status": "active",
+                    "ts": datetime(2025, 1, 10),
+                },
+                {
+                    "id": 2,
+                    "name": "Bob",
+                    "status": "active",
+                    "ts": datetime(2025, 1, 10),
+                },
+            ]
+        )
 
-        batch_t1 = create_memtable([
-            {"id": 1, "name": "Alice Updated", "status": "inactive", "ts": datetime(2025, 1, 15)},
-            {"id": 3, "name": "Charlie", "status": "active", "ts": datetime(2025, 1, 15)},
-        ])
+        batch_t1 = create_memtable(
+            [
+                {
+                    "id": 1,
+                    "name": "Alice Updated",
+                    "status": "inactive",
+                    "ts": datetime(2025, 1, 15),
+                },
+                {
+                    "id": 3,
+                    "name": "Charlie",
+                    "status": "active",
+                    "ts": datetime(2025, 1, 15),
+                },
+            ]
+        )
 
         result = simulate_incremental_to_scd1([batch_t0, batch_t1], ["id"], "ts")
         result_df = result.execute()
@@ -58,18 +97,20 @@ class TestIncrementalToSCD1:
                 1: {"name": "Alice Updated", "status": "inactive"},
                 2: {"name": "Bob", "status": "active"},
                 3: {"name": "Charlie", "status": "active"},
-            }
+            },
         )
         assert values.passed, values.message
 
     def test_out_of_order_updates_handled(self, con):
         """Out-of-order incremental updates deduplicated correctly."""
         # Batch 1 has earlier and later timestamps
-        batch = create_memtable([
-            {"id": 1, "name": "V2", "ts": datetime(2025, 1, 15)},  # Later
-            {"id": 1, "name": "V1", "ts": datetime(2025, 1, 10)},  # Earlier
-            {"id": 1, "name": "V3", "ts": datetime(2025, 1, 20)},  # Latest
-        ])
+        batch = create_memtable(
+            [
+                {"id": 1, "name": "V2", "ts": datetime(2025, 1, 15)},  # Later
+                {"id": 1, "name": "V1", "ts": datetime(2025, 1, 10)},  # Earlier
+                {"id": 1, "name": "V3", "ts": datetime(2025, 1, 20)},  # Latest
+            ]
+        )
 
         result = simulate_incremental_to_scd1([batch], ["id"], "ts")
         result_df = result.execute()
@@ -80,9 +121,11 @@ class TestIncrementalToSCD1:
 
     def test_no_scd2_columns_in_output(self, con):
         """SCD1 output should not have SCD2 columns."""
-        batch = create_memtable([
-            {"id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},
-        ])
+        batch = create_memtable(
+            [
+                {"id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},
+            ]
+        )
 
         result = simulate_incremental_to_scd1([batch], ["id"], "ts")
         result_df = result.execute()
@@ -96,9 +139,11 @@ class TestIncrementalToSCD2:
 
     def test_single_batch_creates_history(self, con):
         """Single incremental batch creates SCD2 structure."""
-        batch = create_memtable([
-            {"id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},
-        ])
+        batch = create_memtable(
+            [
+                {"id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},
+            ]
+        )
 
         result = simulate_incremental_to_scd2([batch], ["id"], "ts")
         result_df = result.execute()
@@ -111,40 +156,50 @@ class TestIncrementalToSCD2:
 
     def test_multiple_batches_preserves_all_versions(self, con):
         """Incremental batches preserve all versions in history."""
-        batch_t0 = create_memtable([
-            {"id": 1, "name": "V1", "ts": datetime(2025, 1, 10)},
-        ])
+        batch_t0 = create_memtable(
+            [
+                {"id": 1, "name": "V1", "ts": datetime(2025, 1, 10)},
+            ]
+        )
 
-        batch_t1 = create_memtable([
-            {"id": 1, "name": "V2", "ts": datetime(2025, 1, 15)},
-        ])
+        batch_t1 = create_memtable(
+            [
+                {"id": 1, "name": "V2", "ts": datetime(2025, 1, 15)},
+            ]
+        )
 
-        batch_t2 = create_memtable([
-            {"id": 1, "name": "V3", "ts": datetime(2025, 1, 20)},
-        ])
+        batch_t2 = create_memtable(
+            [
+                {"id": 1, "name": "V3", "ts": datetime(2025, 1, 20)},
+            ]
+        )
 
-        result = simulate_incremental_to_scd2([batch_t0, batch_t1, batch_t2], ["id"], "ts")
+        result = simulate_incremental_to_scd2(
+            [batch_t0, batch_t1, batch_t2], ["id"], "ts"
+        )
         result_df = result.execute()
 
         # All 3 versions preserved
         history = SCD2Assertions.assert_history_preserved(
-            result_df,
-            keys=["id"],
-            expected_counts={1: 3}
+            result_df, keys=["id"], expected_counts={1: 3}
         )
         assert history.passed, history.message
 
     def test_current_view_after_multiple_updates(self, con):
         """Current view has unique keys after updates."""
-        batch_t0 = create_memtable([
-            {"id": 1, "name": "V1", "ts": datetime(2025, 1, 10)},
-            {"id": 2, "name": "V1", "ts": datetime(2025, 1, 10)},
-        ])
+        batch_t0 = create_memtable(
+            [
+                {"id": 1, "name": "V1", "ts": datetime(2025, 1, 10)},
+                {"id": 2, "name": "V1", "ts": datetime(2025, 1, 10)},
+            ]
+        )
 
-        batch_t1 = create_memtable([
-            {"id": 1, "name": "V2", "ts": datetime(2025, 1, 15)},
-            {"id": 2, "name": "V2", "ts": datetime(2025, 1, 15)},
-        ])
+        batch_t1 = create_memtable(
+            [
+                {"id": 1, "name": "V2", "ts": datetime(2025, 1, 15)},
+                {"id": 2, "name": "V2", "ts": datetime(2025, 1, 15)},
+            ]
+        )
 
         result = simulate_incremental_to_scd2([batch_t0, batch_t1], ["id"], "ts")
         result_df = result.execute()
@@ -159,7 +214,9 @@ class TestIncrementalToSCD2:
     def test_effective_dates_form_chain(self, con):
         """Effective dates form contiguous chain for each key."""
         batches = [
-            create_memtable([{"id": 1, "name": f"V{i}", "ts": datetime(2025, 1, i * 5)}])
+            create_memtable(
+                [{"id": 1, "name": f"V{i}", "ts": datetime(2025, 1, i * 5)}]
+            )
             for i in range(1, 5)
         ]
 
@@ -175,19 +232,27 @@ class TestIncrementalNewAndExisting:
 
     def test_scd1_new_keys_added(self, con):
         """New keys in incremental batches are added to SCD1."""
-        batch_t0 = create_memtable([
-            {"id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},
-        ])
+        batch_t0 = create_memtable(
+            [
+                {"id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},
+            ]
+        )
 
-        batch_t1 = create_memtable([
-            {"id": 2, "name": "Bob", "ts": datetime(2025, 1, 15)},  # New key
-        ])
+        batch_t1 = create_memtable(
+            [
+                {"id": 2, "name": "Bob", "ts": datetime(2025, 1, 15)},  # New key
+            ]
+        )
 
-        batch_t2 = create_memtable([
-            {"id": 3, "name": "Charlie", "ts": datetime(2025, 1, 20)},  # New key
-        ])
+        batch_t2 = create_memtable(
+            [
+                {"id": 3, "name": "Charlie", "ts": datetime(2025, 1, 20)},  # New key
+            ]
+        )
 
-        result = simulate_incremental_to_scd1([batch_t0, batch_t1, batch_t2], ["id"], "ts")
+        result = simulate_incremental_to_scd1(
+            [batch_t0, batch_t1, batch_t2], ["id"], "ts"
+        )
         result_df = result.execute()
 
         assert len(result_df) == 3
@@ -195,23 +260,25 @@ class TestIncrementalNewAndExisting:
 
     def test_scd2_new_keys_get_history(self, con):
         """New keys in incremental batches get proper history."""
-        batch_t0 = create_memtable([
-            {"id": 1, "name": "Alice V1", "ts": datetime(2025, 1, 10)},
-        ])
+        batch_t0 = create_memtable(
+            [
+                {"id": 1, "name": "Alice V1", "ts": datetime(2025, 1, 10)},
+            ]
+        )
 
-        batch_t1 = create_memtable([
-            {"id": 1, "name": "Alice V2", "ts": datetime(2025, 1, 15)},  # Update
-            {"id": 2, "name": "Bob V1", "ts": datetime(2025, 1, 15)},    # New key
-        ])
+        batch_t1 = create_memtable(
+            [
+                {"id": 1, "name": "Alice V2", "ts": datetime(2025, 1, 15)},  # Update
+                {"id": 2, "name": "Bob V1", "ts": datetime(2025, 1, 15)},  # New key
+            ]
+        )
 
         result = simulate_incremental_to_scd2([batch_t0, batch_t1], ["id"], "ts")
         result_df = result.execute()
 
         # id=1 should have 2 versions, id=2 should have 1
         history = SCD2Assertions.assert_history_preserved(
-            result_df,
-            keys=["id"],
-            expected_counts={1: 2, 2: 1}
+            result_df, keys=["id"], expected_counts={1: 2, 2: 1}
         )
         assert history.passed, history.message
 

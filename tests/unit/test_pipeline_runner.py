@@ -64,6 +64,7 @@ def test_run_pipeline_success():
     assert bronze.calls == 1
     assert silver.calls == 1
 
+
 def test_run_pipeline_failure(monkeypatch):
     bronze = DummyBronze()
     silver = DummySilver()
@@ -77,12 +78,14 @@ def test_run_pipeline_failure(monkeypatch):
     assert isinstance(result.error, RuntimeError)
     assert silver.calls == 0
 
+
 def test_run_bronze_only():
     bronze = DummyBronze()
     result = run_bronze_only(bronze, "2025-01-17")
     assert result.success
     assert result.pipeline_name == "tests.orders:bronze"
     assert result.bronze["row_count"] == 5
+
 
 def test_run_silver_only():
     silver = DummySilver()

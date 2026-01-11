@@ -44,7 +44,11 @@ def test_maybe_skip_if_exists_returns_skip_result():
     )
 
     assert called is True
-    assert result == {"skipped": True, "reason": "already_exists", "target": "/tmp/output"}
+    assert result == {
+        "skipped": True,
+        "reason": "already_exists",
+        "target": "/tmp/output",
+    }
 
 
 def test_maybe_dry_run_returns_extra_fields():

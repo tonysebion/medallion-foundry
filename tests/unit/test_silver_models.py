@@ -60,7 +60,10 @@ class TestSilverModelEnum:
         # CDC presets
         assert SilverModel("cdc_current") == SilverModel.CDC_CURRENT
         assert SilverModel("cdc_current_tombstone") == SilverModel.CDC_CURRENT_TOMBSTONE
-        assert SilverModel("cdc_history_hard_delete") == SilverModel.CDC_HISTORY_HARD_DELETE
+        assert (
+            SilverModel("cdc_history_hard_delete")
+            == SilverModel.CDC_HISTORY_HARD_DELETE
+        )
 
 
 class TestSilverModelPresets:
@@ -69,7 +72,9 @@ class TestSilverModelPresets:
     def test_all_models_have_presets(self):
         """Test every SilverModel has a corresponding preset."""
         for model in SilverModel:
-            assert model.value in SILVER_MODEL_PRESETS, f"Missing preset for {model.value}"
+            assert model.value in SILVER_MODEL_PRESETS, (
+                f"Missing preset for {model.value}"
+            )
 
     def test_presets_have_all_required_keys(self):
         """Test every preset has entity_kind, history_mode, and input_mode."""
@@ -165,12 +170,18 @@ class TestSilverModelPresets:
     def test_cdc_presets_include_delete_mode(self):
         """Test that all CDC presets include delete_mode key."""
         cdc_models = [
-            "cdc_current", "cdc_current_tombstone", "cdc_current_hard_delete",
-            "cdc_history", "cdc_history_tombstone", "cdc_history_hard_delete",
+            "cdc_current",
+            "cdc_current_tombstone",
+            "cdc_current_hard_delete",
+            "cdc_history",
+            "cdc_history_tombstone",
+            "cdc_history_hard_delete",
         ]
         for model_name in cdc_models:
             preset = SILVER_MODEL_PRESETS[model_name]
-            assert "delete_mode" in preset, f"CDC preset {model_name} missing delete_mode"
+            assert "delete_mode" in preset, (
+                f"CDC preset {model_name} missing delete_mode"
+            )
 
 
 class TestConfigLoaderModelExpansion:
@@ -179,7 +190,9 @@ class TestConfigLoaderModelExpansion:
     def test_load_silver_with_periodic_snapshot_model(self, tmp_path: Path):
         """Test loading Silver config with periodic_snapshot model."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["order_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["order_id"],
             "change_timestamp": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/orders/",
@@ -209,7 +222,9 @@ class TestConfigLoaderModelExpansion:
     def test_load_silver_with_full_merge_dedupe_model(self, tmp_path: Path):
         """Test loading Silver config with full_merge_dedupe model."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["customer_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["customer_id"],
             "change_timestamp": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/customers/",
@@ -223,7 +238,9 @@ class TestConfigLoaderModelExpansion:
     def test_load_silver_with_scd_type_2_model(self, tmp_path: Path):
         """Test loading Silver config with scd_type_2 model."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["product_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["product_id"],
             "change_timestamp": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/products/",
@@ -237,7 +254,9 @@ class TestConfigLoaderModelExpansion:
     def test_load_silver_with_event_log_model(self, tmp_path: Path):
         """Test loading Silver config with event_log model."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["event_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["event_id"],
             "change_timestamp": "event_time",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/events/",
@@ -251,7 +270,9 @@ class TestConfigLoaderModelExpansion:
     def test_explicit_settings_override_model(self, tmp_path: Path):
         """Test that explicit settings override model defaults."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["order_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["order_id"],
             "change_timestamp": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/orders/",
@@ -270,7 +291,9 @@ class TestConfigLoaderModelExpansion:
     def test_invalid_model_raises(self, tmp_path: Path):
         """Test invalid model raises YAMLConfigError."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["order_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["order_id"],
             "change_timestamp": "updated_at",
             "model": "invalid_model",
         }
@@ -281,7 +304,9 @@ class TestConfigLoaderModelExpansion:
     def test_load_silver_with_column_mapping(self, tmp_path: Path):
         """Test loading Silver config with column_mapping."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["order_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["order_id"],
             "change_timestamp": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/orders/",
@@ -302,7 +327,9 @@ class TestConfigLoaderModelExpansion:
     def test_load_silver_without_column_mapping(self, tmp_path: Path):
         """Test loading Silver config without column_mapping defaults to None."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["order_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["order_id"],
             "change_timestamp": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/orders/",
@@ -395,6 +422,7 @@ silver:
         config_file.write_text(yaml_content)
 
         import warnings
+
         # This will warn about input_mode mismatch, but we're testing the override
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
@@ -438,7 +466,9 @@ class TestCDCPresetConfigLoader:
     def test_load_silver_with_cdc_current_model(self, tmp_path: Path):
         """Test loading Silver config with cdc_current model."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["order_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["order_id"],
             "change_timestamp": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/orders/",
@@ -453,7 +483,9 @@ class TestCDCPresetConfigLoader:
     def test_load_silver_with_cdc_current_tombstone_model(self, tmp_path: Path):
         """Test loading Silver config with cdc_current_tombstone model."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["customer_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["customer_id"],
             "change_timestamp": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/customers/",
@@ -468,7 +500,9 @@ class TestCDCPresetConfigLoader:
     def test_load_silver_with_cdc_history_model(self, tmp_path: Path):
         """Test loading Silver config with cdc_history model."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["product_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["product_id"],
             "change_timestamp": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/products/",
@@ -483,7 +517,9 @@ class TestCDCPresetConfigLoader:
     def test_load_silver_with_cdc_history_tombstone_model(self, tmp_path: Path):
         """Test loading Silver config with cdc_history_tombstone model."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["account_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["account_id"],
             "change_timestamp": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/accounts/",
@@ -498,7 +534,9 @@ class TestCDCPresetConfigLoader:
     def test_load_silver_with_cdc_current_hard_delete_model(self, tmp_path: Path):
         """Test loading Silver config with cdc_current_hard_delete model."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["order_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["order_id"],
             "change_timestamp": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/orders/",
@@ -513,7 +551,9 @@ class TestCDCPresetConfigLoader:
     def test_load_silver_with_cdc_history_hard_delete_model(self, tmp_path: Path):
         """Test loading Silver config with cdc_history_hard_delete model."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["user_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["user_id"],
             "change_timestamp": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/users/",
@@ -528,7 +568,9 @@ class TestCDCPresetConfigLoader:
     def test_explicit_delete_mode_overrides_cdc_preset(self, tmp_path: Path):
         """Test that explicit delete_mode overrides CDC preset default."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["order_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["order_id"],
             "change_timestamp": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/orders/",
@@ -594,7 +636,9 @@ class TestModelValidationRequirements:
         """Non-periodic models require change_timestamp."""
         config = {
             "model": model,
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/",
         }
@@ -656,7 +700,9 @@ class TestCDCModelCrossValidation:
 
         config = {
             "model": model,
-            "domain": "test", "subject": "test", "natural_keys": ["order_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["order_id"],
             "change_timestamp": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/",
@@ -683,7 +729,9 @@ class TestCDCModelCrossValidation:
 
         config = {
             "model": model,
-            "domain": "test", "subject": "test", "natural_keys": ["order_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["order_id"],
             "change_timestamp": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/",
@@ -698,8 +746,12 @@ class TestBronzeSilverCrossValidation:
     """Tests for Bronze-Silver consistency validation."""
 
     # Rule 1: full_snapshot with append_log models is inefficient but works (warning)
-    @pytest.mark.parametrize("model", ["full_merge_dedupe", "incremental_merge", "scd_type_2", "event_log"])
-    def test_full_snapshot_with_append_log_models_warns(self, tmp_path: Path, model: str):
+    @pytest.mark.parametrize(
+        "model", ["full_merge_dedupe", "incremental_merge", "scd_type_2", "event_log"]
+    )
+    def test_full_snapshot_with_append_log_models_warns(
+        self, tmp_path: Path, model: str
+    ):
         """full_snapshot Bronze + append_log Silver models = warning (inefficient but works)."""
         from pipelines.lib.bronze import BronzeSource, SourceType, LoadPattern
 
@@ -713,7 +765,9 @@ class TestBronzeSilverCrossValidation:
         )
         config = {
             "model": model,
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/",
@@ -768,7 +822,9 @@ class TestBronzeSilverCrossValidation:
             load_silver_from_yaml(config, tmp_path, bronze)
         # The error now explains which patterns are valid for periodic_snapshot
         assert "periodic_snapshot" in str(exc_info.value).lower()
-        assert "full_snapshot" in str(exc_info.value).lower()  # Tells user the valid pattern
+        assert (
+            "full_snapshot" in str(exc_info.value).lower()
+        )  # Tells user the valid pattern
 
     # Rule 3: CDC Bronze with non-CDC Silver warns
     def test_cdc_bronze_warns_on_non_cdc_silver(self, tmp_path: Path):
@@ -785,7 +841,9 @@ class TestBronzeSilverCrossValidation:
         )
         config = {
             "model": "full_merge_dedupe",
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/",
@@ -798,7 +856,9 @@ class TestBronzeSilverCrossValidation:
         """delete_mode: tombstone/hard_delete requires CDC."""
         config = {
             "model": "full_merge_dedupe",
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
             "delete_mode": "tombstone",
             "source_path": "./bronze/*.parquet",
@@ -813,7 +873,9 @@ class TestBronzeSilverCrossValidation:
         """delete_mode: hard_delete also requires CDC."""
         config = {
             "model": "scd_type_2",
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
             "delete_mode": "hard_delete",
             "source_path": "./bronze/*.parquet",
@@ -828,7 +890,9 @@ class TestBronzeSilverCrossValidation:
         """delete_mode: ignore is valid with any load pattern."""
         config = {
             "model": "full_merge_dedupe",
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
             "delete_mode": "ignore",
             "source_path": "./bronze/*.parquet",
@@ -851,7 +915,9 @@ class TestBronzeSilverCrossValidation:
         )
         config = {
             "model": "cdc_current_tombstone",
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/",
@@ -880,7 +946,9 @@ class TestBronzeSilverCrossValidation:
         # We use explicit input_mode to trigger Rule 5
         config = {
             "model": "full_merge_dedupe",
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
             "input_mode": "append_log",  # Explicitly set (matches model default, conflicts with Bronze)
             "source_path": "./bronze/*.parquet",
@@ -905,7 +973,9 @@ class TestBronzeSilverCrossValidation:
         )
         config = {
             "model": "full_merge_dedupe",
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
             "input_mode": "replace_daily",  # Wrong for incremental!
             "source_path": "./bronze/*.parquet",

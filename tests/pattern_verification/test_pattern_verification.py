@@ -417,9 +417,7 @@ class TestCurrentHistoryPattern:
 
     def test_scd2_generates_entity_versions(self, generator):
         """Test SCD2 generates multiple versions per entity."""
-        scenario = generator.generate_scd2_scenario(
-            entities=500, changes_per_entity=3
-        )
+        scenario = generator.generate_scd2_scenario(entities=500, changes_per_entity=3)
 
         assert scenario.pattern == "current_history"
         assert scenario.batch_count >= 1
@@ -494,12 +492,14 @@ class TestAssertionFramework:
     @pytest.fixture
     def sample_df(self):
         """Create sample DataFrame for assertion tests."""
-        return pd.DataFrame({
-            "record_id": ["REC00000001", "REC00000002", "REC00000003"],
-            "status": ["active", "pending", "completed"],
-            "amount": [100.50, 200.75, 300.25],
-            "is_active": [True, True, False],
-        })
+        return pd.DataFrame(
+            {
+                "record_id": ["REC00000001", "REC00000002", "REC00000003"],
+                "status": ["active", "pending", "completed"],
+                "amount": [100.50, 200.75, 300.25],
+                "is_active": [True, True, False],
+            }
+        )
 
     def test_row_count_assertion_pass(self, sample_df):
         """Test row count assertion passes with correct count."""

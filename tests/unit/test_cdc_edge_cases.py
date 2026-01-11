@@ -29,12 +29,14 @@ class TestCDCOperationCodes:
     def _create_cdc_table(self, ops: list[str]):
         """Create a test CDC table with given operation codes."""
         con = ibis.duckdb.connect()
-        df = pd.DataFrame({
-            "id": [1, 1, 2, 3],
-            "name": ["Alice", "Alice Updated", "Bob", "Charlie"],
-            "op": ops,
-            "updated_at": ["2025-01-01", "2025-01-02", "2025-01-03", "2025-01-04"],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 1, 2, 3],
+                "name": ["Alice", "Alice Updated", "Bob", "Charlie"],
+                "op": ops,
+                "updated_at": ["2025-01-01", "2025-01-02", "2025-01-03", "2025-01-04"],
+            }
+        )
         return con.create_table("test", df)
 
     def test_uppercase_operation_codes(self):
@@ -83,12 +85,14 @@ class TestCDCOperationCodes:
     def test_numeric_operation_codes(self):
         """Numeric operation codes work when configured."""
         con = ibis.duckdb.connect()
-        df = pd.DataFrame({
-            "id": [1, 2, 3],
-            "name": ["Alice", "Bob", "Charlie"],
-            "op": ["1", "2", "3"],  # 1=insert, 2=update, 3=delete
-            "updated_at": ["2025-01-01", "2025-01-02", "2025-01-03"],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 2, 3],
+                "name": ["Alice", "Bob", "Charlie"],
+                "op": ["1", "2", "3"],  # 1=insert, 2=update, 3=delete
+                "updated_at": ["2025-01-01", "2025-01-02", "2025-01-03"],
+            }
+        )
         t = con.create_table("test", df)
 
         result = apply_cdc(
@@ -118,12 +122,14 @@ class TestMissingOperationColumn:
     def test_missing_operation_column_raises(self):
         """apply_cdc raises clear error when operation_column missing from data."""
         con = ibis.duckdb.connect()
-        df = pd.DataFrame({
-            "id": [1, 2],
-            "name": ["Alice", "Bob"],
-            "updated_at": ["2025-01-01", "2025-01-02"],
-            # No 'op' column!
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 2],
+                "name": ["Alice", "Bob"],
+                "updated_at": ["2025-01-01", "2025-01-02"],
+                # No 'op' column!
+            }
+        )
         t = con.create_table("test", df)
 
         with pytest.raises(ValueError) as exc_info:
@@ -141,12 +147,14 @@ class TestMissingOperationColumn:
     def test_missing_cdc_options_raises(self):
         """apply_cdc raises when cdc_options is None."""
         con = ibis.duckdb.connect()
-        df = pd.DataFrame({
-            "id": [1, 2],
-            "name": ["Alice", "Bob"],
-            "op": ["I", "U"],
-            "updated_at": ["2025-01-01", "2025-01-02"],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 2],
+                "name": ["Alice", "Bob"],
+                "op": ["I", "U"],
+                "updated_at": ["2025-01-01", "2025-01-02"],
+            }
+        )
         t = con.create_table("test", df)
 
         with pytest.raises(ValueError) as exc_info:
@@ -163,12 +171,14 @@ class TestMissingOperationColumn:
     def test_empty_cdc_options_raises(self):
         """apply_cdc raises when cdc_options is empty dict."""
         con = ibis.duckdb.connect()
-        df = pd.DataFrame({
-            "id": [1, 2],
-            "name": ["Alice", "Bob"],
-            "op": ["I", "U"],
-            "updated_at": ["2025-01-01", "2025-01-02"],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 2],
+                "name": ["Alice", "Bob"],
+                "op": ["I", "U"],
+                "updated_at": ["2025-01-01", "2025-01-02"],
+            }
+        )
         t = con.create_table("test", df)
 
         with pytest.raises(ValueError) as exc_info:
@@ -262,12 +272,14 @@ class TestInvalidDeleteMode:
     def test_invalid_delete_mode_in_apply_cdc(self):
         """apply_cdc raises for invalid delete_mode."""
         con = ibis.duckdb.connect()
-        df = pd.DataFrame({
-            "id": [1, 2],
-            "name": ["Alice", "Bob"],
-            "op": ["I", "U"],
-            "updated_at": ["2025-01-01", "2025-01-02"],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 2],
+                "name": ["Alice", "Bob"],
+                "op": ["I", "U"],
+                "updated_at": ["2025-01-01", "2025-01-02"],
+            }
+        )
         t = con.create_table("test", df)
 
         with pytest.raises(ValueError) as exc_info:
@@ -279,7 +291,10 @@ class TestInvalidDeleteMode:
                 cdc_options={"operation_column": "op"},
             )
 
-        assert "invalid_mode" in str(exc_info.value).lower() or "unknown" in str(exc_info.value).lower()
+        assert (
+            "invalid_mode" in str(exc_info.value).lower()
+            or "unknown" in str(exc_info.value).lower()
+        )
 
     def test_invalid_delete_mode_in_yaml(self, tmp_path):
         """YAML loader rejects invalid delete_mode."""
@@ -311,12 +326,20 @@ class TestCDCDeleteModes:
     def _create_cdc_table_with_deletes(self):
         """Create test table with I/U/D records."""
         con = ibis.duckdb.connect()
-        df = pd.DataFrame({
-            "id": [1, 1, 2, 3, 3],
-            "name": ["Alice", "Alice Updated", "Bob", "Charlie", "Charlie Deleted"],
-            "op": ["I", "U", "I", "I", "D"],
-            "updated_at": ["2025-01-01", "2025-01-02", "2025-01-03", "2025-01-04", "2025-01-05"],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 1, 2, 3, 3],
+                "name": ["Alice", "Alice Updated", "Bob", "Charlie", "Charlie Deleted"],
+                "op": ["I", "U", "I", "I", "D"],
+                "updated_at": [
+                    "2025-01-01",
+                    "2025-01-02",
+                    "2025-01-03",
+                    "2025-01-04",
+                    "2025-01-05",
+                ],
+            }
+        )
         return con.create_table("test", df)
 
     def test_delete_mode_ignore(self):
@@ -380,12 +403,14 @@ class TestCDCEmptyData:
     def test_all_deletes_results_in_empty(self):
         """When all records are deletes with ignore mode, result is empty."""
         con = ibis.duckdb.connect()
-        df = pd.DataFrame({
-            "id": [1, 2, 3],
-            "name": ["Alice", "Bob", "Charlie"],
-            "op": ["D", "D", "D"],  # All deletes
-            "updated_at": ["2025-01-01", "2025-01-02", "2025-01-03"],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 2, 3],
+                "name": ["Alice", "Bob", "Charlie"],
+                "op": ["D", "D", "D"],  # All deletes
+                "updated_at": ["2025-01-01", "2025-01-02", "2025-01-03"],
+            }
+        )
         t = con.create_table("test", df)
 
         result = apply_cdc(
@@ -400,12 +425,14 @@ class TestCDCEmptyData:
     def test_all_deletes_with_tombstone_preserves_all(self):
         """When all records are deletes with tombstone mode, all marked deleted."""
         con = ibis.duckdb.connect()
-        df = pd.DataFrame({
-            "id": [1, 2, 3],
-            "name": ["Alice", "Bob", "Charlie"],
-            "op": ["D", "D", "D"],
-            "updated_at": ["2025-01-01", "2025-01-02", "2025-01-03"],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 2, 3],
+                "name": ["Alice", "Bob", "Charlie"],
+                "op": ["D", "D", "D"],
+                "updated_at": ["2025-01-01", "2025-01-02", "2025-01-03"],
+            }
+        )
         t = con.create_table("test", df)
 
         result = apply_cdc(
@@ -422,12 +449,14 @@ class TestCDCEmptyData:
     def test_single_row_insert(self):
         """CDC handles single insert record."""
         con = ibis.duckdb.connect()
-        df = pd.DataFrame({
-            "id": [1],
-            "name": ["Alice"],
-            "op": ["I"],
-            "updated_at": ["2025-01-01"],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1],
+                "name": ["Alice"],
+                "op": ["I"],
+                "updated_at": ["2025-01-01"],
+            }
+        )
         t = con.create_table("test", df)
 
         result = apply_cdc(

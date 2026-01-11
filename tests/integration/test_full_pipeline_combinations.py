@@ -51,7 +51,9 @@ def con():
 # =============================================================================
 
 
-def create_snapshot_batches(num_batches: int = 3, base_rows: int = 5) -> List[pd.DataFrame]:
+def create_snapshot_batches(
+    num_batches: int = 3, base_rows: int = 5
+) -> List[pd.DataFrame]:
     """Create FULL_SNAPSHOT batches (full replacement each time).
 
     Each batch contains ALL records at that point in time.
@@ -76,7 +78,9 @@ def create_snapshot_batches(num_batches: int = 3, base_rows: int = 5) -> List[pd
     return batches
 
 
-def create_incremental_batches(num_batches: int = 4, rows_per_batch: int = 3) -> List[pd.DataFrame]:
+def create_incremental_batches(
+    num_batches: int = 4, rows_per_batch: int = 3
+) -> List[pd.DataFrame]:
     """Create INCREMENTAL_APPEND batches (new records each time).
 
     Each batch contains only NEW records since last batch.
@@ -110,7 +114,9 @@ def create_incremental_batches(num_batches: int = 4, rows_per_batch: int = 3) ->
     return batches
 
 
-def create_cdc_stream(num_records: int = 5, include_deletes: bool = True) -> pd.DataFrame:
+def create_cdc_stream(
+    num_records: int = 5, include_deletes: bool = True
+) -> pd.DataFrame:
     """Create CDC stream with I/U/D operations.
 
     Returns a single DataFrame with all CDC events.
@@ -119,43 +125,51 @@ def create_cdc_stream(num_records: int = 5, include_deletes: bool = True) -> pd.
 
     # Initial inserts
     for i in range(num_records):
-        events.append({
-            "id": i + 1,
-            "name": f"Entity_{i + 1}_v1",
-            "value": 100 + i,
-            "ts": datetime(2025, 1, 10),
-            "op": "I",
-        })
+        events.append(
+            {
+                "id": i + 1,
+                "name": f"Entity_{i + 1}_v1",
+                "value": 100 + i,
+                "ts": datetime(2025, 1, 10),
+                "op": "I",
+            }
+        )
 
     # Updates for some records
     for i in range(min(3, num_records)):
-        events.append({
-            "id": i + 1,
-            "name": f"Entity_{i + 1}_v2",
-            "value": 200 + i,
-            "ts": datetime(2025, 1, 15),
-            "op": "U",
-        })
+        events.append(
+            {
+                "id": i + 1,
+                "name": f"Entity_{i + 1}_v2",
+                "value": 200 + i,
+                "ts": datetime(2025, 1, 15),
+                "op": "U",
+            }
+        )
 
     # Delete one record if requested
     if include_deletes and num_records > 1:
-        events.append({
-            "id": 2,
-            "name": "Entity_2_deleted",
-            "value": 0,
-            "ts": datetime(2025, 1, 20),
-            "op": "D",
-        })
+        events.append(
+            {
+                "id": 2,
+                "name": "Entity_2_deleted",
+                "value": 0,
+                "ts": datetime(2025, 1, 20),
+                "op": "D",
+            }
+        )
 
     # Final update for another record
     if num_records > 2:
-        events.append({
-            "id": 3,
-            "name": "Entity_3_v3",
-            "value": 350,
-            "ts": datetime(2025, 1, 25),
-            "op": "U",
-        })
+        events.append(
+            {
+                "id": 3,
+                "name": "Entity_3_v3",
+                "value": 350,
+                "ts": datetime(2025, 1, 25),
+                "op": "U",
+            }
+        )
 
     return pd.DataFrame(events)
 
@@ -191,7 +205,9 @@ def transform_to_event(df: pd.DataFrame) -> pd.DataFrame:
     return result.execute()
 
 
-def transform_cdc_to_scd1(df: pd.DataFrame, keys: List[str], order_by: str, op_col: str = "op") -> pd.DataFrame:
+def transform_cdc_to_scd1(
+    df: pd.DataFrame, keys: List[str], order_by: str, op_col: str = "op"
+) -> pd.DataFrame:
     """Transform CDC to SCD1 (apply ops, keep latest non-delete)."""
     t = ibis.memtable(df)
     # Get latest operation per key
@@ -201,7 +217,9 @@ def transform_cdc_to_scd1(df: pd.DataFrame, keys: List[str], order_by: str, op_c
     return active.execute()
 
 
-def transform_cdc_to_scd2(df: pd.DataFrame, keys: List[str], ts_col: str) -> pd.DataFrame:
+def transform_cdc_to_scd2(
+    df: pd.DataFrame, keys: List[str], ts_col: str
+) -> pd.DataFrame:
     """Transform CDC to SCD2 (build full history from CDC events)."""
     t = ibis.memtable(df)
     result = build_history(t, keys, ts_col)
@@ -254,11 +272,13 @@ class TestSnapshotToStateSCD1:
 
     def test_snapshot_with_duplicates_resolved(self, con):
         """Snapshot with duplicate keys resolved by timestamp."""
-        df = pd.DataFrame([
-            {"id": 1, "name": "Old", "value": 100, "ts": datetime(2025, 1, 10)},
-            {"id": 1, "name": "New", "value": 200, "ts": datetime(2025, 1, 15)},
-            {"id": 2, "name": "Only", "value": 300, "ts": datetime(2025, 1, 12)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "name": "Old", "value": 100, "ts": datetime(2025, 1, 10)},
+                {"id": 1, "name": "New", "value": 200, "ts": datetime(2025, 1, 15)},
+                {"id": 2, "name": "Only", "value": 300, "ts": datetime(2025, 1, 12)},
+            ]
+        )
 
         result_df = transform_to_scd1(df, keys=["id"], order_by="ts")
 
@@ -310,20 +330,28 @@ class TestSnapshotToStateSCD2:
         history_preserved = SCD2Assertions.assert_history_preserved(
             result_df, ["id"], expected_counts={1: 3, 2: 3, 3: 3}
         )
-        assert history_preserved.passed, f"History not preserved: {history_preserved.details}"
+        assert history_preserved.passed, (
+            f"History not preserved: {history_preserved.details}"
+        )
 
     def test_scd2_effective_dates_correct(self, con):
         """Verify effective_from equals timestamp."""
-        df = pd.DataFrame([
-            {"id": 1, "name": "V1", "ts": datetime(2025, 1, 10)},
-            {"id": 1, "name": "V2", "ts": datetime(2025, 1, 15)},
-            {"id": 1, "name": "V3", "ts": datetime(2025, 1, 20)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "name": "V1", "ts": datetime(2025, 1, 10)},
+                {"id": 1, "name": "V2", "ts": datetime(2025, 1, 15)},
+                {"id": 1, "name": "V3", "ts": datetime(2025, 1, 20)},
+            ]
+        )
 
         result_df = transform_to_scd2(df, keys=["id"], ts_col="ts")
 
-        eff_from_result = SCD2Assertions.assert_effective_from_equals_ts(result_df, "ts")
-        assert eff_from_result.passed, f"effective_from mismatch: {eff_from_result.details}"
+        eff_from_result = SCD2Assertions.assert_effective_from_equals_ts(
+            result_df, "ts"
+        )
+        assert eff_from_result.passed, (
+            f"effective_from mismatch: {eff_from_result.details}"
+        )
 
         # Only latest should be current
         current_rows = result_df[result_df["is_current"] == 1]
@@ -354,11 +382,17 @@ class TestSnapshotToEvent:
 
     def test_exact_duplicates_removed(self, con):
         """Exact duplicate rows removed from event stream."""
-        df = pd.DataFrame([
-            {"id": 1, "event_type": "click", "ts": datetime(2025, 1, 10)},
-            {"id": 1, "event_type": "click", "ts": datetime(2025, 1, 10)},  # Exact dup
-            {"id": 2, "event_type": "click", "ts": datetime(2025, 1, 10)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "event_type": "click", "ts": datetime(2025, 1, 10)},
+                {
+                    "id": 1,
+                    "event_type": "click",
+                    "ts": datetime(2025, 1, 10),
+                },  # Exact dup
+                {"id": 2, "event_type": "click", "ts": datetime(2025, 1, 10)},
+            ]
+        )
 
         result_df = transform_to_event(df)
 
@@ -388,14 +422,38 @@ class TestIncrementalToStateSCD1:
 
     def test_incremental_updates_keep_latest(self, con):
         """Updates in incremental batches resolved correctly."""
-        batch1 = pd.DataFrame([
-            {"id": 1, "name": "Entity_1_v1", "value": 100, "ts": datetime(2025, 1, 10)},
-            {"id": 2, "name": "Entity_2_v1", "value": 101, "ts": datetime(2025, 1, 10)},
-        ])
-        batch2 = pd.DataFrame([
-            {"id": 1, "name": "Entity_1_v2", "value": 200, "ts": datetime(2025, 1, 15)},  # Update
-            {"id": 3, "name": "Entity_3_v1", "value": 102, "ts": datetime(2025, 1, 15)},  # New
-        ])
+        batch1 = pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "name": "Entity_1_v1",
+                    "value": 100,
+                    "ts": datetime(2025, 1, 10),
+                },
+                {
+                    "id": 2,
+                    "name": "Entity_2_v1",
+                    "value": 101,
+                    "ts": datetime(2025, 1, 10),
+                },
+            ]
+        )
+        batch2 = pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "name": "Entity_1_v2",
+                    "value": 200,
+                    "ts": datetime(2025, 1, 15),
+                },  # Update
+                {
+                    "id": 3,
+                    "name": "Entity_3_v1",
+                    "value": 102,
+                    "ts": datetime(2025, 1, 15),
+                },  # New
+            ]
+        )
 
         combined = union_batches([batch1, batch2])
         result_df = transform_to_scd1(combined, keys=["id"], order_by="ts")
@@ -416,15 +474,36 @@ class TestIncrementalToStateSCD2:
 
     def test_incremental_to_scd2_history(self, con):
         """Incremental batches build proper SCD2 history."""
-        batch1 = pd.DataFrame([
-            {"id": 1, "name": "Entity_1_v1", "value": 100, "ts": datetime(2025, 1, 10)},
-        ])
-        batch2 = pd.DataFrame([
-            {"id": 1, "name": "Entity_1_v2", "value": 200, "ts": datetime(2025, 1, 15)},
-        ])
-        batch3 = pd.DataFrame([
-            {"id": 1, "name": "Entity_1_v3", "value": 300, "ts": datetime(2025, 1, 20)},
-        ])
+        batch1 = pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "name": "Entity_1_v1",
+                    "value": 100,
+                    "ts": datetime(2025, 1, 10),
+                },
+            ]
+        )
+        batch2 = pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "name": "Entity_1_v2",
+                    "value": 200,
+                    "ts": datetime(2025, 1, 15),
+                },
+            ]
+        )
+        batch3 = pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "name": "Entity_1_v3",
+                    "value": 300,
+                    "ts": datetime(2025, 1, 20),
+                },
+            ]
+        )
 
         combined = union_batches([batch1, batch2, batch3])
         result_df = transform_to_scd2(combined, keys=["id"], ts_col="ts")
@@ -466,14 +545,18 @@ class TestIncrementalToEvent:
 
     def test_incremental_events_preserved(self, con):
         """All unique events from incremental batches preserved."""
-        batch1 = pd.DataFrame([
-            {"event_id": "e1", "type": "click", "ts": datetime(2025, 1, 10)},
-            {"event_id": "e2", "type": "view", "ts": datetime(2025, 1, 10)},
-        ])
-        batch2 = pd.DataFrame([
-            {"event_id": "e3", "type": "click", "ts": datetime(2025, 1, 11)},
-            {"event_id": "e4", "type": "purchase", "ts": datetime(2025, 1, 11)},
-        ])
+        batch1 = pd.DataFrame(
+            [
+                {"event_id": "e1", "type": "click", "ts": datetime(2025, 1, 10)},
+                {"event_id": "e2", "type": "view", "ts": datetime(2025, 1, 10)},
+            ]
+        )
+        batch2 = pd.DataFrame(
+            [
+                {"event_id": "e3", "type": "click", "ts": datetime(2025, 1, 11)},
+                {"event_id": "e4", "type": "purchase", "ts": datetime(2025, 1, 11)},
+            ]
+        )
 
         combined = union_batches([batch1, batch2])
         result_df = transform_to_event(combined)
@@ -485,16 +568,17 @@ class TestIncrementalToEvent:
 
     def test_incremental_event_immutability(self, con):
         """Events are immutable across batches."""
-        before = pd.DataFrame([
-            {"event_id": "e1", "data": "original"},
-            {"event_id": "e2", "data": "original"},
-        ])
+        before = pd.DataFrame(
+            [
+                {"event_id": "e1", "data": "original"},
+                {"event_id": "e2", "data": "original"},
+            ]
+        )
 
         # New batch with new events (not modifications)
-        after_df = union_batches([
-            before,
-            pd.DataFrame([{"event_id": "e3", "data": "new"}])
-        ])
+        after_df = union_batches(
+            [before, pd.DataFrame([{"event_id": "e3", "data": "new"}])]
+        )
         after = transform_to_event(after_df)
 
         immutable = EventAssertions.assert_records_immutable(before, after, "event_id")
@@ -536,11 +620,31 @@ class TestCDCToStateSCD1:
 
     def test_cdc_deletes_remove_records(self, con):
         """Deleted records removed from SCD1 state."""
-        cdc_df = pd.DataFrame([
-            {"id": 1, "name": "A", "value": 100, "ts": datetime(2025, 1, 10), "op": "I"},
-            {"id": 2, "name": "B", "value": 200, "ts": datetime(2025, 1, 10), "op": "I"},
-            {"id": 1, "name": "A_del", "value": 0, "ts": datetime(2025, 1, 15), "op": "D"},
-        ])
+        cdc_df = pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "name": "A",
+                    "value": 100,
+                    "ts": datetime(2025, 1, 10),
+                    "op": "I",
+                },
+                {
+                    "id": 2,
+                    "name": "B",
+                    "value": 200,
+                    "ts": datetime(2025, 1, 10),
+                    "op": "I",
+                },
+                {
+                    "id": 1,
+                    "name": "A_del",
+                    "value": 0,
+                    "ts": datetime(2025, 1, 15),
+                    "op": "D",
+                },
+            ]
+        )
 
         result_df = transform_cdc_to_scd1(cdc_df, keys=["id"], order_by="ts")
 
@@ -569,11 +673,13 @@ class TestCDCToStateSCD2:
 
     def test_cdc_scd2_preserves_all_versions(self, con):
         """All CDC operations preserved as history."""
-        cdc_df = pd.DataFrame([
-            {"id": 1, "name": "V1", "ts": datetime(2025, 1, 10), "op": "I"},
-            {"id": 1, "name": "V2", "ts": datetime(2025, 1, 15), "op": "U"},
-            {"id": 1, "name": "V3", "ts": datetime(2025, 1, 20), "op": "U"},
-        ])
+        cdc_df = pd.DataFrame(
+            [
+                {"id": 1, "name": "V1", "ts": datetime(2025, 1, 10), "op": "I"},
+                {"id": 1, "name": "V2", "ts": datetime(2025, 1, 15), "op": "U"},
+                {"id": 1, "name": "V3", "ts": datetime(2025, 1, 20), "op": "U"},
+            ]
+        )
 
         result_df = transform_cdc_to_scd2(cdc_df, keys=["id"], ts_col="ts")
 
@@ -587,10 +693,12 @@ class TestCDCToStateSCD2:
 
     def test_cdc_scd2_with_deletes(self, con):
         """CDC deletes appear in history (can be filtered by view)."""
-        cdc_df = pd.DataFrame([
-            {"id": 1, "name": "Created", "ts": datetime(2025, 1, 10), "op": "I"},
-            {"id": 1, "name": "Deleted", "ts": datetime(2025, 1, 15), "op": "D"},
-        ])
+        cdc_df = pd.DataFrame(
+            [
+                {"id": 1, "name": "Created", "ts": datetime(2025, 1, 10), "op": "I"},
+                {"id": 1, "name": "Deleted", "ts": datetime(2025, 1, 15), "op": "D"},
+            ]
+        )
 
         result_df = transform_cdc_to_scd2(cdc_df, keys=["id"], ts_col="ts")
 
@@ -631,11 +739,14 @@ class TestCombinationMatrix:
     - 3 Bronze patterns × 2 Silver EntityKinds × 2 HistoryModes = 12 combinations
     """
 
-    @pytest.mark.parametrize("bronze_pattern,expected_rows,scd_type", [
-        ("snapshot", 5, "scd1"),
-        ("incremental", 3, "scd1"),  # Dedupe reduces rows
-        ("cdc", 4, "scd1"),  # One delete removes a row
-    ])
+    @pytest.mark.parametrize(
+        "bronze_pattern,expected_rows,scd_type",
+        [
+            ("snapshot", 5, "scd1"),
+            ("incremental", 3, "scd1"),  # Dedupe reduces rows
+            ("cdc", 4, "scd1"),  # One delete removes a row
+        ],
+    )
     def test_all_bronze_to_scd1(self, con, bronze_pattern, expected_rows, scd_type):
         """All Bronze patterns to SCD1 state."""
         if bronze_pattern == "snapshot":
@@ -659,11 +770,14 @@ class TestCombinationMatrix:
         no_scd2 = SCD1Assertions.assert_no_scd2_columns(result_df)
         assert no_scd2.passed, f"[{bronze_pattern}] SCD2 columns present"
 
-    @pytest.mark.parametrize("bronze_pattern,min_history_per_key", [
-        ("snapshot", 2),  # 2 snapshot batches = 2 versions
-        ("incremental", 1),  # At least 1 version per key
-        ("cdc", 1),  # At least initial insert
-    ])
+    @pytest.mark.parametrize(
+        "bronze_pattern,min_history_per_key",
+        [
+            ("snapshot", 2),  # 2 snapshot batches = 2 versions
+            ("incremental", 1),  # At least 1 version per key
+            ("cdc", 1),  # At least initial insert
+        ],
+    )
     def test_all_bronze_to_scd2(self, con, bronze_pattern, min_history_per_key):
         """All Bronze patterns to SCD2 state."""
         if bronze_pattern == "snapshot":
@@ -684,11 +798,14 @@ class TestCombinationMatrix:
         one_current = SCD2Assertions.assert_one_current_per_key(result_df, ["id"])
         assert one_current.passed, f"[{bronze_pattern}] Multiple current per key"
 
-    @pytest.mark.parametrize("bronze_pattern", [
-        "snapshot",
-        "incremental",
-        "cdc",
-    ])
+    @pytest.mark.parametrize(
+        "bronze_pattern",
+        [
+            "snapshot",
+            "incremental",
+            "cdc",
+        ],
+    )
     def test_all_bronze_to_event(self, con, bronze_pattern):
         """All Bronze patterns to EVENT."""
         if bronze_pattern == "snapshot":

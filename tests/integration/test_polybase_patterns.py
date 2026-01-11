@@ -40,10 +40,7 @@ def is_minio_available() -> bool:
 
 
 # Skip all tests in this module if MinIO is not available
-pytestmark = pytest.mark.skipif(
-    not is_minio_available(),
-    reason="MinIO not available"
-)
+pytestmark = pytest.mark.skipif(not is_minio_available(), reason="MinIO not available")
 
 
 @pytest.fixture
@@ -96,14 +93,19 @@ def get_polybase_ddl_from_minio(client, bucket: str, prefix: str) -> str:
 class TestPolyBaseDDLForPatterns:
     """Verify PolyBase DDL is correct for each pattern combination."""
 
-    def test_snapshot_scd1_generates_current_view_only(self, minio_client, polybase_config):
+    def test_snapshot_scd1_generates_current_view_only(
+        self, minio_client, polybase_config
+    ):
         """Snapshot SCD1 should have current view without SCD2 functions."""
         metadata = get_metadata_from_minio(
-            minio_client, MINIO_BUCKET,
-            "demo/silver/domain=demo/subject=snapshot_scd1/dt=2025-01-12"
+            minio_client,
+            MINIO_BUCKET,
+            "demo/silver/domain=demo/subject=snapshot_scd1/dt=2025-01-12",
         )
 
-        ddl = generate_from_metadata_dict(metadata, polybase_config, entity_name="snapshot_scd1")
+        ddl = generate_from_metadata_dict(
+            metadata, polybase_config, entity_name="snapshot_scd1"
+        )
 
         # Should have current view
         assert "vw_snapshot_scd1_state_current" in ddl
@@ -111,14 +113,19 @@ class TestPolyBaseDDLForPatterns:
         assert "fn_snapshot_scd1_state_as_of" not in ddl
         assert "fn_snapshot_scd1_state_history" not in ddl
 
-    def test_snapshot_scd2_has_point_in_time_functions(self, minio_client, polybase_config):
+    def test_snapshot_scd2_has_point_in_time_functions(
+        self, minio_client, polybase_config
+    ):
         """Snapshot SCD2 should have point-in-time and history functions."""
         metadata = get_metadata_from_minio(
-            minio_client, MINIO_BUCKET,
-            "demo/silver/domain=demo/subject=snapshot_scd2/dt=2025-01-12"
+            minio_client,
+            MINIO_BUCKET,
+            "demo/silver/domain=demo/subject=snapshot_scd2/dt=2025-01-12",
         )
 
-        ddl = generate_from_metadata_dict(metadata, polybase_config, entity_name="snapshot_scd2")
+        ddl = generate_from_metadata_dict(
+            metadata, polybase_config, entity_name="snapshot_scd2"
+        )
 
         # Should have current view with is_current filter
         assert "vw_snapshot_scd2_state_current" in ddl
@@ -128,26 +135,36 @@ class TestPolyBaseDDLForPatterns:
         assert "effective_from <= @as_of_date" in ddl
         assert "fn_snapshot_scd2_state_history" in ddl
 
-    def test_cdc_scd1_tombstone_filters_deleted_in_view(self, minio_client, polybase_config):
+    def test_cdc_scd1_tombstone_filters_deleted_in_view(
+        self, minio_client, polybase_config
+    ):
         """CDC SCD1 with tombstone should filter _deleted in current view."""
         metadata = get_metadata_from_minio(
-            minio_client, MINIO_BUCKET,
-            "demo/silver/domain=demo/subject=cdc_scd1_tombstone/dt=2025-01-12"
+            minio_client,
+            MINIO_BUCKET,
+            "demo/silver/domain=demo/subject=cdc_scd1_tombstone/dt=2025-01-12",
         )
 
-        ddl = generate_from_metadata_dict(metadata, polybase_config, entity_name="cdc_scd1_tombstone")
+        ddl = generate_from_metadata_dict(
+            metadata, polybase_config, entity_name="cdc_scd1_tombstone"
+        )
 
         # Should filter deleted records
         assert "_deleted = 0" in ddl or "_deleted IS NULL" in ddl
 
-    def test_cdc_scd2_tombstone_excludes_deleted_from_point_in_time(self, minio_client, polybase_config):
+    def test_cdc_scd2_tombstone_excludes_deleted_from_point_in_time(
+        self, minio_client, polybase_config
+    ):
         """CDC SCD2 with tombstone should exclude deleted from point-in-time function."""
         metadata = get_metadata_from_minio(
-            minio_client, MINIO_BUCKET,
-            "demo/silver/domain=demo/subject=cdc_scd2_tombstone/dt=2025-01-12"
+            minio_client,
+            MINIO_BUCKET,
+            "demo/silver/domain=demo/subject=cdc_scd2_tombstone/dt=2025-01-12",
         )
 
-        ddl = generate_from_metadata_dict(metadata, polybase_config, entity_name="cdc_scd2_tombstone")
+        ddl = generate_from_metadata_dict(
+            metadata, polybase_config, entity_name="cdc_scd2_tombstone"
+        )
 
         # Point-in-time should exclude deleted
         assert "fn_cdc_scd2_tombstone_state_as_of" in ddl
@@ -157,11 +174,14 @@ class TestPolyBaseDDLForPatterns:
     def test_event_pattern_has_date_functions(self, minio_client, polybase_config):
         """Event pattern should have date range and daily summary views."""
         metadata = get_metadata_from_minio(
-            minio_client, MINIO_BUCKET,
-            "demo/silver/domain=demo/subject=cdc_event/dt=2025-01-12"
+            minio_client,
+            MINIO_BUCKET,
+            "demo/silver/domain=demo/subject=cdc_event/dt=2025-01-12",
         )
 
-        ddl = generate_from_metadata_dict(metadata, polybase_config, entity_name="cdc_event")
+        ddl = generate_from_metadata_dict(
+            metadata, polybase_config, entity_name="cdc_event"
+        )
 
         # Should have event-specific functions
         assert "fn_cdc_event_events_for_dates" in ddl or "fn_cdc_event_for_dates" in ddl
@@ -175,8 +195,9 @@ class TestPolyBaseDDLColumns:
     def test_scd2_metadata_has_temporal_columns(self, minio_client):
         """SCD2 metadata should include effective_from, effective_to, is_current."""
         metadata = get_metadata_from_minio(
-            minio_client, MINIO_BUCKET,
-            "demo/silver/domain=demo/subject=snapshot_scd2/dt=2025-01-12"
+            minio_client,
+            MINIO_BUCKET,
+            "demo/silver/domain=demo/subject=snapshot_scd2/dt=2025-01-12",
         )
 
         column_names = [col["name"] for col in metadata.get("columns", [])]
@@ -187,8 +208,9 @@ class TestPolyBaseDDLColumns:
     def test_tombstone_metadata_has_deleted_column(self, minio_client):
         """Tombstone mode metadata should include _deleted column."""
         metadata = get_metadata_from_minio(
-            minio_client, MINIO_BUCKET,
-            "demo/silver/domain=demo/subject=cdc_scd1_tombstone/dt=2025-01-12"
+            minio_client,
+            MINIO_BUCKET,
+            "demo/silver/domain=demo/subject=cdc_scd1_tombstone/dt=2025-01-12",
         )
 
         column_names = [col["name"] for col in metadata.get("columns", [])]
@@ -197,8 +219,9 @@ class TestPolyBaseDDLColumns:
     def test_hard_delete_no_deleted_column(self, minio_client):
         """Hard delete mode should NOT have _deleted column."""
         metadata = get_metadata_from_minio(
-            minio_client, MINIO_BUCKET,
-            "demo/silver/domain=demo/subject=cdc_scd1_hard/dt=2025-01-12"
+            minio_client,
+            MINIO_BUCKET,
+            "demo/silver/domain=demo/subject=cdc_scd1_hard/dt=2025-01-12",
         )
 
         column_names = [col["name"] for col in metadata.get("columns", [])]
@@ -228,7 +251,9 @@ class TestPolyBaseCompositeKeys:
             "change_timestamp": "effective_from",
         }
 
-        ddl = generate_from_metadata_dict(metadata, polybase_config, entity_name="order_lines")
+        ddl = generate_from_metadata_dict(
+            metadata, polybase_config, entity_name="order_lines"
+        )
 
         # Should have composite key parameters
         assert "@key_0" in ddl
@@ -252,7 +277,9 @@ class TestPolyBaseCompositeKeys:
             "change_timestamp": "effective_from",
         }
 
-        ddl = generate_from_metadata_dict(metadata, polybase_config, entity_name="customers")
+        ddl = generate_from_metadata_dict(
+            metadata, polybase_config, entity_name="customers"
+        )
 
         # Should have simple parameter
         assert "@key_value NVARCHAR(255)" in ddl
@@ -266,8 +293,9 @@ class TestGeneratedPolybaseDDLFromDemo:
     def test_snapshot_scd1_ddl_file(self, minio_client):
         """Verify snapshot_scd1 generated DDL is valid."""
         ddl = get_polybase_ddl_from_minio(
-            minio_client, MINIO_BUCKET,
-            "demo/silver/domain=demo/subject=snapshot_scd1/dt=2025-01-12"
+            minio_client,
+            MINIO_BUCKET,
+            "demo/silver/domain=demo/subject=snapshot_scd1/dt=2025-01-12",
         )
 
         assert "CREATE EXTERNAL TABLE" in ddl
@@ -276,8 +304,9 @@ class TestGeneratedPolybaseDDLFromDemo:
     def test_snapshot_scd2_ddl_file(self, minio_client):
         """Verify snapshot_scd2 generated DDL has SCD2 functions."""
         ddl = get_polybase_ddl_from_minio(
-            minio_client, MINIO_BUCKET,
-            "demo/silver/domain=demo/subject=snapshot_scd2/dt=2025-01-12"
+            minio_client,
+            MINIO_BUCKET,
+            "demo/silver/domain=demo/subject=snapshot_scd2/dt=2025-01-12",
         )
 
         assert "CREATE EXTERNAL TABLE" in ddl
@@ -287,8 +316,9 @@ class TestGeneratedPolybaseDDLFromDemo:
     def test_cdc_tombstone_ddl_file_has_deleted_filter(self, minio_client):
         """Verify CDC tombstone generated DDL filters _deleted."""
         ddl = get_polybase_ddl_from_minio(
-            minio_client, MINIO_BUCKET,
-            "demo/silver/domain=demo/subject=cdc_scd1_tombstone/dt=2025-01-12"
+            minio_client,
+            MINIO_BUCKET,
+            "demo/silver/domain=demo/subject=cdc_scd1_tombstone/dt=2025-01-12",
         )
 
         assert "CREATE EXTERNAL TABLE" in ddl
@@ -297,8 +327,9 @@ class TestGeneratedPolybaseDDLFromDemo:
     def test_event_ddl_file_has_date_functions(self, minio_client):
         """Verify event entity generated DDL has date functions."""
         ddl = get_polybase_ddl_from_minio(
-            minio_client, MINIO_BUCKET,
-            "demo/silver/domain=demo/subject=cdc_event/dt=2025-01-12"
+            minio_client,
+            MINIO_BUCKET,
+            "demo/silver/domain=demo/subject=cdc_event/dt=2025-01-12",
         )
 
         assert "CREATE EXTERNAL TABLE" in ddl

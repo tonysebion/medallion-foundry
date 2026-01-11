@@ -26,10 +26,12 @@ class TestColumnRename:
     def test_simple_column_rename(self, con):
         """Handle simple column rename with coalesce."""
         # V1 schema had "customer_name", V2 has "cust_name"
-        df = pd.DataFrame([
-            {"id": 1, "customer_name": None, "cust_name": "Old Alice"},  # V1 record
-            {"id": 2, "customer_name": "New Bob", "cust_name": None},    # V2 record
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "customer_name": None, "cust_name": "Old Alice"},  # V1 record
+                {"id": 2, "customer_name": "New Bob", "cust_name": None},  # V2 record
+            ]
+        )
 
         t = ibis.memtable(df)
         result = coalesce_columns(t, "customer_name", "cust_name")
@@ -41,11 +43,13 @@ class TestColumnRename:
 
     def test_multiple_column_renames(self, con):
         """Handle multiple columns renamed at different times."""
-        df = pd.DataFrame([
-            {"id": 1, "new_name": None, "old_name": "A", "oldest_name": None},
-            {"id": 2, "new_name": None, "old_name": None, "oldest_name": "B"},
-            {"id": 3, "new_name": "C", "old_name": None, "oldest_name": None},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "new_name": None, "old_name": "A", "oldest_name": None},
+                {"id": 2, "new_name": None, "old_name": None, "oldest_name": "B"},
+                {"id": 3, "new_name": "C", "old_name": None, "oldest_name": None},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = coalesce_columns(t, "new_name", "old_name", "oldest_name")
@@ -57,9 +61,11 @@ class TestColumnRename:
 
     def test_fallback_column_not_exist(self, con):
         """Missing fallback column is gracefully ignored."""
-        df = pd.DataFrame([
-            {"id": 1, "name": "Alice"},  # No fallback column exists
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "name": "Alice"},  # No fallback column exists
+            ]
+        )
 
         t = ibis.memtable(df)
         # "old_name" doesn't exist but shouldn't error
@@ -75,16 +81,25 @@ class TestColumnAddition:
     def test_new_column_with_defaults(self, con):
         """New column added with NULL for old records."""
         # Simulate union of old and new schema
-        old_schema = pd.DataFrame([
-            {"id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},
-        ])
+        old_schema = pd.DataFrame(
+            [
+                {"id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},
+            ]
+        )
 
         # Add new column to simulate evolved schema
         old_schema["new_column"] = None
 
-        new_schema = pd.DataFrame([
-            {"id": 2, "name": "Bob", "ts": datetime(2025, 1, 15), "new_column": "has_value"},
-        ])
+        new_schema = pd.DataFrame(
+            [
+                {
+                    "id": 2,
+                    "name": "Bob",
+                    "ts": datetime(2025, 1, 15),
+                    "new_column": "has_value",
+                },
+            ]
+        )
 
         combined = pd.concat([old_schema, new_schema], ignore_index=True)
         t = ibis.memtable(combined)
@@ -108,10 +123,16 @@ class TestColumnTypeChanges:
 
     def test_integer_to_float_compatible(self, con):
         """Integer to float type change is compatible."""
-        df = pd.DataFrame([
-            {"id": 1, "amount": 100, "ts": datetime(2025, 1, 10)},     # Integer
-            {"id": 1, "amount": 100.50, "ts": datetime(2025, 1, 15)},  # Float (new version)
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "amount": 100, "ts": datetime(2025, 1, 10)},  # Integer
+                {
+                    "id": 1,
+                    "amount": 100.50,
+                    "ts": datetime(2025, 1, 15),
+                },  # Float (new version)
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_latest(t, keys=["id"], order_by="ts")
@@ -123,10 +144,12 @@ class TestColumnTypeChanges:
     def test_string_to_numeric_mixed(self, con):
         """Mixed string/numeric values in same column."""
         # In real scenarios, this would need type casting
-        df = pd.DataFrame([
-            {"id": 1, "value": "100", "ts": datetime(2025, 1, 10)},
-            {"id": 2, "value": "200", "ts": datetime(2025, 1, 15)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "value": "100", "ts": datetime(2025, 1, 10)},
+                {"id": 2, "value": "200", "ts": datetime(2025, 1, 15)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_latest(t, keys=["id"], order_by="ts")
@@ -141,15 +164,24 @@ class TestSchemaEvolutionWithDedup:
     def test_dedupe_across_schema_versions(self, con):
         """Dedupe works across schema versions."""
         # V1 schema
-        v1_data = pd.DataFrame([
-            {"id": 1, "name": "Alice V1", "ts": datetime(2025, 1, 10)},
-        ])
+        v1_data = pd.DataFrame(
+            [
+                {"id": 1, "name": "Alice V1", "ts": datetime(2025, 1, 10)},
+            ]
+        )
         v1_data["new_field"] = None  # Add for union
 
         # V2 schema (has new_field)
-        v2_data = pd.DataFrame([
-            {"id": 1, "name": "Alice V2", "ts": datetime(2025, 1, 15), "new_field": "added"},
-        ])
+        v2_data = pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "name": "Alice V2",
+                    "ts": datetime(2025, 1, 15),
+                    "new_field": "added",
+                },
+            ]
+        )
 
         combined = pd.concat([v1_data, v2_data], ignore_index=True)
         t = ibis.memtable(combined)
@@ -163,11 +195,13 @@ class TestSchemaEvolutionWithDedup:
 
     def test_exact_dedupe_different_nullability(self, con):
         """Exact dedupe with NULL vs empty string."""
-        df = pd.DataFrame([
-            {"id": 1, "optional": None},
-            {"id": 2, "optional": ""},
-            {"id": 1, "optional": None},  # Exact duplicate
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "optional": None},
+                {"id": 2, "optional": ""},
+                {"id": 1, "optional": None},  # Exact duplicate
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_exact(t)
@@ -188,13 +222,30 @@ class TestMultiVersionSchemaEvolution:
         v1["phone"] = None
 
         # V2: Added email
-        v2 = pd.DataFrame([{"id": 2, "name": "Mid", "ts": datetime(2025, 1, 5), "email": "test@v2.com"}])
+        v2 = pd.DataFrame(
+            [
+                {
+                    "id": 2,
+                    "name": "Mid",
+                    "ts": datetime(2025, 1, 5),
+                    "email": "test@v2.com",
+                }
+            ]
+        )
         v2["phone"] = None
 
         # V3: Added phone
-        v3 = pd.DataFrame([
-            {"id": 3, "name": "New", "ts": datetime(2025, 1, 10), "email": "test@v3.com", "phone": "555-1234"}
-        ])
+        v3 = pd.DataFrame(
+            [
+                {
+                    "id": 3,
+                    "name": "New",
+                    "ts": datetime(2025, 1, 10),
+                    "email": "test@v3.com",
+                    "phone": "555-1234",
+                }
+            ]
+        )
 
         combined = pd.concat([v1, v2, v3], ignore_index=True)
         t = ibis.memtable(combined)
@@ -216,14 +267,21 @@ class TestMultiVersionSchemaEvolution:
     def test_update_to_new_schema(self, con):
         """Update record from old schema to new schema."""
         # Same record, evolving schema
-        old_version = pd.DataFrame([
-            {"id": 1, "name": "Original", "ts": datetime(2025, 1, 1)}
-        ])
+        old_version = pd.DataFrame(
+            [{"id": 1, "name": "Original", "ts": datetime(2025, 1, 1)}]
+        )
         old_version["new_field"] = None
 
-        new_version = pd.DataFrame([
-            {"id": 1, "name": "Updated", "ts": datetime(2025, 1, 10), "new_field": "now_populated"}
-        ])
+        new_version = pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "name": "Updated",
+                    "ts": datetime(2025, 1, 10),
+                    "new_field": "now_populated",
+                }
+            ]
+        )
 
         combined = pd.concat([old_version, new_version], ignore_index=True)
         t = ibis.memtable(combined)

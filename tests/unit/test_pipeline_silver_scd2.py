@@ -27,12 +27,14 @@ class TestBuildHistory:
         con = ibis.duckdb.connect()
 
         # Create test data with multiple versions of the same key
-        df = pd.DataFrame([
-            {"id": 1, "name": "Alice", "updated_at": "2025-01-10T10:00:00"},
-            {"id": 1, "name": "Alice Smith", "updated_at": "2025-01-15T10:00:00"},
-            {"id": 1, "name": "Alice Jones", "updated_at": "2025-01-20T10:00:00"},
-            {"id": 2, "name": "Bob", "updated_at": "2025-01-12T10:00:00"},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "name": "Alice", "updated_at": "2025-01-10T10:00:00"},
+                {"id": 1, "name": "Alice Smith", "updated_at": "2025-01-15T10:00:00"},
+                {"id": 1, "name": "Alice Jones", "updated_at": "2025-01-20T10:00:00"},
+                {"id": 2, "name": "Bob", "updated_at": "2025-01-12T10:00:00"},
+            ]
+        )
 
         t = con.create_table("test_data", df)
         result = build_history(t, ["id"], "updated_at")
@@ -64,9 +66,11 @@ class TestBuildHistory:
 
         con = ibis.duckdb.connect()
 
-        df = pd.DataFrame([
-            {"id": 1, "name": "Solo", "updated_at": "2025-01-15T10:00:00"},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "name": "Solo", "updated_at": "2025-01-15T10:00:00"},
+            ]
+        )
 
         t = con.create_table("single", df)
         result = build_history(t, ["id"], "updated_at")
@@ -86,9 +90,21 @@ class TestSilverEntityFullHistory:
         _create_parquet_file(
             bronze_dir / "data.parquet",
             [
-                {"customer_id": 1, "email": "a@old.com", "updated_at": "2025-01-01T10:00:00"},
-                {"customer_id": 1, "email": "a@new.com", "updated_at": "2025-01-15T10:00:00"},
-                {"customer_id": 2, "email": "b@test.com", "updated_at": "2025-01-10T10:00:00"},
+                {
+                    "customer_id": 1,
+                    "email": "a@old.com",
+                    "updated_at": "2025-01-01T10:00:00",
+                },
+                {
+                    "customer_id": 1,
+                    "email": "a@new.com",
+                    "updated_at": "2025-01-15T10:00:00",
+                },
+                {
+                    "customer_id": 2,
+                    "email": "b@test.com",
+                    "updated_at": "2025-01-10T10:00:00",
+                },
             ],
         )
 
@@ -109,7 +125,9 @@ class TestSilverEntityFullHistory:
         assert result["row_count"] == 3
 
         # Verify output
-        silver_df = pd.read_parquet(tmp_path / "silver/domain=test/subject=customers/customers.parquet")
+        silver_df = pd.read_parquet(
+            tmp_path / "silver/domain=test/subject=customers/customers.parquet"
+        )
         assert len(silver_df) == 3
 
         # Check effective dates are present (no underscore prefix)
@@ -126,10 +144,30 @@ class TestSilverEntityFullHistory:
         _create_parquet_file(
             bronze_dir / "data.parquet",
             [
-                {"region": "US", "product_id": 1, "price": 100, "updated_at": "2025-01-01"},
-                {"region": "US", "product_id": 1, "price": 110, "updated_at": "2025-01-10"},
-                {"region": "EU", "product_id": 1, "price": 90, "updated_at": "2025-01-05"},
-                {"region": "US", "product_id": 2, "price": 200, "updated_at": "2025-01-08"},
+                {
+                    "region": "US",
+                    "product_id": 1,
+                    "price": 100,
+                    "updated_at": "2025-01-01",
+                },
+                {
+                    "region": "US",
+                    "product_id": 1,
+                    "price": 110,
+                    "updated_at": "2025-01-10",
+                },
+                {
+                    "region": "EU",
+                    "product_id": 1,
+                    "price": 90,
+                    "updated_at": "2025-01-05",
+                },
+                {
+                    "region": "US",
+                    "product_id": 2,
+                    "price": 200,
+                    "updated_at": "2025-01-08",
+                },
             ],
         )
 
@@ -149,10 +187,14 @@ class TestSilverEntityFullHistory:
         # All 4 rows should be preserved
         assert result["row_count"] == 4
 
-        silver_df = pd.read_parquet(tmp_path / "silver/domain=test/subject=prices/prices.parquet")
+        silver_df = pd.read_parquet(
+            tmp_path / "silver/domain=test/subject=prices/prices.parquet"
+        )
 
         # US + product_id=1 should have 2 versions
-        us_p1 = silver_df[(silver_df["region"] == "US") & (silver_df["product_id"] == 1)]
+        us_p1 = silver_df[
+            (silver_df["region"] == "US") & (silver_df["product_id"] == 1)
+        ]
         assert len(us_p1) == 2
 
 
@@ -188,7 +230,9 @@ class TestSilverEntityCurrentOnly:
         # Should deduplicate to 2 rows
         assert result["row_count"] == 2
 
-        silver_df = pd.read_parquet(tmp_path / "silver/domain=test/subject=orders/orders.parquet")
+        silver_df = pd.read_parquet(
+            tmp_path / "silver/domain=test/subject=orders/orders.parquet"
+        )
         assert len(silver_df) == 2
 
         # Order 1 should be "completed" (latest)
@@ -205,10 +249,30 @@ class TestEventEntity:
         _create_parquet_file(
             bronze_dir / "data.parquet",
             [
-                {"event_id": 1, "user_id": 100, "action": "click", "ts": "2025-01-15T10:00:00"},
-                {"event_id": 1, "user_id": 100, "action": "click", "ts": "2025-01-15T10:00:00"},  # Exact dupe
-                {"event_id": 2, "user_id": 100, "action": "view", "ts": "2025-01-15T10:01:00"},
-                {"event_id": 3, "user_id": 100, "action": "click", "ts": "2025-01-15T10:02:00"},
+                {
+                    "event_id": 1,
+                    "user_id": 100,
+                    "action": "click",
+                    "ts": "2025-01-15T10:00:00",
+                },
+                {
+                    "event_id": 1,
+                    "user_id": 100,
+                    "action": "click",
+                    "ts": "2025-01-15T10:00:00",
+                },  # Exact dupe
+                {
+                    "event_id": 2,
+                    "user_id": 100,
+                    "action": "view",
+                    "ts": "2025-01-15T10:01:00",
+                },
+                {
+                    "event_id": 3,
+                    "user_id": 100,
+                    "action": "click",
+                    "ts": "2025-01-15T10:02:00",
+                },
             ],
         )
 
@@ -228,7 +292,9 @@ class TestEventEntity:
         # Should have 3 unique events (1 duplicate removed)
         assert result["row_count"] == 3
 
-        silver_df = pd.read_parquet(tmp_path / "silver/domain=test/subject=events/events.parquet")
+        silver_df = pd.read_parquet(
+            tmp_path / "silver/domain=test/subject=events/events.parquet"
+        )
         assert len(silver_df) == 3
 
 
@@ -241,11 +307,13 @@ class TestDedupeLatest:
 
         con = ibis.duckdb.connect()
 
-        df = pd.DataFrame([
-            {"id": 1, "value": "old", "ts": "2025-01-01"},
-            {"id": 1, "value": "new", "ts": "2025-01-15"},
-            {"id": 2, "value": "only", "ts": "2025-01-10"},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "value": "old", "ts": "2025-01-01"},
+                {"id": 1, "value": "new", "ts": "2025-01-15"},
+                {"id": 2, "value": "only", "ts": "2025-01-10"},
+            ]
+        )
 
         t = con.create_table("test", df)
         result = dedupe_latest(t, ["id"], "ts")
@@ -263,11 +331,13 @@ class TestDedupeLatest:
 
         con = ibis.duckdb.connect()
 
-        df = pd.DataFrame([
-            {"region": "US", "product_id": 1, "value": 10, "ts": "2025-01-01"},
-            {"region": "US", "product_id": 1, "value": 20, "ts": "2025-01-15"},
-            {"region": "EU", "product_id": 1, "value": 30, "ts": "2025-01-10"},
-        ])
+        df = pd.DataFrame(
+            [
+                {"region": "US", "product_id": 1, "value": 10, "ts": "2025-01-01"},
+                {"region": "US", "product_id": 1, "value": 20, "ts": "2025-01-15"},
+                {"region": "EU", "product_id": 1, "value": 30, "ts": "2025-01-10"},
+            ]
+        )
 
         # Write to temp file and read back to avoid schema issues
         with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as f:

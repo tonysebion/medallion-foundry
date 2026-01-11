@@ -10,20 +10,17 @@ These tests verify the "take and go" principle:
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, Generator
+from typing import Dict, Generator
 
 import pytest
 
 from tests.integration.conftest import (
     MINIO_ACCESS_KEY,
-    MINIO_BUCKET,
     MINIO_ENDPOINT,
     MINIO_SECRET_KEY,
-    is_minio_available,
     list_objects_in_prefix,
     requires_minio,
 )
@@ -33,16 +30,18 @@ from tests.integration.conftest import (
 # Test Configuration
 # =============================================================================
 
-TEMPLATES_DIR = Path(__file__).parent.parent.parent / "pipelines" / "templates"
-WORK1_YAML = TEMPLATES_DIR / "work1.yaml"
-WORK2_YAML = TEMPLATES_DIR / "work2.yaml"
-SAMPLE_DATA_DIR = TEMPLATES_DIR / "data"
+EXAMPLES_DIR = Path(__file__).parent.parent.parent / "pipelines" / "examples"
+WORK1_YAML = EXAMPLES_DIR / "work1.yaml"
+WORK2_YAML = EXAMPLES_DIR / "work2.yaml"
+WORK3_YAML = EXAMPLES_DIR / "work3.yaml"
+SAMPLE_DATA_DIR = EXAMPLES_DIR / "data"
 
 
 @pytest.fixture
 def template_test_prefix() -> str:
     """Generate a unique prefix for template test isolation."""
     import uuid
+
     return f"template-test-{uuid.uuid4().hex[:8]}"
 
 
@@ -56,7 +55,9 @@ def cleanup_template_prefix(
     # Cleanup: delete all objects with this prefix
     try:
         paginator = minio_client.get_paginator("list_objects_v2")
-        for page in paginator.paginate(Bucket=minio_bucket, Prefix=template_test_prefix):
+        for page in paginator.paginate(
+            Bucket=minio_bucket, Prefix=template_test_prefix
+        ):
             if "Contents" in page:
                 objects = [{"Key": obj["Key"]} for obj in page["Contents"]]
                 if objects:
@@ -85,7 +86,9 @@ def env_with_minio(template_test_prefix: str) -> Dict[str, str]:
 # =============================================================================
 
 
-def run_pipeline(yaml_path: Path, run_date: str, env: Dict[str, str]) -> subprocess.CompletedProcess:
+def run_pipeline(
+    yaml_path: Path, run_date: str, env: Dict[str, str]
+) -> subprocess.CompletedProcess:
     """Run a pipeline YAML file and return the result."""
     cmd = [
         sys.executable,
@@ -149,7 +152,9 @@ class TestWork1CsvToS3:
         # Check for key documentation sections
         assert "BEFORE YOU RUN" in content, "Missing 'BEFORE YOU RUN' section"
         assert "TO RUN:" in content, "Missing 'TO RUN:' section"
-        assert "OUTPUT FILES CREATED" in content, "Missing 'OUTPUT FILES CREATED' section"
+        assert "OUTPUT FILES CREATED" in content, (
+            "Missing 'OUTPUT FILES CREATED' section"
+        )
         # Check for field explanations
         assert "# SYSTEM:" in content, "Missing SYSTEM field explanation"
         assert "# ENTITY:" in content, "Missing ENTITY field explanation"
@@ -166,9 +171,14 @@ class TestWork1CsvToS3:
         """Test work1.yaml Bronze layer writes to S3."""
         # Create test YAML with unique prefix
         test_yaml = tmp_path / "work1_test.yaml"
+        # Convert relative paths to absolute paths (since test YAML is in temp dir)
+        # Use forward slashes for YAML compatibility (YAML treats backslash as escape)
+        project_root = Path(__file__).parent.parent.parent
+        data_path = (project_root / "pipelines" / "examples" / "data").as_posix() + "/"
         replacements = {
             "s3://bronze-bucket/": f"s3://{minio_bucket}/{cleanup_template_prefix}/bronze/",
             "s3://silver-bucket/": f"s3://{minio_bucket}/{cleanup_template_prefix}/silver/",
+            "./pipelines/examples/data/": data_path,
         }
         create_test_yaml(WORK1_YAML, test_yaml, replacements)
 
@@ -204,18 +214,27 @@ class TestWork2FixedWidthToS3:
 
     def test_work2_sample_data_exists(self) -> None:
         """Verify sample fixed-width data exists for work2.yaml."""
-        txt_path = SAMPLE_DATA_DIR / "daily_transactions_2025-01-15.txt"
+        txt_path = SAMPLE_DATA_DIR / "order_details_2025-01-15.txt"
         assert txt_path.exists(), f"Sample data not found at {txt_path}"
 
     def test_work2_sample_data_format(self) -> None:
-        """Verify sample fixed-width data has correct format (92 chars per line)."""
-        txt_path = SAMPLE_DATA_DIR / "daily_transactions_2025-01-15.txt"
+        """Verify sample multi-record fixed-width data has parent-child pattern.
+
+        H lines (parent): 31 chars = 1 (type) + 10 + 10 + 10
+        D lines (child): 40 chars = 1 (type) + 10 + 15 + 6 + 8
+        """
+        txt_path = SAMPLE_DATA_DIR / "order_details_2025-01-15.txt"
         with open(txt_path, "r") as f:
             for i, line in enumerate(f, 1):
                 line = line.rstrip("\n\r")
-                assert len(line) == 92, (
-                    f"Line {i} has {len(line)} chars, expected 92: [{line}]"
-                )
+                if line.startswith("H"):
+                    assert len(line) == 31, (
+                        f"Line {i} (H) has {len(line)} chars, expected 31: [{line}]"
+                    )
+                elif line.startswith("D"):
+                    assert len(line) == 40, (
+                        f"Line {i} (D) has {len(line)} chars, expected 40: [{line}]"
+                    )
 
     def test_work2_yaml_has_schema_reference(self) -> None:
         """Verify work2.yaml has JSON schema reference for IDE autocomplete."""
@@ -228,7 +247,9 @@ class TestWork2FixedWidthToS3:
         """Verify work2.yaml has extensive comments for non-Python users."""
         content = WORK2_YAML.read_text()
         # Check for key documentation sections
-        assert "WHAT IS A MULTI-RECORD FIXED-WIDTH FILE?" in content, "Missing fixed-width explanation"
+        assert "WHAT IS A MULTI-RECORD FIXED-WIDTH FILE?" in content, (
+            "Missing fixed-width explanation"
+        )
         assert "columns:" in content, "Missing columns field"
         assert "widths:" in content, "Missing widths field"
 
@@ -243,9 +264,14 @@ class TestWork2FixedWidthToS3:
         """Test work2.yaml Bronze layer writes to S3."""
         # Create test YAML with unique prefix
         test_yaml = tmp_path / "work2_test.yaml"
+        # Convert relative paths to absolute paths (since test YAML is in temp dir)
+        # Use forward slashes for YAML compatibility (YAML treats backslash as escape)
+        project_root = Path(__file__).parent.parent.parent
+        data_path = (project_root / "pipelines" / "examples" / "data").as_posix() + "/"
         replacements = {
             "s3://bronze-bucket/": f"s3://{minio_bucket}/{cleanup_template_prefix}/bronze/",
             "s3://silver-bucket/": f"s3://{minio_bucket}/{cleanup_template_prefix}/silver/",
+            "./pipelines/examples/data/": data_path,
         }
         create_test_yaml(WORK2_YAML, test_yaml, replacements)
 
@@ -271,7 +297,7 @@ class TestWork2FixedWidthToS3:
 # =============================================================================
 
 
-WORK3_YAML = TEMPLATES_DIR / "work3.yaml"
+# WORK3_YAML already defined above
 
 
 @requires_minio
@@ -294,8 +320,8 @@ class TestWork3ParentChildToS3:
         lines = content.strip().split("\n")
 
         # Should have A lines (parents) and B lines (children)
-        a_lines = [l for l in lines if l.startswith("A")]
-        b_lines = [l for l in lines if l.startswith("B")]
+        a_lines = [line for line in lines if line.startswith("A")]
+        b_lines = [line for line in lines if line.startswith("B")]
 
         assert len(a_lines) == 3, f"Expected 3 parent (A) lines, got {len(a_lines)}"
         assert len(b_lines) == 6, f"Expected 6 child (B) lines, got {len(b_lines)}"
@@ -328,9 +354,14 @@ class TestWork3ParentChildToS3:
         """Test work3.yaml Bronze layer writes flattened parent-child data to S3."""
         # Create test YAML with unique prefix
         test_yaml = tmp_path / "work3_test.yaml"
+        # Convert relative paths to absolute paths (since test YAML is in temp dir)
+        # Use forward slashes for YAML compatibility (YAML treats backslash as escape)
+        project_root = Path(__file__).parent.parent.parent
+        data_path = (project_root / "pipelines" / "examples" / "data").as_posix() + "/"
         replacements = {
             "s3://bronze-bucket/": f"s3://{minio_bucket}/{cleanup_template_prefix}/bronze/",
             "s3://silver-bucket/": f"s3://{minio_bucket}/{cleanup_template_prefix}/silver/",
+            "./pipelines/examples/data/": data_path,
         }
         create_test_yaml(WORK3_YAML, test_yaml, replacements)
 
@@ -378,7 +409,9 @@ bronze:
         # Should mention ALL missing fields, not just the first one
         assert "system" in error_msg.lower(), "Error should mention missing 'system'"
         assert "entity" in error_msg.lower(), "Error should mention missing 'entity'"
-        assert "source_type" in error_msg.lower(), "Error should mention missing 'source_type'"
+        assert "source_type" in error_msg.lower(), (
+            "Error should mention missing 'source_type'"
+        )
 
     def test_silver_missing_multiple_fields_shows_all(self, tmp_path: Path) -> None:
         """Test that missing Silver fields are all reported at once."""
@@ -397,8 +430,12 @@ silver:
 
         error_msg = str(exc_info.value)
         # Should mention ALL missing fields
-        assert "natural_keys" in error_msg.lower(), "Error should mention missing 'natural_keys'"
-        assert "change_timestamp" in error_msg.lower(), "Error should mention missing 'change_timestamp'"
+        assert "natural_keys" in error_msg.lower(), (
+            "Error should mention missing 'natural_keys'"
+        )
+        assert "change_timestamp" in error_msg.lower(), (
+            "Error should mention missing 'change_timestamp'"
+        )
 
 
 # =============================================================================
@@ -413,7 +450,7 @@ class TestSSLVerificationDefault:
         """Verify JSON schema has s3_verify_ssl default=false."""
         import json
 
-        schema_path = TEMPLATES_DIR.parent / "schema" / "pipeline.schema.json"
+        schema_path = EXAMPLES_DIR.parent / "schema" / "pipeline.schema.json"
         with open(schema_path) as f:
             schema = json.load(f)
 

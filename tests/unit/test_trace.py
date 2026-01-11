@@ -178,6 +178,7 @@ class TestGlobalTracer:
         """get_tracer should create disabled tracer if not initialized."""
         # Reset global state
         import pipelines.lib.trace as trace_module
+
         trace_module._tracer = None
 
         tracer = get_tracer()

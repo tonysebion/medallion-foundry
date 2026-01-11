@@ -22,7 +22,9 @@ except ImportError:
     retail_orders = None
 
 
-@pytest.mark.skipif(customer_scd2 is None, reason="customer_scd2 example converted to YAML")
+@pytest.mark.skipif(
+    customer_scd2 is None, reason="customer_scd2 example converted to YAML"
+)
 def test_customer_scd2_full_history(tmp_path, monkeypatch):
     run_date = "2025-01-15"
     sample_dir = tmp_path / "customer_scd2"
@@ -36,7 +38,13 @@ def test_customer_scd2_full_history(tmp_path, monkeypatch):
     monkeypatch.setattr(
         customer_scd2.bronze,
         "target_path",
-        str(sample_dir / "bronze" / "system={system}" / "entity={entity}" / "dt={run_date}"),
+        str(
+            sample_dir
+            / "bronze"
+            / "system={system}"
+            / "entity={entity}"
+            / "dt={run_date}"
+        ),
     )
     monkeypatch.setattr(
         customer_scd2.silver,
@@ -60,7 +68,9 @@ def test_customer_scd2_full_history(tmp_path, monkeypatch):
     result = customer_scd2.run(run_date)
 
     assert result["bronze"]["row_count"] == 6
-    silver_df = pd.read_parquet(sample_dir / "silver" / "crm" / "customers" / "data.parquet")
+    silver_df = pd.read_parquet(
+        sample_dir / "silver" / "crm" / "customers" / "data.parquet"
+    )
     assert len(silver_df) == 6
     assert set(silver_df["customer_id"]) == {"CUST001", "CUST002", "CUST003"}
     assert "effective_from" in silver_df.columns
@@ -70,7 +80,9 @@ def test_customer_scd2_full_history(tmp_path, monkeypatch):
     assert silver_df[silver_df["customer_id"] == "CUST001"].shape[0] == 3
 
 
-@pytest.mark.skipif(retail_orders is None, reason="retail_orders example converted to YAML")
+@pytest.mark.skipif(
+    retail_orders is None, reason="retail_orders example converted to YAML"
+)
 def test_retail_orders_current_only(tmp_path, monkeypatch):
     run_date = "2025-01-15"
     sample_dir = tmp_path / "retail_orders"
@@ -84,7 +96,13 @@ def test_retail_orders_current_only(tmp_path, monkeypatch):
     monkeypatch.setattr(
         retail_orders.bronze,
         "target_path",
-        str(sample_dir / "bronze" / "system={system}" / "entity={entity}" / "dt={run_date}"),
+        str(
+            sample_dir
+            / "bronze"
+            / "system={system}"
+            / "entity={entity}"
+            / "dt={run_date}"
+        ),
     )
     monkeypatch.setattr(
         retail_orders.silver,
@@ -108,7 +126,9 @@ def test_retail_orders_current_only(tmp_path, monkeypatch):
     result = retail_orders.run(run_date)
 
     assert result["silver"]["row_count"] == 5
-    silver_df = pd.read_parquet(sample_dir / "silver" / "retail" / "orders" / "data.parquet")
+    silver_df = pd.read_parquet(
+        sample_dir / "silver" / "retail" / "orders" / "data.parquet"
+    )
     assert len(silver_df) == 5
     assert silver_df["order_id"].nunique() == 5
     assert "_silver_run_date" in silver_df.columns
@@ -153,7 +173,9 @@ def test_file_to_silver_quality_checks(tmp_path, monkeypatch):
     assert quality["pass_rate"] == 100.0
 
     # Silver writes to entity_name.parquet (products.parquet)
-    silver_df = pd.read_parquet(output_dir / "silver" / "inventory" / "products" / "products.parquet")
+    silver_df = pd.read_parquet(
+        output_dir / "silver" / "inventory" / "products" / "products.parquet"
+    )
     assert len(silver_df) == 4
     assert "effective_from" in silver_df.columns
 
@@ -236,6 +258,8 @@ def test_multi_source_parallel_handles_every_entity(tmp_path, monkeypatch):
     assert silver_results["products"]["row_count"] == 3
 
     # Silver writes to entity_name.parquet (orders.parquet)
-    orders_df = pd.read_parquet(output_dir / "silver" / "ecommerce" / "orders" / "orders.parquet")
+    orders_df = pd.read_parquet(
+        output_dir / "silver" / "ecommerce" / "orders" / "orders.parquet"
+    )
     assert len(orders_df) == 3
     assert "_silver_curated_at" in orders_df.columns

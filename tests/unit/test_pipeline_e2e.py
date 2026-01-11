@@ -39,9 +39,24 @@ class TestBronzeToSilverE2E:
         _create_csv_file(
             source_file,
             [
-                {"id": 1, "name": "Widget", "price": 10.0, "updated_at": "2025-01-15T10:00:00"},
-                {"id": 2, "name": "Gadget", "price": 20.0, "updated_at": "2025-01-15T10:00:00"},
-                {"id": 1, "name": "Widget Pro", "price": 15.0, "updated_at": "2025-01-15T11:00:00"},
+                {
+                    "id": 1,
+                    "name": "Widget",
+                    "price": 10.0,
+                    "updated_at": "2025-01-15T10:00:00",
+                },
+                {
+                    "id": 2,
+                    "name": "Gadget",
+                    "price": 20.0,
+                    "updated_at": "2025-01-15T10:00:00",
+                },
+                {
+                    "id": 1,
+                    "name": "Widget Pro",
+                    "price": 15.0,
+                    "updated_at": "2025-01-15T11:00:00",
+                },
             ],
         )
 
@@ -51,13 +66,17 @@ class TestBronzeToSilverE2E:
             entity="products",
             source_type=SourceType.FILE_CSV,
             source_path=str(tmp_path / "source" / "{run_date}.csv"),
-            target_path=str(tmp_path / "bronze/system={system}/entity={entity}/dt={run_date}/"),
+            target_path=str(
+                tmp_path / "bronze/system={system}/entity={entity}/dt={run_date}/"
+            ),
             load_pattern=LoadPattern.FULL_SNAPSHOT,
         )
 
         # Configure Silver
         silver = SilverEntity(
-            source_path=str(tmp_path / "bronze/system=sales/entity=products/dt={run_date}/*.parquet"),
+            source_path=str(
+                tmp_path / "bronze/system=sales/entity=products/dt={run_date}/*.parquet"
+            ),
             target_path=str(tmp_path / "silver/domain=sales/subject=products/"),
             domain="sales",
             subject="products",
@@ -112,11 +131,15 @@ class TestBronzeToSilverE2E:
             entity="items",
             source_type=SourceType.FILE_CSV,
             source_path=str(tmp_path / "source" / "{run_date}.csv"),
-            target_path=str(tmp_path / "bronze/system={system}/entity={entity}/dt={run_date}/"),
+            target_path=str(
+                tmp_path / "bronze/system={system}/entity={entity}/dt={run_date}/"
+            ),
         )
 
         silver = SilverEntity(
-            source_path=str(tmp_path / "bronze/system=test/entity=items/dt={run_date}/*.parquet"),
+            source_path=str(
+                tmp_path / "bronze/system=test/entity=items/dt={run_date}/*.parquet"
+            ),
             target_path=str(tmp_path / "silver/domain=test/subject=items/"),
             domain="test",
             subject="items",
@@ -137,7 +160,9 @@ class TestBronzeToSilverE2E:
         assert result1.silver["row_count"] == result2.silver["row_count"]
 
         # Verify Silver data is the same
-        silver_df = pd.read_parquet(tmp_path / "silver/domain=test/subject=items/items.parquet")
+        silver_df = pd.read_parquet(
+            tmp_path / "silver/domain=test/subject=items/items.parquet"
+        )
         assert len(silver_df) == 2
 
     def test_backfill_multiple_dates(self, tmp_path: Path, monkeypatch):
@@ -152,7 +177,11 @@ class TestBronzeToSilverE2E:
             _create_csv_file(
                 source_file,
                 [
-                    {"id": 1, "value": 100 + i * 10, "updated_at": f"{run_date}T10:00:00"},
+                    {
+                        "id": 1,
+                        "value": 100 + i * 10,
+                        "updated_at": f"{run_date}T10:00:00",
+                    },
                 ],
             )
 
@@ -161,7 +190,9 @@ class TestBronzeToSilverE2E:
             entity="data",
             source_type=SourceType.FILE_CSV,
             source_path=str(tmp_path / "source" / "{run_date}.csv"),
-            target_path=str(tmp_path / "bronze/system={system}/entity={entity}/dt={run_date}/"),
+            target_path=str(
+                tmp_path / "bronze/system={system}/entity={entity}/dt={run_date}/"
+            ),
         )
 
         # Run Bronze for all dates
@@ -170,7 +201,9 @@ class TestBronzeToSilverE2E:
             assert result["row_count"] == 1
 
             # Verify each date has its own partition
-            bronze_dir = tmp_path / "bronze/system=backfill/entity=data" / f"dt={run_date}"
+            bronze_dir = (
+                tmp_path / "bronze/system=backfill/entity=data" / f"dt={run_date}"
+            )
             assert (bronze_dir / "data.parquet").exists()
 
         # Verify all partitions exist
@@ -203,7 +236,9 @@ class TestIncrementalPipeline:
             entity="clicks",
             source_type=SourceType.FILE_CSV,
             source_path=str(tmp_path / "source" / "{run_date}.csv"),
-            target_path=str(tmp_path / "bronze/system={system}/entity={entity}/dt={run_date}/"),
+            target_path=str(
+                tmp_path / "bronze/system={system}/entity={entity}/dt={run_date}/"
+            ),
             load_pattern=LoadPattern.INCREMENTAL_APPEND,
             watermark_column="event_ts",
         )
@@ -235,9 +270,21 @@ class TestIncrementalPipeline:
         _create_csv_file(
             source_file,
             [
-                {"id": 1, "event_ts": "2025-01-15T10:00:00", "value": 100},  # Before watermark
-                {"id": 2, "event_ts": "2025-01-15T14:00:00", "value": 200},  # After watermark
-                {"id": 3, "event_ts": "2025-01-16T09:00:00", "value": 300},  # After watermark
+                {
+                    "id": 1,
+                    "event_ts": "2025-01-15T10:00:00",
+                    "value": 100,
+                },  # Before watermark
+                {
+                    "id": 2,
+                    "event_ts": "2025-01-15T14:00:00",
+                    "value": 200,
+                },  # After watermark
+                {
+                    "id": 3,
+                    "event_ts": "2025-01-16T09:00:00",
+                    "value": 300,
+                },  # After watermark
             ],
         )
 
@@ -246,7 +293,9 @@ class TestIncrementalPipeline:
             entity="orders",
             source_type=SourceType.FILE_CSV,
             source_path=str(tmp_path / "source" / "{run_date}.csv"),
-            target_path=str(tmp_path / "bronze/system={system}/entity={entity}/dt={run_date}/"),
+            target_path=str(
+                tmp_path / "bronze/system={system}/entity={entity}/dt={run_date}/"
+            ),
             load_pattern=LoadPattern.INCREMENTAL_APPEND,
             watermark_column="event_ts",
         )
@@ -273,7 +322,9 @@ class TestDryRun:
             entity="items",
             source_type=SourceType.FILE_CSV,
             source_path=str(tmp_path / "source" / "{run_date}.csv"),
-            target_path=str(tmp_path / "bronze/system={system}/entity={entity}/dt={run_date}/"),
+            target_path=str(
+                tmp_path / "bronze/system={system}/entity={entity}/dt={run_date}/"
+            ),
         )
 
         result = bronze.run("2025-01-15", dry_run=True)
@@ -296,11 +347,15 @@ class TestDryRun:
             entity="items",
             source_type=SourceType.FILE_CSV,
             source_path=str(tmp_path / "source" / "{run_date}.csv"),
-            target_path=str(tmp_path / "bronze/system={system}/entity={entity}/dt={run_date}/"),
+            target_path=str(
+                tmp_path / "bronze/system={system}/entity={entity}/dt={run_date}/"
+            ),
         )
 
         silver = SilverEntity(
-            source_path=str(tmp_path / "bronze/system=test/entity=items/dt={run_date}/*.parquet"),
+            source_path=str(
+                tmp_path / "bronze/system=test/entity=items/dt={run_date}/*.parquet"
+            ),
             target_path=str(tmp_path / "silver/domain=test/subject=items/"),
             domain="test",
             subject="items",
@@ -334,7 +389,9 @@ class TestSkipIfExists:
             entity="items",
             source_type=SourceType.FILE_CSV,
             source_path=str(tmp_path / "source" / "{run_date}.csv"),
-            target_path=str(tmp_path / "bronze/system={system}/entity={entity}/dt={run_date}/"),
+            target_path=str(
+                tmp_path / "bronze/system={system}/entity={entity}/dt={run_date}/"
+            ),
         )
 
         # First run - should write

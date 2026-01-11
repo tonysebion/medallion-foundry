@@ -169,11 +169,15 @@ class TestGetWatermarkWithSource:
         state_dir = tmp_path / ".state"
         state_dir.mkdir()
         watermark_file = state_dir / "test_orders_watermark.json"
-        watermark_file.write_text(json.dumps({
-            "system": "test",
-            "entity": "orders",
-            "last_value": "2025-01-10T08:00:00",
-        }))
+        watermark_file.write_text(
+            json.dumps(
+                {
+                    "system": "test",
+                    "entity": "orders",
+                    "last_value": "2025-01-10T08:00:00",
+                }
+            )
+        )
         monkeypatch.setenv("PIPELINE_STATE_DIR", str(state_dir))
 
         result = get_watermark_with_source(
@@ -208,11 +212,15 @@ class TestGetWatermarkWithSource:
         state_dir = tmp_path / ".state"
         state_dir.mkdir()
         watermark_file = state_dir / "test_orders_watermark.json"
-        watermark_file.write_text(json.dumps({
-            "system": "test",
-            "entity": "orders",
-            "last_value": "2025-01-10T08:00:00",
-        }))
+        watermark_file.write_text(
+            json.dumps(
+                {
+                    "system": "test",
+                    "entity": "orders",
+                    "last_value": "2025-01-10T08:00:00",
+                }
+            )
+        )
         monkeypatch.setenv("PIPELINE_STATE_DIR", str(state_dir))
 
         result = get_watermark_with_source(
@@ -230,11 +238,15 @@ class TestGetWatermarkWithSource:
         state_dir = tmp_path / ".state"
         state_dir.mkdir()
         watermark_file = state_dir / "test_orders_watermark.json"
-        watermark_file.write_text(json.dumps({
-            "system": "test",
-            "entity": "orders",
-            "last_value": "2025-01-10T08:00:00",  # Older
-        }))
+        watermark_file.write_text(
+            json.dumps(
+                {
+                    "system": "test",
+                    "entity": "orders",
+                    "last_value": "2025-01-10T08:00:00",  # Older
+                }
+            )
+        )
         monkeypatch.setenv("PIPELINE_STATE_DIR", str(state_dir))
 
         partition = tmp_path / "bronze" / "dt=2025-01-15"
@@ -258,11 +270,15 @@ class TestGetWatermarkWithSource:
         state_dir = tmp_path / ".state"
         state_dir.mkdir()
         watermark_file = state_dir / "test_orders_watermark.json"
-        watermark_file.write_text(json.dumps({
-            "system": "test",
-            "entity": "orders",
-            "last_value": "2025-01-10T08:00:00",
-        }))
+        watermark_file.write_text(
+            json.dumps(
+                {
+                    "system": "test",
+                    "entity": "orders",
+                    "last_value": "2025-01-10T08:00:00",
+                }
+            )
+        )
         monkeypatch.setenv("PIPELINE_STATE_DIR", str(state_dir))
 
         # Empty destination (no partitions)

@@ -35,7 +35,9 @@ class SyntheticConfig:
     row_count: int = 100
     seed: int = 42
     start_date: date = field(default_factory=lambda: date(2024, 1, 1))
-    domains: List[str] = field(default_factory=lambda: ["claims", "orders", "transactions"])
+    domains: List[str] = field(
+        default_factory=lambda: ["claims", "orders", "transactions"]
+    )
 
 
 class BaseSyntheticGenerator:
@@ -68,7 +70,9 @@ class BaseSyntheticGenerator:
         """Pick a random item from options."""
         return self.rng.choice(options)
 
-    def _random_amount(self, min_val: float, max_val: float, decimals: int = 2) -> float:
+    def _random_amount(
+        self, min_val: float, max_val: float, decimals: int = 2
+    ) -> float:
         """Generate a random monetary amount."""
         return round(self.rng.uniform(min_val, max_val), decimals)
 
@@ -105,20 +109,24 @@ class ClaimsGenerator(BaseSyntheticGenerator):
         for i in range(1, self.row_count + 1):
             service_date = self._random_date(base_date, run_date)
             billed = self._random_amount(100, 5000)
-            records.append({
-                "claim_id": self._generate_id("CLM", i),
-                "patient_id": self._generate_id("PAT", (i % 50) + 1, 5),
-                "provider_id": self._generate_id("PRV", (i % 20) + 1, 4),
-                "claim_type": self._random_choice(self.CLAIM_TYPES),
-                "service_date": service_date,
-                "billed_amount": billed,
-                "paid_amount": round(billed * self.rng.uniform(0.6, 0.95), 2),
-                "diagnosis_code": self._random_choice(self.DIAGNOSIS_CODES),
-                "procedure_code": self._random_choice(self.PROCEDURE_CODES),
-                "status": self._random_choice(self.CLAIM_STATUSES[:3]),  # Initial states
-                "created_at": datetime.combine(service_date, datetime.min.time()),
-                "updated_at": datetime.combine(service_date, datetime.min.time()),
-            })
+            records.append(
+                {
+                    "claim_id": self._generate_id("CLM", i),
+                    "patient_id": self._generate_id("PAT", (i % 50) + 1, 5),
+                    "provider_id": self._generate_id("PRV", (i % 20) + 1, 4),
+                    "claim_type": self._random_choice(self.CLAIM_TYPES),
+                    "service_date": service_date,
+                    "billed_amount": billed,
+                    "paid_amount": round(billed * self.rng.uniform(0.6, 0.95), 2),
+                    "diagnosis_code": self._random_choice(self.DIAGNOSIS_CODES),
+                    "procedure_code": self._random_choice(self.PROCEDURE_CODES),
+                    "status": self._random_choice(
+                        self.CLAIM_STATUSES[:3]
+                    ),  # Initial states
+                    "created_at": datetime.combine(service_date, datetime.min.time()),
+                    "updated_at": datetime.combine(service_date, datetime.min.time()),
+                }
+            )
 
         return pd.DataFrame(records)
 
@@ -136,8 +144,12 @@ class ClaimsGenerator(BaseSyntheticGenerator):
         # Updates to existing claims
         for idx in self.rng.sample(range(len(t0_df)), update_count):
             row = t0_df.iloc[idx].to_dict()
-            row["status"] = self._random_choice(self.CLAIM_STATUSES[2:])  # Progress status
-            row["paid_amount"] = round(row["billed_amount"] * self.rng.uniform(0.7, 0.98), 2)
+            row["status"] = self._random_choice(
+                self.CLAIM_STATUSES[2:]
+            )  # Progress status
+            row["paid_amount"] = round(
+                row["billed_amount"] * self.rng.uniform(0.7, 0.98), 2
+            )
             row["updated_at"] = datetime.combine(run_date, datetime.min.time())
             records.append(row)
 
@@ -145,20 +157,22 @@ class ClaimsGenerator(BaseSyntheticGenerator):
         max_id = int(t0_df["claim_id"].str.extract(r"(\d+)")[0].max())
         for i in range(1, new_count + 1):
             billed = self._random_amount(100, 5000)
-            records.append({
-                "claim_id": self._generate_id("CLM", max_id + i),
-                "patient_id": self._generate_id("PAT", self.rng.randint(1, 50), 5),
-                "provider_id": self._generate_id("PRV", self.rng.randint(1, 20), 4),
-                "claim_type": self._random_choice(self.CLAIM_TYPES),
-                "service_date": run_date - timedelta(days=self.rng.randint(0, 7)),
-                "billed_amount": billed,
-                "paid_amount": 0.0,  # New claims not yet paid
-                "diagnosis_code": self._random_choice(self.DIAGNOSIS_CODES),
-                "procedure_code": self._random_choice(self.PROCEDURE_CODES),
-                "status": "submitted",
-                "created_at": datetime.combine(run_date, datetime.min.time()),
-                "updated_at": datetime.combine(run_date, datetime.min.time()),
-            })
+            records.append(
+                {
+                    "claim_id": self._generate_id("CLM", max_id + i),
+                    "patient_id": self._generate_id("PAT", self.rng.randint(1, 50), 5),
+                    "provider_id": self._generate_id("PRV", self.rng.randint(1, 20), 4),
+                    "claim_type": self._random_choice(self.CLAIM_TYPES),
+                    "service_date": run_date - timedelta(days=self.rng.randint(0, 7)),
+                    "billed_amount": billed,
+                    "paid_amount": 0.0,  # New claims not yet paid
+                    "diagnosis_code": self._random_choice(self.DIAGNOSIS_CODES),
+                    "procedure_code": self._random_choice(self.PROCEDURE_CODES),
+                    "status": "submitted",
+                    "created_at": datetime.combine(run_date, datetime.min.time()),
+                    "updated_at": datetime.combine(run_date, datetime.min.time()),
+                }
+            )
 
         return pd.DataFrame(records)
 
@@ -174,20 +188,22 @@ class ClaimsGenerator(BaseSyntheticGenerator):
         for i in range(1, late_count + 1):
             service_date = self._random_date(base_date, run_date - timedelta(days=30))
             billed = self._random_amount(100, 3000)
-            records.append({
-                "claim_id": self._generate_id("CLM", max_id + i),
-                "patient_id": self._generate_id("PAT", self.rng.randint(1, 50), 5),
-                "provider_id": self._generate_id("PRV", self.rng.randint(1, 20), 4),
-                "claim_type": self._random_choice(self.CLAIM_TYPES),
-                "service_date": service_date,
-                "billed_amount": billed,
-                "paid_amount": round(billed * self.rng.uniform(0.7, 0.95), 2),
-                "diagnosis_code": self._random_choice(self.DIAGNOSIS_CODES),
-                "procedure_code": self._random_choice(self.PROCEDURE_CODES),
-                "status": "paid",  # Late claims often already processed
-                "created_at": datetime.combine(service_date, datetime.min.time()),
-                "updated_at": datetime.combine(run_date, datetime.min.time()),
-            })
+            records.append(
+                {
+                    "claim_id": self._generate_id("CLM", max_id + i),
+                    "patient_id": self._generate_id("PAT", self.rng.randint(1, 50), 5),
+                    "provider_id": self._generate_id("PRV", self.rng.randint(1, 20), 4),
+                    "claim_type": self._random_choice(self.CLAIM_TYPES),
+                    "service_date": service_date,
+                    "billed_amount": billed,
+                    "paid_amount": round(billed * self.rng.uniform(0.7, 0.95), 2),
+                    "diagnosis_code": self._random_choice(self.DIAGNOSIS_CODES),
+                    "procedure_code": self._random_choice(self.PROCEDURE_CODES),
+                    "status": "paid",  # Late claims often already processed
+                    "created_at": datetime.combine(service_date, datetime.min.time()),
+                    "updated_at": datetime.combine(run_date, datetime.min.time()),
+                }
+            )
 
         return pd.DataFrame(records)
 
@@ -195,7 +211,14 @@ class ClaimsGenerator(BaseSyntheticGenerator):
 class OrdersGenerator(BaseSyntheticGenerator):
     """Generate retail/e-commerce orders data."""
 
-    ORDER_STATUSES = ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled"]
+    ORDER_STATUSES = [
+        "pending",
+        "confirmed",
+        "processing",
+        "shipped",
+        "delivered",
+        "cancelled",
+    ]
     PAYMENT_METHODS = ["credit_card", "debit_card", "paypal", "apple_pay", "google_pay"]
     CATEGORIES = ["electronics", "clothing", "home", "books", "sports", "food"]
 
@@ -210,20 +233,26 @@ class OrdersGenerator(BaseSyntheticGenerator):
             order_time = self._random_datetime(base_time, end_time)
             quantity = self.rng.randint(1, 5)
             unit_price = self._random_amount(10, 500)
-            records.append({
-                "order_id": self._generate_id("ORD", i),
-                "customer_id": self._generate_id("CUST", (i % 100) + 1, 5),
-                "product_id": self._generate_id("PROD", self.rng.randint(1, 200), 5),
-                "category": self._random_choice(self.CATEGORIES),
-                "quantity": quantity,
-                "unit_price": unit_price,
-                "total_amount": round(quantity * unit_price, 2),
-                "discount": self._random_amount(0, 50) if self.rng.random() > 0.7 else 0,
-                "payment_method": self._random_choice(self.PAYMENT_METHODS),
-                "status": self._random_choice(self.ORDER_STATUSES[:4]),
-                "order_ts": order_time,
-                "updated_at": order_time,
-            })
+            records.append(
+                {
+                    "order_id": self._generate_id("ORD", i),
+                    "customer_id": self._generate_id("CUST", (i % 100) + 1, 5),
+                    "product_id": self._generate_id(
+                        "PROD", self.rng.randint(1, 200), 5
+                    ),
+                    "category": self._random_choice(self.CATEGORIES),
+                    "quantity": quantity,
+                    "unit_price": unit_price,
+                    "total_amount": round(quantity * unit_price, 2),
+                    "discount": self._random_amount(0, 50)
+                    if self.rng.random() > 0.7
+                    else 0,
+                    "payment_method": self._random_choice(self.PAYMENT_METHODS),
+                    "status": self._random_choice(self.ORDER_STATUSES[:4]),
+                    "order_ts": order_time,
+                    "updated_at": order_time,
+                }
+            )
 
         return pd.DataFrame(records)
 
@@ -252,20 +281,28 @@ class OrdersGenerator(BaseSyntheticGenerator):
         for i in range(1, new_count + 1):
             quantity = self.rng.randint(1, 5)
             unit_price = self._random_amount(10, 500)
-            records.append({
-                "order_id": self._generate_id("ORD", max_id + i),
-                "customer_id": self._generate_id("CUST", self.rng.randint(1, 100), 5),
-                "product_id": self._generate_id("PROD", self.rng.randint(1, 200), 5),
-                "category": self._random_choice(self.CATEGORIES),
-                "quantity": quantity,
-                "unit_price": unit_price,
-                "total_amount": round(quantity * unit_price, 2),
-                "discount": self._random_amount(0, 50) if self.rng.random() > 0.7 else 0,
-                "payment_method": self._random_choice(self.PAYMENT_METHODS),
-                "status": "pending",
-                "order_ts": order_time + timedelta(minutes=i),
-                "updated_at": order_time + timedelta(minutes=i),
-            })
+            records.append(
+                {
+                    "order_id": self._generate_id("ORD", max_id + i),
+                    "customer_id": self._generate_id(
+                        "CUST", self.rng.randint(1, 100), 5
+                    ),
+                    "product_id": self._generate_id(
+                        "PROD", self.rng.randint(1, 200), 5
+                    ),
+                    "category": self._random_choice(self.CATEGORIES),
+                    "quantity": quantity,
+                    "unit_price": unit_price,
+                    "total_amount": round(quantity * unit_price, 2),
+                    "discount": self._random_amount(0, 50)
+                    if self.rng.random() > 0.7
+                    else 0,
+                    "payment_method": self._random_choice(self.PAYMENT_METHODS),
+                    "status": "pending",
+                    "order_ts": order_time + timedelta(minutes=i),
+                    "updated_at": order_time + timedelta(minutes=i),
+                }
+            )
 
         return pd.DataFrame(records)
 
@@ -291,18 +328,22 @@ class TransactionsGenerator(BaseSyntheticGenerator):
             if txn_type in ("debit", "payment"):
                 amount = -amount
 
-            records.append({
-                "transaction_id": self._generate_id("TXN", i, 10),
-                "account_id": self._generate_id("ACC", (i % 50) + 1, 6),
-                "transaction_type": txn_type,
-                "amount": amount,
-                "currency": self._random_choice(self.CURRENCIES),
-                "status": self._random_choice(self.TRANSACTION_STATUSES[:2]),
-                "description": f"{txn_type.title()} transaction",
-                "reference_id": hashlib.md5(f"{i}{txn_time}".encode()).hexdigest()[:12],
-                "transaction_ts": txn_time,
-                "created_at": txn_time,
-            })
+            records.append(
+                {
+                    "transaction_id": self._generate_id("TXN", i, 10),
+                    "account_id": self._generate_id("ACC", (i % 50) + 1, 6),
+                    "transaction_type": txn_type,
+                    "amount": amount,
+                    "currency": self._random_choice(self.CURRENCIES),
+                    "status": self._random_choice(self.TRANSACTION_STATUSES[:2]),
+                    "description": f"{txn_type.title()} transaction",
+                    "reference_id": hashlib.md5(f"{i}{txn_time}".encode()).hexdigest()[
+                        :12
+                    ],
+                    "transaction_ts": txn_time,
+                    "created_at": txn_time,
+                }
+            )
 
         return pd.DataFrame(records)
 
@@ -319,7 +360,9 @@ class TransactionsGenerator(BaseSyntheticGenerator):
         # Status updates (pending -> completed/failed)
         pending_mask = t0_df["status"] == "pending"
         pending_indices = t0_df[pending_mask].index.tolist()
-        for idx in self.rng.sample(pending_indices, min(update_count, len(pending_indices))):
+        for idx in self.rng.sample(
+            pending_indices, min(update_count, len(pending_indices))
+        ):
             row = t0_df.iloc[idx].to_dict()
             row["status"] = self._random_choice(["completed", "failed"])
             records.append(row)
@@ -333,18 +376,22 @@ class TransactionsGenerator(BaseSyntheticGenerator):
             if txn_type in ("debit", "payment"):
                 amount = -amount
 
-            records.append({
-                "transaction_id": self._generate_id("TXN", max_id + i, 10),
-                "account_id": self._generate_id("ACC", self.rng.randint(1, 50), 6),
-                "transaction_type": txn_type,
-                "amount": amount,
-                "currency": self._random_choice(self.CURRENCIES),
-                "status": "pending",
-                "description": f"{txn_type.title()} transaction",
-                "reference_id": hashlib.md5(f"{max_id + i}{txn_time}".encode()).hexdigest()[:12],
-                "transaction_ts": txn_time + timedelta(seconds=i),
-                "created_at": txn_time + timedelta(seconds=i),
-            })
+            records.append(
+                {
+                    "transaction_id": self._generate_id("TXN", max_id + i, 10),
+                    "account_id": self._generate_id("ACC", self.rng.randint(1, 50), 6),
+                    "transaction_type": txn_type,
+                    "amount": amount,
+                    "currency": self._random_choice(self.CURRENCIES),
+                    "status": "pending",
+                    "description": f"{txn_type.title()} transaction",
+                    "reference_id": hashlib.md5(
+                        f"{max_id + i}{txn_time}".encode()
+                    ).hexdigest()[:12],
+                    "transaction_ts": txn_time + timedelta(seconds=i),
+                    "created_at": txn_time + timedelta(seconds=i),
+                }
+            )
 
         return pd.DataFrame(records)
 
@@ -369,15 +416,17 @@ class StateChangeGenerator(BaseSyntheticGenerator):
             current_time = base_time + timedelta(days=self.rng.randint(0, 30))
 
             for version in range(1, changes_per_entity + 1):
-                records.append({
-                    "entity_id": entity_id,
-                    "name": name if version == 1 else f"{name} (v{version})",
-                    "status": self._random_choice(status_options),
-                    "amount": self._random_amount(100, 5000),
-                    "effective_from": current_time,
-                    "change_ts": current_time,
-                    "version": version,
-                })
+                records.append(
+                    {
+                        "entity_id": entity_id,
+                        "name": name if version == 1 else f"{name} (v{version})",
+                        "status": self._random_choice(status_options),
+                        "amount": self._random_amount(100, 5000),
+                        "effective_from": current_time,
+                        "change_ts": current_time,
+                        "version": version,
+                    }
+                )
                 current_time = current_time + timedelta(days=self.rng.randint(7, 30))
 
         return pd.DataFrame(records)
@@ -409,12 +458,16 @@ class NestedJsonGenerator(BaseSyntheticGenerator):
         base_time = datetime.combine(run_date - timedelta(days=30), datetime.min.time())
 
         for i in range(1, self.row_count + 1):
-            created_at = self._random_datetime(base_time, datetime.combine(run_date, datetime.min.time()))
+            created_at = self._random_datetime(
+                base_time, datetime.combine(run_date, datetime.min.time())
+            )
 
             # Nested object: address
             address = {
                 "street": f"{self.rng.randint(100, 9999)} {self._random_choice(['Main', 'Oak', 'Pine', 'Maple'])} St",
-                "city": self._random_choice(["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"]),
+                "city": self._random_choice(
+                    ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"]
+                ),
                 "state": self._random_choice(["NY", "CA", "IL", "TX", "AZ"]),
                 "zip": f"{self.rng.randint(10000, 99999)}",
                 "country": "USA",
@@ -422,30 +475,46 @@ class NestedJsonGenerator(BaseSyntheticGenerator):
 
             # Nested array: tags (variable length)
             num_tags = self.rng.randint(0, 4)
-            tags: List[str] = self.rng.sample(self.TAGS, num_tags) if num_tags > 0 else []
+            tags: List[str] = (
+                self.rng.sample(self.TAGS, num_tags) if num_tags > 0 else []
+            )
 
             # Nested array of objects: line_items
             num_items = self.rng.randint(1, 5)
             line_items: List[LineItem] = []
             for j in range(num_items):
-                line_items.append({
-                    "product_id": self._generate_id("PROD", self.rng.randint(1, 500), 5),
-                    "name": f"Product {self.rng.randint(1, 100)}",
-                    "quantity": self.rng.randint(1, 10),
-                    "price": self._random_amount(5, 500),
-                    "discount_pct": self._random_amount(0, 30) if self.rng.random() > 0.7 else 0.0,
-                })
+                line_items.append(
+                    {
+                        "product_id": self._generate_id(
+                            "PROD", self.rng.randint(1, 500), 5
+                        ),
+                        "name": f"Product {self.rng.randint(1, 100)}",
+                        "quantity": self.rng.randint(1, 10),
+                        "price": self._random_amount(5, 500),
+                        "discount_pct": self._random_amount(0, 30)
+                        if self.rng.random() > 0.7
+                        else 0.0,
+                    }
+                )
 
             # Nested object: metadata with mixed types
             metadata = {
                 "source": self._random_choice(["web", "mobile", "api", "pos"]),
                 "session_id": hashlib.md5(f"{i}{created_at}".encode()).hexdigest()[:16],
                 "is_guest": self.rng.random() > 0.7,
-                "referral_code": f"REF{self.rng.randint(1000, 9999)}" if self.rng.random() > 0.5 else None,
+                "referral_code": f"REF{self.rng.randint(1000, 9999)}"
+                if self.rng.random() > 0.5
+                else None,
                 "utm_params": {
-                    "source": self._random_choice(["google", "facebook", "email", "direct"]),
-                    "medium": self._random_choice(["cpc", "organic", "social", "referral"]),
-                    "campaign": f"campaign_{self.rng.randint(1, 20)}" if self.rng.random() > 0.3 else None,
+                    "source": self._random_choice(
+                        ["google", "facebook", "email", "direct"]
+                    ),
+                    "medium": self._random_choice(
+                        ["cpc", "organic", "social", "referral"]
+                    ),
+                    "campaign": f"campaign_{self.rng.randint(1, 20)}"
+                    if self.rng.random() > 0.3
+                    else None,
                 },
             }
 
@@ -456,22 +525,24 @@ class NestedJsonGenerator(BaseSyntheticGenerator):
                 "signature_required": self.rng.random() > 0.8,
             }
 
-            records.append({
-                "order_id": self._generate_id("ORD", i),
-                "customer_id": self._generate_id("CUST", (i % 100) + 1, 5),
-                "category": self._random_choice(self.CATEGORIES),
-                "region": self._random_choice(self.REGIONS),
-                "total_amount": sum(
-                    item["price"] * item["quantity"] for item in line_items
-                ),
-                "address": json.dumps(address),  # JSON string column
-                "tags": tags,  # Native array
-                "line_items": line_items,  # Native array of objects
-                "metadata": metadata,  # Native nested object
-                "shipping": shipping,  # Native nested object
-                "created_at": created_at,
-                "updated_at": created_at,
-            })
+            records.append(
+                {
+                    "order_id": self._generate_id("ORD", i),
+                    "customer_id": self._generate_id("CUST", (i % 100) + 1, 5),
+                    "category": self._random_choice(self.CATEGORIES),
+                    "region": self._random_choice(self.REGIONS),
+                    "total_amount": sum(
+                        item["price"] * item["quantity"] for item in line_items
+                    ),
+                    "address": json.dumps(address),  # JSON string column
+                    "tags": tags,  # Native array
+                    "line_items": line_items,  # Native array of objects
+                    "metadata": metadata,  # Native nested object
+                    "shipping": shipping,  # Native nested object
+                    "created_at": created_at,
+                    "updated_at": created_at,
+                }
+            )
 
         return pd.DataFrame(records)
 
@@ -539,13 +610,14 @@ class WideSchemaGenerator(BaseSyntheticGenerator):
         base_time = datetime.combine(run_date - timedelta(days=30), datetime.min.time())
 
         for i in range(1, self.row_count + 1):
-            created_at = self._random_datetime(base_time, datetime.combine(run_date, datetime.min.time()))
+            created_at = self._random_datetime(
+                base_time, datetime.combine(run_date, datetime.min.time())
+            )
 
             record: Dict[str, Any] = {
                 # Primary key columns (never null)
                 "record_id": self._generate_id("REC", i, 10),
                 "entity_key": self._generate_id("ENT", (i % 100) + 1, 6),
-
                 # Core columns (low null rate)
                 "name": f"Entity {i}",
                 "category": self._random_choice(["A", "B", "C", "D", "E"]),
@@ -588,7 +660,9 @@ class WideSchemaGenerator(BaseSyntheticGenerator):
             for j in range(1, 6):
                 col_name = f"ts_col_{j:02d}"
                 ts_value = self._random_datetime(
-                    datetime.combine(run_date - timedelta(days=30), datetime.min.time()),
+                    datetime.combine(
+                        run_date - timedelta(days=30), datetime.min.time()
+                    ),
                     datetime.combine(run_date, datetime.min.time()),
                 )
                 record[col_name] = self._maybe_null(ts_value)
@@ -623,7 +697,9 @@ class WideSchemaGenerator(BaseSyntheticGenerator):
             row = t0_df.iloc[idx].to_dict()
 
             # Update some columns randomly
-            row["status"] = self._random_choice(["active", "inactive", "pending", "archived"])
+            row["status"] = self._random_choice(
+                ["active", "inactive", "pending", "archived"]
+            )
             row["updated_at"] = datetime.combine(run_date, datetime.min.time())
 
             # Update a few numeric columns
@@ -681,29 +757,39 @@ class LateDataGenerator(BaseSyntheticGenerator):
         """Generate T0 dataset with mixed timezones."""
         self.reset()
         records = []
-        base_time = datetime.combine(run_date - timedelta(days=7), datetime.min.time(), tzinfo=ZoneInfo("UTC"))
-        end_time = datetime.combine(run_date, datetime.min.time(), tzinfo=ZoneInfo("UTC"))
+        base_time = datetime.combine(
+            run_date - timedelta(days=7), datetime.min.time(), tzinfo=ZoneInfo("UTC")
+        )
+        end_time = datetime.combine(
+            run_date, datetime.min.time(), tzinfo=ZoneInfo("UTC")
+        )
 
         for i in range(1, self.row_count + 1):
             # Generate event in a random timezone
             event_tz = self._get_timezone()
-            event_time_utc = self._random_datetime(base_time.replace(tzinfo=None), end_time.replace(tzinfo=None))
+            event_time_utc = self._random_datetime(
+                base_time.replace(tzinfo=None), end_time.replace(tzinfo=None)
+            )
             event_time_utc = event_time_utc.replace(tzinfo=ZoneInfo("UTC"))
             event_time_local = event_time_utc.astimezone(event_tz)
 
-            records.append({
-                "event_id": self._generate_id("EVT", i, 10),
-                "user_id": self._generate_id("USR", (i % 100) + 1, 6),
-                "event_type": self._random_choice(self.EVENT_TYPES),
-                "event_ts_utc": event_time_utc,
-                "event_ts_local": event_time_local,
-                "timezone": str(event_tz),
-                "value": self._random_amount(0, 1000),
-                "session_id": hashlib.md5(f"{i}{event_time_utc}".encode()).hexdigest()[:12],
-                "is_late": False,
-                "arrival_delay_hours": 0,
-                "created_at": event_time_utc,
-            })
+            records.append(
+                {
+                    "event_id": self._generate_id("EVT", i, 10),
+                    "user_id": self._generate_id("USR", (i % 100) + 1, 6),
+                    "event_type": self._random_choice(self.EVENT_TYPES),
+                    "event_ts_utc": event_time_utc,
+                    "event_ts_local": event_time_local,
+                    "timezone": str(event_tz),
+                    "value": self._random_amount(0, 1000),
+                    "session_id": hashlib.md5(
+                        f"{i}{event_time_utc}".encode()
+                    ).hexdigest()[:12],
+                    "is_late": False,
+                    "arrival_delay_hours": 0,
+                    "created_at": event_time_utc,
+                }
+            )
 
         return pd.DataFrame(records)
 
@@ -717,26 +803,32 @@ class LateDataGenerator(BaseSyntheticGenerator):
         new_count = self.row_count // 4
         max_id = int(t0_df["event_id"].str.extract(r"(\d+)")[0].max())
 
-        event_time_utc = datetime.combine(run_date, datetime.min.time(), tzinfo=ZoneInfo("UTC"))
+        event_time_utc = datetime.combine(
+            run_date, datetime.min.time(), tzinfo=ZoneInfo("UTC")
+        )
 
         for i in range(1, new_count + 1):
             event_tz = self._get_timezone()
             current_time = event_time_utc + timedelta(minutes=i)
             event_time_local = current_time.astimezone(event_tz)
 
-            records.append({
-                "event_id": self._generate_id("EVT", max_id + i, 10),
-                "user_id": self._generate_id("USR", self.rng.randint(1, 100), 6),
-                "event_type": self._random_choice(self.EVENT_TYPES),
-                "event_ts_utc": current_time,
-                "event_ts_local": event_time_local,
-                "timezone": str(event_tz),
-                "value": self._random_amount(0, 1000),
-                "session_id": hashlib.md5(f"{max_id + i}{current_time}".encode()).hexdigest()[:12],
-                "is_late": False,
-                "arrival_delay_hours": 0,
-                "created_at": current_time,
-            })
+            records.append(
+                {
+                    "event_id": self._generate_id("EVT", max_id + i, 10),
+                    "user_id": self._generate_id("USR", self.rng.randint(1, 100), 6),
+                    "event_type": self._random_choice(self.EVENT_TYPES),
+                    "event_ts_utc": current_time,
+                    "event_ts_local": event_time_local,
+                    "timezone": str(event_tz),
+                    "value": self._random_amount(0, 1000),
+                    "session_id": hashlib.md5(
+                        f"{max_id + i}{current_time}".encode()
+                    ).hexdigest()[:12],
+                    "is_late": False,
+                    "arrival_delay_hours": 0,
+                    "created_at": current_time,
+                }
+            )
 
         return pd.DataFrame(records)
 
@@ -760,7 +852,9 @@ class LateDataGenerator(BaseSyntheticGenerator):
         late_count = max(1, int(self.row_count * self.late_rate))
         max_id = int(t0_df["event_id"].str.extract(r"(\d+)")[0].max()) + 1000
 
-        arrival_time = datetime.combine(run_date, datetime.min.time(), tzinfo=ZoneInfo("UTC"))
+        arrival_time = datetime.combine(
+            run_date, datetime.min.time(), tzinfo=ZoneInfo("UTC")
+        )
 
         for i in range(1, late_count + 1):
             # Event occurred in the past
@@ -770,19 +864,23 @@ class LateDataGenerator(BaseSyntheticGenerator):
             event_tz = self._get_timezone()
             event_time_local = event_time_utc.astimezone(event_tz)
 
-            records.append({
-                "event_id": self._generate_id("EVT", max_id + i, 10),
-                "user_id": self._generate_id("USR", self.rng.randint(1, 100), 6),
-                "event_type": self._random_choice(self.EVENT_TYPES),
-                "event_ts_utc": event_time_utc,
-                "event_ts_local": event_time_local,
-                "timezone": str(event_tz),
-                "value": self._random_amount(0, 1000),
-                "session_id": hashlib.md5(f"{max_id + i}{event_time_utc}".encode()).hexdigest()[:12],
-                "is_late": True,
-                "arrival_delay_hours": delay_hours,
-                "created_at": arrival_time,  # Arrived now, but event was in the past
-            })
+            records.append(
+                {
+                    "event_id": self._generate_id("EVT", max_id + i, 10),
+                    "user_id": self._generate_id("USR", self.rng.randint(1, 100), 6),
+                    "event_type": self._random_choice(self.EVENT_TYPES),
+                    "event_ts_utc": event_time_utc,
+                    "event_ts_local": event_time_local,
+                    "timezone": str(event_tz),
+                    "value": self._random_amount(0, 1000),
+                    "session_id": hashlib.md5(
+                        f"{max_id + i}{event_time_utc}".encode()
+                    ).hexdigest()[:12],
+                    "is_late": True,
+                    "arrival_delay_hours": delay_hours,
+                    "created_at": arrival_time,  # Arrived now, but event was in the past
+                }
+            )
 
         return pd.DataFrame(records)
 
@@ -798,7 +896,9 @@ class LateDataGenerator(BaseSyntheticGenerator):
         """
         self.reset()
         records = []
-        arrival_time = datetime.combine(run_date, datetime.min.time(), tzinfo=ZoneInfo("UTC"))
+        arrival_time = datetime.combine(
+            run_date, datetime.min.time(), tzinfo=ZoneInfo("UTC")
+        )
 
         for i in range(1, batch_size + 1):
             # Decide if this event is late or on-time
@@ -810,25 +910,31 @@ class LateDataGenerator(BaseSyntheticGenerator):
                 event_time_utc = arrival_time - timedelta(hours=delay_hours)
             else:
                 # Event from recent past (within expected window)
-                event_time_utc = arrival_time - timedelta(minutes=self.rng.randint(0, 60))
+                event_time_utc = arrival_time - timedelta(
+                    minutes=self.rng.randint(0, 60)
+                )
                 delay_hours = 0
 
             event_tz = self._get_timezone()
             event_time_local = event_time_utc.astimezone(event_tz)
 
-            records.append({
-                "event_id": self._generate_id("EVT", 10000 + i, 10),
-                "user_id": self._generate_id("USR", self.rng.randint(1, 100), 6),
-                "event_type": self._random_choice(self.EVENT_TYPES),
-                "event_ts_utc": event_time_utc,
-                "event_ts_local": event_time_local,
-                "timezone": str(event_tz),
-                "value": self._random_amount(0, 1000),
-                "session_id": hashlib.md5(f"{10000 + i}{event_time_utc}".encode()).hexdigest()[:12],
-                "is_late": is_late,
-                "arrival_delay_hours": delay_hours,
-                "created_at": arrival_time,
-            })
+            records.append(
+                {
+                    "event_id": self._generate_id("EVT", 10000 + i, 10),
+                    "user_id": self._generate_id("USR", self.rng.randint(1, 100), 6),
+                    "event_type": self._random_choice(self.EVENT_TYPES),
+                    "event_ts_utc": event_time_utc,
+                    "event_ts_local": event_time_local,
+                    "timezone": str(event_tz),
+                    "value": self._random_amount(0, 1000),
+                    "session_id": hashlib.md5(
+                        f"{10000 + i}{event_time_utc}".encode()
+                    ).hexdigest()[:12],
+                    "is_late": is_late,
+                    "arrival_delay_hours": delay_hours,
+                    "created_at": arrival_time,
+                }
+            )
 
         # Shuffle to simulate out-of-order arrival
         self.rng.shuffle(records)
@@ -852,14 +958,18 @@ class SchemaEvolutionGenerator(BaseSyntheticGenerator):
         base_time = datetime.combine(run_date - timedelta(days=30), datetime.min.time())
 
         for i in range(1, self.row_count + 1):
-            records.append({
-                "id": i,
-                "name": f"Entity {i}",
-                "value": self.rng.randint(0, 1000),  # int type
-                "score": round(self.rng.uniform(0, 100), 2),  # float type
-                "status": self._random_choice(["active", "inactive"]),
-                "created_at": self._random_datetime(base_time, datetime.combine(run_date, datetime.min.time())),
-            })
+            records.append(
+                {
+                    "id": i,
+                    "name": f"Entity {i}",
+                    "value": self.rng.randint(0, 1000),  # int type
+                    "score": round(self.rng.uniform(0, 100), 2),  # float type
+                    "status": self._random_choice(["active", "inactive"]),
+                    "created_at": self._random_datetime(
+                        base_time, datetime.combine(run_date, datetime.min.time())
+                    ),
+                }
+            )
 
         return pd.DataFrame(records)
 
@@ -870,18 +980,30 @@ class SchemaEvolutionGenerator(BaseSyntheticGenerator):
         base_time = datetime.combine(run_date - timedelta(days=30), datetime.min.time())
 
         for i in range(1, self.row_count + 1):
-            records.append({
-                "id": i,
-                "name": f"Entity {i}",
-                "value": self.rng.randint(0, 1000),
-                "score": round(self.rng.uniform(0, 100), 2),
-                "status": self._random_choice(["active", "inactive"]),
-                "created_at": self._random_datetime(base_time, datetime.combine(run_date, datetime.min.time())),
-                # New columns in V2
-                "category": self._random_choice(["A", "B", "C"]) if self.rng.random() > 0.3 else None,
-                "priority": self.rng.randint(1, 5) if self.rng.random() > 0.2 else None,
-                "tags": ",".join(self.rng.sample(["tag1", "tag2", "tag3", "tag4"], self.rng.randint(0, 3))),
-            })
+            records.append(
+                {
+                    "id": i,
+                    "name": f"Entity {i}",
+                    "value": self.rng.randint(0, 1000),
+                    "score": round(self.rng.uniform(0, 100), 2),
+                    "status": self._random_choice(["active", "inactive"]),
+                    "created_at": self._random_datetime(
+                        base_time, datetime.combine(run_date, datetime.min.time())
+                    ),
+                    # New columns in V2
+                    "category": self._random_choice(["A", "B", "C"])
+                    if self.rng.random() > 0.3
+                    else None,
+                    "priority": self.rng.randint(1, 5)
+                    if self.rng.random() > 0.2
+                    else None,
+                    "tags": ",".join(
+                        self.rng.sample(
+                            ["tag1", "tag2", "tag3", "tag4"], self.rng.randint(0, 3)
+                        )
+                    ),
+                }
+            )
 
         return pd.DataFrame(records)
 
@@ -892,17 +1014,33 @@ class SchemaEvolutionGenerator(BaseSyntheticGenerator):
         base_time = datetime.combine(run_date - timedelta(days=30), datetime.min.time())
 
         for i in range(1, self.row_count + 1):
-            records.append({
-                "id": i,
-                "name": f"Entity {i}",
-                "value": self.rng.randint(0, 10_000_000_000),  # Larger range (bigint)
-                "score": round(self.rng.uniform(0, 1000000), 6),  # More precision
-                "status": self._random_choice(["active", "inactive", "pending", "archived"]),
-                "created_at": self._random_datetime(base_time, datetime.combine(run_date, datetime.min.time())),
-                "category": self._random_choice(["A", "B", "C"]) if self.rng.random() > 0.3 else None,
-                "priority": self.rng.randint(1, 5) if self.rng.random() > 0.2 else None,
-                "tags": ",".join(self.rng.sample(["tag1", "tag2", "tag3", "tag4"], self.rng.randint(0, 3))),
-            })
+            records.append(
+                {
+                    "id": i,
+                    "name": f"Entity {i}",
+                    "value": self.rng.randint(
+                        0, 10_000_000_000
+                    ),  # Larger range (bigint)
+                    "score": round(self.rng.uniform(0, 1000000), 6),  # More precision
+                    "status": self._random_choice(
+                        ["active", "inactive", "pending", "archived"]
+                    ),
+                    "created_at": self._random_datetime(
+                        base_time, datetime.combine(run_date, datetime.min.time())
+                    ),
+                    "category": self._random_choice(["A", "B", "C"])
+                    if self.rng.random() > 0.3
+                    else None,
+                    "priority": self.rng.randint(1, 5)
+                    if self.rng.random() > 0.2
+                    else None,
+                    "tags": ",".join(
+                        self.rng.sample(
+                            ["tag1", "tag2", "tag3", "tag4"], self.rng.randint(0, 3)
+                        )
+                    ),
+                }
+            )
 
         return pd.DataFrame(records)
 
@@ -917,19 +1055,29 @@ class SchemaEvolutionGenerator(BaseSyntheticGenerator):
         base_time = datetime.combine(run_date - timedelta(days=30), datetime.min.time())
 
         for i in range(1, self.row_count + 1):
-            records.append({
-                "id": i,
-                "name": f"Entity {i}",
-                "value": self.rng.randint(0, 10_000_000_000),
-                "score": round(self.rng.uniform(0, 1000000), 6),
-                "status": self._random_choice(["active", "inactive", "pending", "archived"]),
-                "created_at": self._random_datetime(base_time, datetime.combine(run_date, datetime.min.time())),
-                "category": self._random_choice(["A", "B", "C"]) if self.rng.random() > 0.3 else None,
-                "priority": self.rng.randint(1, 5) if self.rng.random() > 0.2 else None,
-                # NOTE: 'tags' column removed in V4
-                # New column to replace it
-                "metadata_version": "v4",
-            })
+            records.append(
+                {
+                    "id": i,
+                    "name": f"Entity {i}",
+                    "value": self.rng.randint(0, 10_000_000_000),
+                    "score": round(self.rng.uniform(0, 1000000), 6),
+                    "status": self._random_choice(
+                        ["active", "inactive", "pending", "archived"]
+                    ),
+                    "created_at": self._random_datetime(
+                        base_time, datetime.combine(run_date, datetime.min.time())
+                    ),
+                    "category": self._random_choice(["A", "B", "C"])
+                    if self.rng.random() > 0.3
+                    else None,
+                    "priority": self.rng.randint(1, 5)
+                    if self.rng.random() > 0.2
+                    else None,
+                    # NOTE: 'tags' column removed in V4
+                    # New column to replace it
+                    "metadata_version": "v4",
+                }
+            )
 
         return pd.DataFrame(records)
 
@@ -955,17 +1103,21 @@ class CustomerDimensionGenerator(BaseSyntheticGenerator):
         records = []
 
         for i in range(1, self.row_count + 1):
-            signup_date = self._random_date(run_date - timedelta(days=365), run_date - timedelta(days=30))
-            records.append({
-                "customer_id": self._generate_id("CUST", i, 5),
-                "customer_name": f"Customer {i}",
-                "email": f"customer{i}@example.com",
-                "tier": self._random_choice(self.TIERS),
-                "region": self._random_choice(self.REGIONS),
-                "signup_date": signup_date,
-                "lifetime_value": self._random_amount(0, 50000),
-                "is_active": self.rng.random() > 0.1,
-            })
+            signup_date = self._random_date(
+                run_date - timedelta(days=365), run_date - timedelta(days=30)
+            )
+            records.append(
+                {
+                    "customer_id": self._generate_id("CUST", i, 5),
+                    "customer_name": f"Customer {i}",
+                    "email": f"customer{i}@example.com",
+                    "tier": self._random_choice(self.TIERS),
+                    "region": self._random_choice(self.REGIONS),
+                    "signup_date": signup_date,
+                    "lifetime_value": self._random_amount(0, 50000),
+                    "is_active": self.rng.random() > 0.1,
+                }
+            )
 
         return pd.DataFrame(records)
 
@@ -982,16 +1134,20 @@ class ProductDimensionGenerator(BaseSyntheticGenerator):
         records = []
 
         for i in range(1, self.row_count + 1):
-            records.append({
-                "product_id": self._generate_id("PROD", i, 5),
-                "product_name": f"Product {i}",
-                "category": self._random_choice(self.CATEGORIES),
-                "brand": self._random_choice(self.BRANDS),
-                "unit_cost": self._random_amount(1, 200),
-                "unit_price": self._random_amount(5, 500),
-                "is_active": self.rng.random() > 0.05,
-                "created_date": self._random_date(run_date - timedelta(days=365), run_date),
-            })
+            records.append(
+                {
+                    "product_id": self._generate_id("PROD", i, 5),
+                    "product_name": f"Product {i}",
+                    "category": self._random_choice(self.CATEGORIES),
+                    "brand": self._random_choice(self.BRANDS),
+                    "unit_cost": self._random_amount(1, 200),
+                    "unit_price": self._random_amount(5, 500),
+                    "is_active": self.rng.random() > 0.05,
+                    "created_date": self._random_date(
+                        run_date - timedelta(days=365), run_date
+                    ),
+                }
+            )
 
         return pd.DataFrame(records)
 
@@ -1017,25 +1173,35 @@ class SalesFactGenerator(BaseSyntheticGenerator):
         base_time = datetime.combine(run_date - timedelta(days=30), datetime.min.time())
 
         for i in range(1, self.row_count + 1):
-            sale_time = self._random_datetime(base_time, datetime.combine(run_date, datetime.min.time()))
+            sale_time = self._random_datetime(
+                base_time, datetime.combine(run_date, datetime.min.time())
+            )
             quantity = self.rng.randint(1, 10)
             unit_price = self._random_amount(10, 500)
 
             # Include some orphan keys for testing (customer/product that doesn't exist)
-            customer_id = self._generate_id("CUST", self.rng.randint(1, self.customer_count + 5), 5)
-            product_id = self._generate_id("PROD", self.rng.randint(1, self.product_count + 5), 5)
+            customer_id = self._generate_id(
+                "CUST", self.rng.randint(1, self.customer_count + 5), 5
+            )
+            product_id = self._generate_id(
+                "PROD", self.rng.randint(1, self.product_count + 5), 5
+            )
 
-            records.append({
-                "sale_id": self._generate_id("SALE", i, 8),
-                "customer_id": customer_id,
-                "product_id": product_id,
-                "quantity": quantity,
-                "unit_price": unit_price,
-                "total_amount": round(quantity * unit_price, 2),
-                "discount_amount": self._random_amount(0, 50) if self.rng.random() > 0.7 else 0,
-                "sale_ts": sale_time,
-                "created_at": sale_time,
-            })
+            records.append(
+                {
+                    "sale_id": self._generate_id("SALE", i, 8),
+                    "customer_id": customer_id,
+                    "product_id": product_id,
+                    "quantity": quantity,
+                    "unit_price": unit_price,
+                    "total_amount": round(quantity * unit_price, 2),
+                    "discount_amount": self._random_amount(0, 50)
+                    if self.rng.random() > 0.7
+                    else 0,
+                    "sale_ts": sale_time,
+                    "created_at": sale_time,
+                }
+            )
 
         return pd.DataFrame(records)
 
@@ -1055,17 +1221,25 @@ class SalesFactGenerator(BaseSyntheticGenerator):
             quantity = self.rng.randint(1, 10)
             unit_price = self._random_amount(10, 500)
 
-            records.append({
-                "sale_id": self._generate_id("SALE", max_id + i, 8),
-                "customer_id": self._generate_id("CUST", self.rng.randint(1, self.customer_count), 5),
-                "product_id": self._generate_id("PROD", self.rng.randint(1, self.product_count), 5),
-                "quantity": quantity,
-                "unit_price": unit_price,
-                "total_amount": round(quantity * unit_price, 2),
-                "discount_amount": self._random_amount(0, 50) if self.rng.random() > 0.7 else 0,
-                "sale_ts": sale_time + timedelta(minutes=i),
-                "created_at": sale_time + timedelta(minutes=i),
-            })
+            records.append(
+                {
+                    "sale_id": self._generate_id("SALE", max_id + i, 8),
+                    "customer_id": self._generate_id(
+                        "CUST", self.rng.randint(1, self.customer_count), 5
+                    ),
+                    "product_id": self._generate_id(
+                        "PROD", self.rng.randint(1, self.product_count), 5
+                    ),
+                    "quantity": quantity,
+                    "unit_price": unit_price,
+                    "total_amount": round(quantity * unit_price, 2),
+                    "discount_amount": self._random_amount(0, 50)
+                    if self.rng.random() > 0.7
+                    else 0,
+                    "sale_ts": sale_time + timedelta(minutes=i),
+                    "created_at": sale_time + timedelta(minutes=i),
+                }
+            )
 
         return pd.DataFrame(records)
 
@@ -1080,7 +1254,9 @@ class DuplicateConfig:
     """Configuration for duplicate injection behavior."""
 
     exact_duplicate_rate: float = 0.05  # 5% exact duplicates
-    near_duplicate_rate: float = 0.03  # 3% near duplicates (same key, minor differences)
+    near_duplicate_rate: float = (
+        0.03  # 3% near duplicates (same key, minor differences)
+    )
     out_of_order_rate: float = 0.02  # 2% out-of-order duplicate arrivals
     seed: int = 42
 
@@ -1203,7 +1379,9 @@ class DuplicateInjector:
             if timestamp_column and timestamp_column in row:
                 ts_value = row[timestamp_column]
                 if isinstance(ts_value, datetime):
-                    row[timestamp_column] = ts_value + timedelta(seconds=timestamp_offset_seconds)
+                    row[timestamp_column] = ts_value + timedelta(
+                        seconds=timestamp_offset_seconds
+                    )
                 elif isinstance(ts_value, date):
                     row[timestamp_column] = ts_value + timedelta(days=1)
 
@@ -1263,7 +1441,9 @@ class DuplicateInjector:
             if timestamp_column in row:
                 ts_value = row[timestamp_column]
                 if isinstance(ts_value, datetime):
-                    row[timestamp_column] = ts_value - timedelta(seconds=self.rng.randint(1, 3600))
+                    row[timestamp_column] = ts_value - timedelta(
+                        seconds=self.rng.randint(1, 3600)
+                    )
 
             # Insert at a random position in the second half (simulating late arrival)
             insert_pos = self.rng.randint(first_half_size, len(result))
@@ -1325,7 +1505,15 @@ class DuplicateInjector:
         key_columns: List[str],
     ) -> List[str]:
         """Auto-detect columns that are likely mutable (can be modified in updates)."""
-        mutable_patterns = ["updated", "modified", "status", "state", "amount", "value", "count"]
+        mutable_patterns = [
+            "updated",
+            "modified",
+            "status",
+            "state",
+            "amount",
+            "value",
+            "count",
+        ]
         mutable_cols = []
 
         for col in df.columns:
@@ -1408,7 +1596,9 @@ class DuplicateInjector:
             "duplicate_rows": duplicate_count,
             "duplicate_rate": duplicate_count / total_rows if total_rows > 0 else 0,
             "keys_with_duplicates": len(keys_with_dupes),
-            "max_duplicates_per_key": int(key_counts.max()) if len(key_counts) > 0 else 0,
+            "max_duplicates_per_key": int(key_counts.max())
+            if len(key_counts) > 0
+            else 0,
         }
 
 
@@ -1443,7 +1633,9 @@ def create_duplicate_injector(
 
 
 # Factory function for creating generators
-def create_generator(domain: str, seed: int = 42, row_count: int = 100) -> BaseSyntheticGenerator:
+def create_generator(
+    domain: str, seed: int = 42, row_count: int = 100
+) -> BaseSyntheticGenerator:
     """Create a generator for the specified domain.
 
     Available domains:
@@ -1476,7 +1668,9 @@ def create_generator(domain: str, seed: int = 42, row_count: int = 100) -> BaseS
         "product_dim": ProductDimensionGenerator,
         "sales_fact": SalesFactGenerator,
     }
-    generator_class: Type[BaseSyntheticGenerator] = generators.get(domain, BaseSyntheticGenerator)
+    generator_class: Type[BaseSyntheticGenerator] = generators.get(
+        domain, BaseSyntheticGenerator
+    )
     return generator_class(seed=seed, row_count=row_count)
 
 

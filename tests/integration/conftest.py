@@ -109,7 +109,9 @@ def test_prefix() -> str:
 
 
 @pytest.fixture
-def cleanup_prefix(minio_client, minio_bucket, test_prefix) -> Generator[str, None, None]:
+def cleanup_prefix(
+    minio_client, minio_bucket, test_prefix
+) -> Generator[str, None, None]:
     """Yield test prefix and cleanup all objects under it after test."""
     yield test_prefix
 
@@ -408,14 +410,14 @@ def bronze_pipeline_config(
                 "path": str(synthetic_input_path),
                 "format": "parquet",
             },
-        "run": {
-            "load_pattern": "snapshot",
-            "local_output_dir": str(bronze_output_path),
-            "storage_enabled": False,
-            "max_rows_per_file": 0,
-            "checkpoint_enabled": False,
-            "cleanup_on_failure": True,
-        },
+            "run": {
+                "load_pattern": "snapshot",
+                "local_output_dir": str(bronze_output_path),
+                "storage_enabled": False,
+                "max_rows_per_file": 0,
+                "checkpoint_enabled": False,
+                "cleanup_on_failure": True,
+            },
         },
     }
 
@@ -488,14 +490,14 @@ def bronze_s3_pipeline_config(
                 "path": str(temp_dir / "input"),
                 "format": "parquet",
             },
-        "run": {
-            "load_pattern": "snapshot",
-            "local_output_dir": str(temp_dir / "output"),
-            "storage_enabled": True,
-            "max_rows_per_file": 0,
-            "cleanup_on_failure": True,
-            "checkpoint_enabled": False,
-        },
+            "run": {
+                "load_pattern": "snapshot",
+                "local_output_dir": str(temp_dir / "output"),
+                "storage_enabled": True,
+                "max_rows_per_file": 0,
+                "cleanup_on_failure": True,
+                "checkpoint_enabled": False,
+            },
         },
     }
 
@@ -511,7 +513,9 @@ def bronze_s3_pipeline_config(
 # YAML Pattern Test Fixtures
 # =============================================================================
 
-SAMPLE_DATA_DIR = Path(__file__).parent.parent.parent / "pipelines" / "examples" / "sample_data"
+SAMPLE_DATA_DIR = (
+    Path(__file__).parent.parent.parent / "pipelines" / "examples" / "sample_data"
+)
 
 
 @pytest.fixture(scope="module")
@@ -539,7 +543,9 @@ def yaml_test_prefix() -> str:
 
 
 @pytest.fixture
-def cleanup_yaml_prefix(minio_client, minio_bucket, yaml_test_prefix) -> Generator[str, None, None]:
+def cleanup_yaml_prefix(
+    minio_client, minio_bucket, yaml_test_prefix
+) -> Generator[str, None, None]:
     """Yield YAML test prefix and cleanup all objects under it after test."""
     yield yaml_test_prefix
 
@@ -569,11 +575,36 @@ def events_csv(tmp_path: Path) -> Path:
     - event_timestamp: When the event occurred
     """
     events_data = [
-        {"event_id": "EVT001", "order_id": "ORD001", "event_type": "created", "event_timestamp": "2025-01-15T10:00:00"},
-        {"event_id": "EVT002", "order_id": "ORD001", "event_type": "paid", "event_timestamp": "2025-01-15T10:05:00"},
-        {"event_id": "EVT003", "order_id": "ORD002", "event_type": "created", "event_timestamp": "2025-01-15T11:30:00"},
-        {"event_id": "EVT004", "order_id": "ORD003", "event_type": "created", "event_timestamp": "2025-01-15T14:00:00"},
-        {"event_id": "EVT005", "order_id": "ORD003", "event_type": "shipped", "event_timestamp": "2025-01-15T15:00:00"},
+        {
+            "event_id": "EVT001",
+            "order_id": "ORD001",
+            "event_type": "created",
+            "event_timestamp": "2025-01-15T10:00:00",
+        },
+        {
+            "event_id": "EVT002",
+            "order_id": "ORD001",
+            "event_type": "paid",
+            "event_timestamp": "2025-01-15T10:05:00",
+        },
+        {
+            "event_id": "EVT003",
+            "order_id": "ORD002",
+            "event_type": "created",
+            "event_timestamp": "2025-01-15T11:30:00",
+        },
+        {
+            "event_id": "EVT004",
+            "order_id": "ORD003",
+            "event_type": "created",
+            "event_timestamp": "2025-01-15T14:00:00",
+        },
+        {
+            "event_id": "EVT005",
+            "order_id": "ORD003",
+            "event_type": "shipped",
+            "event_timestamp": "2025-01-15T15:00:00",
+        },
     ]
     df = pd.DataFrame(events_data)
     csv_path = tmp_path / "events_2025-01-15.csv"
@@ -590,16 +621,52 @@ def multi_day_orders_csv(tmp_path: Path) -> Dict[str, Path]:
     """
     days = {
         "2025-01-15": [
-            {"order_id": "ORD001", "customer_id": "CUST01", "order_total": "150.00", "status": "completed", "updated_at": "2025-01-15T10:00:00"},
-            {"order_id": "ORD002", "customer_id": "CUST02", "order_total": "89.99", "status": "pending", "updated_at": "2025-01-15T11:30:00"},
+            {
+                "order_id": "ORD001",
+                "customer_id": "CUST01",
+                "order_total": "150.00",
+                "status": "completed",
+                "updated_at": "2025-01-15T10:00:00",
+            },
+            {
+                "order_id": "ORD002",
+                "customer_id": "CUST02",
+                "order_total": "89.99",
+                "status": "pending",
+                "updated_at": "2025-01-15T11:30:00",
+            },
         ],
         "2025-01-17": [
-            {"order_id": "ORD003", "customer_id": "CUST01", "order_total": "225.50", "status": "shipped", "updated_at": "2025-01-17T14:00:00"},
-            {"order_id": "ORD004", "customer_id": "CUST03", "order_total": "45.00", "status": "completed", "updated_at": "2025-01-17T09:15:00"},
+            {
+                "order_id": "ORD003",
+                "customer_id": "CUST01",
+                "order_total": "225.50",
+                "status": "shipped",
+                "updated_at": "2025-01-17T14:00:00",
+            },
+            {
+                "order_id": "ORD004",
+                "customer_id": "CUST03",
+                "order_total": "45.00",
+                "status": "completed",
+                "updated_at": "2025-01-17T09:15:00",
+            },
         ],
         "2025-01-19": [
-            {"order_id": "ORD005", "customer_id": "CUST02", "order_total": "310.25", "status": "pending", "updated_at": "2025-01-19T16:45:00"},
-            {"order_id": "ORD006", "customer_id": "CUST01", "order_total": "175.00", "status": "completed", "updated_at": "2025-01-19T12:00:00"},
+            {
+                "order_id": "ORD005",
+                "customer_id": "CUST02",
+                "order_total": "310.25",
+                "status": "pending",
+                "updated_at": "2025-01-19T16:45:00",
+            },
+            {
+                "order_id": "ORD006",
+                "customer_id": "CUST01",
+                "order_total": "175.00",
+                "status": "completed",
+                "updated_at": "2025-01-19T12:00:00",
+            },
         ],
     }
 

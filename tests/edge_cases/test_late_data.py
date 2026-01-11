@@ -27,10 +27,16 @@ class TestLateDataInSCD1:
     def test_late_data_ignored_in_scd1(self, con):
         """Late-arriving data with older timestamp is ignored."""
         # Scenario: We have current state, then receive older data
-        df = pd.DataFrame([
-            {"id": 1, "name": "Current", "ts": datetime(2025, 1, 20)},
-            {"id": 1, "name": "Old (late arrival)", "ts": datetime(2025, 1, 10)},  # Late
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "name": "Current", "ts": datetime(2025, 1, 20)},
+                {
+                    "id": 1,
+                    "name": "Old (late arrival)",
+                    "ts": datetime(2025, 1, 10),
+                },  # Late
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_latest(t, keys=["id"], order_by="ts")
@@ -41,10 +47,16 @@ class TestLateDataInSCD1:
 
     def test_late_data_newer_than_current_wins(self, con):
         """Late data with newer timestamp overwrites current."""
-        df = pd.DataFrame([
-            {"id": 1, "name": "Old State", "ts": datetime(2025, 1, 10)},
-            {"id": 1, "name": "Late But Newer", "ts": datetime(2025, 1, 15)},  # Late but newer
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "name": "Old State", "ts": datetime(2025, 1, 10)},
+                {
+                    "id": 1,
+                    "name": "Late But Newer",
+                    "ts": datetime(2025, 1, 15),
+                },  # Late but newer
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_latest(t, keys=["id"], order_by="ts")
@@ -60,11 +72,13 @@ class TestLateDataInSCD2:
     def test_late_data_creates_history_gap(self, con):
         """Late data in SCD2 inserts into history correctly."""
         # We have V1 and V3, then V2 arrives late
-        df = pd.DataFrame([
-            {"id": 1, "version": "V1", "ts": datetime(2025, 1, 10)},
-            {"id": 1, "version": "V3", "ts": datetime(2025, 1, 20)},
-            {"id": 1, "version": "V2", "ts": datetime(2025, 1, 15)},  # Late arrival
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "version": "V1", "ts": datetime(2025, 1, 10)},
+                {"id": 1, "version": "V3", "ts": datetime(2025, 1, 20)},
+                {"id": 1, "version": "V2", "ts": datetime(2025, 1, 15)},  # Late arrival
+            ]
+        )
 
         t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
@@ -84,11 +98,13 @@ class TestLateDataInSCD2:
 
     def test_late_data_fixes_history_chain(self, con):
         """Late data properly links effective dates."""
-        df = pd.DataFrame([
-            {"id": 1, "version": "V1", "ts": datetime(2025, 1, 10)},
-            {"id": 1, "version": "V3", "ts": datetime(2025, 1, 20)},
-            {"id": 1, "version": "V2", "ts": datetime(2025, 1, 15)},  # Late arrival
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "version": "V1", "ts": datetime(2025, 1, 10)},
+                {"id": 1, "version": "V3", "ts": datetime(2025, 1, 20)},
+                {"id": 1, "version": "V2", "ts": datetime(2025, 1, 15)},  # Late arrival
+            ]
+        )
 
         t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
@@ -100,13 +116,19 @@ class TestLateDataInSCD2:
 
     def test_multiple_late_arrivals(self, con):
         """Multiple late-arriving records handled correctly."""
-        df = pd.DataFrame([
-            {"id": 1, "version": "V5", "ts": datetime(2025, 1, 25)},  # Current
-            {"id": 1, "version": "V1", "ts": datetime(2025, 1, 5)},   # Very old, late
-            {"id": 1, "version": "V3", "ts": datetime(2025, 1, 15)},  # Late
-            {"id": 1, "version": "V2", "ts": datetime(2025, 1, 10)},  # Late
-            {"id": 1, "version": "V4", "ts": datetime(2025, 1, 20)},  # Late
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "version": "V5", "ts": datetime(2025, 1, 25)},  # Current
+                {
+                    "id": 1,
+                    "version": "V1",
+                    "ts": datetime(2025, 1, 5),
+                },  # Very old, late
+                {"id": 1, "version": "V3", "ts": datetime(2025, 1, 15)},  # Late
+                {"id": 1, "version": "V2", "ts": datetime(2025, 1, 10)},  # Late
+                {"id": 1, "version": "V4", "ts": datetime(2025, 1, 20)},  # Late
+            ]
+        )
 
         t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
@@ -124,11 +146,17 @@ class TestLateDataWithIncremental:
 
     def test_filter_incremental_excludes_late(self, con):
         """Incremental filter excludes late data by design."""
-        df = pd.DataFrame([
-            {"id": 1, "name": "After watermark", "ts": datetime(2025, 1, 20)},
-            {"id": 2, "name": "Before watermark (late)", "ts": datetime(2025, 1, 5)},
-            {"id": 3, "name": "At watermark", "ts": datetime(2025, 1, 10)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "name": "After watermark", "ts": datetime(2025, 1, 20)},
+                {
+                    "id": 2,
+                    "name": "Before watermark (late)",
+                    "ts": datetime(2025, 1, 5),
+                },
+                {"id": 3, "name": "At watermark", "ts": datetime(2025, 1, 10)},
+            ]
+        )
 
         t = ibis.memtable(df)
         watermark = "2025-01-10"
@@ -143,15 +171,23 @@ class TestLateDataWithIncremental:
     def test_late_data_in_new_batch(self, con):
         """Late data arriving in new batch is filtered."""
         # Batch 1: Normal data
-        pd.DataFrame([
-            {"id": 1, "name": "Normal", "ts": datetime(2025, 1, 15)},
-        ])
+        pd.DataFrame(
+            [
+                {"id": 1, "name": "Normal", "ts": datetime(2025, 1, 15)},
+            ]
+        )
 
         # Batch 2: Contains late data
-        batch2 = pd.DataFrame([
-            {"id": 2, "name": "New", "ts": datetime(2025, 1, 20)},
-            {"id": 3, "name": "Late (before last watermark)", "ts": datetime(2025, 1, 10)},
-        ])
+        batch2 = pd.DataFrame(
+            [
+                {"id": 2, "name": "New", "ts": datetime(2025, 1, 20)},
+                {
+                    "id": 3,
+                    "name": "Late (before last watermark)",
+                    "ts": datetime(2025, 1, 10),
+                },
+            ]
+        )
 
         # Process batch 2 with watermark from batch 1
         t2 = ibis.memtable(batch2)
@@ -168,14 +204,16 @@ class TestLateDataMultipleKeys:
 
     def test_late_data_different_keys(self, con):
         """Late data for different keys handled independently."""
-        df = pd.DataFrame([
-            # Key 1: Normal order
-            {"id": 1, "version": "1-V1", "ts": datetime(2025, 1, 10)},
-            {"id": 1, "version": "1-V2", "ts": datetime(2025, 1, 15)},
-            # Key 2: Late arrival
-            {"id": 2, "version": "2-V2", "ts": datetime(2025, 1, 15)},
-            {"id": 2, "version": "2-V1", "ts": datetime(2025, 1, 10)},  # Late
-        ])
+        df = pd.DataFrame(
+            [
+                # Key 1: Normal order
+                {"id": 1, "version": "1-V1", "ts": datetime(2025, 1, 10)},
+                {"id": 1, "version": "1-V2", "ts": datetime(2025, 1, 15)},
+                # Key 2: Late arrival
+                {"id": 2, "version": "2-V2", "ts": datetime(2025, 1, 15)},
+                {"id": 2, "version": "2-V1", "ts": datetime(2025, 1, 10)},  # Late
+            ]
+        )
 
         t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
@@ -192,16 +230,18 @@ class TestLateDataMultipleKeys:
 
     def test_late_data_some_keys_only(self, con):
         """Late data affects only specific keys."""
-        df = pd.DataFrame([
-            # Key 1: In order
-            {"id": 1, "version": "V1", "ts": datetime(2025, 1, 10)},
-            {"id": 1, "version": "V2", "ts": datetime(2025, 1, 15)},
-            # Key 2: Has late data
-            {"id": 2, "version": "V2", "ts": datetime(2025, 1, 15)},
-            {"id": 2, "version": "V1-LATE", "ts": datetime(2025, 1, 5)},  # Late!
-            # Key 3: Single version
-            {"id": 3, "version": "V1", "ts": datetime(2025, 1, 12)},
-        ])
+        df = pd.DataFrame(
+            [
+                # Key 1: In order
+                {"id": 1, "version": "V1", "ts": datetime(2025, 1, 10)},
+                {"id": 1, "version": "V2", "ts": datetime(2025, 1, 15)},
+                # Key 2: Has late data
+                {"id": 2, "version": "V2", "ts": datetime(2025, 1, 15)},
+                {"id": 2, "version": "V1-LATE", "ts": datetime(2025, 1, 5)},  # Late!
+                # Key 3: Single version
+                {"id": 3, "version": "V1", "ts": datetime(2025, 1, 12)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_latest(t, keys=["id"], order_by="ts")

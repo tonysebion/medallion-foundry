@@ -98,7 +98,9 @@ def minio_test_prefix():
             if "Contents" in page:
                 objects = [{"Key": obj["Key"]} for obj in page["Contents"]]
                 if objects:
-                    client.delete_objects(Bucket=MINIO_BUCKET, Delete={"Objects": objects})
+                    client.delete_objects(
+                        Bucket=MINIO_BUCKET, Delete={"Objects": objects}
+                    )
     except Exception as e:
         print(f"Cleanup warning: {e}")
 
@@ -182,11 +184,11 @@ class TestBronzeSilverMinIO:
         source_file = tmp_path / "source" / "orders" / f"{run_date}.csv"
         create_sample_csv(source_file, sample_data)
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"MinIO Test: {test_prefix}")
         print(f"Bucket: {MINIO_BUCKET}")
         print(f"Endpoint: {MINIO_ENDPOINT}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # ===== Step 2: Configure Bronze to write to MinIO =====
         # Note: partition_by=[] disables partitioning to avoid _load_date column issues
@@ -245,18 +247,26 @@ class TestBronzeSilverMinIO:
         )
 
         # List Bronze files
-        bronze_path_resolved = f"{test_prefix}/bronze/system=sales/entity=orders/dt={run_date}"
+        bronze_path_resolved = (
+            f"{test_prefix}/bronze/system=sales/entity=orders/dt={run_date}"
+        )
         bronze_files = []
         paginator = client.get_paginator("list_objects_v2")
-        for page in paginator.paginate(Bucket=MINIO_BUCKET, Prefix=bronze_path_resolved):
+        for page in paginator.paginate(
+            Bucket=MINIO_BUCKET, Prefix=bronze_path_resolved
+        ):
             bronze_files.extend([obj["Key"] for obj in page.get("Contents", [])])
         print(f"\nBronze files in MinIO: {bronze_files}")
         assert len(bronze_files) > 0, "Bronze should create files in MinIO"
 
         # List Silver files
-        silver_path_resolved = f"{test_prefix}/silver/domain=sales/subject=orders/dt={run_date}"
+        silver_path_resolved = (
+            f"{test_prefix}/silver/domain=sales/subject=orders/dt={run_date}"
+        )
         silver_files = []
-        for page in paginator.paginate(Bucket=MINIO_BUCKET, Prefix=silver_path_resolved):
+        for page in paginator.paginate(
+            Bucket=MINIO_BUCKET, Prefix=silver_path_resolved
+        ):
             silver_files.extend([obj["Key"] for obj in page.get("Contents", [])])
         print(f"Silver files in MinIO: {silver_files}")
         assert len(silver_files) > 0, "Silver should create files in MinIO"
@@ -277,9 +287,9 @@ class TestBronzeSilverMinIO:
             assert ord001["quantity"] == 7, "Should have latest quantity"
             assert ord001["total"] == 70.00, "Should have latest total"
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("TEST PASSED: Full Bronze→Silver pipeline with MinIO storage")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
     @requires_minio
     @pytest.mark.integration

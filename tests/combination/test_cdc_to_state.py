@@ -19,11 +19,13 @@ class TestCDCToSCD1:
 
     def test_insert_only_cdc(self, con):
         """CDC with only inserts produces unique keys."""
-        cdc = create_memtable([
-            {"op": "I", "id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},
-            {"op": "I", "id": 2, "name": "Bob", "ts": datetime(2025, 1, 10)},
-            {"op": "I", "id": 3, "name": "Charlie", "ts": datetime(2025, 1, 10)},
-        ])
+        cdc = create_memtable(
+            [
+                {"op": "I", "id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},
+                {"op": "I", "id": 2, "name": "Bob", "ts": datetime(2025, 1, 10)},
+                {"op": "I", "id": 3, "name": "Charlie", "ts": datetime(2025, 1, 10)},
+            ]
+        )
 
         result = simulate_cdc_to_scd1(cdc, ["id"], "ts")
         result_df = result.execute()
@@ -34,11 +36,31 @@ class TestCDCToSCD1:
 
     def test_insert_and_update_keeps_latest(self, con):
         """CDC with inserts and updates keeps latest version."""
-        cdc = create_memtable([
-            {"op": "I", "id": 1, "name": "Alice", "status": "active", "ts": datetime(2025, 1, 10)},
-            {"op": "U", "id": 1, "name": "Alice Updated", "status": "inactive", "ts": datetime(2025, 1, 15)},
-            {"op": "I", "id": 2, "name": "Bob", "status": "active", "ts": datetime(2025, 1, 10)},
-        ])
+        cdc = create_memtable(
+            [
+                {
+                    "op": "I",
+                    "id": 1,
+                    "name": "Alice",
+                    "status": "active",
+                    "ts": datetime(2025, 1, 10),
+                },
+                {
+                    "op": "U",
+                    "id": 1,
+                    "name": "Alice Updated",
+                    "status": "inactive",
+                    "ts": datetime(2025, 1, 15),
+                },
+                {
+                    "op": "I",
+                    "id": 2,
+                    "name": "Bob",
+                    "status": "active",
+                    "ts": datetime(2025, 1, 10),
+                },
+            ]
+        )
 
         result = simulate_cdc_to_scd1(cdc, ["id"], "ts")
         result_df = result.execute()
@@ -54,17 +76,24 @@ class TestCDCToSCD1:
             expected_values={
                 1: {"name": "Alice Updated", "status": "inactive"},
                 2: {"name": "Bob", "status": "active"},
-            }
+            },
         )
         assert values.passed, values.message
 
     def test_deletes_excluded_from_scd1(self, con):
         """Deleted records not in SCD1 output."""
-        cdc = create_memtable([
-            {"op": "I", "id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},
-            {"op": "I", "id": 2, "name": "Bob", "ts": datetime(2025, 1, 10)},
-            {"op": "D", "id": 1, "name": "Alice", "ts": datetime(2025, 1, 15)},  # Delete
-        ])
+        cdc = create_memtable(
+            [
+                {"op": "I", "id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},
+                {"op": "I", "id": 2, "name": "Bob", "ts": datetime(2025, 1, 10)},
+                {
+                    "op": "D",
+                    "id": 1,
+                    "name": "Alice",
+                    "ts": datetime(2025, 1, 15),
+                },  # Delete
+            ]
+        )
 
         result = simulate_cdc_to_scd1(cdc, ["id"], "ts")
         result_df = result.execute()
@@ -75,12 +104,14 @@ class TestCDCToSCD1:
 
     def test_multiple_updates_same_key(self, con):
         """Multiple updates to same key keeps only latest."""
-        cdc = create_memtable([
-            {"op": "I", "id": 1, "name": "V1", "ts": datetime(2025, 1, 10)},
-            {"op": "U", "id": 1, "name": "V2", "ts": datetime(2025, 1, 11)},
-            {"op": "U", "id": 1, "name": "V3", "ts": datetime(2025, 1, 12)},
-            {"op": "U", "id": 1, "name": "V4", "ts": datetime(2025, 1, 13)},
-        ])
+        cdc = create_memtable(
+            [
+                {"op": "I", "id": 1, "name": "V1", "ts": datetime(2025, 1, 10)},
+                {"op": "U", "id": 1, "name": "V2", "ts": datetime(2025, 1, 11)},
+                {"op": "U", "id": 1, "name": "V3", "ts": datetime(2025, 1, 12)},
+                {"op": "U", "id": 1, "name": "V4", "ts": datetime(2025, 1, 13)},
+            ]
+        )
 
         result = simulate_cdc_to_scd1(cdc, ["id"], "ts")
         result_df = result.execute()
@@ -94,9 +125,11 @@ class TestCDCToSCD2:
 
     def test_insert_only_creates_history(self, con):
         """CDC inserts create SCD2 history structure."""
-        cdc = create_memtable([
-            {"op": "I", "id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},
-        ])
+        cdc = create_memtable(
+            [
+                {"op": "I", "id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},
+            ]
+        )
 
         result = simulate_cdc_to_scd2(cdc, ["id"], "ts")
         result_df = result.execute()
@@ -109,29 +142,31 @@ class TestCDCToSCD2:
 
     def test_all_cdc_operations_in_history(self, con):
         """All CDC operations (I/U/D) preserved in SCD2 history."""
-        cdc = create_memtable([
-            {"op": "I", "id": 1, "name": "V1", "ts": datetime(2025, 1, 10)},
-            {"op": "U", "id": 1, "name": "V2", "ts": datetime(2025, 1, 15)},
-            {"op": "U", "id": 1, "name": "V3", "ts": datetime(2025, 1, 20)},
-        ])
+        cdc = create_memtable(
+            [
+                {"op": "I", "id": 1, "name": "V1", "ts": datetime(2025, 1, 10)},
+                {"op": "U", "id": 1, "name": "V2", "ts": datetime(2025, 1, 15)},
+                {"op": "U", "id": 1, "name": "V3", "ts": datetime(2025, 1, 20)},
+            ]
+        )
 
         result = simulate_cdc_to_scd2(cdc, ["id"], "ts")
         result_df = result.execute()
 
         # All 3 operations preserved
         history = SCD2Assertions.assert_history_preserved(
-            result_df,
-            keys=["id"],
-            expected_counts={1: 3}
+            result_df, keys=["id"], expected_counts={1: 3}
         )
         assert history.passed, history.message
 
     def test_effective_dates_follow_cdc_order(self, con):
         """Effective dates follow CDC operation order."""
-        cdc = create_memtable([
-            {"op": "I", "id": 1, "name": "Insert", "ts": datetime(2025, 1, 10)},
-            {"op": "U", "id": 1, "name": "Update", "ts": datetime(2025, 1, 15)},
-        ])
+        cdc = create_memtable(
+            [
+                {"op": "I", "id": 1, "name": "Insert", "ts": datetime(2025, 1, 10)},
+                {"op": "U", "id": 1, "name": "Update", "ts": datetime(2025, 1, 15)},
+            ]
+        )
 
         result = simulate_cdc_to_scd2(cdc, ["id"], "ts")
         result_df = result.execute()
@@ -146,10 +181,17 @@ class TestCDCToSCD2:
 
     def test_delete_in_history(self, con):
         """Delete operations are part of history."""
-        cdc = create_memtable([
-            {"op": "I", "id": 1, "name": "Created", "ts": datetime(2025, 1, 10)},
-            {"op": "D", "id": 1, "name": "Created", "ts": datetime(2025, 1, 15)},  # Delete
-        ])
+        cdc = create_memtable(
+            [
+                {"op": "I", "id": 1, "name": "Created", "ts": datetime(2025, 1, 10)},
+                {
+                    "op": "D",
+                    "id": 1,
+                    "name": "Created",
+                    "ts": datetime(2025, 1, 15),
+                },  # Delete
+            ]
+        )
 
         result = simulate_cdc_to_scd2(cdc, ["id"], "ts")
         result_df = result.execute()
@@ -167,16 +209,18 @@ class TestCDCComplexScenarios:
 
     def test_multiple_keys_mixed_operations(self, con):
         """Multiple keys with different operation patterns."""
-        cdc = create_memtable([
-            # Key 1: Insert -> Update
-            {"op": "I", "id": 1, "name": "K1-V1", "ts": datetime(2025, 1, 10)},
-            {"op": "U", "id": 1, "name": "K1-V2", "ts": datetime(2025, 1, 15)},
-            # Key 2: Insert only
-            {"op": "I", "id": 2, "name": "K2-V1", "ts": datetime(2025, 1, 10)},
-            # Key 3: Insert -> Delete
-            {"op": "I", "id": 3, "name": "K3-V1", "ts": datetime(2025, 1, 10)},
-            {"op": "D", "id": 3, "name": "K3-V1", "ts": datetime(2025, 1, 15)},
-        ])
+        cdc = create_memtable(
+            [
+                # Key 1: Insert -> Update
+                {"op": "I", "id": 1, "name": "K1-V1", "ts": datetime(2025, 1, 10)},
+                {"op": "U", "id": 1, "name": "K1-V2", "ts": datetime(2025, 1, 15)},
+                # Key 2: Insert only
+                {"op": "I", "id": 2, "name": "K2-V1", "ts": datetime(2025, 1, 10)},
+                # Key 3: Insert -> Delete
+                {"op": "I", "id": 3, "name": "K3-V1", "ts": datetime(2025, 1, 10)},
+                {"op": "D", "id": 3, "name": "K3-V1", "ts": datetime(2025, 1, 15)},
+            ]
+        )
 
         # SCD1: Key 3 should be excluded
         scd1_result = simulate_cdc_to_scd1(cdc, ["id"], "ts")
@@ -190,18 +234,28 @@ class TestCDCComplexScenarios:
         scd2_df = scd2_result.execute()
 
         history = SCD2Assertions.assert_history_preserved(
-            scd2_df,
-            keys=["id"],
-            expected_counts={1: 2, 2: 1, 3: 2}
+            scd2_df, keys=["id"], expected_counts={1: 2, 2: 1, 3: 2}
         )
         assert history.passed, history.message
 
     def test_out_of_order_cdc_events(self, con):
         """Out-of-order CDC events handled correctly."""
-        cdc = create_memtable([
-            {"op": "U", "id": 1, "name": "V2", "ts": datetime(2025, 1, 15)},  # Later event first
-            {"op": "I", "id": 1, "name": "V1", "ts": datetime(2025, 1, 10)},  # Earlier event second
-        ])
+        cdc = create_memtable(
+            [
+                {
+                    "op": "U",
+                    "id": 1,
+                    "name": "V2",
+                    "ts": datetime(2025, 1, 15),
+                },  # Later event first
+                {
+                    "op": "I",
+                    "id": 1,
+                    "name": "V1",
+                    "ts": datetime(2025, 1, 10),
+                },  # Earlier event second
+            ]
+        )
 
         # SCD1 should keep V2 (latest)
         scd1_result = simulate_cdc_to_scd1(cdc, ["id"], "ts")

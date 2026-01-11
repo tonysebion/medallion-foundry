@@ -188,7 +188,13 @@ def schema_config() -> Dict[str, Any]:
         "expected_columns": [
             {"name": "id", "type": "integer", "nullable": False, "primary_key": True},
             {"name": "name", "type": "string", "nullable": False},
-            {"name": "amount", "type": "decimal", "nullable": True, "precision": 18, "scale": 2},
+            {
+                "name": "amount",
+                "type": "decimal",
+                "nullable": True,
+                "precision": 18,
+                "scale": 2,
+            },
             {"name": "created_at", "type": "timestamp", "nullable": True},
             {"name": "is_active", "type": "boolean", "nullable": True},
         ],
@@ -231,13 +237,17 @@ def sample_events_df() -> pd.DataFrame:
     """Sample event data for testing."""
     rows = scale_rows(100)
     base_time = datetime(2024, 1, 1, 10, 0, 0)
-    return pd.DataFrame({
-        "event_id": [f"EVT{i:05d}" for i in range(1, rows + 1)],
-        "user_id": [f"USR{(i % 10) + 1:03d}" for i in range(rows)],
-        "event_type": [["click", "view", "purchase"][i % 3] for i in range(rows)],
-        "event_ts": [base_time + timedelta(minutes=i) for i in range(rows)],
-        "amount": [round(100 + (i * 1.5), 2) if i % 3 == 2 else None for i in range(rows)],
-    })
+    return pd.DataFrame(
+        {
+            "event_id": [f"EVT{i:05d}" for i in range(1, rows + 1)],
+            "user_id": [f"USR{(i % 10) + 1:03d}" for i in range(rows)],
+            "event_type": [["click", "view", "purchase"][i % 3] for i in range(rows)],
+            "event_ts": [base_time + timedelta(minutes=i) for i in range(rows)],
+            "amount": [
+                round(100 + (i * 1.5), 2) if i % 3 == 2 else None for i in range(rows)
+            ],
+        }
+    )
 
 
 @pytest.fixture
@@ -245,14 +255,16 @@ def sample_state_df() -> pd.DataFrame:
     """Sample state/entity data for testing."""
     rows = scale_rows(50)
     base_time = datetime(2024, 1, 1, 10, 0, 0)
-    return pd.DataFrame({
-        "id": list(range(1, rows + 1)),
-        "name": [f"Entity {i}" for i in range(1, rows + 1)],
-        "status": [["active", "inactive", "pending"][i % 3] for i in range(rows)],
-        "amount": [round(100.0 + (i * 10.5), 2) for i in range(rows)],
-        "updated_at": [base_time + timedelta(hours=i) for i in range(rows)],
-        "is_active": [i % 2 == 0 for i in range(rows)],
-    })
+    return pd.DataFrame(
+        {
+            "id": list(range(1, rows + 1)),
+            "name": [f"Entity {i}" for i in range(1, rows + 1)],
+            "status": [["active", "inactive", "pending"][i % 3] for i in range(rows)],
+            "amount": [round(100.0 + (i * 10.5), 2) for i in range(rows)],
+            "updated_at": [base_time + timedelta(hours=i) for i in range(rows)],
+            "is_active": [i % 2 == 0 for i in range(rows)],
+        }
+    )
 
 
 @pytest.fixture
@@ -260,18 +272,28 @@ def sample_claims_df() -> pd.DataFrame:
     """Sample healthcare claims data for domain-specific testing."""
     rows = scale_rows(100)
     base_date = date(2024, 1, 1)
-    return pd.DataFrame({
-        "claim_id": [f"CLM{i:08d}" for i in range(1, rows + 1)],
-        "patient_id": [f"PAT{(i % 20) + 1:05d}" for i in range(rows)],
-        "provider_id": [f"PRV{(i % 10) + 1:04d}" for i in range(rows)],
-        "service_date": [base_date + timedelta(days=i % 30) for i in range(rows)],
-        "billed_amount": [round(100 + (i * 25.5), 2) for i in range(rows)],
-        "paid_amount": [round(80 + (i * 20.0), 2) for i in range(rows)],
-        "diagnosis_code": [f"ICD{100 + (i % 50)}" for i in range(rows)],
-        "procedure_code": [f"CPT{10000 + (i % 100)}" for i in range(rows)],
-        "claim_status": [["submitted", "processing", "paid", "denied"][i % 4] for i in range(rows)],
-        "created_at": [datetime.combine(base_date + timedelta(days=i % 30), datetime.min.time()) for i in range(rows)],
-    })
+    return pd.DataFrame(
+        {
+            "claim_id": [f"CLM{i:08d}" for i in range(1, rows + 1)],
+            "patient_id": [f"PAT{(i % 20) + 1:05d}" for i in range(rows)],
+            "provider_id": [f"PRV{(i % 10) + 1:04d}" for i in range(rows)],
+            "service_date": [base_date + timedelta(days=i % 30) for i in range(rows)],
+            "billed_amount": [round(100 + (i * 25.5), 2) for i in range(rows)],
+            "paid_amount": [round(80 + (i * 20.0), 2) for i in range(rows)],
+            "diagnosis_code": [f"ICD{100 + (i % 50)}" for i in range(rows)],
+            "procedure_code": [f"CPT{10000 + (i % 100)}" for i in range(rows)],
+            "claim_status": [
+                ["submitted", "processing", "paid", "denied"][i % 4]
+                for i in range(rows)
+            ],
+            "created_at": [
+                datetime.combine(
+                    base_date + timedelta(days=i % 30), datetime.min.time()
+                )
+                for i in range(rows)
+            ],
+        }
+    )
 
 
 @pytest.fixture
@@ -279,16 +301,23 @@ def sample_orders_df() -> pd.DataFrame:
     """Sample retail orders data for domain-specific testing."""
     rows = scale_rows(100)
     base_time = datetime(2024, 1, 1, 9, 0, 0)
-    return pd.DataFrame({
-        "order_id": [f"ORD{i:08d}" for i in range(1, rows + 1)],
-        "customer_id": [f"CUST{(i % 50) + 1:05d}" for i in range(rows)],
-        "product_id": [f"PROD{(i % 25) + 1:04d}" for i in range(rows)],
-        "quantity": [(i % 5) + 1 for i in range(rows)],
-        "unit_price": [round(10 + (i % 100) * 1.5, 2) for i in range(rows)],
-        "total_amount": [round(((i % 5) + 1) * (10 + (i % 100) * 1.5), 2) for i in range(rows)],
-        "order_status": [["pending", "confirmed", "shipped", "delivered"][i % 4] for i in range(rows)],
-        "order_ts": [base_time + timedelta(hours=i) for i in range(rows)],
-    })
+    return pd.DataFrame(
+        {
+            "order_id": [f"ORD{i:08d}" for i in range(1, rows + 1)],
+            "customer_id": [f"CUST{(i % 50) + 1:05d}" for i in range(rows)],
+            "product_id": [f"PROD{(i % 25) + 1:04d}" for i in range(rows)],
+            "quantity": [(i % 5) + 1 for i in range(rows)],
+            "unit_price": [round(10 + (i % 100) * 1.5, 2) for i in range(rows)],
+            "total_amount": [
+                round(((i % 5) + 1) * (10 + (i % 100) * 1.5), 2) for i in range(rows)
+            ],
+            "order_status": [
+                ["pending", "confirmed", "shipped", "delivered"][i % 4]
+                for i in range(rows)
+            ],
+            "order_ts": [base_time + timedelta(hours=i) for i in range(rows)],
+        }
+    )
 
 
 # Mock fixtures

@@ -394,7 +394,9 @@ class AssertionValidator:
         if "checksums_valid" in assertions and assertions["checksums_valid"]:
             files = checksums.get("files", [])
             all_have_checksums = all(f.get("checksum") for f in files)
-            checksum_status = "checksums present" if all_have_checksums else "missing checksums"
+            checksum_status = (
+                "checksums present" if all_have_checksums else "missing checksums"
+            )
             self.report.add(
                 AssertionResult(
                     name="checksum.valid",
@@ -432,7 +434,7 @@ class AssertionValidator:
                             passed=is_replacement == expected,
                             expected=expected,
                             actual=is_replacement,
-                    message=f"Snapshot replacement check - overlap: {len(overlap)} IDs",
+                            message=f"Snapshot replacement check - overlap: {len(overlap)} IDs",
                         )
                     )
 
@@ -494,7 +496,9 @@ class AssertionValidator:
                 # Count rows that don't exist in previous batch
                 if previous_df is not None and "record_id" in df.columns:
                     previous_ids = set(previous_df["record_id"])
-                    actual = sum(1 for rid in df["record_id"] if rid not in previous_ids)
+                    actual = sum(
+                        1 for rid in df["record_id"] if rid not in previous_ids
+                    )
                 else:
                     actual = len(df)
                 self.report.add(

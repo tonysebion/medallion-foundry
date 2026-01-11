@@ -19,11 +19,28 @@ class TestIncrementalToEvent:
 
     def test_single_batch_preserved(self, con):
         """Single batch events preserved as-is."""
-        batch = create_memtable([
-            {"event_id": "E001", "user_id": "U1", "type": "click", "ts": datetime(2025, 1, 10)},
-            {"event_id": "E002", "user_id": "U1", "type": "view", "ts": datetime(2025, 1, 10)},
-            {"event_id": "E003", "user_id": "U2", "type": "click", "ts": datetime(2025, 1, 11)},
-        ])
+        batch = create_memtable(
+            [
+                {
+                    "event_id": "E001",
+                    "user_id": "U1",
+                    "type": "click",
+                    "ts": datetime(2025, 1, 10),
+                },
+                {
+                    "event_id": "E002",
+                    "user_id": "U1",
+                    "type": "view",
+                    "ts": datetime(2025, 1, 10),
+                },
+                {
+                    "event_id": "E003",
+                    "user_id": "U2",
+                    "type": "click",
+                    "ts": datetime(2025, 1, 11),
+                },
+            ]
+        )
 
         result = simulate_incremental_to_event([batch])
         result_df = result.execute()
@@ -35,15 +52,19 @@ class TestIncrementalToEvent:
 
     def test_multiple_batches_accumulated(self, con):
         """Multiple batches accumulate all events."""
-        batch_t0 = create_memtable([
-            {"event_id": "E001", "user_id": "U1", "ts": datetime(2025, 1, 10)},
-            {"event_id": "E002", "user_id": "U1", "ts": datetime(2025, 1, 10)},
-        ])
+        batch_t0 = create_memtable(
+            [
+                {"event_id": "E001", "user_id": "U1", "ts": datetime(2025, 1, 10)},
+                {"event_id": "E002", "user_id": "U1", "ts": datetime(2025, 1, 10)},
+            ]
+        )
 
-        batch_t1 = create_memtable([
-            {"event_id": "E003", "user_id": "U2", "ts": datetime(2025, 1, 11)},
-            {"event_id": "E004", "user_id": "U2", "ts": datetime(2025, 1, 11)},
-        ])
+        batch_t1 = create_memtable(
+            [
+                {"event_id": "E003", "user_id": "U2", "ts": datetime(2025, 1, 11)},
+                {"event_id": "E004", "user_id": "U2", "ts": datetime(2025, 1, 11)},
+            ]
+        )
 
         result = simulate_incremental_to_event([batch_t0, batch_t1])
         result_df = result.execute()
@@ -52,11 +73,28 @@ class TestIncrementalToEvent:
 
     def test_exact_duplicates_removed(self, con):
         """Exact duplicate events are removed."""
-        batch = create_memtable([
-            {"event_id": "E001", "user_id": "U1", "data": "A", "ts": datetime(2025, 1, 10)},
-            {"event_id": "E001", "user_id": "U1", "data": "A", "ts": datetime(2025, 1, 10)},  # Exact dup
-            {"event_id": "E002", "user_id": "U1", "data": "B", "ts": datetime(2025, 1, 10)},
-        ])
+        batch = create_memtable(
+            [
+                {
+                    "event_id": "E001",
+                    "user_id": "U1",
+                    "data": "A",
+                    "ts": datetime(2025, 1, 10),
+                },
+                {
+                    "event_id": "E001",
+                    "user_id": "U1",
+                    "data": "A",
+                    "ts": datetime(2025, 1, 10),
+                },  # Exact dup
+                {
+                    "event_id": "E002",
+                    "user_id": "U1",
+                    "data": "B",
+                    "ts": datetime(2025, 1, 10),
+                },
+            ]
+        )
 
         result = simulate_incremental_to_event([batch])
         result_df = result.execute()
@@ -68,10 +106,22 @@ class TestIncrementalToEvent:
 
     def test_near_duplicates_preserved(self, con):
         """Near duplicates (same event_id, different data) are preserved."""
-        batch = create_memtable([
-            {"event_id": "E001", "user_id": "U1", "data": "A", "ts": datetime(2025, 1, 10)},
-            {"event_id": "E001", "user_id": "U1", "data": "B", "ts": datetime(2025, 1, 10)},  # Different data
-        ])
+        batch = create_memtable(
+            [
+                {
+                    "event_id": "E001",
+                    "user_id": "U1",
+                    "data": "A",
+                    "ts": datetime(2025, 1, 10),
+                },
+                {
+                    "event_id": "E001",
+                    "user_id": "U1",
+                    "data": "B",
+                    "ts": datetime(2025, 1, 10),
+                },  # Different data
+            ]
+        )
 
         result = simulate_incremental_to_event([batch])
         result_df = result.execute()
@@ -81,9 +131,11 @@ class TestIncrementalToEvent:
 
     def test_no_scd2_columns(self, con):
         """Event output has no SCD2 columns."""
-        batch = create_memtable([
-            {"event_id": "E001", "ts": datetime(2025, 1, 10)},
-        ])
+        batch = create_memtable(
+            [
+                {"event_id": "E001", "ts": datetime(2025, 1, 10)},
+            ]
+        )
 
         result = simulate_incremental_to_event([batch])
         result_df = result.execute()
@@ -97,14 +149,18 @@ class TestEventImmutability:
 
     def test_events_not_modified(self, con):
         """Existing events remain unchanged when new events added."""
-        batch_t0 = create_memtable([
-            {"event_id": "E001", "data": "original"},
-            {"event_id": "E002", "data": "original"},
-        ])
+        batch_t0 = create_memtable(
+            [
+                {"event_id": "E001", "data": "original"},
+                {"event_id": "E002", "data": "original"},
+            ]
+        )
 
-        batch_t1 = create_memtable([
-            {"event_id": "E003", "data": "new"},  # New event
-        ])
+        batch_t1 = create_memtable(
+            [
+                {"event_id": "E003", "data": "new"},  # New event
+            ]
+        )
 
         result_t0 = simulate_incremental_to_event([batch_t0])
         result_t0_df = result_t0.execute()
@@ -120,14 +176,18 @@ class TestEventImmutability:
 
     def test_append_only_behavior(self, con):
         """Events are append-only between batches."""
-        batch_t0 = create_memtable([
-            {"event_id": "E001"},
-            {"event_id": "E002"},
-        ])
+        batch_t0 = create_memtable(
+            [
+                {"event_id": "E001"},
+                {"event_id": "E002"},
+            ]
+        )
 
-        batch_t1 = create_memtable([
-            {"event_id": "E003"},  # New
-        ])
+        batch_t1 = create_memtable(
+            [
+                {"event_id": "E003"},  # New
+            ]
+        )
 
         result_t0 = simulate_incremental_to_event([batch_t0])
         result_t0_df = result_t0.execute()
@@ -146,14 +206,22 @@ class TestEventWithDuplicateAcrossBatches:
 
     def test_duplicate_across_batches_removed(self, con):
         """Same exact event in multiple batches is deduplicated."""
-        batch_t0 = create_memtable([
-            {"event_id": "E001", "data": "same", "ts": datetime(2025, 1, 10)},
-        ])
+        batch_t0 = create_memtable(
+            [
+                {"event_id": "E001", "data": "same", "ts": datetime(2025, 1, 10)},
+            ]
+        )
 
-        batch_t1 = create_memtable([
-            {"event_id": "E001", "data": "same", "ts": datetime(2025, 1, 10)},  # Exact duplicate
-            {"event_id": "E002", "data": "new", "ts": datetime(2025, 1, 11)},
-        ])
+        batch_t1 = create_memtable(
+            [
+                {
+                    "event_id": "E001",
+                    "data": "same",
+                    "ts": datetime(2025, 1, 10),
+                },  # Exact duplicate
+                {"event_id": "E002", "data": "new", "ts": datetime(2025, 1, 11)},
+            ]
+        )
 
         result = simulate_incremental_to_event([batch_t0, batch_t1])
         result_df = result.execute()

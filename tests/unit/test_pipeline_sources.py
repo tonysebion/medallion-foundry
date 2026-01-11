@@ -11,7 +11,9 @@ from pipelines.lib.silver import EntityKind, HistoryMode, SilverEntity
 from pipelines.lib.state import get_watermark
 
 
-def _create_csv_input(tmp_path: Path, run_date: str, rows: list[dict[str, object]]) -> str:
+def _create_csv_input(
+    tmp_path: Path, run_date: str, rows: list[dict[str, object]]
+) -> str:
     """Create a CSV file for a given run date and return a templated path."""
     template = tmp_path / "input_{run_date}.csv"
     target_path = template.as_posix().format(run_date=run_date)
@@ -19,7 +21,9 @@ def _create_csv_input(tmp_path: Path, run_date: str, rows: list[dict[str, object
     return template.as_posix()
 
 
-def test_bronze_source_writes_metadata_and_checksums(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_bronze_source_writes_metadata_and_checksums(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     """BronzeSource should land CSV data with metadata."""
     monkeypatch.setenv("PIPELINE_STATE_DIR", str(tmp_path / "state"))
     run_date = "2025-01-15"
@@ -38,7 +42,9 @@ def test_bronze_source_writes_metadata_and_checksums(tmp_path: Path, monkeypatch
         entity="items",
         source_type=SourceType.FILE_CSV,
         source_path=source_path_template,
-        target_path=str(tmp_path / "bronze/system={system}/entity={entity}/dt={run_date}/"),
+        target_path=str(
+            tmp_path / "bronze/system={system}/entity={entity}/dt={run_date}/"
+        ),
         load_pattern=LoadPattern.FULL_SNAPSHOT,
         options={"csv_options": {"header": True, "sep": ","}},
     )
@@ -46,7 +52,9 @@ def test_bronze_source_writes_metadata_and_checksums(tmp_path: Path, monkeypatch
     result = source.run(run_date)
     assert result["row_count"] == 3
 
-    target_dir = tmp_path / "bronze" / "system=tests" / "entity=items" / f"dt={run_date}"
+    target_dir = (
+        tmp_path / "bronze" / "system=tests" / "entity=items" / f"dt={run_date}"
+    )
     assert (target_dir / "items.parquet").exists()
     assert (target_dir / "_metadata.json").exists()
     assert (target_dir / "_checksums.json").exists()
@@ -57,7 +65,9 @@ def test_bronze_source_writes_metadata_and_checksums(tmp_path: Path, monkeypatch
     assert metadata["entity"] == "items"
 
 
-def test_bronze_source_incremental_appends_updates_watermark(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_bronze_source_incremental_appends_updates_watermark(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     """Incremental Bronze runs should persist the watermark."""
     state_dir = tmp_path / "state"
     monkeypatch.setenv("PIPELINE_STATE_DIR", str(state_dir))
@@ -77,7 +87,9 @@ def test_bronze_source_incremental_appends_updates_watermark(tmp_path: Path, mon
         entity="events",
         source_type=SourceType.FILE_CSV,
         source_path=source_path_template,
-        target_path=str(tmp_path / "bronze/system={system}/entity={entity}/dt={run_date}/"),
+        target_path=str(
+            tmp_path / "bronze/system={system}/entity={entity}/dt={run_date}/"
+        ),
         load_pattern=LoadPattern.INCREMENTAL_APPEND,
         watermark_column="event_ts",
         options={"csv_options": {"header": True, "sep": ","}},
@@ -104,7 +116,14 @@ def test_silver_entity_curates_state_entity(tmp_path: Path):
         ]
     ).to_parquet(bronze_dir / "data.parquet", index=False)
 
-    source_template = tmp_path / "bronze" / "system=tests" / "entity=items" / "dt={run_date}" / "*.parquet"
+    source_template = (
+        tmp_path
+        / "bronze"
+        / "system=tests"
+        / "entity=items"
+        / "dt={run_date}"
+        / "*.parquet"
+    )
     silver_target = tmp_path / "silver" / "domain=tests" / "subject=items"
 
     silver = SilverEntity(

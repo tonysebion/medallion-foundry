@@ -180,6 +180,7 @@ def compute_sha256_bytes(data: bytes) -> str:
 def verify_artifact_exists(client, bucket: str, path: str, artifact_name: str) -> bool:
     """Check if an artifact file exists in S3."""
     from botocore.exceptions import ClientError
+
     key = path.rstrip("/") + "/" + artifact_name
     try:
         client.head_object(Bucket=bucket, Key=key)
@@ -200,7 +201,9 @@ def read_json_from_s3(client, bucket: str, key: str) -> Optional[Dict[str, Any]]
         return None
 
 
-def verify_parquet_integrity(client, bucket: str, parquet_key: str, expected_sha256: str) -> bool:
+def verify_parquet_integrity(
+    client, bucket: str, parquet_key: str, expected_sha256: str
+) -> bool:
     """Verify SHA256 hash of parquet file matches expected value."""
     try:
         response = client.get_object(Bucket=bucket, Key=parquet_key)
@@ -227,6 +230,7 @@ def list_files_in_path(client, bucket: str, prefix: str) -> List[str]:
 def verify_bronze_artifacts(client, bucket: str, bronze_path: str) -> Dict[str, Any]:
     """Verify Bronze layer artifacts exist and return details."""
     from botocore.exceptions import ClientError
+
     result = {
         "path": bronze_path,
         "parquet_files": [],
@@ -272,6 +276,7 @@ def verify_bronze_artifacts(client, bucket: str, bronze_path: str) -> Dict[str, 
 def verify_silver_artifacts(client, bucket: str, silver_path: str) -> Dict[str, Any]:
     """Verify Silver layer artifacts exist and return details."""
     from botocore.exceptions import ClientError
+
     result = {
         "path": silver_path,
         "parquet_files": [],
@@ -314,12 +319,15 @@ def verify_silver_artifacts(client, bucket: str, silver_path: str) -> Dict[str, 
     return result
 
 
-def verify_checksum_integrity(client, bucket: str, base_path: str, checksums: Dict[str, Any]) -> Dict[str, Any]:
+def verify_checksum_integrity(
+    client, bucket: str, base_path: str, checksums: Dict[str, Any]
+) -> Dict[str, Any]:
     """Verify SHA256 hashes of parquet files match manifest.
 
     Returns dict with verification results.
     """
     from botocore.exceptions import ClientError
+
     result = {
         "verified": [],
         "mismatched": [],
@@ -357,13 +365,15 @@ def verify_checksum_integrity(client, bucket: str, base_path: str, checksums: Di
             if actual_sha256 == expected_sha256 and actual_size == expected_size:
                 result["verified"].append(filename)
             else:
-                result["mismatched"].append({
-                    "file": filename,
-                    "expected_sha256": expected_sha256,
-                    "actual_sha256": actual_sha256,
-                    "expected_size": expected_size,
-                    "actual_size": actual_size,
-                })
+                result["mismatched"].append(
+                    {
+                        "file": filename,
+                        "expected_sha256": expected_sha256,
+                        "actual_sha256": actual_sha256,
+                        "expected_size": expected_size,
+                        "actual_size": actual_size,
+                    }
+                )
         except Exception as e:
             result["missing"].append(f"{filename} (error: {e})")
 
@@ -376,7 +386,9 @@ def verify_checksum_integrity(client, bucket: str, base_path: str, checksums: Di
     return result
 
 
-def generate_polybase_ddl_from_s3(client, bucket: str, metadata_key: str) -> Optional[str]:
+def generate_polybase_ddl_from_s3(
+    client, bucket: str, metadata_key: str
+) -> Optional[str]:
     """Generate PolyBase DDL from metadata file in S3."""
     metadata = read_json_from_s3(client, bucket, metadata_key)
     if not metadata:
@@ -400,7 +412,9 @@ def generate_polybase_ddl_from_s3(client, bucket: str, metadata_key: str) -> Opt
 
 def get_sample_data_path(data_type: str, run_date: str) -> Path:
     """Get path to sample data file."""
-    sample_dir = Path(__file__).parent.parent.parent / "pipelines" / "examples" / "sample_data"
+    sample_dir = (
+        Path(__file__).parent.parent.parent / "pipelines" / "examples" / "sample_data"
+    )
     return sample_dir / f"{data_type}_{run_date}.csv"
 
 
@@ -425,7 +439,9 @@ def minio_test_prefix():
     #         fs.rm(obj)
     # except Exception as e:
     #     print(f"Cleanup warning: {e}")
-    print(f"\n[CLEANUP DISABLED] Test files preserved at: s3://{MINIO_BUCKET}/{prefix}/")
+    print(
+        f"\n[CLEANUP DISABLED] Test files preserved at: s3://{MINIO_BUCKET}/{prefix}/"
+    )
 
 
 @pytest.fixture
@@ -477,12 +493,12 @@ class TestYamlPatterns:
         if not source_path.exists():
             pytest.skip(f"Sample data not found: {source_path}")
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Pattern Test: {pattern.name}")
         print(f"Data Type: {pattern.data_type}")
         print(f"Source: {source_path}")
         print(f"Prefix: {test_prefix}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # Load pattern template and substitute placeholders
         template_path = get_pattern_template(pattern.name)
@@ -516,14 +532,19 @@ class TestYamlPatterns:
 
         # Verify Bronze artifacts
         import io
+
         client = get_s3_client()
         bronze_path = f"{test_prefix}/bronze/system={pattern.system}/entity={pattern.entity}/dt={run_date}"
 
         bronze_artifacts = verify_bronze_artifacts(client, MINIO_BUCKET, bronze_path)
         print(f"\nBronze artifacts: {bronze_artifacts}")
 
-        assert bronze_artifacts["parquet_count"] > 0, "Bronze should create parquet files"
-        assert bronze_artifacts["metadata_exists"], "Bronze should create _metadata.json"
+        assert bronze_artifacts["parquet_count"] > 0, (
+            "Bronze should create parquet files"
+        )
+        assert bronze_artifacts["metadata_exists"], (
+            "Bronze should create _metadata.json"
+        )
 
         # Verify Bronze metadata content
         if bronze_artifacts["metadata"]:
@@ -533,21 +554,27 @@ class TestYamlPatterns:
 
         # Verify checksums if available
         if bronze_artifacts["checksums_exists"]:
-            checksum_result = verify_checksum_integrity(client, MINIO_BUCKET, bronze_path, bronze_artifacts["checksums"])
+            checksum_result = verify_checksum_integrity(
+                client, MINIO_BUCKET, bronze_path, bronze_artifacts["checksums"]
+            )
             print(f"Bronze checksum verification: {checksum_result}")
 
         # Verify Silver artifacts
-        silver_path = f"{test_prefix}/silver/domain={pattern.system}/subject={pattern.entity}"
+        silver_path = (
+            f"{test_prefix}/silver/domain={pattern.system}/subject={pattern.entity}"
+        )
 
         silver_artifacts = verify_silver_artifacts(client, MINIO_BUCKET, silver_path)
         print(f"\nSilver artifacts: {silver_artifacts}")
 
-        assert silver_artifacts["parquet_count"] > 0, "Silver should create parquet files"
+        assert silver_artifacts["parquet_count"] > 0, (
+            "Silver should create parquet files"
+        )
 
         # Read Silver parquet and verify content
         silver_parquet = next(
             (f for f in silver_artifacts["parquet_files"] if f.endswith(".parquet")),
-            None
+            None,
         )
         assert silver_parquet is not None, "Silver should have parquet file"
 
@@ -558,7 +585,9 @@ class TestYamlPatterns:
 
         # Verify SCD2 columns if applicable
         if pattern.has_scd2_columns:
-            assert "effective_from" in silver_df.columns, "SCD2 should have effective_from"
+            assert "effective_from" in silver_df.columns, (
+                "SCD2 should have effective_from"
+            )
             assert "effective_to" in silver_df.columns, "SCD2 should have effective_to"
             assert "is_current" in silver_df.columns, "SCD2 should have is_current"
 
@@ -568,11 +597,13 @@ class TestYamlPatterns:
             ddl = generate_polybase_ddl_from_s3(client, MINIO_BUCKET, metadata_key)
             if ddl:
                 print(f"\nGenerated PolyBase DDL:\n{ddl[:500]}...")
-                assert "CREATE EXTERNAL TABLE" in ddl, "DDL should contain CREATE EXTERNAL TABLE"
+                assert "CREATE EXTERNAL TABLE" in ddl, (
+                    "DDL should contain CREATE EXTERNAL TABLE"
+                )
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"TEST PASSED: {pattern.name}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
 
 # ---------------------------------------------------------------------------
@@ -603,10 +634,10 @@ class TestSpecializedScenarios:
         test_prefix = minio_test_prefix
         run_dates = ["2025-01-15", "2025-01-17", "2025-01-19"]  # Skip 16, 18
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Skipped Days Test: {test_prefix}")
         print(f"Run Dates: {run_dates}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # Load pattern template
         template_path = get_pattern_template("skipped_days")
@@ -643,7 +674,9 @@ class TestSpecializedScenarios:
             print(f"  Bronze: {bronze_result['row_count']} rows")
             print(f"  Silver: {silver_result['row_count']} rows")
 
-            bronze_path = f"{test_prefix}/bronze/system=retail/entity=orders/dt={run_date}"
+            bronze_path = (
+                f"{test_prefix}/bronze/system=retail/entity=orders/dt={run_date}"
+            )
             silver_path = f"{test_prefix}/silver/domain=retail/subject=orders"
 
             bronze_paths.append(bronze_path)
@@ -653,14 +686,20 @@ class TestSpecializedScenarios:
         print("\nVerifying Bronze partitions...")
         for i, run_date in enumerate(run_dates):
             bronze_path = bronze_paths[i]
-            bronze_artifacts = verify_bronze_artifacts(client, MINIO_BUCKET, bronze_path)
-            assert bronze_artifacts["parquet_count"] > 0, f"Bronze partition for {run_date} should exist"
+            bronze_artifacts = verify_bronze_artifacts(
+                client, MINIO_BUCKET, bronze_path
+            )
+            assert bronze_artifacts["parquet_count"] > 0, (
+                f"Bronze partition for {run_date} should exist"
+            )
             print(f"  {run_date}: {bronze_artifacts['parquet_count']} parquet files")
 
         # Verify skipped dates DON'T have partitions
         skipped_dates = ["2025-01-16", "2025-01-18"]
         for skipped_date in skipped_dates:
-            skipped_path = f"{test_prefix}/bronze/system=retail/entity=orders/dt={skipped_date}"
+            skipped_path = (
+                f"{test_prefix}/bronze/system=retail/entity=orders/dt={skipped_date}"
+            )
             files = list_files_in_path(client, MINIO_BUCKET, skipped_path)
             assert len(files) == 0, f"Skipped date {skipped_date} should have no files"
 
@@ -677,9 +716,9 @@ class TestSpecializedScenarios:
             print(f"\nPolyBase DDL generated successfully ({len(ddl)} chars)")
             assert "CREATE EXTERNAL TABLE" in ddl
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("TEST PASSED: Skipped days scenario")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
     @requires_minio
     @pytest.mark.integration
@@ -726,7 +765,9 @@ class TestSpecializedScenarios:
         bronze_artifacts = verify_bronze_artifacts(client, MINIO_BUCKET, bronze_path)
 
         if bronze_artifacts["checksums_exists"]:
-            checksum_result = verify_checksum_integrity(client, MINIO_BUCKET, bronze_path, bronze_artifacts["checksums"])
+            checksum_result = verify_checksum_integrity(
+                client, MINIO_BUCKET, bronze_path, bronze_artifacts["checksums"]
+            )
             print("\nBronze checksum verification:")
             print(f"  Verified: {len(checksum_result['verified'])} files")
             print(f"  Mismatched: {len(checksum_result['mismatched'])} files")
@@ -776,6 +817,7 @@ class TestSpecializedScenarios:
 
         # Read Silver data
         import io
+
         client = get_s3_client()
         silver_path = f"{test_prefix}/silver/domain=crm/subject=customers"
         silver_files = list_files_in_path(client, MINIO_BUCKET, silver_path)
@@ -795,17 +837,22 @@ class TestSpecializedScenarios:
 
         # Verify CUST001 has multiple versions (historical data in sample)
         cust001_rows = silver_df[silver_df["customer_id"] == "CUST001"]
-        assert len(cust001_rows) >= 2, f"CUST001 should have historical versions, got {len(cust001_rows)}"
+        assert len(cust001_rows) >= 2, (
+            f"CUST001 should have historical versions, got {len(cust001_rows)}"
+        )
 
         # Verify only one version per customer is current
         current_rows = silver_df[silver_df["is_current"] == 1]
         unique_current_customers = current_rows["customer_id"].nunique()
-        assert unique_current_customers == len(current_rows), "Each customer should have exactly one current row"
+        assert unique_current_customers == len(current_rows), (
+            "Each customer should have exactly one current row"
+        )
 
         # Verify effective_to is None for current rows
         for _, row in current_rows.iterrows():
-            assert pd.isna(row["effective_to"]) or row["effective_to"] is None, \
+            assert pd.isna(row["effective_to"]) or row["effective_to"] is None, (
                 f"Current row for {row['customer_id']} should have None effective_to"
+            )
 
         print("TEST PASSED: SCD2 effective dates verification")
 

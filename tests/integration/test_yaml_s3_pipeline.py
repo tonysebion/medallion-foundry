@@ -95,9 +95,9 @@ def create_pipeline_yaml(
         "silver": {
             "domain": "retail",
             "subject": "orders",
-            "source_path": bronze_target.replace("{run_date}/", "{run_date}/*.parquet").replace(
-                "{system}", "retail"
-            ).replace("{entity}", "orders"),
+            "source_path": bronze_target.replace("{run_date}/", "{run_date}/*.parquet")
+            .replace("{system}", "retail")
+            .replace("{entity}", "orders"),
             "target_path": silver_target,
             "natural_keys": ["order_id"],
             "change_timestamp": "order_ts",
@@ -110,7 +110,9 @@ def create_pipeline_yaml(
     yaml_path.parent.mkdir(parents=True, exist_ok=True)
     with open(yaml_path, "w") as f:
         # Add schema comment for IDE support
-        f.write("# yaml-language-server: $schema=../../pipelines/schema/pipeline.schema.json\n")
+        f.write(
+            "# yaml-language-server: $schema=../../pipelines/schema/pipeline.schema.json\n"
+        )
         yaml.dump(pipeline_config, f, default_flow_style=False, sort_keys=False)
 
 
@@ -143,7 +145,9 @@ def minio_test_prefix():
             if "Contents" in page:
                 objects = [{"Key": obj["Key"]} for obj in page["Contents"]]
                 if objects:
-                    client.delete_objects(Bucket=MINIO_BUCKET, Delete={"Objects": objects})
+                    client.delete_objects(
+                        Bucket=MINIO_BUCKET, Delete={"Objects": objects}
+                    )
     except Exception as e:
         print(f"Cleanup warning: {e}")
 
@@ -230,10 +234,10 @@ class TestYamlPipelineS3:
             silver_target=silver_target,
         )
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"YAML Pipeline Test: {test_prefix}")
         print(f"YAML file: {yaml_file}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         # Print the generated YAML for debugging
         with open(yaml_file) as f:
@@ -277,7 +281,9 @@ class TestYamlPipelineS3:
             bronze_files.extend([obj["Key"] for obj in page.get("Contents", [])])
         print(f"\nBronze files in S3: {bronze_files}")
         assert len(bronze_files) > 0, "Bronze should create files in S3"
-        assert any(f.endswith(".parquet") for f in bronze_files), "Bronze should write parquet file"
+        assert any(f.endswith(".parquet") for f in bronze_files), (
+            "Bronze should write parquet file"
+        )
 
         # List Silver files
         silver_path = f"{test_prefix}/silver/domain=retail/subject=orders/dt={run_date}"
@@ -303,6 +309,6 @@ class TestYamlPipelineS3:
             assert ord001["quantity"] == 7, "Should have latest quantity"
             assert ord001["total"] == 70.00, "Should have latest total"
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("TEST PASSED: YAML-driven Bronze→Silver pipeline with S3 storage")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")

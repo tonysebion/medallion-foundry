@@ -28,9 +28,11 @@ class TestBuildHistoryBasic:
 
     def test_adds_scd2_columns(self, con):
         """Verify SCD2 columns are added."""
-        df = pd.DataFrame([
-            {"id": 1, "status": "active", "ts": datetime(2025, 1, 10)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "status": "active", "ts": datetime(2025, 1, 10)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
@@ -43,10 +45,12 @@ class TestBuildHistoryBasic:
 
     def test_single_version_is_current(self, con):
         """Single version per entity should be marked as current."""
-        df = pd.DataFrame([
-            {"id": 1, "status": "active", "ts": datetime(2025, 1, 10)},
-            {"id": 2, "status": "pending", "ts": datetime(2025, 1, 11)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "status": "active", "ts": datetime(2025, 1, 10)},
+                {"id": 2, "status": "pending", "ts": datetime(2025, 1, 11)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
@@ -60,11 +64,13 @@ class TestBuildHistoryBasic:
 
     def test_effective_dates_correct_sequence(self, con):
         """Verify effective_from/to form correct time ranges."""
-        df = pd.DataFrame([
-            {"id": 1, "status": "pending", "ts": datetime(2025, 1, 10, 10, 0, 0)},
-            {"id": 1, "status": "approved", "ts": datetime(2025, 1, 15, 10, 0, 0)},
-            {"id": 1, "status": "completed", "ts": datetime(2025, 1, 20, 10, 0, 0)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "status": "pending", "ts": datetime(2025, 1, 10, 10, 0, 0)},
+                {"id": 1, "status": "approved", "ts": datetime(2025, 1, 15, 10, 0, 0)},
+                {"id": 1, "status": "completed", "ts": datetime(2025, 1, 20, 10, 0, 0)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
@@ -74,7 +80,9 @@ class TestBuildHistoryBasic:
         v1 = result_df.iloc[0]
         assert v1["status"] == "pending"
         assert v1["effective_from"] == datetime(2025, 1, 10, 10, 0, 0)
-        assert v1["effective_to"] == datetime(2025, 1, 15, 10, 0, 0)  # Next version's ts
+        assert v1["effective_to"] == datetime(
+            2025, 1, 15, 10, 0, 0
+        )  # Next version's ts
         assert v1["is_current"] == 0
 
         # Version 2 (approved)
@@ -93,10 +101,12 @@ class TestBuildHistoryBasic:
 
     def test_effective_from_equals_ts_col(self, con):
         """effective_from should always equal the timestamp column."""
-        df = pd.DataFrame([
-            {"id": 1, "val": "A", "change_ts": datetime(2025, 1, 10)},
-            {"id": 1, "val": "B", "change_ts": datetime(2025, 1, 15)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "val": "A", "change_ts": datetime(2025, 1, 10)},
+                {"id": 1, "val": "B", "change_ts": datetime(2025, 1, 15)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="change_ts")
@@ -104,9 +114,7 @@ class TestBuildHistoryBasic:
 
         # effective_from should equal change_ts for all rows
         pd.testing.assert_series_equal(
-            result_df["effective_from"],
-            result_df["change_ts"],
-            check_names=False
+            result_df["effective_from"], result_df["change_ts"], check_names=False
         )
 
 
@@ -115,13 +123,15 @@ class TestBuildHistoryMultipleEntities:
 
     def test_independent_entity_histories(self, con):
         """Each entity's history is built independently."""
-        df = pd.DataFrame([
-            {"id": 1, "val": "1A", "ts": datetime(2025, 1, 10)},
-            {"id": 1, "val": "1B", "ts": datetime(2025, 1, 15)},
-            {"id": 2, "val": "2A", "ts": datetime(2025, 1, 12)},
-            {"id": 2, "val": "2B", "ts": datetime(2025, 1, 18)},
-            {"id": 2, "val": "2C", "ts": datetime(2025, 1, 20)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "val": "1A", "ts": datetime(2025, 1, 10)},
+                {"id": 1, "val": "1B", "ts": datetime(2025, 1, 15)},
+                {"id": 2, "val": "2A", "ts": datetime(2025, 1, 12)},
+                {"id": 2, "val": "2B", "ts": datetime(2025, 1, 18)},
+                {"id": 2, "val": "2C", "ts": datetime(2025, 1, 20)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
@@ -133,7 +143,9 @@ class TestBuildHistoryMultipleEntities:
         assert id1_history["is_current"].sum() == 1
 
         # ID 1 effective_to chain
-        assert id1_history.iloc[0]["effective_to"] == id1_history.iloc[1]["effective_from"]
+        assert (
+            id1_history.iloc[0]["effective_to"] == id1_history.iloc[1]["effective_from"]
+        )
         assert pd.isna(id1_history.iloc[1]["effective_to"])
 
         # ID 2 should have 3 versions
@@ -146,11 +158,17 @@ class TestBuildHistoryMultipleEntities:
 
     def test_current_view_unique_per_entity(self, con):
         """Current view (is_current=1) should have exactly one row per entity."""
-        df = pd.DataFrame([
-            {"id": i, "version": v, "ts": datetime(2025, 1, 1) + pd.Timedelta(days=v)}
-            for i in range(1, 11)
-            for v in range(1, 6)
-        ])
+        df = pd.DataFrame(
+            [
+                {
+                    "id": i,
+                    "version": v,
+                    "ts": datetime(2025, 1, 1) + pd.Timedelta(days=v),
+                }
+                for i in range(1, 11)
+                for v in range(1, 6)
+            ]
+        )
 
         t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
@@ -173,26 +191,52 @@ class TestBuildHistoryCompositeKeys:
 
     def test_composite_key_history(self, con):
         """Build history with composite key."""
-        df = pd.DataFrame([
-            {"region": "US", "product": "A", "price": 100, "ts": datetime(2025, 1, 10)},
-            {"region": "US", "product": "A", "price": 110, "ts": datetime(2025, 1, 15)},
-            {"region": "EU", "product": "A", "price": 90, "ts": datetime(2025, 1, 12)},
-            {"region": "EU", "product": "A", "price": 95, "ts": datetime(2025, 1, 20)},
-        ])
+        df = pd.DataFrame(
+            [
+                {
+                    "region": "US",
+                    "product": "A",
+                    "price": 100,
+                    "ts": datetime(2025, 1, 10),
+                },
+                {
+                    "region": "US",
+                    "product": "A",
+                    "price": 110,
+                    "ts": datetime(2025, 1, 15),
+                },
+                {
+                    "region": "EU",
+                    "product": "A",
+                    "price": 90,
+                    "ts": datetime(2025, 1, 12),
+                },
+                {
+                    "region": "EU",
+                    "product": "A",
+                    "price": 95,
+                    "ts": datetime(2025, 1, 20),
+                },
+            ]
+        )
 
         t = ibis.memtable(df)
         result = build_history(t, keys=["region", "product"], ts_col="ts")
         result_df = result.execute()
 
         # US+A history
-        us_a = result_df[(result_df["region"] == "US") & (result_df["product"] == "A")].sort_values("ts")
+        us_a = result_df[
+            (result_df["region"] == "US") & (result_df["product"] == "A")
+        ].sort_values("ts")
         assert len(us_a) == 2
         assert us_a.iloc[0]["is_current"] == 0
         assert us_a.iloc[1]["is_current"] == 1
         assert us_a.iloc[0]["effective_to"] == us_a.iloc[1]["effective_from"]
 
         # EU+A history
-        eu_a = result_df[(result_df["region"] == "EU") & (result_df["product"] == "A")].sort_values("ts")
+        eu_a = result_df[
+            (result_df["region"] == "EU") & (result_df["product"] == "A")
+        ].sort_values("ts")
         assert len(eu_a) == 2
         assert eu_a.iloc[1]["is_current"] == 1
 
@@ -202,10 +246,12 @@ class TestBuildHistoryCustomColumnNames:
 
     def test_custom_column_names(self, con):
         """Use custom names for SCD2 columns."""
-        df = pd.DataFrame([
-            {"id": 1, "val": "A", "ts": datetime(2025, 1, 10)},
-            {"id": 1, "val": "B", "ts": datetime(2025, 1, 15)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "val": "A", "ts": datetime(2025, 1, 10)},
+                {"id": 1, "val": "B", "ts": datetime(2025, 1, 15)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = build_history(
@@ -234,11 +280,13 @@ class TestBuildHistoryEdgeCases:
 
     def test_empty_table(self, con):
         """Empty table returns empty result with SCD2 columns."""
-        df = pd.DataFrame({
-            "id": pd.array([], dtype="int64"),
-            "val": pd.array([], dtype="string"),
-            "ts": pd.array([], dtype="datetime64[ns]")
-        })
+        df = pd.DataFrame(
+            {
+                "id": pd.array([], dtype="int64"),
+                "val": pd.array([], dtype="string"),
+                "ts": pd.array([], dtype="datetime64[ns]"),
+            }
+        )
 
         t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
@@ -251,9 +299,17 @@ class TestBuildHistoryEdgeCases:
 
     def test_preserves_original_columns(self, con):
         """Original columns preserved alongside SCD2 columns."""
-        df = pd.DataFrame([
-            {"id": 1, "name": "Alice", "age": 30, "city": "NYC", "ts": datetime(2025, 1, 10)},
-        ])
+        df = pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "name": "Alice",
+                    "age": 30,
+                    "city": "NYC",
+                    "ts": datetime(2025, 1, 10),
+                },
+            ]
+        )
 
         t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
@@ -270,10 +326,12 @@ class TestBuildHistoryEdgeCases:
 
     def test_handles_same_timestamp(self, con):
         """Records with same timestamp handled gracefully."""
-        df = pd.DataFrame([
-            {"id": 1, "val": "A", "ts": datetime(2025, 1, 15)},
-            {"id": 1, "val": "B", "ts": datetime(2025, 1, 15)},  # Same timestamp
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "val": "A", "ts": datetime(2025, 1, 15)},
+                {"id": 1, "val": "B", "ts": datetime(2025, 1, 15)},  # Same timestamp
+            ]
+        )
 
         t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
@@ -292,10 +350,16 @@ class TestBuildHistoryNoGaps:
     def test_effective_dates_contiguous(self, con):
         """effective_to of one version equals effective_from of next."""
         # Use Timedelta to avoid invalid day values
-        df = pd.DataFrame([
-            {"id": 1, "version": i, "ts": datetime(2025, 1, 1) + pd.Timedelta(days=i * 3)}
-            for i in range(1, 10)
-        ])
+        df = pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "version": i,
+                    "ts": datetime(2025, 1, 1) + pd.Timedelta(days=i * 3),
+                }
+                for i in range(1, 10)
+            ]
+        )
 
         t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
@@ -307,8 +371,9 @@ class TestBuildHistoryNoGaps:
             next_ver = result_df.iloc[i + 1]
 
             # effective_to equals next effective_from (no gap)
-            assert current["effective_to"] == next_ver["effective_from"], \
-                f"Gap between version {i+1} and {i+2}"
+            assert current["effective_to"] == next_ver["effective_from"], (
+                f"Gap between version {i + 1} and {i + 2}"
+            )
 
         # Last version has null effective_to
         assert pd.isna(result_df.iloc[-1]["effective_to"])

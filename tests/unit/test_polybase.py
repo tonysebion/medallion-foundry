@@ -35,7 +35,10 @@ class TestPolyBaseConfig:
             data_source_location="wasbs://container@account.blob.core.windows.net/",
         )
         assert config.data_source_name == "test_source"
-        assert config.data_source_location == "wasbs://container@account.blob.core.windows.net/"
+        assert (
+            config.data_source_location
+            == "wasbs://container@account.blob.core.windows.net/"
+        )
 
     def test_default_values(self):
         """Has sensible defaults."""
@@ -708,7 +711,9 @@ class TestWritePolybaseDdlS3:
     def test_returns_false_on_failure(self, config, metadata):
         """Returns False when write fails."""
         mock_storage = MagicMock()
-        mock_storage.write_text.return_value = MagicMock(success=False, error="Write failed")
+        mock_storage.write_text.return_value = MagicMock(
+            success=False, error="Write failed"
+        )
 
         result = write_polybase_ddl_s3(
             mock_storage,
@@ -936,7 +941,9 @@ class TestNoneNaturalKeysEdgeCases:
             "natural_keys": ["id"],
             "change_timestamp": None,  # Explicitly None (periodic_snapshot model)
         }
-        ddl = generate_from_metadata_dict(metadata, config, entity_name="snapshot_events")
+        ddl = generate_from_metadata_dict(
+            metadata, config, entity_name="snapshot_events"
+        )
         # Should NOT have literal [None] in the SQL - should use default "updated_at"
         assert "[None]" not in ddl
         # Should use the default fallback instead
@@ -988,7 +995,9 @@ class TestDomainSubjectNaming:
             "domain": "sales",
             "subject": "orders",
         }
-        ddl = generate_from_metadata_dict(metadata, config, entity_name="my_custom_name")
+        ddl = generate_from_metadata_dict(
+            metadata, config, entity_name="my_custom_name"
+        )
         # When domain is provided, it's still used as schema
         # But entity_name affects the internal name only (shown in header)
         # Table name uses subject as base since domain is present

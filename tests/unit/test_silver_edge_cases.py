@@ -34,11 +34,19 @@ class TestModelEntityKindCombinations:
 
     def _create_test_data_with_duplicates(self, tmp_path: Path) -> Path:
         """Create test parquet file with exact duplicate rows."""
-        df = pd.DataFrame({
-            "id": [1, 1, 2, 2, 3],  # Duplicates on id
-            "name": ["Alice", "Alice", "Bob", "Bob", "Charlie"],  # Exact duplicates
-            "updated_at": ["2025-01-01", "2025-01-01", "2025-01-02", "2025-01-02", "2025-01-03"],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 1, 2, 2, 3],  # Duplicates on id
+                "name": ["Alice", "Alice", "Bob", "Bob", "Charlie"],  # Exact duplicates
+                "updated_at": [
+                    "2025-01-01",
+                    "2025-01-01",
+                    "2025-01-02",
+                    "2025-01-02",
+                    "2025-01-03",
+                ],
+            }
+        )
         parquet_path = tmp_path / "data.parquet"
         df.to_parquet(parquet_path)
         return parquet_path
@@ -107,7 +115,10 @@ class TestModelEntityKindCombinations:
         with pytest.raises(YAMLConfigError) as exc_info:
             load_silver_from_yaml(config, tmp_path)
 
-        assert "natural_keys" in str(exc_info.value).lower() or "change_timestamp" in str(exc_info.value).lower()
+        assert (
+            "natural_keys" in str(exc_info.value).lower()
+            or "change_timestamp" in str(exc_info.value).lower()
+        )
 
     def test_scd_type_2_requires_keys(self, tmp_path: Path):
         """scd_type_2 model requires natural_keys and change_timestamp."""
@@ -125,7 +136,10 @@ class TestModelEntityKindCombinations:
         with pytest.raises(YAMLConfigError) as exc_info:
             load_silver_from_yaml(config, tmp_path)
 
-        assert "natural_keys" in str(exc_info.value).lower() or "change_timestamp" in str(exc_info.value).lower()
+        assert (
+            "natural_keys" in str(exc_info.value).lower()
+            or "change_timestamp" in str(exc_info.value).lower()
+        )
 
     def test_event_log_deduplicates_exact(self, tmp_path: Path):
         """event_log model should call distinct() on data."""
@@ -160,11 +174,13 @@ class TestMissingKeysTimestamp:
 
     def _create_simple_parquet(self, tmp_path: Path) -> Path:
         """Create simple test parquet file."""
-        df = pd.DataFrame({
-            "id": [1, 2, 3, 1],  # Duplicate id=1
-            "name": ["Alice", "Bob", "Charlie", "Alice Updated"],
-            "updated_at": ["2025-01-01", "2025-01-02", "2025-01-03", "2025-01-04"],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 2, 3, 1],  # Duplicate id=1
+                "name": ["Alice", "Bob", "Charlie", "Alice Updated"],
+                "updated_at": ["2025-01-01", "2025-01-02", "2025-01-03", "2025-01-04"],
+            }
+        )
         parquet_path = tmp_path / "data.parquet"
         df.to_parquet(parquet_path)
         return parquet_path
@@ -346,6 +362,7 @@ class TestEmptyDataEdgeCases:
         # but it may raise an error creating an empty DataFrame
         # This tests that we handle this gracefully
         from duckdb import InvalidInputException
+
         try:
             result = silver.run("2025-01-15")
             assert result["row_count"] == 0
@@ -357,11 +374,13 @@ class TestEmptyDataEdgeCases:
     def test_all_exact_duplicates_deduplicated(self, tmp_path: Path):
         """Data with all exact duplicates should result in fewer rows."""
         # All rows are identical
-        df = pd.DataFrame({
-            "id": [1, 1, 1, 1],
-            "name": ["Alice", "Alice", "Alice", "Alice"],
-            "updated_at": ["2025-01-01", "2025-01-01", "2025-01-01", "2025-01-01"],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 1, 1, 1],
+                "name": ["Alice", "Alice", "Alice", "Alice"],
+                "updated_at": ["2025-01-01", "2025-01-01", "2025-01-01", "2025-01-01"],
+            }
+        )
         parquet_path = tmp_path / "duplicates.parquet"
         df.to_parquet(parquet_path)
 
@@ -398,10 +417,12 @@ class TestCurateFunctionEdgeCases:
     def test_dedupe_latest_with_none_keys_all_one_group(self):
         """dedupe_latest with None keys treats all rows as one group."""
         con = ibis.duckdb.connect()
-        df = pd.DataFrame({
-            "id": [1, 2],
-            "updated_at": ["2025-01-01", "2025-01-02"],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 2],
+                "updated_at": ["2025-01-01", "2025-01-02"],
+            }
+        )
         t = con.create_table("test", df)
 
         # With None keys, all rows are in one group (window over entire dataset)
@@ -412,10 +433,12 @@ class TestCurateFunctionEdgeCases:
     def test_dedupe_latest_with_empty_keys_all_one_group(self):
         """dedupe_latest with empty keys list treats all rows as one group."""
         con = ibis.duckdb.connect()
-        df = pd.DataFrame({
-            "id": [1, 2],
-            "updated_at": ["2025-01-01", "2025-01-02"],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 2],
+                "updated_at": ["2025-01-01", "2025-01-02"],
+            }
+        )
         t = con.create_table("test", df)
 
         # Empty keys list = all rows in one group, only latest kept
@@ -425,11 +448,13 @@ class TestCurateFunctionEdgeCases:
     def test_build_history_with_none_keys_all_one_group(self):
         """build_history with None keys treats all rows as one entity."""
         con = ibis.duckdb.connect()
-        df = pd.DataFrame({
-            "id": [1, 1],
-            "name": ["Alice", "Alice Updated"],
-            "updated_at": ["2025-01-01", "2025-01-02"],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 1],
+                "name": ["Alice", "Alice Updated"],
+                "updated_at": ["2025-01-01", "2025-01-02"],
+            }
+        )
         t = con.create_table("test", df)
 
         # With None keys, all rows become history versions of "one entity"
@@ -444,10 +469,12 @@ class TestCurateFunctionEdgeCases:
     def test_dedupe_latest_missing_order_column(self):
         """dedupe_latest should error when order_by column doesn't exist."""
         con = ibis.duckdb.connect()
-        df = pd.DataFrame({
-            "id": [1, 2],
-            "name": ["Alice", "Bob"],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 2],
+                "name": ["Alice", "Bob"],
+            }
+        )
         t = con.create_table("test", df)
 
         # Column 'nonexistent' doesn't exist
@@ -458,11 +485,13 @@ class TestCurateFunctionEdgeCases:
     def test_dedupe_latest_with_null_timestamps(self):
         """dedupe_latest should handle NULL values in timestamp column."""
         con = ibis.duckdb.connect()
-        df = pd.DataFrame({
-            "id": [1, 1, 2],
-            "name": ["Alice", "Alice Updated", "Bob"],
-            "updated_at": ["2025-01-01", None, "2025-01-02"],  # NULL timestamp
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 1, 2],
+                "name": ["Alice", "Alice Updated", "Bob"],
+                "updated_at": ["2025-01-01", None, "2025-01-02"],  # NULL timestamp
+            }
+        )
         t = con.create_table("test", df)
 
         # Should still work, NULL sorts differently
@@ -495,11 +524,13 @@ class TestHistoryModeWithoutKeys:
 
     def test_full_history_with_keys_builds_scd2(self, tmp_path: Path):
         """full_history with keys builds proper SCD2 history."""
-        df = pd.DataFrame({
-            "id": [1, 1, 2],
-            "name": ["Alice", "Alice Updated", "Bob"],
-            "updated_at": ["2025-01-01", "2025-01-02", "2025-01-03"],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 1, 2],
+                "name": ["Alice", "Alice Updated", "Bob"],
+                "updated_at": ["2025-01-01", "2025-01-02", "2025-01-03"],
+            }
+        )
         parquet_path = tmp_path / "data.parquet"
         df.to_parquet(parquet_path)
 

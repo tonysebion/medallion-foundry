@@ -20,7 +20,9 @@ import pytest
 class TestBronzeConfigExpansion:
     """Test that env vars in Bronze options are expanded at the right time."""
 
-    def test_database_host_expanded_before_connection(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_database_host_expanded_before_connection(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Database host ${DB_HOST} is expanded before creating connection."""
         from pipelines.lib.connections import _expand_credentials
 
@@ -41,7 +43,9 @@ class TestBronzeConfigExpansion:
         assert expanded["database"] == "mydb"
         assert expanded["user"] == "admin"
 
-    def test_s3_endpoint_expanded_in_storage_config(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_s3_endpoint_expanded_in_storage_config(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """S3 endpoint_url with ${MINIO_ENDPOINT} is expanded in storage options."""
         from pipelines.lib.storage_config import get_config_value
 
@@ -54,7 +58,9 @@ class TestBronzeConfigExpansion:
         value = get_config_value(options, "endpoint_url", "AWS_ENDPOINT_URL")
         assert value == "http://localhost:9000"
 
-    def test_s3_endpoint_falls_back_to_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_s3_endpoint_falls_back_to_env_var(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """When option not in dict, falls back to env var."""
         from pipelines.lib.storage_config import get_config_value
 
@@ -67,21 +73,29 @@ class TestBronzeConfigExpansion:
 class TestS3StorageConfigFlow:
     """Test end-to-end S3 config flow from options to boto3 client."""
 
-    def test_verify_ssl_from_options_reaches_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_verify_ssl_from_options_reaches_client(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """verify_ssl: false in options reaches boto3 client creation."""
         from pipelines.lib.storage_config import get_bool_config_value
 
         # Test with boolean value
         options: Dict[str, Any] = {"verify_ssl": False}
-        value = get_bool_config_value(options, "verify_ssl", "AWS_S3_VERIFY_SSL", default=True)
+        value = get_bool_config_value(
+            options, "verify_ssl", "AWS_S3_VERIFY_SSL", default=True
+        )
         assert value is False
 
-    def test_verify_ssl_string_true_parsed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_verify_ssl_string_true_parsed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """verify_ssl: "true" (string) is parsed as True."""
         from pipelines.lib.storage_config import get_bool_config_value
 
         options: Dict[str, Any] = {"verify_ssl": "true"}
-        value = get_bool_config_value(options, "verify_ssl", "AWS_S3_VERIFY_SSL", default=False)
+        value = get_bool_config_value(
+            options, "verify_ssl", "AWS_S3_VERIFY_SSL", default=False
+        )
         assert value is True
 
     def test_verify_ssl_from_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -90,14 +104,18 @@ class TestS3StorageConfigFlow:
 
         monkeypatch.setenv("AWS_S3_VERIFY_SSL", "false")
 
-        value = get_bool_config_value(None, "verify_ssl", "AWS_S3_VERIFY_SSL", default=True)
+        value = get_bool_config_value(
+            None, "verify_ssl", "AWS_S3_VERIFY_SSL", default=True
+        )
         assert value is False
 
 
 class TestApiConfigExpansion:
     """Test that API credentials are expanded before AuthConfig validation."""
 
-    def test_bearer_token_expanded_before_validation(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_bearer_token_expanded_before_validation(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """${API_TOKEN} is expanded BEFORE AuthConfig validates it."""
         from pipelines.lib.api import build_auth_headers_from_dict
 
@@ -112,7 +130,9 @@ class TestApiConfigExpansion:
         headers, _ = build_auth_headers_from_dict(api_options)
         assert headers["Authorization"] == "Bearer real-secret-token"
 
-    def test_api_key_expanded_before_validation(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_api_key_expanded_before_validation(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """${API_KEY} is expanded BEFORE AuthConfig validates it."""
         from pipelines.lib.api import build_auth_headers_from_dict
 
@@ -128,7 +148,9 @@ class TestApiConfigExpansion:
         headers, _ = build_auth_headers_from_dict(api_options)
         assert headers["X-Custom-Key"] == "secret-api-key"
 
-    def test_basic_auth_expanded_before_validation(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_basic_auth_expanded_before_validation(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """${USERNAME} and ${PASSWORD} expanded BEFORE basic auth encoding."""
         from pipelines.lib.api import build_auth_headers_from_dict
 
@@ -147,7 +169,9 @@ class TestApiConfigExpansion:
         # Basic auth returns the credentials as a tuple for requests lib
         assert basic_auth == ("admin", "secret123")
 
-    def test_unexpanded_placeholder_raises_keyerror(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_unexpanded_placeholder_raises_keyerror(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """If env var not set, expand_env_vars with strict=True raises KeyError.
 
         API expansion uses strict mode internally for auth tokens, so missing
@@ -171,7 +195,9 @@ class TestApiConfigExpansion:
 class TestYamlConfigExpansion:
     """Test that YAML configs properly expand ${VAR} patterns."""
 
-    def test_bronze_options_expanded_from_yaml(self, monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    def test_bronze_options_expanded_from_yaml(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path
+    ) -> None:
         """Options in YAML Bronze config have ${VAR} expanded."""
         from pipelines.lib.config_loader import load_bronze_from_yaml
 
@@ -196,7 +222,9 @@ class TestYamlConfigExpansion:
         # The options should be stored as-is (expansion happens at runtime)
         assert bronze.options.get("endpoint_url") == "${MINIO_ENDPOINT}"
 
-    def test_silver_storage_options_from_yaml(self, monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    def test_silver_storage_options_from_yaml(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path
+    ) -> None:
         """Storage options in YAML Silver config are passed through.
 
         YAML uses s3_* prefixed keys which map to storage_options.
@@ -267,7 +295,9 @@ class TestConnectionsExpansion:
         assert expanded["user"] == "testuser"
         assert expanded["password"] == "p@ssw0rd"
 
-    def test_missing_env_var_keeps_placeholder(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_missing_env_var_keeps_placeholder(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Missing env var keeps placeholder (non-strict mode).
 
         The _expand_credentials function doesn't use strict mode, so missing
@@ -294,7 +324,9 @@ class TestConnectionsExpansion:
 class TestExpandOptionsFunction:
     """Test the expand_options utility function."""
 
-    def test_expand_options_expands_nested_values(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_expand_options_expands_nested_values(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """expand_options handles nested dicts and lists."""
         from pipelines.lib.env import expand_options
 

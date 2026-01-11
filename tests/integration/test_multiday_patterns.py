@@ -250,8 +250,15 @@ def run_silver_pipeline(
 
     # Map string values to enums
     kind_map = {"state": EntityKind.STATE, "event": EntityKind.EVENT}
-    history_map = {"current_only": HistoryMode.CURRENT_ONLY, "full_history": HistoryMode.FULL_HISTORY}
-    delete_map = {"ignore": DeleteMode.IGNORE, "tombstone": DeleteMode.TOMBSTONE, "hard_delete": DeleteMode.HARD_DELETE}
+    history_map = {
+        "current_only": HistoryMode.CURRENT_ONLY,
+        "full_history": HistoryMode.FULL_HISTORY,
+    }
+    delete_map = {
+        "ignore": DeleteMode.IGNORE,
+        "tombstone": DeleteMode.TOMBSTONE,
+        "hard_delete": DeleteMode.HARD_DELETE,
+    }
 
     # Build source path pattern
     if run_date:
@@ -471,17 +478,54 @@ class TestSnapshotToStateSCD1:
             minio_client, minio_bucket, multiday_prefix, "snapshot_full", "customers"
         )
 
-        # With snapshot + SCD1, we dedupe across all days
-        # Day 3 snapshot has 5 records (ID 2 is not in Day 3)
-        # But SCD1 keeps latest per ID, so if ID 2 is in Day 1/2, it stays
-        # Actually depends on implementation - for FULL_SNAPSHOT, typically
-        # we'd take latest snapshot only, but SilverEntity unions all Bronze days
-        assert len(silver_df) >= 5  # At least 5 unique IDs
+        # With snapshot + SCD1, Silver reads ALL Bronze partitions and dedupes by id
+        # keeping the latest version (by timestamp). Since Silver sees Days 1-3:
+        # - ID 1: v2 from Day 2 (ts=DAY2) is latest
+        # - ID 2: v1 from Day 1 (ts=DAY1) is only version (not in Day 3 but still seen from Day 1/2)
+        # - ID 3: v2 from Day 2 (ts=DAY2) is latest
+        # - ID 4: v2 from Day 3 (ts=DAY3) is latest
+        # - ID 5: v1 from Day 1 (ts=DAY1) is only version
+        # - ID 6: v1 from Day 2 (ts=DAY2) is only version
+        # Result: 6 unique IDs (ID 2 not implicitly deleted because Silver sees all days)
+        assert len(silver_df) == 6, (
+            f"Expected 6 unique IDs after 3-day snapshot, got {len(silver_df)}"
+        )
+        assert set(silver_df["id"].tolist()) == {1, 2, 3, 4, 5, 6}, (
+            "Should have IDs 1-6"
+        )
 
-        # Verify ID 4 has latest update
+        # Verify ID 1 has Day 2 update (name v2, value 150)
+        row_1 = silver_df[silver_df["id"] == 1].iloc[0]
+        assert "v2" in row_1["name"], "ID 1 should have v2 name from Day 2 update"
+        assert row_1["value"] == 150, "ID 1 should have value=150 from Day 2 update"
+
+        # Verify ID 2 still exists (it's in Day 1/2 Bronze, just not in Day 3 snapshot)
+        row_2 = silver_df[silver_df["id"] == 2].iloc[0]
+        assert "v1" in row_2["name"], "ID 2 should have v1 name (unchanged from Day 1)"
+        assert row_2["value"] == 200, "ID 2 should have value=200 from Day 1"
+
+        # Verify ID 3 has Day 2 update
+        row_3 = silver_df[silver_df["id"] == 3].iloc[0]
+        assert "v2" in row_3["name"], "ID 3 should have v2 name from Day 2 update"
+        assert row_3["status"] == "pending", (
+            "ID 3 should have status=pending from Day 2"
+        )
+
+        # Verify ID 4 has Day 3 update (latest)
         row_4 = silver_df[silver_df["id"] == 4].iloc[0]
-        assert "v2" in row_4["name"]
-        assert row_4["status"] == "closed"
+        assert "v2" in row_4["name"], "ID 4 should have v2 name from Day 3 update"
+        assert row_4["status"] == "closed", "ID 4 should have status=closed from Day 3"
+        assert row_4["value"] == 450, "ID 4 should have value=450 from Day 3"
+
+        # Verify ID 5 unchanged from Day 1
+        row_5 = silver_df[silver_df["id"] == 5].iloc[0]
+        assert "v1" in row_5["name"], "ID 5 should have v1 name (unchanged)"
+        assert row_5["value"] == 500, "ID 5 should have value=500 from Day 1"
+
+        # Verify ID 6 from Day 2
+        row_6 = silver_df[silver_df["id"] == 6].iloc[0]
+        assert "v1" in row_6["name"], "ID 6 should have v1 name from Day 2"
+        assert row_6["value"] == 600, "ID 6 should have value=600 from Day 2"
 
 
 @pytest.mark.integration
@@ -546,13 +590,19 @@ class TestSnapshotToStateSCD2:
 class TestCDCWithDeleteModes:
     """CDC → State pattern tests with different delete modes."""
 
-    @pytest.mark.parametrize("delete_mode,expected_active_ids", [
-        # With ignore: D operations filtered, but dedupe keeps latest non-D per key
-        # ID 2 only has I (Day 1) and D (Day 3), after filtering D the I remains
-        # BUT apply_cdc dedupes first then filters, so ID 2's D is latest, gets filtered, ID 2 gone
-        ("ignore", {1, 3, 4, 5, 6}),  # ID 2's delete filtered but no older version remains after dedupe
-        ("hard_delete", {1, 3, 4, 5, 6}),  # ID 2 explicitly removed
-    ])
+    @pytest.mark.parametrize(
+        "delete_mode,expected_active_ids",
+        [
+            # With ignore: D operations filtered, but dedupe keeps latest non-D per key
+            # ID 2 only has I (Day 1) and D (Day 3), after filtering D the I remains
+            # BUT apply_cdc dedupes first then filters, so ID 2's D is latest, gets filtered, ID 2 gone
+            (
+                "ignore",
+                {1, 3, 4, 5, 6},
+            ),  # ID 2's delete filtered but no older version remains after dedupe
+            ("hard_delete", {1, 3, 4, 5, 6}),  # ID 2 explicitly removed
+        ],
+    )
     def test_cdc_delete_modes_scd1(
         self,
         minio_client,
@@ -598,6 +648,10 @@ class TestCDCWithDeleteModes:
         )
 
         # Verify Silver data
+        # CDC data evolution:
+        # Day 1: IDs 1-5 all INSERT
+        # Day 2: ID 1 UPDATE (v2), ID 3 UPDATE (v2), ID 6 INSERT
+        # Day 3: ID 2 DELETE, ID 4 UPDATE (v2)
         silver_df = get_silver_data(
             minio_client, minio_bucket, multiday_prefix, system, "accounts"
         )
@@ -610,7 +664,35 @@ class TestCDCWithDeleteModes:
         else:
             # Check active IDs match expected
             actual_ids = set(silver_df["id"].tolist())
-            assert actual_ids == expected_active_ids, f"Expected {expected_active_ids}, got {actual_ids}"
+            assert actual_ids == expected_active_ids, (
+                f"Expected {expected_active_ids}, got {actual_ids}"
+            )
+
+            # Verify the data values for remaining records
+            # ID 1 should have v2 from Day 2 update
+            row_1 = silver_df[silver_df["id"] == 1].iloc[0]
+            assert "v2" in row_1["name"], "ID 1 should have v2 name from Day 2 update"
+            assert row_1["value"] == 150, "ID 1 should have value=150 from Day 2"
+
+            # ID 3 should have v2 from Day 2 update
+            row_3 = silver_df[silver_df["id"] == 3].iloc[0]
+            assert "v2" in row_3["name"], "ID 3 should have v2 name from Day 2 update"
+            assert row_3["status"] == "pending", "ID 3 should have status=pending"
+
+            # ID 4 should have v2 from Day 3 update
+            row_4 = silver_df[silver_df["id"] == 4].iloc[0]
+            assert "v2" in row_4["name"], "ID 4 should have v2 name from Day 3 update"
+            assert row_4["status"] == "closed", "ID 4 should have status=closed"
+            assert row_4["value"] == 450, "ID 4 should have value=450"
+
+            # ID 5 should be unchanged (v1)
+            row_5 = silver_df[silver_df["id"] == 5].iloc[0]
+            assert "v1" in row_5["name"], "ID 5 should have v1 name (unchanged)"
+
+            # ID 6 should have v1 from Day 2 insert
+            row_6 = silver_df[silver_df["id"] == 6].iloc[0]
+            assert "v1" in row_6["name"], "ID 6 should have v1 name from Day 2"
+            assert row_6["value"] == 600, "ID 6 should have value=600"
 
     def test_cdc_tombstone_has_deleted_flag(
         self,
@@ -715,11 +797,16 @@ class TestCDCToEvent:
 
         # Event entity should preserve all operations
         # Day 1: 5 inserts, Day 2: 3 ops, Day 3: 2 ops = 10 total
-        assert len(silver_df) == total_ops, f"Expected {total_ops} events, got {len(silver_df)}"
+        assert len(silver_df) == total_ops, (
+            f"Expected {total_ops} events, got {len(silver_df)}"
+        )
 
         # Op column should be preserved
         if "op" in silver_df.columns:
-            assert set(silver_df["op"].tolist()) >= {"I", "U"}  # At least I and U present
+            assert set(silver_df["op"].tolist()) >= {
+                "I",
+                "U",
+            }  # At least I and U present
 
 
 @pytest.mark.integration
@@ -768,12 +855,41 @@ class TestIncrementalToState:
             minio_client, minio_bucket, multiday_prefix, system, "events"
         )
 
-        # Should have unique IDs only (SCD1 dedupes)
-        assert len(silver_df) == len(silver_df["id"].unique())
+        # Incremental SCD1: Union all 3 days of Bronze, dedupe by id keeping latest ts
+        # Day 1: IDs 1-5 (v1)
+        # Day 2: IDs 1, 3 updated (v2) + ID 6 new
+        # Day 3: ID 4 updated (v2)
+        # Final: 6 unique IDs with latest versions
+        assert len(silver_df) == 6, f"Expected 6 unique IDs, got {len(silver_df)}"
+        assert set(silver_df["id"].tolist()) == {1, 2, 3, 4, 5, 6}, (
+            "Should have IDs 1-6"
+        )
 
-        # Verify ID 1 has latest value from Day 2 update
+        # Verify ID 1 has v2 from Day 2 update
         row_1 = silver_df[silver_df["id"] == 1].iloc[0]
-        assert "v2" in row_1["name"]
+        assert "v2" in row_1["name"], "ID 1 should have v2 name from Day 2"
+        assert row_1["value"] == 150, "ID 1 should have value=150 from Day 2"
+
+        # Verify ID 2 unchanged from Day 1 (no updates in incremental days)
+        row_2 = silver_df[silver_df["id"] == 2].iloc[0]
+        assert "v1" in row_2["name"], "ID 2 should have v1 name (unchanged)"
+        assert row_2["value"] == 200, "ID 2 should have value=200"
+
+        # Verify ID 3 has v2 from Day 2 update
+        row_3 = silver_df[silver_df["id"] == 3].iloc[0]
+        assert "v2" in row_3["name"], "ID 3 should have v2 name from Day 2"
+        assert row_3["status"] == "pending", "ID 3 should have status=pending"
+
+        # Verify ID 4 has v2 from Day 3 update
+        row_4 = silver_df[silver_df["id"] == 4].iloc[0]
+        assert "v2" in row_4["name"], "ID 4 should have v2 name from Day 3"
+        assert row_4["status"] == "closed", "ID 4 should have status=closed"
+        assert row_4["value"] == 450, "ID 4 should have value=450"
+
+        # Verify ID 6 from Day 2 new insert
+        row_6 = silver_df[silver_df["id"] == 6].iloc[0]
+        assert "v1" in row_6["name"], "ID 6 should have v1 name from Day 2"
+        assert row_6["value"] == 600, "ID 6 should have value=600"
 
     def test_incremental_scd2_builds_history(
         self,
@@ -818,12 +934,47 @@ class TestIncrementalToState:
         )
 
         # Should have SCD2 columns
-        assert "effective_from" in silver_df.columns
-        assert "is_current" in silver_df.columns
+        assert "effective_from" in silver_df.columns, "SCD2 should have effective_from"
+        assert "is_current" in silver_df.columns, "SCD2 should have is_current"
 
-        # ID 1 should have 2 versions (initial + update)
+        # Verify exactly one current record per ID
+        current_df = silver_df[silver_df["is_current"] == 1]
+        assert current_df["id"].is_unique, (
+            "Each ID should have exactly one current record"
+        )
+
+        # IDs 1, 3, 4 were updated, so they should have history (2+ versions each)
         id_1_versions = silver_df[silver_df["id"] == 1]
-        assert len(id_1_versions) >= 2, "ID 1 should have history"
+        assert len(id_1_versions) >= 2, (
+            "ID 1 should have history (v1 from Day 1, v2 from Day 2)"
+        )
+
+        id_3_versions = silver_df[silver_df["id"] == 3]
+        assert len(id_3_versions) >= 2, (
+            "ID 3 should have history (v1 from Day 1, v2 from Day 2)"
+        )
+
+        id_4_versions = silver_df[silver_df["id"] == 4]
+        assert len(id_4_versions) >= 2, (
+            "ID 4 should have history (v1 from Day 1, v2 from Day 3)"
+        )
+
+        # Verify the current version of ID 1 has v2 name
+        id_1_current = id_1_versions[id_1_versions["is_current"] == 1].iloc[0]
+        assert "v2" in id_1_current["name"], "ID 1 current version should have v2 name"
+        assert id_1_current["value"] == 150, (
+            "ID 1 current version should have value=150"
+        )
+
+        # Verify ID 2 has only 1 version (never updated)
+        id_2_versions = silver_df[silver_df["id"] == 2]
+        assert len(id_2_versions) == 1, (
+            "ID 2 should have only 1 version (never updated)"
+        )
+
+        # Verify ID 6 has only 1 version (new in Day 2, never updated)
+        id_6_versions = silver_df[silver_df["id"] == 6]
+        assert len(id_6_versions) == 1, "ID 6 should have only 1 version (new in Day 2)"
 
 
 @pytest.mark.integration

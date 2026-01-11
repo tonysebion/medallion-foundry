@@ -212,7 +212,9 @@ class TestValidTimestamp:
 
     def test_custom_date_range(self):
         """Respects custom date range."""
-        rule = valid_timestamp("event_time", min_date="2020-01-01", max_date="2030-12-31")
+        rule = valid_timestamp(
+            "event_time", min_date="2020-01-01", max_date="2030-12-31"
+        )
         assert "2020-01-01" in rule.expression
         assert "2030-12-31" in rule.expression
 
@@ -361,38 +363,46 @@ class TestCheckQualityPandera:
 
     def test_passes_with_valid_data(self):
         """Passes when data meets all rules."""
-        df = pd.DataFrame({
-            "id": [1, 2, 3],
-            "name": ["Alice", "Bob", "Charlie"],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 2, 3],
+                "name": ["Alice", "Bob", "Charlie"],
+            }
+        )
         rules = not_null("id", "name")
         result = check_quality_pandera(df, rules, fail_on_error=False)
         assert result.passed is True
 
     def test_fails_with_null_values(self):
         """Fails when not_null rule is violated."""
-        df = pd.DataFrame({
-            "id": [1, None, 3],
-            "name": ["Alice", "Bob", "Charlie"],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, None, 3],
+                "name": ["Alice", "Bob", "Charlie"],
+            }
+        )
         rules = not_null("id")
         result = check_quality_pandera(df, rules, fail_on_error=False)
         assert result.passed is False
 
     def test_raises_exception_on_error(self):
         """Raises QualityCheckFailed when fail_on_error=True."""
-        df = pd.DataFrame({
-            "id": [1, None, 3],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, None, 3],
+            }
+        )
         rules = not_null("id")
         with pytest.raises(QualityCheckFailed):
             check_quality_pandera(df, rules, fail_on_error=True)
 
     def test_returns_result_on_fail_on_error_false(self):
         """Returns result without raising when fail_on_error=False."""
-        df = pd.DataFrame({
-            "id": [1, None, 3],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, None, 3],
+            }
+        )
         rules = not_null("id")
         result = check_quality_pandera(df, rules, fail_on_error=False)
         assert isinstance(result, QualityResult)
@@ -493,13 +503,19 @@ class TestStandardFactRules:
     def test_includes_pk_not_null(self):
         """Includes NOT NULL rules for composite key."""
         rules = standard_fact_rules(["order_id", "line_id"], "order_date")
-        pk_rules = [r for r in rules if "order_id" in r.expression or "line_id" in r.expression]
+        pk_rules = [
+            r for r in rules if "order_id" in r.expression or "line_id" in r.expression
+        ]
         assert len(pk_rules) >= 2
 
     def test_includes_measure_rules(self):
         """Includes non-negative rules for measures."""
-        rules = standard_fact_rules(["id"], "date", measure_columns=["amount", "quantity"])
-        measure_rules = [r for r in rules if "amount" in r.expression or "quantity" in r.expression]
+        rules = standard_fact_rules(
+            ["id"], "date", measure_columns=["amount", "quantity"]
+        )
+        measure_rules = [
+            r for r in rules if "amount" in r.expression or "quantity" in r.expression
+        ]
         assert len(measure_rules) == 2
 
     def test_no_measure_rules_when_none(self):

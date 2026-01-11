@@ -22,7 +22,10 @@ class TestParseUri:
     def test_s3_path(self):
         """S3 URIs return 's3' scheme."""
         assert parse_uri("s3://bucket/path/") == ("s3", "bucket/path/")
-        assert parse_uri("s3://my-bucket/bronze/data/") == ("s3", "my-bucket/bronze/data/")
+        assert parse_uri("s3://my-bucket/bronze/data/") == (
+            "s3",
+            "my-bucket/bronze/data/",
+        )
 
     def test_adls_abfss_path(self):
         """ADLS abfss:// URIs return 'abfs' scheme."""

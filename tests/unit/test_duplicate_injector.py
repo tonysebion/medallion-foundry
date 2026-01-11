@@ -23,11 +23,13 @@ class TestDuplicateInjectorExactDuplicates:
 
     def test_inject_exact_duplicates_with_rate(self):
         """Should inject exact duplicates based on rate."""
-        df = pd.DataFrame({
-            "id": range(100),
-            "name": [f"Item {i}" for i in range(100)],
-            "value": [i * 10 for i in range(100)],
-        })
+        df = pd.DataFrame(
+            {
+                "id": range(100),
+                "name": [f"Item {i}" for i in range(100)],
+                "value": [i * 10 for i in range(100)],
+            }
+        )
 
         injector = DuplicateInjector(seed=42)
         result = injector.inject_exact_duplicates(df, rate=0.1)
@@ -38,10 +40,12 @@ class TestDuplicateInjectorExactDuplicates:
 
     def test_inject_exact_duplicates_with_count(self):
         """Should inject exact number of duplicates when count specified."""
-        df = pd.DataFrame({
-            "id": range(50),
-            "name": [f"Item {i}" for i in range(50)],
-        })
+        df = pd.DataFrame(
+            {
+                "id": range(50),
+                "name": [f"Item {i}" for i in range(50)],
+            }
+        )
 
         injector = DuplicateInjector(seed=42)
         result = injector.inject_exact_duplicates(df, count=5)
@@ -50,11 +54,13 @@ class TestDuplicateInjectorExactDuplicates:
 
     def test_exact_duplicates_are_identical(self):
         """Exact duplicates should be identical to source rows."""
-        df = pd.DataFrame({
-            "id": [1, 2, 3],
-            "name": ["A", "B", "C"],
-            "value": [100, 200, 300],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 2, 3],
+                "name": ["A", "B", "C"],
+                "value": [100, 200, 300],
+            }
+        )
 
         injector = DuplicateInjector(seed=42)
         result = injector.inject_exact_duplicates(df, count=2)
@@ -71,10 +77,12 @@ class TestDuplicateInjectorExactDuplicates:
 
     def test_reproducibility_with_seed(self):
         """Same seed should produce identical results."""
-        df = pd.DataFrame({
-            "id": range(100),
-            "value": range(100),
-        })
+        df = pd.DataFrame(
+            {
+                "id": range(100),
+                "value": range(100),
+            }
+        )
 
         result1 = DuplicateInjector(seed=123).inject_exact_duplicates(df, count=10)
         result2 = DuplicateInjector(seed=123).inject_exact_duplicates(df, count=10)
@@ -83,10 +91,12 @@ class TestDuplicateInjectorExactDuplicates:
 
     def test_different_seeds_produce_different_results(self):
         """Different seeds should produce different duplicates."""
-        df = pd.DataFrame({
-            "id": range(100),
-            "value": range(100),
-        })
+        df = pd.DataFrame(
+            {
+                "id": range(100),
+                "value": range(100),
+            }
+        )
 
         result1 = DuplicateInjector(seed=100).inject_exact_duplicates(df, count=10)
         result2 = DuplicateInjector(seed=200).inject_exact_duplicates(df, count=10)
@@ -109,13 +119,15 @@ class TestDuplicateInjectorNearDuplicates:
 
     def test_inject_near_duplicates_same_key(self):
         """Near duplicates should have same key but different mutable fields."""
-        df = pd.DataFrame({
-            "order_id": ["ORD001", "ORD002", "ORD003"],
-            "customer_id": ["CUST001", "CUST002", "CUST003"],
-            "status": ["pending", "pending", "pending"],
-            "amount": [100.0, 200.0, 300.0],
-            "updated_at": [datetime(2024, 1, 15)] * 3,
-        })
+        df = pd.DataFrame(
+            {
+                "order_id": ["ORD001", "ORD002", "ORD003"],
+                "customer_id": ["CUST001", "CUST002", "CUST003"],
+                "status": ["pending", "pending", "pending"],
+                "amount": [100.0, 200.0, 300.0],
+                "updated_at": [datetime(2024, 1, 15)] * 3,
+            }
+        )
 
         injector = DuplicateInjector(seed=42)
         result = injector.inject_near_duplicates(
@@ -144,11 +156,13 @@ class TestDuplicateInjectorNearDuplicates:
 
     def test_near_duplicates_with_timestamp_offset(self):
         """Near duplicates should have incremented timestamps."""
-        df = pd.DataFrame({
-            "id": [1, 2, 3],
-            "value": [100, 200, 300],
-            "updated_at": [datetime(2024, 1, 15, 10, 0, 0)] * 3,
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 2, 3],
+                "value": [100, 200, 300],
+                "updated_at": [datetime(2024, 1, 15, 10, 0, 0)] * 3,
+            }
+        )
 
         injector = DuplicateInjector(seed=42)
         result = injector.inject_near_duplicates(
@@ -166,19 +180,23 @@ class TestDuplicateInjectorNearDuplicates:
 
         for dup_id in duplicated_ids:
             rows = result[result["id"] == dup_id].sort_values("updated_at")
-            time_diff = (rows.iloc[1]["updated_at"] - rows.iloc[0]["updated_at"]).total_seconds()
+            time_diff = (
+                rows.iloc[1]["updated_at"] - rows.iloc[0]["updated_at"]
+            ).total_seconds()
             assert time_diff == 60  # Should be offset by 60 seconds
 
     def test_auto_detect_mutable_columns(self):
         """Should auto-detect mutable columns based on naming patterns."""
-        df = pd.DataFrame({
-            "order_id": ["ORD001", "ORD002"],
-            "customer_id": ["CUST001", "CUST002"],
-            "status": ["pending", "pending"],
-            "total_amount": [100.0, 200.0],
-            "updated_at": [datetime(2024, 1, 15)] * 2,
-            "modified_ts": [datetime(2024, 1, 15)] * 2,
-        })
+        df = pd.DataFrame(
+            {
+                "order_id": ["ORD001", "ORD002"],
+                "customer_id": ["CUST001", "CUST002"],
+                "status": ["pending", "pending"],
+                "total_amount": [100.0, 200.0],
+                "updated_at": [datetime(2024, 1, 15)] * 2,
+                "modified_ts": [datetime(2024, 1, 15)] * 2,
+            }
+        )
 
         injector = DuplicateInjector(seed=42)
         detected = injector._detect_mutable_columns(df, key_columns=["order_id"])
@@ -199,11 +217,13 @@ class TestDuplicateInjectorOutOfOrder:
         """Out-of-order duplicates should appear later in the DataFrame."""
         # Create chronologically ordered data
         base_time = datetime(2024, 1, 15, 10, 0, 0)
-        df = pd.DataFrame({
-            "event_id": [f"EVT{i:03d}" for i in range(20)],
-            "event_ts": [base_time + timedelta(hours=i) for i in range(20)],
-            "value": range(20),
-        })
+        df = pd.DataFrame(
+            {
+                "event_id": [f"EVT{i:03d}" for i in range(20)],
+                "event_ts": [base_time + timedelta(hours=i) for i in range(20)],
+                "value": range(20),
+            }
+        )
 
         injector = DuplicateInjector(seed=42)
         result = injector.inject_out_of_order_duplicates(
@@ -228,10 +248,12 @@ class TestDuplicateInjectorOutOfOrder:
     def test_out_of_order_timestamps_are_older(self):
         """Out-of-order duplicates should have older timestamps."""
         base_time = datetime(2024, 1, 15, 10, 0, 0)
-        df = pd.DataFrame({
-            "id": range(10),
-            "event_ts": [base_time + timedelta(hours=i) for i in range(10)],
-        })
+        df = pd.DataFrame(
+            {
+                "id": range(10),
+                "event_ts": [base_time + timedelta(hours=i) for i in range(10)],
+            }
+        )
 
         injector = DuplicateInjector(seed=42)
         result = injector.inject_out_of_order_duplicates(
@@ -258,13 +280,15 @@ class TestDuplicateInjectorAllTypes:
     def test_inject_all_duplicate_types(self):
         """Should inject all types of duplicates."""
         base_time = datetime(2024, 1, 15, 10, 0, 0)
-        df = pd.DataFrame({
-            "order_id": [f"ORD{i:03d}" for i in range(100)],
-            "customer_id": [f"CUST{i % 20:03d}" for i in range(100)],
-            "status": ["pending"] * 100,
-            "amount": [float(i * 10) for i in range(100)],
-            "updated_at": [base_time + timedelta(hours=i) for i in range(100)],
-        })
+        df = pd.DataFrame(
+            {
+                "order_id": [f"ORD{i:03d}" for i in range(100)],
+                "customer_id": [f"CUST{i % 20:03d}" for i in range(100)],
+                "status": ["pending"] * 100,
+                "amount": [float(i * 10) for i in range(100)],
+                "updated_at": [base_time + timedelta(hours=i) for i in range(100)],
+            }
+        )
 
         config = DuplicateConfig(
             exact_duplicate_rate=0.05,
@@ -293,10 +317,12 @@ class TestDuplicateStats:
 
     def test_get_duplicate_stats_no_duplicates(self):
         """Should correctly report no duplicates."""
-        df = pd.DataFrame({
-            "id": [1, 2, 3, 4, 5],
-            "value": [10, 20, 30, 40, 50],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 2, 3, 4, 5],
+                "value": [10, 20, 30, 40, 50],
+            }
+        )
 
         injector = DuplicateInjector(seed=42)
         stats = injector.get_duplicate_stats(df, key_columns=["id"])
@@ -310,10 +336,12 @@ class TestDuplicateStats:
 
     def test_get_duplicate_stats_with_duplicates(self):
         """Should correctly report duplicate statistics."""
-        df = pd.DataFrame({
-            "id": [1, 1, 2, 2, 2, 3],  # 1 appears 2x, 2 appears 3x, 3 appears 1x
-            "value": [10, 11, 20, 21, 22, 30],
-        })
+        df = pd.DataFrame(
+            {
+                "id": [1, 1, 2, 2, 2, 3],  # 1 appears 2x, 2 appears 3x, 3 appears 1x
+                "value": [10, 11, 20, 21, 22, 30],
+            }
+        )
 
         injector = DuplicateInjector(seed=42)
         stats = injector.get_duplicate_stats(df, key_columns=["id"])
@@ -379,7 +407,9 @@ class TestDuplicateInjectorWithSyntheticData:
         )
 
         # Verify we have duplicates
-        stats_before = injector.get_duplicate_stats(df_with_dupes, key_columns=["claim_id"])
+        stats_before = injector.get_duplicate_stats(
+            df_with_dupes, key_columns=["claim_id"]
+        )
         assert stats_before["duplicate_rows"] > 0
 
         # Simulate deduplication (keep last occurrence)

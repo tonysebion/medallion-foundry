@@ -10,7 +10,6 @@ Tests cover:
 - Edge cases: empty responses, partial pages, max_pages limits
 """
 
-
 from pipelines.lib.api import (
     PaginationConfig,
     PaginationStrategy,
@@ -212,7 +211,9 @@ class TestOffsetPaginationState:
             strategy=PaginationStrategy.OFFSET,
             page_size=100,
         )
-        state = OffsetPaginationState(config, base_params={"status": "active", "sort": "name"})
+        state = OffsetPaginationState(
+            config, base_params={"status": "active", "sort": "name"}
+        )
 
         params = state.build_params()
         assert params["status"] == "active"
@@ -713,12 +714,14 @@ class TestBuildPaginationConfigFromDict:
 
     def test_offset_from_dict(self):
         """Should build offset config from dict."""
-        config = build_pagination_config_from_dict({
-            "pagination_type": "offset",
-            "page_size": 50,
-            "offset_param": "skip",
-            "limit_param": "take",
-        })
+        config = build_pagination_config_from_dict(
+            {
+                "pagination_type": "offset",
+                "page_size": 50,
+                "offset_param": "skip",
+                "limit_param": "take",
+            }
+        )
 
         assert config.strategy == PaginationStrategy.OFFSET
         assert config.page_size == 50
@@ -727,13 +730,15 @@ class TestBuildPaginationConfigFromDict:
 
     def test_page_from_dict(self):
         """Should build page config from dict."""
-        config = build_pagination_config_from_dict({
-            "pagination_type": "page",
-            "page_size": 25,
-            "page_param": "p",
-            "page_size_param": "per_page",
-            "max_pages": 10,
-        })
+        config = build_pagination_config_from_dict(
+            {
+                "pagination_type": "page",
+                "page_size": 25,
+                "page_param": "p",
+                "page_size_param": "per_page",
+                "max_pages": 10,
+            }
+        )
 
         assert config.strategy == PaginationStrategy.PAGE
         assert config.page_size == 25
@@ -743,11 +748,13 @@ class TestBuildPaginationConfigFromDict:
 
     def test_cursor_from_dict(self):
         """Should build cursor config from dict."""
-        config = build_pagination_config_from_dict({
-            "pagination_type": "cursor",
-            "cursor_param": "next_token",
-            "cursor_path": "meta.next",
-        })
+        config = build_pagination_config_from_dict(
+            {
+                "pagination_type": "cursor",
+                "cursor_param": "next_token",
+                "cursor_path": "meta.next",
+            }
+        )
 
         assert config.strategy == PaginationStrategy.CURSOR
         assert config.cursor_param == "next_token"
@@ -755,16 +762,20 @@ class TestBuildPaginationConfigFromDict:
 
     def test_none_pagination_explicit(self):
         """Explicit 'none' should work."""
-        config = build_pagination_config_from_dict({
-            "pagination_type": "none",
-        })
+        config = build_pagination_config_from_dict(
+            {
+                "pagination_type": "none",
+            }
+        )
 
         assert config.strategy == PaginationStrategy.NONE
 
     def test_case_insensitive_strategy(self):
         """Strategy name should be case insensitive."""
-        config = build_pagination_config_from_dict({
-            "pagination_type": "OFFSET",
-        })
+        config = build_pagination_config_from_dict(
+            {
+                "pagination_type": "OFFSET",
+            }
+        )
 
         assert config.strategy == PaginationStrategy.OFFSET

@@ -292,7 +292,9 @@ class TestLoadSilverFromYaml:
     def test_minimal_config(self):
         """Minimal Silver configuration."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
         }
         silver = load_silver_from_yaml(config)
@@ -305,7 +307,9 @@ class TestLoadSilverFromYaml:
     def test_natural_keys_as_string(self):
         """Single natural key as string (converted to list)."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": "order_id",
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": "order_id",
             "change_timestamp": "updated_at",
         }
         silver = load_silver_from_yaml(config)
@@ -315,7 +319,9 @@ class TestLoadSilverFromYaml:
     def test_composite_natural_keys(self):
         """Composite natural keys."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["order_id", "line_item_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["order_id", "line_item_id"],
             "change_timestamp": "modified_date",
         }
         silver = load_silver_from_yaml(config)
@@ -325,7 +331,9 @@ class TestLoadSilverFromYaml:
     def test_entity_kind_state(self):
         """Entity kind: state."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["customer_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["customer_id"],
             "change_timestamp": "updated_at",
             "entity_kind": "state",
         }
@@ -336,7 +344,9 @@ class TestLoadSilverFromYaml:
     def test_entity_kind_event(self):
         """Entity kind: event."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["event_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["event_id"],
             "change_timestamp": "event_time",
             "entity_kind": "event",
         }
@@ -347,7 +357,9 @@ class TestLoadSilverFromYaml:
     def test_history_mode_current_only(self):
         """History mode: current_only (SCD1)."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
             "history_mode": "current_only",
         }
@@ -358,7 +370,9 @@ class TestLoadSilverFromYaml:
     def test_history_mode_scd1_alias(self):
         """History mode: scd1 (alias for current_only)."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
             "history_mode": "scd1",
         }
@@ -369,7 +383,9 @@ class TestLoadSilverFromYaml:
     def test_history_mode_full_history(self):
         """History mode: full_history (SCD2)."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
             "history_mode": "full_history",
         }
@@ -380,7 +396,9 @@ class TestLoadSilverFromYaml:
     def test_history_mode_scd2_alias(self):
         """History mode: scd2 (alias for full_history)."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
             "history_mode": "scd2",
         }
@@ -391,7 +409,9 @@ class TestLoadSilverFromYaml:
     def test_attributes_list(self):
         """Explicit attributes list."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
             "attributes": ["name", "email", "status"],
         }
@@ -402,7 +422,9 @@ class TestLoadSilverFromYaml:
     def test_exclude_columns(self):
         """Exclude columns list."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
             "exclude_columns": ["internal_id", "password_hash"],
         }
@@ -413,7 +435,9 @@ class TestLoadSilverFromYaml:
     def test_partition_by(self):
         """Partition by columns."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
             "partition_by": ["year", "month"],
         }
@@ -424,7 +448,9 @@ class TestLoadSilverFromYaml:
     def test_output_formats(self):
         """Multiple output formats."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
             "output_formats": ["parquet", "csv"],
         }
@@ -435,7 +461,9 @@ class TestLoadSilverFromYaml:
     def test_s3_storage_options_top_level(self):
         """S3 storage options at top level in Silver config."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
             "target_path": "s3://bucket/silver/",
             "s3_endpoint_url": "https://objects.nutanix.local:443",
@@ -447,7 +475,10 @@ class TestLoadSilverFromYaml:
 
         # S3 options should be in storage_options
         assert silver.storage_options is not None
-        assert silver.storage_options["endpoint_url"] == "https://objects.nutanix.local:443"
+        assert (
+            silver.storage_options["endpoint_url"]
+            == "https://objects.nutanix.local:443"
+        )
         assert silver.storage_options["s3_signature_version"] == "s3v4"
         assert silver.storage_options["s3_addressing_style"] == "path"
         assert silver.storage_options["region"] == "us-west-2"
@@ -470,7 +501,9 @@ class TestLoadSilverFromYaml:
         )
 
         silver_config = {
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
         }
         silver = load_silver_from_yaml(silver_config, bronze=bronze)
@@ -479,7 +512,10 @@ class TestLoadSilverFromYaml:
         assert silver.storage_options is not None
         assert silver.storage_options["s3_signature_version"] == "s3v4"
         assert silver.storage_options["s3_addressing_style"] == "path"
-        assert silver.storage_options["endpoint_url"] == "https://objects.nutanix.local:443"
+        assert (
+            silver.storage_options["endpoint_url"]
+            == "https://objects.nutanix.local:443"
+        )
 
     def test_missing_natural_keys_raises(self):
         """Missing natural_keys should raise."""
@@ -494,7 +530,9 @@ class TestLoadSilverFromYaml:
     def test_missing_change_timestamp_raises(self):
         """Missing change_timestamp should raise."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
         }
         with pytest.raises(YAMLConfigError) as exc_info:
             load_silver_from_yaml(config)
@@ -504,7 +542,9 @@ class TestLoadSilverFromYaml:
     def test_invalid_entity_kind_raises(self):
         """Invalid entity_kind should raise."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
             "entity_kind": "invalid",
         }
@@ -516,7 +556,9 @@ class TestLoadSilverFromYaml:
     def test_invalid_history_mode_raises(self):
         """Invalid history_mode should raise."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["id"],
             "change_timestamp": "updated_at",
             "history_mode": "invalid",
         }
@@ -616,7 +658,10 @@ silver:
 
         # Silver source should be auto-wired
         assert pipeline.silver.source_path is not None
-        assert "bronze" in pipeline.silver.source_path or ".parquet" in pipeline.silver.source_path
+        assert (
+            "bronze" in pipeline.silver.source_path
+            or ".parquet" in pipeline.silver.source_path
+        )
 
     def test_auto_generate_silver_target(self, tmp_path):
         """Silver target_path auto-generated from Silver domain/subject."""
@@ -666,7 +711,10 @@ description: No layers defined
         with pytest.raises(YAMLConfigError) as exc_info:
             load_pipeline(config_file)
 
-        assert "bronze" in str(exc_info.value).lower() or "silver" in str(exc_info.value).lower()
+        assert (
+            "bronze" in str(exc_info.value).lower()
+            or "silver" in str(exc_info.value).lower()
+        )
 
     def test_invalid_yaml_syntax_raises(self, tmp_path):
         """Invalid YAML syntax should raise."""

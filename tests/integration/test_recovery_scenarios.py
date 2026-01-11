@@ -390,12 +390,8 @@ class TestIdempotentRuns:
         run_date = date(2025, 1, 6)
 
         # Run Bronze twice
-        run_bronze(
-            day1_data, tmp_path, minio_bucket, prefix, run_date, "day1_first"
-        )
-        run_bronze(
-            day1_data, tmp_path, minio_bucket, prefix, run_date, "day1_second"
-        )
+        run_bronze(day1_data, tmp_path, minio_bucket, prefix, run_date, "day1_first")
+        run_bronze(day1_data, tmp_path, minio_bucket, prefix, run_date, "day1_second")
 
         # Run Silver
         run_silver(minio_bucket, prefix, run_date)

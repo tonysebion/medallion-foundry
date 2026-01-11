@@ -65,7 +65,9 @@ class DummyS3Client:
             raise MockClientError("NoSuchKey", "Not found")
         return {"Body": io.BytesIO(self.objects[Key])}
 
-    def put_object(self, Bucket: str, Key: str, Body: bytes, **kwargs) -> Dict[str, Any]:
+    def put_object(
+        self, Bucket: str, Key: str, Body: bytes, **kwargs
+    ) -> Dict[str, Any]:
         self.objects[Key] = Body
         return {}
 

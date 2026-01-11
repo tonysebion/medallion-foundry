@@ -26,12 +26,14 @@ class TestExactDuplicateResolution:
 
     def test_exact_duplicates_in_snapshot(self, con):
         """Exact duplicates in snapshot data are removed."""
-        df = pd.DataFrame([
-            {"id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},
-            {"id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},  # Exact dup
-            {"id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},  # Exact dup
-            {"id": 2, "name": "Bob", "ts": datetime(2025, 1, 10)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},
+                {"id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},  # Exact dup
+                {"id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},  # Exact dup
+                {"id": 2, "name": "Bob", "ts": datetime(2025, 1, 10)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_exact(t)
@@ -41,14 +43,16 @@ class TestExactDuplicateResolution:
 
     def test_exact_duplicates_across_batches(self, con):
         """Same exact record appearing in multiple batches."""
-        df = pd.DataFrame([
-            # Batch 1
-            {"id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},
-            {"id": 2, "name": "Bob", "ts": datetime(2025, 1, 10)},
-            # Batch 2 (same data, simulating re-extraction)
-            {"id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},
-            {"id": 2, "name": "Bob", "ts": datetime(2025, 1, 10)},
-        ])
+        df = pd.DataFrame(
+            [
+                # Batch 1
+                {"id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},
+                {"id": 2, "name": "Bob", "ts": datetime(2025, 1, 10)},
+                # Batch 2 (same data, simulating re-extraction)
+                {"id": 1, "name": "Alice", "ts": datetime(2025, 1, 10)},
+                {"id": 2, "name": "Bob", "ts": datetime(2025, 1, 10)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_exact(t)
@@ -77,11 +81,13 @@ class TestNearDuplicateResolution:
 
     def test_near_duplicates_in_scd1(self, con):
         """Near duplicates (same key, different values) - keep latest."""
-        df = pd.DataFrame([
-            {"id": 1, "name": "Alice V1", "ts": datetime(2025, 1, 10)},
-            {"id": 1, "name": "Alice V2", "ts": datetime(2025, 1, 15)},
-            {"id": 1, "name": "Alice V3", "ts": datetime(2025, 1, 20)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "name": "Alice V1", "ts": datetime(2025, 1, 10)},
+                {"id": 1, "name": "Alice V2", "ts": datetime(2025, 1, 15)},
+                {"id": 1, "name": "Alice V3", "ts": datetime(2025, 1, 20)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_latest(t, keys=["id"], order_by="ts")
@@ -92,11 +98,13 @@ class TestNearDuplicateResolution:
 
     def test_near_duplicates_in_scd2(self, con):
         """Near duplicates preserved as history in SCD2."""
-        df = pd.DataFrame([
-            {"id": 1, "name": "Alice V1", "ts": datetime(2025, 1, 10)},
-            {"id": 1, "name": "Alice V2", "ts": datetime(2025, 1, 15)},
-            {"id": 1, "name": "Alice V3", "ts": datetime(2025, 1, 20)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "name": "Alice V1", "ts": datetime(2025, 1, 10)},
+                {"id": 1, "name": "Alice V2", "ts": datetime(2025, 1, 15)},
+                {"id": 1, "name": "Alice V3", "ts": datetime(2025, 1, 20)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
@@ -112,11 +120,28 @@ class TestNearDuplicateResolution:
 
     def test_same_key_different_non_key_columns(self, con):
         """Same key with various non-key column differences."""
-        df = pd.DataFrame([
-            {"id": 1, "name": "Alice", "email": "a@old.com", "ts": datetime(2025, 1, 10)},
-            {"id": 1, "name": "Alice", "email": "a@new.com", "ts": datetime(2025, 1, 15)},  # Email changed
-            {"id": 1, "name": "Alice Smith", "email": "a@new.com", "ts": datetime(2025, 1, 20)},  # Name changed
-        ])
+        df = pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "name": "Alice",
+                    "email": "a@old.com",
+                    "ts": datetime(2025, 1, 10),
+                },
+                {
+                    "id": 1,
+                    "name": "Alice",
+                    "email": "a@new.com",
+                    "ts": datetime(2025, 1, 15),
+                },  # Email changed
+                {
+                    "id": 1,
+                    "name": "Alice Smith",
+                    "email": "a@new.com",
+                    "ts": datetime(2025, 1, 20),
+                },  # Name changed
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_latest(t, keys=["id"], order_by="ts")
@@ -132,11 +157,17 @@ class TestOutOfOrderDuplicates:
 
     def test_out_of_order_timestamps_scd1(self, con):
         """Out-of-order timestamps correctly resolved in SCD1."""
-        df = pd.DataFrame([
-            {"id": 1, "version": "V3", "ts": datetime(2025, 1, 20)},  # Latest ts, first in data
-            {"id": 1, "version": "V1", "ts": datetime(2025, 1, 10)},
-            {"id": 1, "version": "V2", "ts": datetime(2025, 1, 15)},
-        ])
+        df = pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "version": "V3",
+                    "ts": datetime(2025, 1, 20),
+                },  # Latest ts, first in data
+                {"id": 1, "version": "V1", "ts": datetime(2025, 1, 10)},
+                {"id": 1, "version": "V2", "ts": datetime(2025, 1, 15)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_latest(t, keys=["id"], order_by="ts")
@@ -147,11 +178,13 @@ class TestOutOfOrderDuplicates:
 
     def test_out_of_order_timestamps_scd2(self, con):
         """Out-of-order timestamps correctly ordered in SCD2."""
-        df = pd.DataFrame([
-            {"id": 1, "version": "V3", "ts": datetime(2025, 1, 20)},
-            {"id": 1, "version": "V1", "ts": datetime(2025, 1, 10)},
-            {"id": 1, "version": "V2", "ts": datetime(2025, 1, 15)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "version": "V3", "ts": datetime(2025, 1, 20)},
+                {"id": 1, "version": "V1", "ts": datetime(2025, 1, 10)},
+                {"id": 1, "version": "V2", "ts": datetime(2025, 1, 15)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
@@ -169,12 +202,14 @@ class TestOutOfOrderDuplicates:
 
     def test_mixed_order_multiple_keys(self, con):
         """Multiple keys with mixed ordering."""
-        df = pd.DataFrame([
-            {"id": 2, "version": "2-B", "ts": datetime(2025, 1, 15)},
-            {"id": 1, "version": "1-A", "ts": datetime(2025, 1, 10)},
-            {"id": 1, "version": "1-B", "ts": datetime(2025, 1, 20)},
-            {"id": 2, "version": "2-A", "ts": datetime(2025, 1, 10)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 2, "version": "2-B", "ts": datetime(2025, 1, 15)},
+                {"id": 1, "version": "1-A", "ts": datetime(2025, 1, 10)},
+                {"id": 1, "version": "1-B", "ts": datetime(2025, 1, 20)},
+                {"id": 2, "version": "2-A", "ts": datetime(2025, 1, 10)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_latest(t, keys=["id"], order_by="ts")
@@ -197,11 +232,13 @@ class TestTimestampTieBreaking:
     def test_timestamp_ties_scd1_deterministic(self, con):
         """Timestamp ties in SCD1 produce consistent result."""
         same_ts = datetime(2025, 1, 15, 10, 0, 0)
-        df = pd.DataFrame([
-            {"id": 1, "value": "A", "ts": same_ts},
-            {"id": 1, "value": "B", "ts": same_ts},
-            {"id": 1, "value": "C", "ts": same_ts},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "value": "A", "ts": same_ts},
+                {"id": 1, "value": "B", "ts": same_ts},
+                {"id": 1, "value": "C", "ts": same_ts},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_latest(t, keys=["id"], order_by="ts")
@@ -214,10 +251,12 @@ class TestTimestampTieBreaking:
     def test_timestamp_ties_scd2_all_preserved(self, con):
         """Timestamp ties in SCD2 - all records preserved."""
         same_ts = datetime(2025, 1, 15, 10, 0, 0)
-        df = pd.DataFrame([
-            {"id": 1, "value": "A", "ts": same_ts},
-            {"id": 1, "value": "B", "ts": same_ts},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "value": "A", "ts": same_ts},
+                {"id": 1, "value": "B", "ts": same_ts},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = build_history(t, keys=["id"], ts_col="ts")
@@ -236,10 +275,12 @@ class TestNullHandling:
 
     def test_null_in_non_key_column(self, con):
         """NULL in non-key columns doesn't affect deduplication."""
-        df = pd.DataFrame([
-            {"id": 1, "name": None, "ts": datetime(2025, 1, 10)},
-            {"id": 1, "name": "Alice", "ts": datetime(2025, 1, 15)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "name": None, "ts": datetime(2025, 1, 10)},
+                {"id": 1, "name": "Alice", "ts": datetime(2025, 1, 15)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_latest(t, keys=["id"], order_by="ts")
@@ -251,10 +292,12 @@ class TestNullHandling:
     def test_null_timestamps_excluded_from_ordering(self, con):
         """Records with NULL timestamps handled gracefully."""
         # When timestamp is NULL, filter_incremental would exclude
-        df = pd.DataFrame([
-            {"id": 1, "name": "Valid", "ts": datetime(2025, 1, 10)},
-            {"id": 2, "name": "Also Valid", "ts": datetime(2025, 1, 15)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "name": "Valid", "ts": datetime(2025, 1, 10)},
+                {"id": 2, "name": "Also Valid", "ts": datetime(2025, 1, 15)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_latest(t, keys=["id"], order_by="ts")
@@ -264,11 +307,13 @@ class TestNullHandling:
 
     def test_exact_duplicate_with_nulls(self, con):
         """Exact duplicates with NULL values are treated as equal."""
-        df = pd.DataFrame([
-            {"id": 1, "name": None, "value": 100},
-            {"id": 1, "name": None, "value": 100},  # Exact duplicate (both NULL)
-            {"id": 2, "name": "Bob", "value": 200},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "name": None, "value": 100},
+                {"id": 1, "name": None, "value": 100},  # Exact duplicate (both NULL)
+                {"id": 2, "name": "Bob", "value": 200},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_exact(t)

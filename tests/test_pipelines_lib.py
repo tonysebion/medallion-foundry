@@ -142,7 +142,9 @@ class TestResilience:
 
         call_count = 0
 
-        @with_retry(max_attempts=3, retry_exceptions=(ConnectionError,), backoff_seconds=0.01)
+        @with_retry(
+            max_attempts=3, retry_exceptions=(ConnectionError,), backoff_seconds=0.01
+        )
         def wrong_exception():
             nonlocal call_count
             call_count += 1

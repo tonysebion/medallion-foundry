@@ -116,9 +116,13 @@ class TestExpandToAllPartitions:
             target_path="./silver/orders/",
             input_mode=InputMode.APPEND_LOG,
         )
-        source = "s3://bucket/bronze/system=retail/entity=orders/dt=2025-01-15/*.parquet"
+        source = (
+            "s3://bucket/bronze/system=retail/entity=orders/dt=2025-01-15/*.parquet"
+        )
         expanded = entity._expand_to_all_partitions(source)
-        assert expanded == "s3://bucket/bronze/system=retail/entity=orders/dt=*/*.parquet"
+        assert (
+            expanded == "s3://bucket/bronze/system=retail/entity=orders/dt=*/*.parquet"
+        )
 
     def test_expands_date_partition_yyyymmdd(self):
         """Test expansion of YYYYMMDD date format."""
@@ -202,7 +206,9 @@ class TestConfigLoaderInputMode:
     def test_load_silver_with_input_mode(self, tmp_path: Path):
         """Test loading Silver config with explicit input_mode."""
         config = {
-            "domain": "test", "subject": "test", "natural_keys": ["order_id"],
+            "domain": "test",
+            "subject": "test",
+            "natural_keys": ["order_id"],
             "change_timestamp": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/orders/",

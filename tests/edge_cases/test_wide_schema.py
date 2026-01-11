@@ -178,8 +178,7 @@ class TestWideSchemaPerformance:
         for version in range(5):
             version_df = base_df.copy()
             version_df["ts"] = [
-                datetime(2025, 1, version * 5 + i + 1)
-                for i in range(10)
+                datetime(2025, 1, version * 5 + i + 1) for i in range(10)
             ]
             version_df["col_000"] = [f"v{version}_{i}" for i in range(10)]
             all_rows.append(version_df)

@@ -26,11 +26,13 @@ class TestDedupeExactBasic:
 
     def test_removes_exact_duplicates(self, con):
         """Exact duplicate rows are removed."""
-        df = pd.DataFrame([
-            {"id": 1, "value": "A", "amount": 100},
-            {"id": 1, "value": "A", "amount": 100},  # Exact duplicate
-            {"id": 2, "value": "B", "amount": 200},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "value": "A", "amount": 100},
+                {"id": 1, "value": "A", "amount": 100},  # Exact duplicate
+                {"id": 2, "value": "B", "amount": 200},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_exact(t)
@@ -40,11 +42,13 @@ class TestDedupeExactBasic:
 
     def test_preserves_near_duplicates(self, con):
         """Near duplicates (same key, different values) are preserved."""
-        df = pd.DataFrame([
-            {"id": 1, "value": "A", "amount": 100},
-            {"id": 1, "value": "A", "amount": 101},  # Different amount - preserved
-            {"id": 1, "value": "B", "amount": 100},  # Different value - preserved
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "value": "A", "amount": 100},
+                {"id": 1, "value": "A", "amount": 101},  # Different amount - preserved
+                {"id": 1, "value": "B", "amount": 100},  # Different value - preserved
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_exact(t)
@@ -54,11 +58,13 @@ class TestDedupeExactBasic:
 
     def test_no_duplicates_unchanged(self, con):
         """Table without duplicates passes through unchanged."""
-        df = pd.DataFrame([
-            {"id": 1, "value": "A"},
-            {"id": 2, "value": "B"},
-            {"id": 3, "value": "C"},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "value": "A"},
+                {"id": 2, "value": "B"},
+                {"id": 3, "value": "C"},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_exact(t)
@@ -72,12 +78,14 @@ class TestDedupeExactMultipleDuplicates:
 
     def test_multiple_duplicates_reduced_to_one(self, con):
         """Multiple copies of same row reduced to one."""
-        df = pd.DataFrame([
-            {"id": 1, "value": "A"},
-            {"id": 1, "value": "A"},  # Duplicate 1
-            {"id": 1, "value": "A"},  # Duplicate 2
-            {"id": 1, "value": "A"},  # Duplicate 3
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "value": "A"},
+                {"id": 1, "value": "A"},  # Duplicate 1
+                {"id": 1, "value": "A"},  # Duplicate 2
+                {"id": 1, "value": "A"},  # Duplicate 3
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_exact(t)
@@ -87,15 +95,17 @@ class TestDedupeExactMultipleDuplicates:
 
     def test_mixed_duplicates(self, con):
         """Mix of unique rows and various duplicate groups."""
-        df = pd.DataFrame([
-            {"id": 1, "value": "A"},  # Unique
-            {"id": 2, "value": "B"},
-            {"id": 2, "value": "B"},  # Duplicate of above
-            {"id": 3, "value": "C"},
-            {"id": 3, "value": "C"},
-            {"id": 3, "value": "C"},  # Two duplicates
-            {"id": 4, "value": "D"},  # Unique
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "value": "A"},  # Unique
+                {"id": 2, "value": "B"},
+                {"id": 2, "value": "B"},  # Duplicate of above
+                {"id": 3, "value": "C"},
+                {"id": 3, "value": "C"},
+                {"id": 3, "value": "C"},  # Two duplicates
+                {"id": 4, "value": "D"},  # Unique
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_exact(t)
@@ -109,11 +119,17 @@ class TestDedupeExactDataTypes:
 
     def test_with_timestamps(self, con):
         """Exact duplicates with timestamp columns."""
-        df = pd.DataFrame([
-            {"id": 1, "ts": datetime(2025, 1, 15, 10, 0, 0), "value": 100},
-            {"id": 1, "ts": datetime(2025, 1, 15, 10, 0, 0), "value": 100},  # Exact
-            {"id": 1, "ts": datetime(2025, 1, 15, 10, 0, 1), "value": 100},  # Different ts
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "ts": datetime(2025, 1, 15, 10, 0, 0), "value": 100},
+                {"id": 1, "ts": datetime(2025, 1, 15, 10, 0, 0), "value": 100},  # Exact
+                {
+                    "id": 1,
+                    "ts": datetime(2025, 1, 15, 10, 0, 1),
+                    "value": 100,
+                },  # Different ts
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_exact(t)
@@ -123,11 +139,13 @@ class TestDedupeExactDataTypes:
 
     def test_with_nulls(self, con):
         """Nulls are considered equal for exact duplicate detection."""
-        df = pd.DataFrame([
-            {"id": 1, "value": None},
-            {"id": 1, "value": None},  # Exact duplicate (both NULL)
-            {"id": 2, "value": "A"},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "value": None},
+                {"id": 1, "value": None},  # Exact duplicate (both NULL)
+                {"id": 2, "value": "A"},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_exact(t)
@@ -137,11 +155,13 @@ class TestDedupeExactDataTypes:
 
     def test_with_floats(self, con):
         """Exact duplicates with float columns."""
-        df = pd.DataFrame([
-            {"id": 1, "score": 1.5},
-            {"id": 1, "score": 1.5},  # Exact
-            {"id": 1, "score": 1.50001},  # Different
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "score": 1.5},
+                {"id": 1, "score": 1.5},  # Exact
+                {"id": 1, "score": 1.50001},  # Different
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_exact(t)
@@ -155,10 +175,9 @@ class TestDedupeExactEdgeCases:
 
     def test_empty_table(self, con):
         """Empty table returns empty result."""
-        df = pd.DataFrame({
-            "id": pd.array([], dtype="int64"),
-            "value": pd.array([], dtype="string")
-        })
+        df = pd.DataFrame(
+            {"id": pd.array([], dtype="int64"), "value": pd.array([], dtype="string")}
+        )
 
         t = ibis.memtable(df)
         result = dedupe_exact(t)
@@ -168,9 +187,7 @@ class TestDedupeExactEdgeCases:
 
     def test_single_row(self, con):
         """Single row table unchanged."""
-        df = pd.DataFrame([
-            {"id": 1, "value": "A"}
-        ])
+        df = pd.DataFrame([{"id": 1, "value": "A"}])
 
         t = ibis.memtable(df)
         result = dedupe_exact(t)
@@ -180,11 +197,13 @@ class TestDedupeExactEdgeCases:
 
     def test_all_columns_must_match(self, con):
         """All columns must match for exact duplicate."""
-        df = pd.DataFrame([
-            {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5},
-            {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5},  # Exact duplicate
-            {"a": 1, "b": 2, "c": 3, "d": 4, "e": 6},  # One column different
-        ])
+        df = pd.DataFrame(
+            [
+                {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5},
+                {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5},  # Exact duplicate
+                {"a": 1, "b": 2, "c": 3, "d": 4, "e": 6},  # One column different
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_exact(t)
@@ -194,10 +213,12 @@ class TestDedupeExactEdgeCases:
 
     def test_preserves_column_order(self, con):
         """Column order in output matches input."""
-        df = pd.DataFrame([
-            {"z_col": 1, "a_col": 2, "m_col": 3},
-            {"z_col": 1, "a_col": 2, "m_col": 3},  # Duplicate
-        ])
+        df = pd.DataFrame(
+            [
+                {"z_col": 1, "a_col": 2, "m_col": 3},
+                {"z_col": 1, "a_col": 2, "m_col": 3},  # Duplicate
+            ]
+        )
 
         t = ibis.memtable(df)
         result = dedupe_exact(t)
@@ -226,10 +247,7 @@ class TestDedupeExactLargeScale:
 
     def test_no_duplicates_large(self, con):
         """Large table with no duplicates."""
-        df = pd.DataFrame([
-            {"id": i, "value": f"val_{i}"}
-            for i in range(1000)
-        ])
+        df = pd.DataFrame([{"id": i, "value": f"val_{i}"} for i in range(1000)])
 
         t = ibis.memtable(df)
         result = dedupe_exact(t)

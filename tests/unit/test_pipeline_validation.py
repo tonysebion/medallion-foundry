@@ -43,7 +43,11 @@ class TestBronzeSourceValidation:
         source.target_path = ""
 
         issues = validate_bronze_source(source)
-        error_fields = {issue.field for issue in issues if issue.severity == ValidationSeverity.ERROR}
+        error_fields = {
+            issue.field
+            for issue in issues
+            if issue.severity == ValidationSeverity.ERROR
+        }
         assert {"system", "entity", "target_path", "source_path"} <= error_fields
 
     def test_incremental_requires_watermark(self):
@@ -64,7 +68,11 @@ class TestSilverEntityValidation:
         entity.change_timestamp = ""
 
         issues = validate_silver_entity(entity)
-        error_fields = [issue.field for issue in issues if issue.severity == ValidationSeverity.ERROR]
+        error_fields = [
+            issue.field
+            for issue in issues
+            if issue.severity == ValidationSeverity.ERROR
+        ]
         assert "source_path" in error_fields
         assert "target_path" in error_fields
         assert "natural_keys" in error_fields
@@ -76,7 +84,9 @@ class TestSilverEntityValidation:
         entity.history_mode = HistoryMode.FULL_HISTORY
 
         issues = validate_silver_entity(entity)
-        warnings = [issue for issue in issues if issue.severity == ValidationSeverity.WARNING]
+        warnings = [
+            issue for issue in issues if issue.severity == ValidationSeverity.WARNING
+        ]
         assert any("history_mode" == issue.field for issue in warnings)
 
 

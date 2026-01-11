@@ -58,8 +58,10 @@ class TestGetConfigValue:
         result = get_config_value(None, "region", "AWS_REGION", "us-west-2")
         assert result == "us-west-2"
 
-    def test_handles_non_string_values(self):
+    def test_handles_non_string_values(self, monkeypatch):
         """Non-string values are returned without expansion."""
+        # Ensure env var isn't set from other tests
+        monkeypatch.delenv("AWS_ENDPOINT_URL", raising=False)
         options = {"port": 9000}
         # Non-string values don't get expanded but also aren't valid for string config
         # The function expects string values, so this returns empty/default
@@ -151,7 +153,9 @@ class TestGetBoolConfigValue:
         """Returns default value when neither option nor env var set."""
         monkeypatch.delenv("AWS_S3_VERIFY_SSL", raising=False)
         options = {}
-        result = get_bool_config_value(options, "verify_ssl", "AWS_S3_VERIFY_SSL", default=True)
+        result = get_bool_config_value(
+            options, "verify_ssl", "AWS_S3_VERIFY_SSL", default=True
+        )
         assert result is True
 
     def test_default_is_false_when_not_specified(self, monkeypatch):

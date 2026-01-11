@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 
-
 class TestS3ConnectionScript:
     """Tests for scripts/test_s3_connection.py."""
 
@@ -58,9 +57,7 @@ class TestS3ConnectionScript:
             expected_bytes = json.dumps(test_data, indent=2).encode("utf-8")
             mock_storage.read_bytes.return_value = expected_bytes
 
-            with patch(
-                "pipelines.lib.storage.s3.S3Storage", return_value=mock_storage
-            ):
+            with patch("pipelines.lib.storage.s3.S3Storage", return_value=mock_storage):
                 result = script.main()
 
         assert result == 0
@@ -88,9 +85,7 @@ class TestS3ConnectionScript:
             mock_dt.now.return_value.strftime.return_value = "20250107_120000"
             mock_dt.now.return_value.isoformat.return_value = "2025-01-07T12:00:00"
 
-            with patch(
-                "pipelines.lib.storage.s3.S3Storage", return_value=mock_storage
-            ):
+            with patch("pipelines.lib.storage.s3.S3Storage", return_value=mock_storage):
                 result = script.main()
 
         assert result == 1
@@ -108,7 +103,9 @@ class TestS3ConnectionScript:
         script.S3_REGION = "us-east-1"
 
         mock_storage = MagicMock()
-        mock_storage.write_bytes.return_value = MagicMock(success=True, bytes_written=45)
+        mock_storage.write_bytes.return_value = MagicMock(
+            success=True, bytes_written=45
+        )
         mock_storage.exists.return_value = True
         mock_storage.read_bytes.return_value = b"{}"
         mock_storage.list_files.return_value = [MagicMock(path="test/file.json")]
@@ -152,9 +149,7 @@ class TestS3ConnectionScript:
             mock_dt.now.return_value.strftime.return_value = "20250107_120000"
             mock_dt.now.return_value.isoformat.return_value = "2025-01-07T12:00:00"
 
-            with patch(
-                "pipelines.lib.storage.s3.S3Storage", return_value=mock_storage
-            ):
+            with patch("pipelines.lib.storage.s3.S3Storage", return_value=mock_storage):
                 result = script.main()
 
         assert result == 1

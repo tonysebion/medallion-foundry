@@ -26,14 +26,18 @@ class TestUnionDedupeBasic:
 
     def test_unions_two_tables(self, con):
         """Two tables unioned correctly."""
-        df1 = pd.DataFrame([
-            {"id": 1, "value": "A", "ts": datetime(2025, 1, 10)},
-            {"id": 2, "value": "B", "ts": datetime(2025, 1, 10)},
-        ])
-        df2 = pd.DataFrame([
-            {"id": 3, "value": "C", "ts": datetime(2025, 1, 15)},
-            {"id": 4, "value": "D", "ts": datetime(2025, 1, 15)},
-        ])
+        df1 = pd.DataFrame(
+            [
+                {"id": 1, "value": "A", "ts": datetime(2025, 1, 10)},
+                {"id": 2, "value": "B", "ts": datetime(2025, 1, 10)},
+            ]
+        )
+        df2 = pd.DataFrame(
+            [
+                {"id": 3, "value": "C", "ts": datetime(2025, 1, 15)},
+                {"id": 4, "value": "D", "ts": datetime(2025, 1, 15)},
+            ]
+        )
 
         t1 = ibis.memtable(df1)
         t2 = ibis.memtable(df2)
@@ -46,12 +50,20 @@ class TestUnionDedupeBasic:
 
     def test_dedupes_across_tables(self, con):
         """Duplicate keys across tables deduplicated."""
-        df1 = pd.DataFrame([
-            {"id": 1, "value": "old", "ts": datetime(2025, 1, 10)},
-        ])
-        df2 = pd.DataFrame([
-            {"id": 1, "value": "new", "ts": datetime(2025, 1, 15)},  # Same key, newer
-        ])
+        df1 = pd.DataFrame(
+            [
+                {"id": 1, "value": "old", "ts": datetime(2025, 1, 10)},
+            ]
+        )
+        df2 = pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "value": "new",
+                    "ts": datetime(2025, 1, 15),
+                },  # Same key, newer
+            ]
+        )
 
         t1 = ibis.memtable(df1)
         t2 = ibis.memtable(df2)
@@ -64,15 +76,21 @@ class TestUnionDedupeBasic:
 
     def test_keeps_latest_version(self, con):
         """Latest version kept when same key in multiple tables."""
-        df1 = pd.DataFrame([
-            {"id": 1, "value": "v1", "ts": datetime(2025, 1, 1)},
-        ])
-        df2 = pd.DataFrame([
-            {"id": 1, "value": "v2", "ts": datetime(2025, 1, 10)},
-        ])
-        df3 = pd.DataFrame([
-            {"id": 1, "value": "v3", "ts": datetime(2025, 1, 20)},  # Latest
-        ])
+        df1 = pd.DataFrame(
+            [
+                {"id": 1, "value": "v1", "ts": datetime(2025, 1, 1)},
+            ]
+        )
+        df2 = pd.DataFrame(
+            [
+                {"id": 1, "value": "v2", "ts": datetime(2025, 1, 10)},
+            ]
+        )
+        df3 = pd.DataFrame(
+            [
+                {"id": 1, "value": "v3", "ts": datetime(2025, 1, 20)},  # Latest
+            ]
+        )
 
         t1 = ibis.memtable(df1)
         t2 = ibis.memtable(df2)
@@ -92,10 +110,16 @@ class TestUnionDedupeManyTables:
         """Union five tables correctly."""
         tables = []
         for i in range(5):
-            df = pd.DataFrame([
-                {"id": i * 10 + j, "value": f"t{i}_{j}", "ts": datetime(2025, 1, i + 1)}
-                for j in range(3)
-            ])
+            df = pd.DataFrame(
+                [
+                    {
+                        "id": i * 10 + j,
+                        "value": f"t{i}_{j}",
+                        "ts": datetime(2025, 1, i + 1),
+                    }
+                    for j in range(3)
+                ]
+            )
             tables.append(ibis.memtable(df))
 
         result = union_dedupe(tables, keys=["id"], order_by="ts")
@@ -105,10 +129,12 @@ class TestUnionDedupeManyTables:
 
     def test_single_table(self, con):
         """Single table returned as-is (deduplicated)."""
-        df = pd.DataFrame([
-            {"id": 1, "value": "A", "ts": datetime(2025, 1, 10)},
-            {"id": 1, "value": "B", "ts": datetime(2025, 1, 15)},  # Duplicate key
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "value": "A", "ts": datetime(2025, 1, 10)},
+                {"id": 1, "value": "B", "ts": datetime(2025, 1, 15)},  # Duplicate key
+            ]
+        )
 
         t = ibis.memtable(df)
 
@@ -124,13 +150,32 @@ class TestUnionDedupeCompositeKeys:
 
     def test_composite_key_dedupe(self, con):
         """Deduplicate with composite key."""
-        df1 = pd.DataFrame([
-            {"region": "US", "product": "A", "price": 100, "ts": datetime(2025, 1, 10)},
-        ])
-        df2 = pd.DataFrame([
-            {"region": "US", "product": "A", "price": 110, "ts": datetime(2025, 1, 15)},  # Update
-            {"region": "EU", "product": "A", "price": 90, "ts": datetime(2025, 1, 15)},   # New
-        ])
+        df1 = pd.DataFrame(
+            [
+                {
+                    "region": "US",
+                    "product": "A",
+                    "price": 100,
+                    "ts": datetime(2025, 1, 10),
+                },
+            ]
+        )
+        df2 = pd.DataFrame(
+            [
+                {
+                    "region": "US",
+                    "product": "A",
+                    "price": 110,
+                    "ts": datetime(2025, 1, 15),
+                },  # Update
+                {
+                    "region": "EU",
+                    "product": "A",
+                    "price": 90,
+                    "ts": datetime(2025, 1, 15),
+                },  # New
+            ]
+        )
 
         t1 = ibis.memtable(df1)
         t2 = ibis.memtable(df2)
@@ -141,7 +186,9 @@ class TestUnionDedupeCompositeKeys:
         assert len(result_df) == 2  # US+A and EU+A
 
         # US+A should have latest price
-        us_a = result_df[(result_df["region"] == "US") & (result_df["product"] == "A")].iloc[0]
+        us_a = result_df[
+            (result_df["region"] == "US") & (result_df["product"] == "A")
+        ].iloc[0]
         assert us_a["price"] == 110
 
 
@@ -155,12 +202,16 @@ class TestUnionDedupeEdgeCases:
 
     def test_preserves_all_columns(self, con):
         """All columns from tables preserved."""
-        df1 = pd.DataFrame([
-            {"id": 1, "col_a": "A", "col_b": 100, "ts": datetime(2025, 1, 10)},
-        ])
-        df2 = pd.DataFrame([
-            {"id": 2, "col_a": "B", "col_b": 200, "ts": datetime(2025, 1, 15)},
-        ])
+        df1 = pd.DataFrame(
+            [
+                {"id": 1, "col_a": "A", "col_b": 100, "ts": datetime(2025, 1, 10)},
+            ]
+        )
+        df2 = pd.DataFrame(
+            [
+                {"id": 2, "col_a": "B", "col_b": 200, "ts": datetime(2025, 1, 15)},
+            ]
+        )
 
         t1 = ibis.memtable(df1)
         t2 = ibis.memtable(df2)
@@ -178,20 +229,50 @@ class TestUnionDedupeTypicalUseCase:
     def test_union_bronze_partitions(self, con):
         """Union multiple Bronze date partitions."""
         # Simulate Bronze partitions from different days
-        partition_2025_01_15 = pd.DataFrame([
-            {"order_id": "ORD001", "status": "pending", "updated_at": datetime(2025, 1, 15, 10, 0, 0)},
-            {"order_id": "ORD002", "status": "pending", "updated_at": datetime(2025, 1, 15, 11, 0, 0)},
-        ])
+        partition_2025_01_15 = pd.DataFrame(
+            [
+                {
+                    "order_id": "ORD001",
+                    "status": "pending",
+                    "updated_at": datetime(2025, 1, 15, 10, 0, 0),
+                },
+                {
+                    "order_id": "ORD002",
+                    "status": "pending",
+                    "updated_at": datetime(2025, 1, 15, 11, 0, 0),
+                },
+            ]
+        )
 
-        partition_2025_01_16 = pd.DataFrame([
-            {"order_id": "ORD001", "status": "shipped", "updated_at": datetime(2025, 1, 16, 9, 0, 0)},  # Update
-            {"order_id": "ORD003", "status": "pending", "updated_at": datetime(2025, 1, 16, 12, 0, 0)},  # New
-        ])
+        partition_2025_01_16 = pd.DataFrame(
+            [
+                {
+                    "order_id": "ORD001",
+                    "status": "shipped",
+                    "updated_at": datetime(2025, 1, 16, 9, 0, 0),
+                },  # Update
+                {
+                    "order_id": "ORD003",
+                    "status": "pending",
+                    "updated_at": datetime(2025, 1, 16, 12, 0, 0),
+                },  # New
+            ]
+        )
 
-        partition_2025_01_17 = pd.DataFrame([
-            {"order_id": "ORD001", "status": "delivered", "updated_at": datetime(2025, 1, 17, 14, 0, 0)},  # Update
-            {"order_id": "ORD002", "status": "shipped", "updated_at": datetime(2025, 1, 17, 10, 0, 0)},    # Update
-        ])
+        partition_2025_01_17 = pd.DataFrame(
+            [
+                {
+                    "order_id": "ORD001",
+                    "status": "delivered",
+                    "updated_at": datetime(2025, 1, 17, 14, 0, 0),
+                },  # Update
+                {
+                    "order_id": "ORD002",
+                    "status": "shipped",
+                    "updated_at": datetime(2025, 1, 17, 10, 0, 0),
+                },  # Update
+            ]
+        )
 
         t1 = ibis.memtable(partition_2025_01_15)
         t2 = ibis.memtable(partition_2025_01_16)

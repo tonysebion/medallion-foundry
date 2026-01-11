@@ -33,7 +33,6 @@ from tests.integration.multiweek_data import (
     MultiWeekScenario,
     CDCDeleteCycleScenario,
     LoadType,
-    SchemaVersion,
 )
 from pipelines.lib.bronze import BronzeSource, LoadPattern, SourceType
 from pipelines.lib.silver import SilverEntity, EntityKind, HistoryMode, DeleteMode
@@ -362,15 +361,49 @@ class TestThreeWeekIncrementalLifecycle:
         )
 
         # Verify data integrity
-        assert len(silver_df) > 0, "Should have records"
+        assert len(silver_df) > 0, "Should have records after 21-day lifecycle"
         assert silver_df["id"].is_unique, "IDs should be unique in SCD1"
 
-        # Verify we have core columns from all schema versions
-        # Note: Depending on how Silver handles schema evolution,
-        # columns from different versions may or may not be present
+        # Verify we have core columns
         assert "id" in silver_df.columns, "Should have id column"
         assert "name" in silver_df.columns, "Should have name column"
         assert "ts" in silver_df.columns, "Should have ts column"
+
+        # After 21 days with the incremental schedule:
+        # - Day 1: 5 initial records (IDs 1-5)
+        # - Days 2-5: 2 new records each (IDs 6-13)
+        # - Days 8-10: 1 new record each (IDs 14-16)
+        # - Day 12: 1 new record (ID 17)
+        # - Day 15: Full refresh (all current records)
+        # - Days 16+: 1 new record on days divisible by 3
+        # Expect substantial record accumulation
+        expected_min_records = 15  # Conservative minimum
+        actual_count = len(silver_df)
+        assert actual_count >= expected_min_records, (
+            f"Should have at least {expected_min_records} records after 21 days, got {actual_count}"
+        )
+
+        # Verify data values make sense
+        # All IDs should be positive integers
+        assert all(silver_df["id"] > 0), "All IDs should be positive"
+
+        # Names should follow the Entity_{id} pattern
+        for _, row in silver_df.iterrows():
+            expected_name_part = f"Entity_{row['id']}"
+            assert expected_name_part in row["name"], (
+                f"Name should contain {expected_name_part}, got {row['name']}"
+            )
+
+        # Verify timestamps are from the 21-day period
+        ts_series = pd.to_datetime(silver_df["ts"])
+        min_expected_date = pd.Timestamp("2025-01-06")  # Start date
+        max_expected_date = pd.Timestamp("2025-01-27")  # End of 3 weeks
+        assert all(ts_series >= min_expected_date), (
+            "All timestamps should be >= start date"
+        )
+        assert all(ts_series <= max_expected_date), (
+            "All timestamps should be <= end date"
+        )
 
 
 class TestCDCDeleteCycleLifecycle:
@@ -396,9 +429,7 @@ class TestCDCDeleteCycleLifecycle:
         for day in range(1, 22):
             config = scenario.schedule[day - 1]
 
-            run_bronze_for_day(
-                scenario, day, tmp_path, minio_bucket, cdc_prefix, "cdc"
-            )
+            run_bronze_for_day(scenario, day, tmp_path, minio_bucket, cdc_prefix, "cdc")
 
             if config.load_type == LoadType.SKIP:
                 continue
@@ -504,10 +535,10 @@ class TestSCD2ThreeWeekHistory:
         final_date = last_run_config.run_date.isoformat()
         silver_df = get_silver_data(minio_client, minio_bucket, scd2_prefix, final_date)
 
-        # Verify SCD2 columns
-        assert "effective_from" in silver_df.columns
-        assert "effective_to" in silver_df.columns
-        assert "is_current" in silver_df.columns
+        # Verify SCD2 columns exist
+        assert "effective_from" in silver_df.columns, "SCD2 should have effective_from"
+        assert "effective_to" in silver_df.columns, "SCD2 should have effective_to"
+        assert "is_current" in silver_df.columns, "SCD2 should have is_current"
 
         # Verify exactly one current per ID
         current_df = silver_df[silver_df["is_current"] == 1]
@@ -516,8 +547,33 @@ class TestSCD2ThreeWeekHistory:
         )
 
         # Verify history exists (some IDs should have multiple versions)
+        # Over 21 days, records are updated multiple times, creating history
         version_counts = silver_df.groupby("id").size()
-        assert (version_counts > 1).any(), "Some records should have history"
+        has_history = (version_counts > 1).sum()
+        assert has_history >= 3, (
+            f"At least 3 IDs should have history (multiple versions), got {has_history}"
+        )
+
+        # Verify the current version counts
+        current_count = len(current_df)
+        unique_ids = silver_df["id"].nunique()
+        assert current_count == unique_ids, (
+            f"Current record count ({current_count}) should equal unique IDs ({unique_ids})"
+        )
+
+        # Verify non-current records have effective_to set (not null/max)
+        historical_df = silver_df[silver_df["is_current"] != 1]
+        if len(historical_df) > 0:
+            assert all(historical_df["effective_to"].notna()), (
+                "Historical records should have effective_to set"
+            )
+
+        # Verify data values in current records
+        for _, row in current_df.iterrows():
+            expected_name_part = f"Entity_{row['id']}"
+            assert expected_name_part in row["name"], (
+                f"Current record name should contain {expected_name_part}"
+            )
 
 
 class TestPolyBaseDDLConsistency:
@@ -590,4 +646,6 @@ class TestPolyBaseDDLConsistency:
             )
             # All should have core columns
             assert "id" in ddl.lower(), f"V{version.value} DDL should have id column"
-            assert "name" in ddl.lower(), f"V{version.value} DDL should have name column"
+            assert "name" in ddl.lower(), (
+                f"V{version.value} DDL should have name column"
+            )

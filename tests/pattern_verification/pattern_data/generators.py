@@ -127,7 +127,9 @@ class PatternTestDataGenerator:
         """Pick a random item from options."""
         return self.rng.choice(options)
 
-    def _random_amount(self, min_val: float, max_val: float, decimals: int = 2) -> float:
+    def _random_amount(
+        self, min_val: float, max_val: float, decimals: int = 2
+    ) -> float:
         """Generate a random monetary amount."""
         return round(self.rng.uniform(min_val, max_val), decimals)
 
@@ -400,7 +402,8 @@ class PatternTestDataGenerator:
         # Generate all entity versions as a stream of changes
         entity_versions: Dict[int, int] = {}  # entity_id -> current version
         batch_dates = [
-            self.base_date + timedelta(days=i * 7) for i in range(changes_per_entity + 1)
+            self.base_date + timedelta(days=i * 7)
+            for i in range(changes_per_entity + 1)
         ]
 
         # T0: Initial state for all entities
@@ -482,16 +485,16 @@ class PatternTestDataGenerator:
     # Helper Methods
     # =========================================================================
 
-    def _generate_base_records(
-        self, count: int, batch_date: date
-    ) -> pd.DataFrame:
+    def _generate_base_records(self, count: int, batch_date: date) -> pd.DataFrame:
         """Generate base records for initial batch."""
         records = []
         for i in range(1, count + 1):
             records.append(self._generate_single_record(i, batch_date))
         return pd.DataFrame(records)
 
-    def _generate_single_record(self, record_num: int, record_date: date) -> Dict[str, Any]:
+    def _generate_single_record(
+        self, record_num: int, record_date: date
+    ) -> Dict[str, Any]:
         """Generate a single test record."""
         created_at = datetime.combine(record_date, datetime.min.time())
         amount = self._random_amount(100, 10000)
@@ -512,7 +515,9 @@ class PatternTestDataGenerator:
             "record_date": record_date,
         }
 
-    def _apply_update(self, record: Dict[str, Any], update_date: date) -> Dict[str, Any]:
+    def _apply_update(
+        self, record: Dict[str, Any], update_date: date
+    ) -> Dict[str, Any]:
         """Apply updates to an existing record."""
         updated = record.copy()
 
@@ -526,7 +531,9 @@ class PatternTestDataGenerator:
             record["amount"] * 0.8, record["amount"] * 1.2
         )
         updated["quantity"] = max(1, record["quantity"] + self.rng.randint(-10, 20))
-        updated["score"] = min(100, max(0, record["score"] + self._random_amount(-10, 10)))
+        updated["score"] = min(
+            100, max(0, record["score"] + self._random_amount(-10, 10))
+        )
 
         # Update timestamp
         updated["updated_at"] = datetime.combine(update_date, datetime.min.time())
@@ -547,7 +554,9 @@ class PatternTestDataGenerator:
 
         return {
             "entity_id": self._generate_id("ENT", entity_id, 6),
-            "entity_name": f"Entity {entity_id}" if version == 1 else f"Entity {entity_id} (v{version})",
+            "entity_name": f"Entity {entity_id}"
+            if version == 1
+            else f"Entity {entity_id} (v{version})",
             "status": "deleted" if is_deleted else self._random_choice(self.STATUSES),
             "category": self._random_choice(self.CATEGORIES),
             "amount": self._random_amount(100, 5000),

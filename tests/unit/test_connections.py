@@ -233,7 +233,9 @@ class TestCreatePostgresConnection:
     def test_postgres_backend_not_available_raises_import_error(self):
         """Raises ImportError when PostgreSQL backend not installed."""
         with patch("pipelines.lib.connections.ibis") as mock_ibis:
-            mock_ibis.postgres.connect.side_effect = AttributeError("postgres not available")
+            mock_ibis.postgres.connect.side_effect = AttributeError(
+                "postgres not available"
+            )
 
             with pytest.raises(ImportError, match="ibis-framework\\[postgres\\]"):
                 get_connection("pg_missing", "database_postgres", {"host": "localhost"})

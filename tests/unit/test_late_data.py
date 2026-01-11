@@ -1,6 +1,5 @@
 """Tests for the pipelines late-data helpers."""
 
-
 import ibis
 import pandas as pd
 import pytest
@@ -83,9 +82,7 @@ class TestFilterLateData:
         return "2025-01-15T00:00:00"
 
     def test_ignore_mode_drops_late_data(self, sample_table, watermark):
-        config = LateDataConfig(
-            mode=LateDataMode.IGNORE, timestamp_column="event_ts"
-        )
+        config = LateDataConfig(mode=LateDataMode.IGNORE, timestamp_column="event_ts")
         filtered = filter_late_data(sample_table, "event_ts", watermark, config)
         df = filtered.execute()
         assert len(df) == 2

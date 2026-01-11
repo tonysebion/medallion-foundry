@@ -26,7 +26,12 @@ import pandas as pd
 import pytest
 
 # Test configuration
-BRONZE_PATTERNS = ["snapshot", "incremental_append", "incremental_merge", "current_history"]
+BRONZE_PATTERNS = [
+    "snapshot",
+    "incremental_append",
+    "incremental_merge",
+    "current_history",
+]
 
 # Mapping from directory pattern names to actual load_pattern values in metadata
 # The generator uses LoadPattern enum values which differ from directory names
@@ -41,19 +46,19 @@ BRONZE_PATTERN_TO_LOAD_PATTERN = {
 # See scripts/generate_silver_samples.py for the complete pattern documentation
 SILVER_PATTERNS = [
     # FULL_SNAPSHOT Bronze patterns
-    "pattern1_full_events",           # snapshot → EVENT
-    "pattern8_snapshot_state_scd1",   # snapshot → STATE (SCD1)
-    "pattern9_snapshot_state_scd2",   # snapshot → STATE (SCD2)
+    "pattern1_full_events",  # snapshot → EVENT
+    "pattern8_snapshot_state_scd1",  # snapshot → STATE (SCD1)
+    "pattern9_snapshot_state_scd2",  # snapshot → STATE (SCD2)
     # INCREMENTAL_APPEND Bronze patterns
-    "pattern2_cdc_events",            # incremental_append → EVENT
-    "pattern6_hybrid_incremental_point",       # incremental_append → STATE (SCD1)
+    "pattern2_cdc_events",  # incremental_append → EVENT
+    "pattern6_hybrid_incremental_point",  # incremental_append → STATE (SCD1)
     "pattern7_hybrid_incremental_cumulative",  # incremental_append → STATE (SCD2)
     # CDC (incremental_merge) Bronze patterns
-    "pattern10_cdc_events",           # cdc → EVENT
-    "pattern4_hybrid_cdc_point",      # cdc → STATE (SCD1)
-    "pattern5_hybrid_cdc_cumulative", # cdc → STATE (SCD2)
+    "pattern10_cdc_events",  # cdc → EVENT
+    "pattern4_hybrid_cdc_point",  # cdc → STATE (SCD1)
+    "pattern5_hybrid_cdc_cumulative",  # cdc → STATE (SCD2)
     # SPECIALIZED: Pre-built SCD2 source
-    "pattern3_scd_state",             # current_history → STATE (SCD2)
+    "pattern3_scd_state",  # current_history → STATE (SCD2)
 ]
 
 # Expected Silver pattern -> Bronze pattern mapping
@@ -113,9 +118,12 @@ def generated_bronze_samples(bronze_samples_dir: Path) -> Path:
             sys.executable,
             str(script_path),
             "--all",
-            "--output", str(bronze_samples_dir),
-            "--rows", "50",  # Small row count for fast tests
-            "--seed", "42",
+            "--output",
+            str(bronze_samples_dir),
+            "--rows",
+            "50",  # Small row count for fast tests
+            "--seed",
+            "42",
         ],
         capture_output=True,
         text=True,
@@ -142,9 +150,12 @@ def generated_silver_samples(
             sys.executable,
             str(script_path),
             "--all",
-            "--bronze-dir", str(generated_bronze_samples),
-            "--output", str(silver_samples_dir),
-            "--seed", "42",
+            "--bronze-dir",
+            str(generated_bronze_samples),
+            "--output",
+            str(silver_samples_dir),
+            "--seed",
+            "42",
         ],
         capture_output=True,
         text=True,
@@ -207,9 +218,15 @@ class TestBronzeSampleGeneration:
 
         # Check each partition has required files
         for date_dir in date_dirs:
-            assert (date_dir / "chunk_0.parquet").exists(), f"Missing parquet in {date_dir}"
-            assert (date_dir / "_metadata.json").exists(), f"Missing metadata in {date_dir}"
-            assert (date_dir / "_checksums.json").exists(), f"Missing checksums in {date_dir}"
+            assert (date_dir / "chunk_0.parquet").exists(), (
+                f"Missing parquet in {date_dir}"
+            )
+            assert (date_dir / "_metadata.json").exists(), (
+                f"Missing metadata in {date_dir}"
+            )
+            assert (date_dir / "_checksums.json").exists(), (
+                f"Missing checksums in {date_dir}"
+            )
 
     @pytest.mark.parametrize("pattern", BRONZE_PATTERNS)
     def test_bronze_checksums_valid(
@@ -416,7 +433,10 @@ class TestPatternSpecificBehavior:
         if changes:
             for batch, info in changes.items():
                 if batch != "t0":
-                    assert info.get("update_count", 0) > 0 or info.get("insert_count", 0) > 0
+                    assert (
+                        info.get("update_count", 0) > 0
+                        or info.get("insert_count", 0) > 0
+                    )
 
     def test_scd_state_has_current_and_history_views(
         self,
@@ -505,7 +525,8 @@ class TestScriptCLI:
                 str(script_path),
                 "--all",
                 "--dry-run",
-                "--output", str(tmp_path / "bronze"),
+                "--output",
+                str(tmp_path / "bronze"),
             ],
             capture_output=True,
             text=True,
@@ -516,7 +537,9 @@ class TestScriptCLI:
         assert "DRY RUN" in result.stdout
 
         # Verify no files were created
-        assert not (tmp_path / "bronze").exists() or not any((tmp_path / "bronze").iterdir())
+        assert not (tmp_path / "bronze").exists() or not any(
+            (tmp_path / "bronze").iterdir()
+        )
 
     def test_silver_script_dry_run(
         self,
@@ -533,8 +556,10 @@ class TestScriptCLI:
                 str(script_path),
                 "--all",
                 "--dry-run",
-                "--bronze-dir", str(generated_bronze_samples),
-                "--output", str(tmp_path / "silver"),
+                "--bronze-dir",
+                str(generated_bronze_samples),
+                "--output",
+                str(tmp_path / "silver"),
             ],
             capture_output=True,
             text=True,
@@ -554,7 +579,8 @@ class TestScriptCLI:
                 sys.executable,
                 str(script_path),
                 "--verify",
-                "--output", str(generated_bronze_samples),
+                "--output",
+                str(generated_bronze_samples),
             ],
             capture_output=True,
             text=True,
@@ -574,7 +600,8 @@ class TestScriptCLI:
                 sys.executable,
                 str(script_path),
                 "--verify",
-                "--output", str(generated_silver_samples),
+                "--output",
+                str(generated_silver_samples),
             ],
             capture_output=True,
             text=True,
@@ -632,10 +659,14 @@ class TestDataIntegrity:
                 [
                     sys.executable,
                     str(bronze_script),
-                    "--pattern", "snapshot",
-                    "--output", str(out_dir),
-                    "--rows", "10",
-                    "--seed", "12345",
+                    "--pattern",
+                    "snapshot",
+                    "--output",
+                    str(out_dir),
+                    "--rows",
+                    "10",
+                    "--seed",
+                    "12345",
                 ],
                 capture_output=True,
                 text=True,

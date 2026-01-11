@@ -28,7 +28,12 @@ from pipelines.lib.config_loader import (
 # Schema Loading
 # ============================================================================
 
-SCHEMA_PATH = Path(__file__).parent.parent.parent / "pipelines" / "schema" / "pipeline.schema.json"
+SCHEMA_PATH = (
+    Path(__file__).parent.parent.parent
+    / "pipelines"
+    / "schema"
+    / "pipeline.schema.json"
+)
 
 
 def load_schema() -> Dict[str, Any]:
@@ -90,6 +95,7 @@ def get_example_value(props: Dict[str, Any]) -> Optional[Any]:
 # Minimal Config Builders
 # ============================================================================
 
+
 def build_minimal_bronze_config(**overrides) -> Dict[str, Any]:
     """Build a minimal valid Bronze config with optional field overrides."""
     config = {
@@ -105,7 +111,9 @@ def build_minimal_bronze_config(**overrides) -> Dict[str, Any]:
 def build_minimal_silver_config(**overrides) -> Dict[str, Any]:
     """Build a minimal valid Silver config with optional field overrides."""
     config = {
-        "domain": "test", "subject": "test", "natural_keys": ["id"],
+        "domain": "test",
+        "subject": "test",
+        "natural_keys": ["id"],
         "change_timestamp": "updated_at",
         "source_path": "./bronze/test/*.parquet",
         "target_path": "./silver/test/",
@@ -117,6 +125,7 @@ def build_minimal_silver_config(**overrides) -> Dict[str, Any]:
 # ============================================================================
 # Field ID Generators for Parametrized Tests
 # ============================================================================
+
 
 def bronze_field_ids() -> List[str]:
     """Generate test IDs for Bronze fields."""
@@ -131,6 +140,7 @@ def silver_field_ids() -> List[str]:
 # ============================================================================
 # Bronze Field Tests
 # ============================================================================
+
 
 class TestBronzeSchemaFields:
     """Test that every Bronze schema field is accepted and processed correctly."""
@@ -149,24 +159,49 @@ class TestBronzeSchemaFields:
         assert "entity" in field_names
         assert "source_type" in field_names
 
-    @pytest.mark.parametrize("field_name,field_props", get_bronze_fields(), ids=bronze_field_ids())
-    def test_bronze_field_has_description(self, field_name: str, field_props: Dict[str, Any]):
+    @pytest.mark.parametrize(
+        "field_name,field_props", get_bronze_fields(), ids=bronze_field_ids()
+    )
+    def test_bronze_field_has_description(
+        self, field_name: str, field_props: Dict[str, Any]
+    ):
         """Every Bronze field should have a description."""
-        assert "description" in field_props, f"Bronze field '{field_name}' missing description"
-        assert len(field_props["description"]) > 0, f"Bronze field '{field_name}' has empty description"
+        assert "description" in field_props, (
+            f"Bronze field '{field_name}' missing description"
+        )
+        assert len(field_props["description"]) > 0, (
+            f"Bronze field '{field_name}' has empty description"
+        )
 
-    @pytest.mark.parametrize("field_name,field_props", get_bronze_fields(), ids=bronze_field_ids())
+    @pytest.mark.parametrize(
+        "field_name,field_props", get_bronze_fields(), ids=bronze_field_ids()
+    )
     def test_bronze_field_accepted(self, field_name: str, field_props: Dict[str, Any]):
         """Every Bronze schema field should be accepted by the config loader."""
         example = get_example_value(field_props)
 
         # Skip nested object fields that need special handling
-        if field_name in ("options", "auth", "pagination", "cdc_options", "headers", "params", "path_params"):
+        if field_name in (
+            "options",
+            "auth",
+            "pagination",
+            "cdc_options",
+            "headers",
+            "params",
+            "path_params",
+        ):
             pytest.skip(f"Nested object field '{field_name}' requires special test")
 
         # Some fields require specific source_type context
-        if field_name in ("base_url", "endpoint", "data_path", "requests_per_second",
-                          "timeout", "max_retries", "watermark_param"):
+        if field_name in (
+            "base_url",
+            "endpoint",
+            "data_path",
+            "requests_per_second",
+            "timeout",
+            "max_retries",
+            "watermark_param",
+        ):
             # API-specific fields - test with api_rest source type
             api_config = {
                 "source_type": "api_rest",
@@ -183,15 +218,16 @@ class TestBronzeSchemaFields:
                 source_type="database_mssql",
                 host="localhost",
                 database="testdb",
-                **{field_name: example} if field_name not in ("host", "database") else {}
+                **{field_name: example}
+                if field_name not in ("host", "database")
+                else {},
             )
             if field_name in ("host", "database"):
                 config[field_name] = example or "test_value"
         elif field_name == "watermark_column":
             # Requires incremental load pattern
             config = build_minimal_bronze_config(
-                load_pattern="incremental",
-                watermark_column=example or "updated_at"
+                load_pattern="incremental", watermark_column=example or "updated_at"
             )
         elif example is not None:
             config = build_minimal_bronze_config(**{field_name: example})
@@ -217,36 +253,42 @@ class TestBronzeEnumFields:
     def test_all_source_types_accepted(self):
         """Every source_type enum value should be accepted."""
         schema = load_schema()
-        source_types = schema["definitions"]["bronze"]["properties"]["source_type"]["enum"]
+        source_types = schema["definitions"]["bronze"]["properties"]["source_type"][
+            "enum"
+        ]
 
         for source_type in source_types:
             if source_type.startswith("database_"):
                 config = build_minimal_bronze_config(
-                    source_type=source_type,
-                    host="localhost",
-                    database="testdb"
+                    source_type=source_type, host="localhost", database="testdb"
                 )
             elif source_type == "api_rest":
                 config = build_minimal_bronze_config(
                     source_type=source_type,
                     base_url="https://api.example.com",
-                    endpoint="/v1/data"
+                    endpoint="/v1/data",
                 )
             elif source_type == "file_fixed_width":
                 config = build_minimal_bronze_config(
                     source_type=source_type,
-                    options={"columns": ["a", "b"], "widths": [10, 20]}
+                    options={"columns": ["a", "b"], "widths": [10, 20]},
                 )
             else:
                 config = build_minimal_bronze_config(source_type=source_type)
 
             bronze = load_bronze_from_yaml(config)
-            assert bronze.source_type.name.lower() == source_type.replace("_", "_").lower().replace("file_", "file_").replace("database_", "database_").replace("api_", "api_")
+            assert bronze.source_type.name.lower() == source_type.replace(
+                "_", "_"
+            ).lower().replace("file_", "file_").replace(
+                "database_", "database_"
+            ).replace("api_", "api_")
 
     def test_all_load_patterns_accepted(self):
         """Every load_pattern enum value should be accepted."""
         schema = load_schema()
-        load_patterns = schema["definitions"]["bronze"]["properties"]["load_pattern"]["enum"]
+        load_patterns = schema["definitions"]["bronze"]["properties"]["load_pattern"][
+            "enum"
+        ]
 
         for pattern in load_patterns:
             config = build_minimal_bronze_config(load_pattern=pattern)
@@ -260,20 +302,23 @@ class TestBronzeEnumFields:
             bronze = load_bronze_from_yaml(config)
             assert bronze is not None
 
-    def test_all_input_modes_accepted(self):
-        """Every input_mode enum value should be accepted."""
+    def test_all_watermark_sources_accepted(self):
+        """Every watermark_source enum value should be accepted."""
         schema = load_schema()
-        input_modes = schema["definitions"]["bronze"]["properties"]["input_mode"]["enum"]
+        watermark_sources = schema["definitions"]["bronze"]["properties"][
+            "watermark_source"
+        ]["enum"]
 
-        for mode in input_modes:
-            config = build_minimal_bronze_config(input_mode=mode)
+        for source in watermark_sources:
+            config = build_minimal_bronze_config(watermark_source=source)
             bronze = load_bronze_from_yaml(config)
-            assert bronze.input_mode is not None
+            assert bronze is not None
 
 
 # ============================================================================
 # Silver Field Tests
 # ============================================================================
+
 
 class TestSilverSchemaFields:
     """Test that every Silver schema field is accepted and processed correctly."""
@@ -291,13 +336,23 @@ class TestSilverSchemaFields:
         assert "natural_keys" in field_names
         assert "change_timestamp" in field_names
 
-    @pytest.mark.parametrize("field_name,field_props", get_silver_fields(), ids=silver_field_ids())
-    def test_silver_field_has_description(self, field_name: str, field_props: Dict[str, Any]):
+    @pytest.mark.parametrize(
+        "field_name,field_props", get_silver_fields(), ids=silver_field_ids()
+    )
+    def test_silver_field_has_description(
+        self, field_name: str, field_props: Dict[str, Any]
+    ):
         """Every Silver field should have a description."""
-        assert "description" in field_props, f"Silver field '{field_name}' missing description"
-        assert len(field_props["description"]) > 0, f"Silver field '{field_name}' has empty description"
+        assert "description" in field_props, (
+            f"Silver field '{field_name}' missing description"
+        )
+        assert len(field_props["description"]) > 0, (
+            f"Silver field '{field_name}' has empty description"
+        )
 
-    @pytest.mark.parametrize("field_name,field_props", get_silver_fields(), ids=silver_field_ids())
+    @pytest.mark.parametrize(
+        "field_name,field_props", get_silver_fields(), ids=silver_field_ids()
+    )
     def test_silver_field_accepted(self, field_name: str, field_props: Dict[str, Any]):
         """Every Silver schema field should be accepted by the config loader."""
         example = get_example_value(field_props)
@@ -339,54 +394,12 @@ class TestSilverEnumFields:
             silver = load_silver_from_yaml(config)
             assert silver is not None
 
-    def test_all_entity_kinds_accepted(self):
-        """Every entity_kind enum value should be accepted."""
-        schema = load_schema()
-        entity_kinds = schema["definitions"]["silver"]["properties"]["entity_kind"]["enum"]
-
-        for kind in entity_kinds:
-            config = build_minimal_silver_config(entity_kind=kind)
-            silver = load_silver_from_yaml(config)
-            assert silver.entity_kind is not None
-
-    def test_all_history_modes_accepted(self):
-        """Every history_mode enum value should be accepted."""
-        schema = load_schema()
-        history_modes = schema["definitions"]["silver"]["properties"]["history_mode"]["enum"]
-
-        for mode in history_modes:
-            config = build_minimal_silver_config(history_mode=mode)
-            silver = load_silver_from_yaml(config)
-            assert silver.history_mode is not None
-
-    def test_all_delete_modes_accepted(self):
-        """Every delete_mode enum value should be accepted."""
-        schema = load_schema()
-        delete_modes = schema["definitions"]["silver"]["properties"]["delete_mode"]["enum"]
-
-        for mode in delete_modes:
-            # tombstone and hard_delete require CDC model; ignore works with any model
-            if mode in ("tombstone", "hard_delete"):
-                config = build_minimal_silver_config(model="cdc_current", delete_mode=mode)
-            else:
-                config = build_minimal_silver_config(delete_mode=mode)
-            silver = load_silver_from_yaml(config)
-            assert silver.delete_mode is not None
-
-    def test_all_input_modes_accepted(self):
-        """Every input_mode enum value should be accepted."""
-        schema = load_schema()
-        input_modes = schema["definitions"]["silver"]["properties"]["input_mode"]["enum"]
-
-        for mode in input_modes:
-            config = build_minimal_silver_config(input_mode=mode)
-            silver = load_silver_from_yaml(config)
-            assert silver.input_mode is not None
-
     def test_all_validate_source_modes_accepted(self):
         """Every validate_source enum value should be accepted."""
         schema = load_schema()
-        validate_modes = schema["definitions"]["silver"]["properties"]["validate_source"]["enum"]
+        validate_modes = schema["definitions"]["silver"]["properties"][
+            "validate_source"
+        ]["enum"]
 
         for mode in validate_modes:
             config = build_minimal_silver_config(validate_source=mode)
@@ -394,20 +407,11 @@ class TestSilverEnumFields:
             # validate_source may not be stored directly on entity - just verify no error
             assert silver is not None
 
-    def test_all_parquet_compression_accepted(self):
-        """Every parquet_compression enum value should be accepted."""
-        schema = load_schema()
-        compressions = schema["definitions"]["silver"]["properties"]["parquet_compression"]["enum"]
-
-        for compression in compressions:
-            config = build_minimal_silver_config(parquet_compression=compression)
-            silver = load_silver_from_yaml(config)
-            assert silver is not None
-
 
 # ============================================================================
 # Schema Completeness Tests
 # ============================================================================
+
 
 class TestSchemaCompleteness:
     """Test that schema and code are in sync."""
@@ -416,21 +420,43 @@ class TestSchemaCompleteness:
         """Verify Bronze schema fields have corresponding code handling."""
         schema_fields = {name for name, _ in get_bronze_fields()}
 
-        # Fields that are known to be handled
-        # (This list should be updated if schema changes)
+        # Fields in the current (non-deprecated) schema
+        # Note: deprecated fields (chunk_size, full_refresh_days, partition_by,
+        # connection, input_mode) are only in pipeline.full.schema.json
         expected_handled = {
-            "system", "entity", "source_type", "source_path", "target_path",
-            "load_pattern", "input_mode", "watermark_column", "watermark_source",
-            "connection", "host", "database", "query",
-            "options", "partition_by", "chunk_size", "full_refresh_days",
-            "write_checksums", "write_metadata",
+            "system",
+            "entity",
+            "source_type",
+            "source_path",
+            "target_path",
+            "load_pattern",
+            "watermark_column",
+            "watermark_source",
+            "host",
+            "database",
+            "query",
+            "options",
+            "write_checksums",
+            "write_metadata",
             # S3 options
-            "s3_endpoint_url", "s3_signature_version", "s3_addressing_style",
-            "s3_region", "s3_verify_ssl",
+            "s3_endpoint_url",
+            "s3_signature_version",
+            "s3_addressing_style",
+            "s3_region",
+            "s3_verify_ssl",
             # API fields (handled through ApiSource)
-            "base_url", "endpoint", "data_path", "auth", "pagination",
-            "requests_per_second", "timeout", "max_retries",
-            "headers", "params", "path_params", "watermark_param",
+            "base_url",
+            "endpoint",
+            "data_path",
+            "auth",
+            "pagination",
+            "requests_per_second",
+            "timeout",
+            "max_retries",
+            "headers",
+            "params",
+            "path_params",
+            "watermark_param",
             # CDC options
             "cdc_options",
         }
@@ -447,17 +473,27 @@ class TestSchemaCompleteness:
         """Verify Silver schema fields have corresponding code handling."""
         schema_fields = {name for name, _ in get_silver_fields()}
 
+        # Fields in the current (non-deprecated) schema
+        # Note: deprecated fields (entity_kind, history_mode, delete_mode,
+        # input_mode, exclude_columns, column_mapping, output_formats,
+        # parquet_compression) are only in pipeline.full.schema.json
         expected_handled = {
-            "domain", "subject", "natural_keys", "change_timestamp",
-            "source_path", "target_path",
-            "model", "entity_kind", "history_mode", "input_mode", "delete_mode",
-            "attributes", "exclude_columns", "column_mapping", "partition_by",
-            "output_formats", "parquet_compression", "validate_source",
+            "domain",
+            "subject",
+            "natural_keys",
+            "change_timestamp",
+            "source_path",
+            "target_path",
+            "model",
+            "attributes",
+            "bronze_source",
+            "validate_source",
             # S3 options
-            "s3_endpoint_url", "s3_signature_version", "s3_addressing_style",
-            "s3_region", "s3_verify_ssl",
-            # CDC options
-            "cdc_options",
+            "s3_endpoint_url",
+            "s3_signature_version",
+            "s3_addressing_style",
+            "s3_region",
+            "s3_verify_ssl",
         }
 
         unexpected = schema_fields - expected_handled
@@ -471,12 +507,24 @@ class TestSchemaCompleteness:
         """Every Bronze field should have an example or default value."""
         missing = []
         # Nested object fields that intentionally don't have simple examples
-        nested_objects = {"cdc_options", "options", "auth", "pagination", "headers", "params", "path_params"}
+        nested_objects = {
+            "cdc_options",
+            "options",
+            "auth",
+            "pagination",
+            "headers",
+            "params",
+            "path_params",
+        }
 
         for name, props in get_bronze_fields():
             if name in nested_objects:
                 continue  # Nested objects are tested separately
-            if not props.get("examples") and "default" not in props and "enum" not in props:
+            if (
+                not props.get("examples")
+                and "default" not in props
+                and "enum" not in props
+            ):
                 # Check if it's a required field (those don't need defaults)
                 schema = load_schema()
                 required = schema["definitions"]["bronze"].get("required", [])
@@ -492,13 +540,17 @@ class TestSchemaCompleteness:
     def test_all_silver_fields_have_examples_or_defaults(self):
         """Every Silver field should have an example or default value."""
         missing = []
-        # Nested object fields and array fields that don't need simple scalar examples
-        nested_or_array = {"cdc_options", "attributes", "exclude_columns", "partition_by"}
+        # Array fields that don't need simple scalar examples (in current schema)
+        nested_or_array = {"attributes"}
 
         for name, props in get_silver_fields():
             if name in nested_or_array:
                 continue  # Array/object fields are tested contextually
-            if not props.get("examples") and "default" not in props and "enum" not in props:
+            if (
+                not props.get("examples")
+                and "default" not in props
+                and "enum" not in props
+            ):
                 schema = load_schema()
                 required = schema["definitions"]["silver"].get("required", [])
                 if name not in required:
@@ -515,13 +567,16 @@ class TestSchemaCompleteness:
 # Nested Object Tests
 # ============================================================================
 
+
 class TestNestedObjectFields:
     """Test nested object fields like auth, pagination, cdc_options."""
 
     def test_auth_all_types(self):
         """Test all authentication types."""
         schema = load_schema()
-        auth_types = schema["definitions"]["bronze"]["properties"]["auth"]["properties"]["auth_type"]["enum"]
+        auth_types = schema["definitions"]["bronze"]["properties"]["auth"][
+            "properties"
+        ]["auth_type"]["enum"]
 
         for auth_type in auth_types:
             config = build_minimal_bronze_config(
@@ -537,7 +592,11 @@ class TestNestedObjectFields:
             elif auth_type == "api_key":
                 config["auth"] = {"auth_type": "api_key", "api_key": "test_key"}
             elif auth_type == "basic":
-                config["auth"] = {"auth_type": "basic", "username": "user", "password": "pass"}
+                config["auth"] = {
+                    "auth_type": "basic",
+                    "username": "user",
+                    "password": "pass",
+                }
 
             # Should not raise
             bronze = load_bronze_from_yaml(config)
@@ -546,7 +605,9 @@ class TestNestedObjectFields:
     def test_pagination_all_strategies(self):
         """Test all pagination strategies."""
         schema = load_schema()
-        strategies = schema["definitions"]["bronze"]["properties"]["pagination"]["properties"]["strategy"]["enum"]
+        strategies = schema["definitions"]["bronze"]["properties"]["pagination"][
+            "properties"
+        ]["strategy"]["enum"]
 
         for strategy in strategies:
             config = build_minimal_bronze_config(
@@ -562,7 +623,10 @@ class TestNestedObjectFields:
             elif strategy == "page":
                 config["pagination"] = {"strategy": "page", "page_size": 100}
             elif strategy == "cursor":
-                config["pagination"] = {"strategy": "cursor", "cursor_path": "meta.next"}
+                config["pagination"] = {
+                    "strategy": "cursor",
+                    "cursor_path": "meta.next",
+                }
 
             bronze = load_bronze_from_yaml(config)
             assert bronze is not None
@@ -576,7 +640,7 @@ class TestNestedObjectFields:
                 "insert_code": "I",
                 "update_code": "U",
                 "delete_code": "D",
-            }
+            },
         )
         # Note: This may fail if cdc requires additional Silver config
         # The test verifies the field is accepted by the parser

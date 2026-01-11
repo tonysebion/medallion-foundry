@@ -81,7 +81,9 @@ def test_respect_retry_after_sleeps(tmp_path, monkeypatch):
     response = httpx.Response(429, headers={"Retry-After": "0.01"}, request=request)
 
     sleep_calls: list[float] = []
-    monkeypatch.setattr("pipelines.lib.api.time.sleep", lambda secs: sleep_calls.append(secs))
+    monkeypatch.setattr(
+        "pipelines.lib.api.time.sleep", lambda secs: sleep_calls.append(secs)
+    )
 
     source._respect_retry_after(response)
 
@@ -94,7 +96,9 @@ def test_respect_retry_after_ignores_invalid_header(tmp_path, monkeypatch):
     response = httpx.Response(429, headers={"Retry-After": "abc"}, request=request)
 
     sleep_calls: list[float] = []
-    monkeypatch.setattr("pipelines.lib.api.time.sleep", lambda secs: sleep_calls.append(secs))
+    monkeypatch.setattr(
+        "pipelines.lib.api.time.sleep", lambda secs: sleep_calls.append(secs)
+    )
 
     source._respect_retry_after(response)
 
@@ -106,6 +110,10 @@ def test_create_api_source_from_options_rejects_invalid_auth():
         create_api_source_from_options(
             system="api",
             entity="items",
-            options={"auth_type": "nope", "base_url": "https://api.example.com", "endpoint": "/v1"},
+            options={
+                "auth_type": "nope",
+                "base_url": "https://api.example.com",
+                "endpoint": "/v1",
+            },
             target_path="/tmp/bronze",
         )

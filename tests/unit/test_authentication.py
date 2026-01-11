@@ -47,7 +47,9 @@ class TestAuthConfigValidation:
 
     def test_api_key_requires_key(self):
         """API key auth should require api_key."""
-        with pytest.raises(ValueError, match="API key authentication requires 'api_key'"):
+        with pytest.raises(
+            ValueError, match="API key authentication requires 'api_key'"
+        ):
             AuthConfig(auth_type=AuthType.API_KEY)
 
     def test_api_key_with_key_valid(self):
@@ -324,77 +326,93 @@ class TestBuildAuthHeadersFromDict:
 
     def test_bearer_from_dict(self):
         """Should build bearer auth from dict."""
-        headers, auth_tuple = build_auth_headers_from_dict({
-            "auth_type": "bearer",
-            "token": "my-token",
-        })
+        headers, auth_tuple = build_auth_headers_from_dict(
+            {
+                "auth_type": "bearer",
+                "token": "my-token",
+            }
+        )
 
         assert headers["Authorization"] == "Bearer my-token"
         assert auth_tuple is None
 
     def test_api_key_from_dict(self):
         """Should build API key auth from dict."""
-        headers, auth_tuple = build_auth_headers_from_dict({
-            "auth_type": "api_key",
-            "api_key": "secret-key",
-        })
+        headers, auth_tuple = build_auth_headers_from_dict(
+            {
+                "auth_type": "api_key",
+                "api_key": "secret-key",
+            }
+        )
 
         assert headers["X-API-Key"] == "secret-key"
         assert auth_tuple is None
 
     def test_api_key_custom_header_from_dict(self):
         """Should build API key with custom header from dict."""
-        headers, auth_tuple = build_auth_headers_from_dict({
-            "auth_type": "api_key",
-            "api_key": "secret-key",
-            "api_key_header": "Authorization-Token",
-        })
+        headers, auth_tuple = build_auth_headers_from_dict(
+            {
+                "auth_type": "api_key",
+                "api_key": "secret-key",
+                "api_key_header": "Authorization-Token",
+            }
+        )
 
         assert headers["Authorization-Token"] == "secret-key"
         assert "X-API-Key" not in headers
 
     def test_basic_from_dict(self):
         """Should build basic auth from dict."""
-        headers, auth_tuple = build_auth_headers_from_dict({
-            "auth_type": "basic",
-            "username": "user",
-            "password": "pass",
-        })
+        headers, auth_tuple = build_auth_headers_from_dict(
+            {
+                "auth_type": "basic",
+                "username": "user",
+                "password": "pass",
+            }
+        )
 
         assert auth_tuple == ("user", "pass")
 
     def test_unsupported_auth_type_raises(self):
         """Unsupported auth type should raise."""
         with pytest.raises(ValueError, match="Unsupported auth_type"):
-            build_auth_headers_from_dict({
-                "auth_type": "oauth2",  # Not supported
-            })
+            build_auth_headers_from_dict(
+                {
+                    "auth_type": "oauth2",  # Not supported
+                }
+            )
 
     def test_case_insensitive_auth_type(self):
         """Auth type should be case insensitive."""
-        headers, _ = build_auth_headers_from_dict({
-            "auth_type": "BEARER",
-            "token": "token",
-        })
+        headers, _ = build_auth_headers_from_dict(
+            {
+                "auth_type": "BEARER",
+                "token": "token",
+            }
+        )
 
         assert headers["Authorization"] == "Bearer token"
 
     def test_extra_headers_from_dict(self):
         """Extra headers dict should be processed."""
-        headers, _ = build_auth_headers_from_dict({
-            "auth_type": "none",
-            "headers": {"X-Custom": "value", "X-Another": "another"},
-        })
+        headers, _ = build_auth_headers_from_dict(
+            {
+                "auth_type": "none",
+                "headers": {"X-Custom": "value", "X-Another": "another"},
+            }
+        )
 
         assert headers["X-Custom"] == "value"
         assert headers["X-Another"] == "another"
 
     def test_headers_non_dict_ignored(self):
         """Non-dict headers should be ignored."""
-        headers, _ = build_auth_headers_from_dict({
-            "auth_type": "none",
-            "headers": "not-a-dict",
-        })
+        headers, _ = build_auth_headers_from_dict(
+            {
+                "auth_type": "none",
+                "headers": "not-a-dict",
+            }
+        )
 
         # Should not raise, just ignore invalid headers
         assert "not-a-dict" not in headers

@@ -26,12 +26,14 @@ class TestFilterIncrementalBasic:
 
     def test_filters_after_watermark(self, con):
         """Records after watermark are kept."""
-        df = pd.DataFrame([
-            {"id": 1, "ts": datetime(2025, 1, 10)},  # Before watermark
-            {"id": 2, "ts": datetime(2025, 1, 15)},  # Equal to watermark (excluded)
-            {"id": 3, "ts": datetime(2025, 1, 16)},  # After watermark
-            {"id": 4, "ts": datetime(2025, 1, 20)},  # After watermark
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "ts": datetime(2025, 1, 10)},  # Before watermark
+                {"id": 2, "ts": datetime(2025, 1, 15)},  # Equal to watermark (excluded)
+                {"id": 3, "ts": datetime(2025, 1, 16)},  # After watermark
+                {"id": 4, "ts": datetime(2025, 1, 20)},  # After watermark
+            ]
+        )
 
         t = ibis.memtable(df)
         result = filter_incremental(t, "ts", "2025-01-15")
@@ -42,10 +44,12 @@ class TestFilterIncrementalBasic:
 
     def test_excludes_equal_to_watermark(self, con):
         """Records equal to watermark are excluded (strict greater than)."""
-        df = pd.DataFrame([
-            {"id": 1, "ts": datetime(2025, 1, 15, 10, 0, 0)},
-            {"id": 2, "ts": datetime(2025, 1, 15, 10, 0, 0)},  # Exact match
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "ts": datetime(2025, 1, 15, 10, 0, 0)},
+                {"id": 2, "ts": datetime(2025, 1, 15, 10, 0, 0)},  # Exact match
+            ]
+        )
 
         t = ibis.memtable(df)
         watermark = datetime(2025, 1, 15, 10, 0, 0).isoformat()
@@ -56,11 +60,13 @@ class TestFilterIncrementalBasic:
 
     def test_all_after_watermark(self, con):
         """All records after watermark returned."""
-        df = pd.DataFrame([
-            {"id": 1, "ts": datetime(2025, 1, 20)},
-            {"id": 2, "ts": datetime(2025, 1, 21)},
-            {"id": 3, "ts": datetime(2025, 1, 22)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "ts": datetime(2025, 1, 20)},
+                {"id": 2, "ts": datetime(2025, 1, 21)},
+                {"id": 3, "ts": datetime(2025, 1, 22)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = filter_incremental(t, "ts", "2025-01-15")
@@ -74,11 +80,13 @@ class TestFilterIncrementalDataTypes:
 
     def test_datetime_watermark(self, con):
         """Filter with datetime watermark column."""
-        df = pd.DataFrame([
-            {"id": 1, "updated_at": datetime(2025, 1, 10, 12, 0, 0)},
-            {"id": 2, "updated_at": datetime(2025, 1, 15, 12, 0, 0)},
-            {"id": 3, "updated_at": datetime(2025, 1, 20, 12, 0, 0)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "updated_at": datetime(2025, 1, 10, 12, 0, 0)},
+                {"id": 2, "updated_at": datetime(2025, 1, 15, 12, 0, 0)},
+                {"id": 3, "updated_at": datetime(2025, 1, 20, 12, 0, 0)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = filter_incremental(t, "updated_at", "2025-01-15T00:00:00")
@@ -89,12 +97,14 @@ class TestFilterIncrementalDataTypes:
 
     def test_integer_watermark(self, con):
         """Filter with integer watermark column (version number)."""
-        df = pd.DataFrame([
-            {"id": 1, "version": 1},
-            {"id": 2, "version": 5},
-            {"id": 3, "version": 10},
-            {"id": 4, "version": 15},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "version": 1},
+                {"id": 2, "version": 5},
+                {"id": 3, "version": 10},
+                {"id": 4, "version": 15},
+            ]
+        )
 
         t = ibis.memtable(df)
         # Use integer comparison
@@ -106,11 +116,13 @@ class TestFilterIncrementalDataTypes:
 
     def test_string_watermark(self, con):
         """Filter with string watermark column (lexicographic comparison)."""
-        df = pd.DataFrame([
-            {"id": 1, "batch_id": "batch_001"},
-            {"id": 2, "batch_id": "batch_005"},
-            {"id": 3, "batch_id": "batch_010"},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "batch_id": "batch_001"},
+                {"id": 2, "batch_id": "batch_005"},
+                {"id": 3, "batch_id": "batch_010"},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = filter_incremental(t, "batch_id", "batch_005")
@@ -125,10 +137,12 @@ class TestFilterIncrementalEdgeCases:
 
     def test_empty_result(self, con):
         """All records before watermark returns empty."""
-        df = pd.DataFrame([
-            {"id": 1, "ts": datetime(2025, 1, 1)},
-            {"id": 2, "ts": datetime(2025, 1, 5)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "ts": datetime(2025, 1, 1)},
+                {"id": 2, "ts": datetime(2025, 1, 5)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = filter_incremental(t, "ts", "2025-01-10")
@@ -138,10 +152,12 @@ class TestFilterIncrementalEdgeCases:
 
     def test_empty_input_table(self, con):
         """Empty input table returns empty result."""
-        df = pd.DataFrame({
-            "id": pd.array([], dtype="int64"),
-            "ts": pd.array([], dtype="datetime64[ns]")
-        })
+        df = pd.DataFrame(
+            {
+                "id": pd.array([], dtype="int64"),
+                "ts": pd.array([], dtype="datetime64[ns]"),
+            }
+        )
 
         t = ibis.memtable(df)
         result = filter_incremental(t, "ts", "2025-01-15")
@@ -151,9 +167,17 @@ class TestFilterIncrementalEdgeCases:
 
     def test_preserves_all_columns(self, con):
         """All columns preserved in filtered output."""
-        df = pd.DataFrame([
-            {"id": 1, "col_a": "A", "col_b": 100, "col_c": 1.5, "ts": datetime(2025, 1, 20)},
-        ])
+        df = pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "col_a": "A",
+                    "col_b": 100,
+                    "col_c": 1.5,
+                    "ts": datetime(2025, 1, 20),
+                },
+            ]
+        )
 
         t = ibis.memtable(df)
         result = filter_incremental(t, "ts", "2025-01-15")
@@ -168,11 +192,13 @@ class TestFilterIncrementalWithNulls:
 
     def test_nulls_excluded(self, con):
         """Null watermark values are excluded (not greater than anything)."""
-        df = pd.DataFrame([
-            {"id": 1, "ts": datetime(2025, 1, 20)},
-            {"id": 2, "ts": None},  # NULL timestamp
-            {"id": 3, "ts": datetime(2025, 1, 25)},
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": 1, "ts": datetime(2025, 1, 20)},
+                {"id": 2, "ts": None},  # NULL timestamp
+                {"id": 3, "ts": datetime(2025, 1, 25)},
+            ]
+        )
 
         t = ibis.memtable(df)
         result = filter_incremental(t, "ts", "2025-01-15")
@@ -189,10 +215,12 @@ class TestFilterIncrementalLargeScale:
     def test_large_dataset_filter(self, con):
         """Filter large dataset efficiently."""
         # 1000 records, 500 before watermark, 500 after
-        df = pd.DataFrame([
-            {"id": i, "ts": datetime(2025, 1, 1) + pd.Timedelta(hours=i)}
-            for i in range(1000)
-        ])
+        df = pd.DataFrame(
+            [
+                {"id": i, "ts": datetime(2025, 1, 1) + pd.Timedelta(hours=i)}
+                for i in range(1000)
+            ]
+        )
 
         t = ibis.memtable(df)
         # Watermark at hour 500

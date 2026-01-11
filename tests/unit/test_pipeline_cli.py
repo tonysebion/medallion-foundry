@@ -13,7 +13,6 @@ import sys
 from unittest.mock import MagicMock
 
 
-
 class TestCLIHelp:
     """Tests for CLI help and basic invocation."""
 
@@ -239,7 +238,15 @@ class TestCLIDiscovery:
     def test_discover_nonexistent_pipeline(self):
         """Should handle nonexistent pipeline gracefully."""
         result = subprocess.run(
-            [sys.executable, "-m", "pipelines", "nonexistent.pipeline", "--date", "2025-01-15", "--dry-run"],
+            [
+                sys.executable,
+                "-m",
+                "pipelines",
+                "nonexistent.pipeline",
+                "--date",
+                "2025-01-15",
+                "--dry-run",
+            ],
             capture_output=True,
             text=True,
         )
@@ -260,7 +267,15 @@ class TestCLIDiscovery:
 
         for name in formats:
             result = subprocess.run(
-                [sys.executable, "-m", "pipelines", name, "--date", "2025-01-15", "--dry-run"],
+                [
+                    sys.executable,
+                    "-m",
+                    "pipelines",
+                    name,
+                    "--date",
+                    "2025-01-15",
+                    "--dry-run",
+                ],
                 capture_output=True,
                 text=True,
             )
