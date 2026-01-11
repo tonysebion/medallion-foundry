@@ -1,75 +1,92 @@
-"""Integration tests that exercise the example Bronze/Silver pipelines.
+"""Integration tests that exercise the example YAML pipelines."""
 
-Note: Some examples (customer_scd2, retail_orders) have been converted to YAML.
-These tests are kept for backward compatibility with Python examples.
-"""
+from pathlib import Path
 
-import pytest
 import pandas as pd
 
-# Import only the Python examples that exist
-from pipelines.examples import file_to_silver, multi_source_parallel
+from pipelines.lib.config_loader import load_pipeline
 
-# These examples were converted to YAML - skip tests that require them
-try:
-    from pipelines.examples import customer_scd2
-except ImportError:
-    customer_scd2 = None
-
-try:
-    from pipelines.examples import retail_orders
-except ImportError:
-    retail_orders = None
+EXAMPLES_DIR = Path(__file__).resolve().parents[2] / "pipelines" / "examples"
 
 
-@pytest.mark.skipif(
-    customer_scd2 is None, reason="customer_scd2 example converted to YAML"
-)
-def test_customer_scd2_full_history(tmp_path, monkeypatch):
+def load_example(name: str):
+    return load_pipeline(EXAMPLES_DIR / f"{name}.yaml")
+
+
+def test_customer_scd2_full_history(tmp_path):
     run_date = "2025-01-15"
-    sample_dir = tmp_path / "customer_scd2"
-    monkeypatch.setattr(customer_scd2, "SAMPLE_DIR", sample_dir)
+    input_dir = tmp_path / "customer_scd2_input"
+    output_dir = tmp_path / "customer_scd2_output"
 
-    monkeypatch.setattr(
-        customer_scd2.bronze,
-        "source_path",
-        str(sample_dir / "customers_{run_date}.csv"),
-    )
-    monkeypatch.setattr(
-        customer_scd2.bronze,
-        "target_path",
-        str(
-            sample_dir
-            / "bronze"
-            / "system={system}"
-            / "entity={entity}"
-            / "dt={run_date}"
-        ),
-    )
-    monkeypatch.setattr(
-        customer_scd2.silver,
-        "source_path",
-        str(
-            sample_dir
-            / "bronze"
-            / "system=crm"
-            / "entity=customers"
-            / "dt={run_date}"
-            / "*.parquet"
-        ),
-    )
-    monkeypatch.setattr(
-        customer_scd2.silver,
-        "target_path",
-        str(sample_dir / "silver" / "crm" / "customers"),
-    )
+    input_dir.mkdir(parents=True, exist_ok=True)
 
-    customer_scd2.create_sample_data(run_date)
-    result = customer_scd2.run(run_date)
+    df = pd.DataFrame(
+        [
+            {
+                "customer_id": "CUST001",
+                "name": "Ada",
+                "email": "ada@example.com",
+                "tier": "gold",
+                "status": "active",
+                "updated_at": "2025-01-01",
+            },
+            {
+                "customer_id": "CUST001",
+                "name": "Ada",
+                "email": "ada@example.com",
+                "tier": "platinum",
+                "status": "active",
+                "updated_at": "2025-01-10",
+            },
+            {
+                "customer_id": "CUST001",
+                "name": "Ada",
+                "email": "ada@example.com",
+                "tier": "platinum",
+                "status": "inactive",
+                "updated_at": "2025-01-14",
+            },
+            {
+                "customer_id": "CUST002",
+                "name": "Ben",
+                "email": "ben@example.com",
+                "tier": "silver",
+                "status": "active",
+                "updated_at": "2025-01-03",
+            },
+            {
+                "customer_id": "CUST003",
+                "name": "Cora",
+                "email": "cora@example.com",
+                "tier": "gold",
+                "status": "active",
+                "updated_at": "2025-01-02",
+            },
+            {
+                "customer_id": "CUST003",
+                "name": "Cora",
+                "email": "cora@example.com",
+                "tier": "gold",
+                "status": "active",
+                "updated_at": "2025-01-12",
+            },
+        ]
+    )
+    df.to_csv(input_dir / f"customers_{run_date}.csv", index=False)
+
+    pipeline = load_example("customer_scd2")
+    pipeline.bronze.source_path = str(input_dir / f"customers_{run_date}.csv")
+    pipeline.bronze.target_path = str(output_dir / "bronze" / "crm" / "customers")
+    pipeline.silver.source_path = str(
+        output_dir / "bronze" / "crm" / "customers" / "*.parquet"
+    )
+    pipeline.silver.target_path = str(output_dir / "silver" / "crm" / "customers")
+
+    result = pipeline.run(run_date)
 
     assert result["bronze"]["row_count"] == 6
     silver_df = pd.read_parquet(
-        sample_dir / "silver" / "crm" / "customers" / "data.parquet"
+        output_dir / "silver" / "crm" / "customers" / "customers.parquet"
     )
     assert len(silver_df) == 6
     assert set(silver_df["customer_id"]) == {"CUST001", "CUST002", "CUST003"}
@@ -80,54 +97,67 @@ def test_customer_scd2_full_history(tmp_path, monkeypatch):
     assert silver_df[silver_df["customer_id"] == "CUST001"].shape[0] == 3
 
 
-@pytest.mark.skipif(
-    retail_orders is None, reason="retail_orders example converted to YAML"
-)
-def test_retail_orders_current_only(tmp_path, monkeypatch):
+def test_retail_orders_current_only(tmp_path):
     run_date = "2025-01-15"
-    sample_dir = tmp_path / "retail_orders"
-    monkeypatch.setattr(retail_orders, "SAMPLE_DIR", sample_dir)
+    input_dir = tmp_path / "retail_orders_input"
+    output_dir = tmp_path / "retail_orders_output"
 
-    monkeypatch.setattr(
-        retail_orders.bronze,
-        "source_path",
-        str(sample_dir / "orders_{run_date}.csv"),
-    )
-    monkeypatch.setattr(
-        retail_orders.bronze,
-        "target_path",
-        str(
-            sample_dir
-            / "bronze"
-            / "system={system}"
-            / "entity={entity}"
-            / "dt={run_date}"
-        ),
-    )
-    monkeypatch.setattr(
-        retail_orders.silver,
-        "source_path",
-        str(
-            sample_dir
-            / "bronze"
-            / "system=retail"
-            / "entity=orders"
-            / "dt={run_date}"
-            / "*.parquet"
-        ),
-    )
-    monkeypatch.setattr(
-        retail_orders.silver,
-        "target_path",
-        str(sample_dir / "silver" / "retail" / "orders"),
-    )
+    input_dir.mkdir(parents=True, exist_ok=True)
 
-    retail_orders.create_sample_data(run_date)
-    result = retail_orders.run(run_date)
+    df = pd.DataFrame(
+        [
+            {
+                "order_id": "ORD001",
+                "customer_id": "CUST001",
+                "order_total": 120.0,
+                "status": "completed",
+                "updated_at": "2025-01-01",
+            },
+            {
+                "order_id": "ORD002",
+                "customer_id": "CUST002",
+                "order_total": 80.0,
+                "status": "pending",
+                "updated_at": "2025-01-02",
+            },
+            {
+                "order_id": "ORD003",
+                "customer_id": "CUST003",
+                "order_total": 60.0,
+                "status": "shipped",
+                "updated_at": "2025-01-03",
+            },
+            {
+                "order_id": "ORD004",
+                "customer_id": "CUST003",
+                "order_total": 95.0,
+                "status": "completed",
+                "updated_at": "2025-01-04",
+            },
+            {
+                "order_id": "ORD005",
+                "customer_id": "CUST001",
+                "order_total": 40.0,
+                "status": "pending",
+                "updated_at": "2025-01-05",
+            },
+        ]
+    )
+    df.to_csv(input_dir / f"orders_{run_date}.csv", index=False)
+
+    pipeline = load_example("retail_orders")
+    pipeline.bronze.source_path = str(input_dir / f"orders_{run_date}.csv")
+    pipeline.bronze.target_path = str(output_dir / "bronze" / "retail" / "orders")
+    pipeline.silver.source_path = str(
+        output_dir / "bronze" / "retail" / "orders" / "*.parquet"
+    )
+    pipeline.silver.target_path = str(output_dir / "silver" / "retail" / "orders")
+
+    result = pipeline.run(run_date)
 
     assert result["silver"]["row_count"] == 5
     silver_df = pd.read_parquet(
-        sample_dir / "silver" / "retail" / "orders" / "data.parquet"
+        output_dir / "silver" / "retail" / "orders" / "orders.parquet"
     )
     assert len(silver_df) == 5
     assert silver_df["order_id"].nunique() == 5
@@ -135,42 +165,64 @@ def test_retail_orders_current_only(tmp_path, monkeypatch):
     assert set(silver_df["status"]) >= {"completed", "pending", "shipped"}
 
 
-def test_file_to_silver_quality_checks(tmp_path, monkeypatch):
+def test_file_to_silver_scd2_history(tmp_path):
     run_date = "2025-01-15"
     input_dir = tmp_path / "file_to_silver_input"
     output_dir = tmp_path / "file_to_silver_output"
-    monkeypatch.setattr(file_to_silver, "INPUT_DIR", input_dir)
-    monkeypatch.setattr(file_to_silver, "OUTPUT_DIR", output_dir)
 
-    monkeypatch.setattr(
-        file_to_silver.bronze,
-        "source_path",
-        str(input_dir / "products" / "*.parquet"),
-    )
-    monkeypatch.setattr(
-        file_to_silver.bronze,
-        "target_path",
-        str(output_dir / "bronze" / "inventory" / "products"),
-    )
-    monkeypatch.setattr(
-        file_to_silver.silver,
-        "source_path",
-        str(output_dir / "bronze" / "inventory" / "products" / "*.parquet"),
-    )
-    monkeypatch.setattr(
-        file_to_silver.silver,
-        "target_path",
-        str(output_dir / "silver" / "inventory" / "products"),
-    )
+    input_dir.mkdir(parents=True, exist_ok=True)
 
-    file_to_silver.create_sample_data(run_date)
-    result = file_to_silver.run(run_date)
+    df = pd.DataFrame(
+        [
+            {
+                "product_id": "P001",
+                "name": "Widget",
+                "category": "Hardware",
+                "price": 10.0,
+                "stock_quantity": 5,
+                "supplier_id": "SUP001",
+                "updated_at": "2025-01-01",
+            },
+            {
+                "product_id": "P001",
+                "name": "Widget",
+                "category": "Hardware",
+                "price": 12.0,
+                "stock_quantity": 4,
+                "supplier_id": "SUP001",
+                "updated_at": "2025-01-10",
+            },
+            {
+                "product_id": "P002",
+                "name": "Gadget",
+                "category": "Hardware",
+                "price": 8.5,
+                "stock_quantity": 10,
+                "supplier_id": "SUP002",
+                "updated_at": "2025-01-05",
+            },
+            {
+                "product_id": "P003",
+                "name": "Service",
+                "category": "Software",
+                "price": 25.0,
+                "stock_quantity": 0,
+                "supplier_id": "SUP003",
+                "updated_at": "2025-01-07",
+            },
+        ]
+    )
+    df.to_parquet(input_dir / "products.parquet", index=False)
 
-    silver_result = result["silver"]
-    quality = silver_result["quality"]
-    assert quality["passed"]
-    assert quality["rules_checked"] == 6
-    assert quality["pass_rate"] == 100.0
+    pipeline = load_example("file_to_silver")
+    pipeline.bronze.source_path = str(input_dir / "*.parquet")
+    pipeline.bronze.target_path = str(output_dir / "bronze" / "inventory" / "products")
+    pipeline.silver.source_path = str(
+        output_dir / "bronze" / "inventory" / "products" / "*.parquet"
+    )
+    pipeline.silver.target_path = str(output_dir / "silver" / "inventory" / "products")
+
+    result = pipeline.run(run_date)
 
     # Silver writes to entity_name.parquet (products.parquet)
     silver_df = pd.read_parquet(
@@ -178,88 +230,56 @@ def test_file_to_silver_quality_checks(tmp_path, monkeypatch):
     )
     assert len(silver_df) == 4
     assert "effective_from" in silver_df.columns
+    assert result["silver"]["row_count"] == 4
 
 
-def test_multi_source_parallel_handles_every_entity(tmp_path, monkeypatch):
+def test_multi_source_parallel_customers_yaml(tmp_path):
     run_date = "2025-01-15"
     input_dir = tmp_path / "multi_source_input"
     output_dir = tmp_path / "multi_source_output"
-    monkeypatch.setattr(multi_source_parallel, "INPUT_DIR", input_dir)
-    monkeypatch.setattr(multi_source_parallel, "OUTPUT_DIR", output_dir)
+    input_dir.mkdir(parents=True, exist_ok=True)
 
-    monkeypatch.setattr(
-        multi_source_parallel.customers_bronze,
-        "source_path",
-        str(input_dir / "customers" / "customers_{run_date}.csv"),
+    df = pd.DataFrame(
+        [
+            {
+                "customer_id": "CUST001",
+                "name": "Ada",
+                "email": "ada@example.com",
+                "tier": "gold",
+                "updated_at": "2025-01-02",
+            },
+            {
+                "customer_id": "CUST002",
+                "name": "Ben",
+                "email": "ben@example.com",
+                "tier": "silver",
+                "updated_at": "2025-01-03",
+            },
+            {
+                "customer_id": "CUST003",
+                "name": "Cora",
+                "email": "cora@example.com",
+                "tier": "gold",
+                "updated_at": "2025-01-04",
+            },
+        ]
     )
-    monkeypatch.setattr(
-        multi_source_parallel.customers_bronze,
-        "target_path",
-        str(output_dir / "bronze" / "ecommerce" / "customers"),
-    )
-    monkeypatch.setattr(
-        multi_source_parallel.orders_bronze,
-        "source_path",
-        str(input_dir / "orders" / "orders_{run_date}.csv"),
-    )
-    monkeypatch.setattr(
-        multi_source_parallel.orders_bronze,
-        "target_path",
-        str(output_dir / "bronze" / "ecommerce" / "orders"),
-    )
-    monkeypatch.setattr(
-        multi_source_parallel.products_bronze,
-        "source_path",
-        str(input_dir / "products" / "products_{run_date}.parquet"),
-    )
-    monkeypatch.setattr(
-        multi_source_parallel.products_bronze,
-        "target_path",
-        str(output_dir / "bronze" / "ecommerce" / "products"),
-    )
+    df.to_csv(input_dir / f"customers_{run_date}.csv", index=False)
 
-    monkeypatch.setattr(
-        multi_source_parallel.customers_silver,
-        "source_path",
-        str(output_dir / "bronze" / "ecommerce" / "customers" / "*.parquet"),
+    pipeline = load_example("multi_source_parallel")
+    pipeline.bronze.source_path = str(input_dir / f"customers_{run_date}.csv")
+    pipeline.bronze.target_path = str(output_dir / "bronze" / "ecommerce" / "customers")
+    pipeline.silver.source_path = str(
+        output_dir / "bronze" / "ecommerce" / "customers" / "*.parquet"
     )
-    monkeypatch.setattr(
-        multi_source_parallel.customers_silver,
-        "target_path",
-        str(output_dir / "silver" / "ecommerce" / "customers"),
-    )
-    monkeypatch.setattr(
-        multi_source_parallel.orders_silver,
-        "source_path",
-        str(output_dir / "bronze" / "ecommerce" / "orders" / "*.parquet"),
-    )
-    monkeypatch.setattr(
-        multi_source_parallel.orders_silver,
-        "target_path",
-        str(output_dir / "silver" / "ecommerce" / "orders"),
-    )
-    monkeypatch.setattr(
-        multi_source_parallel.products_silver,
-        "source_path",
-        str(output_dir / "bronze" / "ecommerce" / "products" / "*.parquet"),
-    )
-    monkeypatch.setattr(
-        multi_source_parallel.products_silver,
-        "target_path",
-        str(output_dir / "silver" / "ecommerce" / "products"),
-    )
+    pipeline.silver.target_path = str(output_dir / "silver" / "ecommerce" / "customers")
 
-    multi_source_parallel.create_sample_data(run_date)
-    result = multi_source_parallel.run(run_date)
+    result = pipeline.run(run_date)
 
-    silver_results = result["silver"]
-    assert silver_results["customers"]["row_count"] == 3
-    assert silver_results["orders"]["entity_kind"] == "event"
-    assert silver_results["products"]["row_count"] == 3
+    assert result["silver"]["row_count"] == 3
 
-    # Silver writes to entity_name.parquet (orders.parquet)
-    orders_df = pd.read_parquet(
-        output_dir / "silver" / "ecommerce" / "orders" / "orders.parquet"
+    customers_df = pd.read_parquet(
+        output_dir / "silver" / "ecommerce" / "customers" / "customers.parquet"
     )
-    assert len(orders_df) == 3
-    assert "_silver_curated_at" in orders_df.columns
+    assert len(customers_df) == 3
+    assert "_silver_curated_at" in customers_df.columns

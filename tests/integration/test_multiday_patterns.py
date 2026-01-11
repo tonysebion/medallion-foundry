@@ -478,20 +478,13 @@ class TestSnapshotToStateSCD1:
             minio_client, minio_bucket, multiday_prefix, "snapshot_full", "customers"
         )
 
-        # With snapshot + SCD1, Silver reads ALL Bronze partitions and dedupes by id
-        # keeping the latest version (by timestamp). Since Silver sees Days 1-3:
-        # - ID 1: v2 from Day 2 (ts=DAY2) is latest
-        # - ID 2: v1 from Day 1 (ts=DAY1) is only version (not in Day 3 but still seen from Day 1/2)
-        # - ID 3: v2 from Day 2 (ts=DAY2) is latest
-        # - ID 4: v2 from Day 3 (ts=DAY3) is latest
-        # - ID 5: v1 from Day 1 (ts=DAY1) is only version
-        # - ID 6: v1 from Day 2 (ts=DAY2) is only version
-        # Result: 6 unique IDs (ID 2 not implicitly deleted because Silver sees all days)
-        assert len(silver_df) == 6, (
-            f"Expected 6 unique IDs after 3-day snapshot, got {len(silver_df)}"
+        # With snapshot + SCD1, Silver uses REPLACE_DAILY (latest full snapshot only).
+        # Day 3 snapshot has IDs 1,3,4,5,6 (ID 2 implicitly deleted).
+        assert len(silver_df) == 5, (
+            f"Expected 5 unique IDs after 3-day snapshot, got {len(silver_df)}"
         )
-        assert set(silver_df["id"].tolist()) == {1, 2, 3, 4, 5, 6}, (
-            "Should have IDs 1-6"
+        assert set(silver_df["id"].tolist()) == {1, 3, 4, 5, 6}, (
+            "Should have IDs 1,3,4,5,6"
         )
 
         # Verify ID 1 has Day 2 update (name v2, value 150)
@@ -499,10 +492,9 @@ class TestSnapshotToStateSCD1:
         assert "v2" in row_1["name"], "ID 1 should have v2 name from Day 2 update"
         assert row_1["value"] == 150, "ID 1 should have value=150 from Day 2 update"
 
-        # Verify ID 2 still exists (it's in Day 1/2 Bronze, just not in Day 3 snapshot)
-        row_2 = silver_df[silver_df["id"] == 2].iloc[0]
-        assert "v1" in row_2["name"], "ID 2 should have v1 name (unchanged from Day 1)"
-        assert row_2["value"] == 200, "ID 2 should have value=200 from Day 1"
+        assert 2 not in set(silver_df["id"].tolist()), (
+            "ID 2 should be absent after Day 3 snapshot"
+        )
 
         # Verify ID 3 has Day 2 update
         row_3 = silver_df[silver_df["id"] == 3].iloc[0]

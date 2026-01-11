@@ -62,7 +62,6 @@ class PatternTransitionDataGenerator:
         records = []
         # Reset and create fresh state
         self._records.clear()
-        self._next_id = 1
 
         for _ in range(record_count):
             rec = self._create_record(ts)
@@ -677,10 +676,10 @@ class TestIncrementalFullSnapshotIncrementalCycle:
                 csv,
                 minio_bucket,
                 prefix,
-                date(2025, 1, 4 + day),
+                date(2025, 1, 5 + day),
                 LoadPattern.INCREMENTAL_APPEND,
             )
-            run_silver(minio_bucket, prefix, date(2025, 1, 4 + day))
+            run_silver(minio_bucket, prefix, date(2025, 1, 5 + day))
 
         # Final Silver output
         final_df = get_silver_data(minio_client, minio_bucket, prefix, "2025-01-11")
