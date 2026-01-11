@@ -108,7 +108,9 @@ def create_yaml_config(
     cdc_operation_column: Optional[str] = None,
 ) -> Path:
     """Create a YAML config file from template with substitutions."""
-    watermark_line = f"incremental_column: {incremental_column}" if incremental_column else ""
+    watermark_line = (
+        f"incremental_column: {incremental_column}" if incremental_column else ""
+    )
     delete_mode_line = f"delete_mode: {delete_mode}" if delete_mode else ""
     cdc_options_line = ""
     if cdc_operation_column:

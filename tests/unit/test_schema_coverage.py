@@ -488,6 +488,9 @@ class TestSchemaCompleteness:
             "attributes",
             "bronze_source",
             "validate_source",
+            # CDC model options
+            "keep_history",
+            "handle_deletes",
             # S3 options
             "s3_endpoint_url",
             "s3_signature_version",

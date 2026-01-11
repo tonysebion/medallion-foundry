@@ -1005,7 +1005,11 @@ class TestPartitionBoundaryDetection:
         csv5 = tmp_path / "day5.csv"
         day5_data.to_csv(csv5, index=False)
         run_bronze(
-            csv5, minio_bucket, prefix, date(2025, 1, 10), LoadPattern.INCREMENTAL_APPEND
+            csv5,
+            minio_bucket,
+            prefix,
+            date(2025, 1, 10),
+            LoadPattern.INCREMENTAL_APPEND,
         )
 
         # Run Silver - should only read partitions 3, 4, 5
@@ -1126,7 +1130,11 @@ class TestPartitionBoundaryDetection:
         csv5 = tmp_path / "day5.csv"
         day5_data.to_csv(csv5, index=False)
         run_bronze(
-            csv5, minio_bucket, prefix, date(2025, 1, 10), LoadPattern.INCREMENTAL_APPEND
+            csv5,
+            minio_bucket,
+            prefix,
+            date(2025, 1, 10),
+            LoadPattern.INCREMENTAL_APPEND,
         )
 
         # Run Silver
