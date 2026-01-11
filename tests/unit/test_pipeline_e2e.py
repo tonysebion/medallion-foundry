@@ -80,8 +80,8 @@ class TestBronzeToSilverE2E:
             target_path=str(tmp_path / "silver/domain=sales/subject=products/"),
             domain="sales",
             subject="products",
-            natural_keys=["id"],
-            change_timestamp="updated_at",
+            unique_columns=["id"],
+            last_updated_column="updated_at",
             entity_kind=EntityKind.STATE,
             history_mode=HistoryMode.CURRENT_ONLY,
         )
@@ -143,8 +143,8 @@ class TestBronzeToSilverE2E:
             target_path=str(tmp_path / "silver/domain=test/subject=items/"),
             domain="test",
             subject="items",
-            natural_keys=["id"],
-            change_timestamp="updated_at",
+            unique_columns=["id"],
+            last_updated_column="updated_at",
         )
 
         # First run
@@ -359,8 +359,8 @@ class TestDryRun:
             target_path=str(tmp_path / "silver/domain=test/subject=items/"),
             domain="test",
             subject="items",
-            natural_keys=["id"],
-            change_timestamp="updated_at",
+            unique_columns=["id"],
+            last_updated_column="updated_at",
         )
 
         result = run_pipeline(bronze, silver, "2025-01-15", dry_run=True)

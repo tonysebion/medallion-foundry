@@ -74,7 +74,7 @@ Partitions are additive - no overlap, only deltas!
 ```yaml
 bronze:
   load_pattern: incremental
-  watermark_column: updated_at  # Required! Column to track changes
+  incremental_column: updated_at  # Required! Column to track changes
 ```
 
 ### cdc - Change Data Capture Stream
@@ -131,7 +131,7 @@ Day 3: Silver reads bronze/dt=01-17/ only
 ```yaml
 silver:
   model: periodic_snapshot
-  # natural_keys and change_timestamp are OPTIONAL for this model
+  # unique_columns and last_updated_column are OPTIONAL for this model
 ```
 
 ### full_merge_dedupe - Accumulated Current State (SCD Type 1)
@@ -141,7 +141,7 @@ Silver reads **ALL Bronze partitions**, unions them, and deduplicates to keep th
 ```
 Day 3: Silver reads bronze/dt=01-15/ UNION dt=01-16/ UNION dt=01-17/
        Total rows: 1000 + 8 + 5 = 1013 rows
-       After dedupe by natural_keys: ~1008 unique records (latest version of each)
+       After dedupe by unique_columns: ~1008 unique records (latest version of each)
 ```
 
 **Use when:** Bronze is `incremental` and you want current state.
@@ -150,8 +150,8 @@ Day 3: Silver reads bronze/dt=01-15/ UNION dt=01-16/ UNION dt=01-17/
 ```yaml
 silver:
   model: full_merge_dedupe
-  natural_keys: [customer_id]      # Required - what makes a record unique
-  change_timestamp: updated_at     # Required - which version is newest
+  unique_columns: [customer_id]        # Required - what makes a record unique
+  last_updated_column: updated_at     # Required - which version is newest
 ```
 
 ### scd_type_2 - Full History with Effective Dates
@@ -174,8 +174,8 @@ Day 3: Silver reads all partitions
 ```yaml
 silver:
   model: scd_type_2
-  natural_keys: [customer_id]
-  change_timestamp: updated_at
+  unique_columns: [customer_id]
+  last_updated_column: updated_at
 ```
 
 ### event_log - Immutable Event Stream
@@ -194,8 +194,8 @@ Day 3: Silver reads all event partitions
 ```yaml
 silver:
   model: event_log
-  natural_keys: [event_id]
-  change_timestamp: event_time
+  unique_columns: [event_id]
+  last_updated_column: event_time
 ```
 
 ### CDC Models - For CDC Bronze Streams
@@ -217,8 +217,8 @@ bronze:
 
 silver:
   model: cdc_current_tombstone  # or any cdc_* model
-  natural_keys: [customer_id]
-  change_timestamp: updated_at
+  unique_columns: [customer_id]
+  last_updated_column: updated_at
 ```
 
 ---
@@ -343,13 +343,13 @@ bronze:
   entity: orders
   source_type: database_mssql
   load_pattern: incremental
-  watermark_column: updated_at
+  incremental_column: updated_at
   query: SELECT * FROM Orders WHERE updated_at > '{watermark}'
 
 silver:
   model: full_merge_dedupe
-  natural_keys: [order_id]
-  change_timestamp: updated_at
+  unique_columns: [order_id]
+  last_updated_column: updated_at
 ```
 
 ### 3. Audit Trail with Full History
@@ -363,12 +363,12 @@ bronze:
   entity: customers
   source_type: database_mssql
   load_pattern: incremental
-  watermark_column: modified_date
+  incremental_column: modified_date
 
 silver:
   model: scd_type_2
-  natural_keys: [customer_id]
-  change_timestamp: modified_date
+  unique_columns: [customer_id]
+  last_updated_column: modified_date
 ```
 
 ### 4. Immutable Event Log
@@ -382,12 +382,12 @@ bronze:
   entity: events
   source_type: api_rest
   load_pattern: incremental
-  watermark_column: event_time
+  incremental_column: event_time
 
 silver:
   model: event_log
-  natural_keys: [event_id]
-  change_timestamp: event_time
+  unique_columns: [event_id]
+  last_updated_column: event_time
 ```
 
 ### 5. CDC Stream with Soft Deletes
@@ -405,8 +405,8 @@ bronze:
 
 silver:
   model: cdc_current_tombstone
-  natural_keys: [customer_id]
-  change_timestamp: updated_at
+  unique_columns: [customer_id]
+  last_updated_column: updated_at
 ```
 
 ---
@@ -454,10 +454,10 @@ WHERE is_current = true
 **Symptom:** Same record appears multiple times with different timestamps.
 
 **Cause:** Either:
-1. Missing `natural_keys` - Silver can't identify duplicates
-2. Wrong `change_timestamp` - Silver can't determine which is newest
+1. Missing `unique_columns` - Silver can't identify duplicates
+2. Wrong `last_updated_column` - Silver can't determine which is newest
 
-**Fix:** Ensure `natural_keys` uniquely identifies records and `change_timestamp` is the modification date.
+**Fix:** Ensure `unique_columns` uniquely identifies records and `last_updated_column` is the modification date.
 
 ### "Validation error: incompatible patterns"
 

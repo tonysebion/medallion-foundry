@@ -1,0 +1,49 @@
+# Azure Pipelines configuration for on-prem ADO
+# Adjust 'pool.name' to match your on-prem agent pool
+# Triggers can be customized in ADO UI for on-prem setups
+
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  name: 'Default'  # CHANGE THIS to your on-prem ADO agent pool name
+
+variables:
+  pythonVersion: '3.11'
+
+steps:
+  - task: UsePythonVersion@0
+    displayName: 'Use Python $(pythonVersion)'
+    inputs:
+      versionSpec: '$(pythonVersion)'
+
+  - pwsh: |
+      python -m pip install --upgrade pip
+      python -m pip install -r requirements-dev.txt
+    displayName: 'Install dependencies'
+
+  - pwsh: python -m ruff format --check pipelines/ tests/ scripts/
+    displayName: 'Format check (ruff)'
+
+  - pwsh: python -m ruff check pipelines/ tests/ scripts/
+    displayName: 'Lint (ruff)'
+
+  - pwsh: python -m mypy pipelines/
+    displayName: 'Type check (mypy)'
+
+  - pwsh: python -m pytest -v
+    displayName: 'Run tests (pytest)'
+
+  # Optionally publish test coverage and artifacts here
+  # - task: PublishBuildArtifacts@1
+  #   inputs:
+  #     PathtoPublish: 'htmlcov'
+  #     ArtifactName: 'coverage'
+  #     publishLocation: 'Container'

@@ -33,8 +33,8 @@ silver:
   subject: "{entity}"
   source_path: "s3://{bucket}/{prefix}/bronze/system={system}/entity={entity}/dt=*/*.parquet"
   target_path: "s3://{bucket}/{prefix}/silver/domain={domain}/subject={subject}/dt={run_date}/"
-  natural_keys: [{natural_key}]
-  change_timestamp: {change_timestamp}
+  unique_columns: [{unique_column}]
+  last_updated_column: {last_updated_column}
   entity_kind: event
   # Note: delete_mode is not applicable for event entities
   # All operations are preserved as immutable events

@@ -27,8 +27,8 @@ def _make_valid_silver_entity() -> SilverEntity:
     return SilverEntity(
         source_path="/tmp/bronze/system=sys/entity=orders/dt={run_date}/*.parquet",
         target_path="/tmp/silver/orders/",
-        natural_keys=["order_id"],
-        change_timestamp="updated_at",
+        unique_columns=["order_id"],
+        last_updated_column="updated_at",
         entity_kind=EntityKind.STATE,
         history_mode=HistoryMode.CURRENT_ONLY,
     )
@@ -56,7 +56,7 @@ class TestBronzeSourceValidation:
         source.watermark_column = None
 
         issues = validate_bronze_source(source)
-        assert any(issue.field == "watermark_column" for issue in issues)
+        assert any(issue.field == "incremental_column" for issue in issues)
 
 
 class TestSilverEntityValidation:
@@ -64,8 +64,8 @@ class TestSilverEntityValidation:
         entity = _make_valid_silver_entity()
         entity.source_path = ""
         entity.target_path = ""
-        entity.natural_keys = []
-        entity.change_timestamp = ""
+        entity.unique_columns = []
+        entity.last_updated_column = ""
 
         issues = validate_silver_entity(entity)
         error_fields = [
@@ -75,8 +75,8 @@ class TestSilverEntityValidation:
         ]
         assert "source_path" in error_fields
         assert "target_path" in error_fields
-        assert "natural_keys" in error_fields
-        assert "change_timestamp" in error_fields
+        assert "unique_columns" in error_fields
+        assert "last_updated_column" in error_fields
 
     def test_warning_for_event_full_history(self):
         entity = _make_valid_silver_entity()
@@ -189,8 +189,8 @@ class TestSilverEntityValidateMethod:
         entity = SilverEntity(
             source_path=str(source_dir / "*.parquet"),
             target_path=str(tmp_path / "silver"),
-            natural_keys=["id"],
-            change_timestamp="updated_at",
+            unique_columns=["id"],
+            last_updated_column="updated_at",
         )
 
         issues = entity.validate(check_source=False)
@@ -201,8 +201,8 @@ class TestSilverEntityValidateMethod:
         entity = SilverEntity(
             source_path=str(tmp_path / "bronze" / "{run_date}" / "*.parquet"),
             target_path=str(tmp_path / "silver"),
-            natural_keys=["id"],
-            change_timestamp="updated_at",
+            unique_columns=["id"],
+            last_updated_column="updated_at",
         )
 
         issues = entity.validate("2025-01-15", check_source=True)
@@ -223,8 +223,8 @@ class TestSilverEntityValidateMethod:
         entity = SilverEntity(
             source_path=str(tmp_path / "bronze" / "{run_date}" / "*.parquet"),
             target_path=str(tmp_path / "silver"),
-            natural_keys=["id"],
-            change_timestamp="updated_at",
+            unique_columns=["id"],
+            last_updated_column="updated_at",
         )
 
         issues = entity.validate("2025-01-15", check_source=True)

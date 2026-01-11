@@ -478,8 +478,8 @@ class TestSilverLayerIsolation:
             ),
             domain="sales",
             subject="orders",
-            natural_keys=["order_id"],
-            change_timestamp="updated_at",
+            unique_columns=["order_id"],
+            last_updated_column="updated_at",
         )
         orders_silver_result = orders_silver.run(run_date)
         assert orders_silver_result.get("row_count", 0) > 0, "Orders Silver failed"
@@ -498,8 +498,8 @@ class TestSilverLayerIsolation:
             ),
             domain="crm",
             subject="customers",
-            natural_keys=["customer_id"],
-            change_timestamp="updated_at",
+            unique_columns=["customer_id"],
+            last_updated_column="updated_at",
         )
         customers_silver_result = customers_silver.run(run_date)
         assert customers_silver_result.get("row_count", 0) > 0, (

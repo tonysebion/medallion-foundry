@@ -214,8 +214,8 @@ class TestBronzeSilverMinIO:
         silver = SilverEntity(
             source_path=silver_source,
             target_path=silver_target,
-            natural_keys=["order_id"],
-            change_timestamp="order_ts",
+            unique_columns=["order_id"],
+            last_updated_column="order_ts",
             entity_kind=EntityKind.STATE,
             history_mode=HistoryMode.CURRENT_ONLY,
             attributes=["customer_id", "product", "quantity", "total"],
@@ -332,8 +332,8 @@ class TestBronzeSilverMinIO:
         silver = SilverEntity(
             source_path=f"s3://{MINIO_BUCKET}/{test_prefix}/bronze/system=test/entity=items/dt={{run_date}}/*.parquet",
             target_path=f"s3://{MINIO_BUCKET}/{test_prefix}/silver/domain=test/subject=items/dt={{run_date}}/",
-            natural_keys=["id"],
-            change_timestamp="updated_at",
+            unique_columns=["id"],
+            last_updated_column="updated_at",
             entity_kind=EntityKind.STATE,
             history_mode=HistoryMode.CURRENT_ONLY,
         )

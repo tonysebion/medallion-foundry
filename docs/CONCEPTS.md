@@ -52,9 +52,9 @@ bronze:
 
 ```yaml
 silver:
-  natural_keys: [order_id]      # What makes a record unique
-  change_timestamp: updated_at  # Which version is newest
-  model: full_merge_dedupe      # How to handle duplicates
+  unique_columns: [order_id]       # What makes each row unique
+  last_updated_column: updated_at  # Which version is newest
+  model: full_merge_dedupe         # How to handle duplicates
 ```
 
 ---
@@ -71,35 +71,39 @@ silver:
 
 ## Key Concepts
 
-### Natural Key
+### Unique Columns
 
-**What it is:** The column(s) that uniquely identify each record. Like a fingerprint for your data.
+**What it is:** The column(s) that uniquely identify each row. Like a fingerprint for your data.
 
 **Analogy:** An employee ID or order number. Even if someone's name changes, their employee ID stays the same and identifies them.
 
-**Why it matters:** Silver uses natural keys to detect duplicates. If two records have the same natural key, Silver keeps the one with the latest `change_timestamp`.
+**Why it matters:** Silver uses unique columns to detect duplicates. If two rows have the same values in these columns, they're considered the same record, and Silver keeps the one with the latest `last_updated_column`.
+
+**TIP:** Run `python -m pipelines inspect-source --file your_data.csv` to get suggestions for which columns to use.
 
 ```yaml
 silver:
-  natural_keys: [customer_id]           # Single column
+  unique_columns: [customer_id]           # Single column
   # or
-  natural_keys: [order_id, line_number] # Composite key
+  unique_columns: [order_id, line_number] # Composite key
 ```
 
 ---
 
-### Change Timestamp
+### Last Updated Column
 
-**What it is:** The column that indicates when a record was last modified.
+**What it is:** The column that shows when each row was last modified.
 
 **Analogy:** The "last updated" date on a document. When you have two versions of the same document, you keep the one with the more recent date.
 
-**Why it matters:** When Silver finds duplicate records (same natural key), it uses the change timestamp to determine which version is newest.
+**Why it matters:** When Silver finds duplicate rows (same unique columns), it uses the last updated column to determine which version is newest.
+
+**TIP:** Run `python -m pipelines inspect-source --file your_data.csv` to get suggestions for which column to use.
 
 ```yaml
 silver:
-  natural_keys: [customer_id]
-  change_timestamp: updated_at  # Column containing modification date
+  unique_columns: [customer_id]
+  last_updated_column: updated_at  # Column showing modification date
 ```
 
 ---
@@ -119,7 +123,7 @@ silver:
 ```yaml
 bronze:
   load_pattern: incremental
-  watermark_column: updated_at  # Column to track
+  incremental_column: updated_at  # Column to track
 ```
 
 ---
@@ -163,7 +167,7 @@ bronze:
 # Incremental - only changes since last run
 bronze:
   load_pattern: incremental
-  watermark_column: updated_at
+  incremental_column: updated_at
 
 # CDC - change operations with I/U/D codes
 bronze:
@@ -203,8 +207,8 @@ bronze:
 ```yaml
 silver:
   model: full_merge_dedupe  # SCD Type 1 behavior
-  natural_keys: [customer_id]
-  change_timestamp: updated_at
+  unique_columns: [customer_id]
+  last_updated_column: updated_at
 ```
 
 ---
@@ -223,8 +227,8 @@ silver:
 ```yaml
 silver:
   model: scd_type_2
-  natural_keys: [customer_id]
-  change_timestamp: updated_at
+  unique_columns: [customer_id]
+  last_updated_column: updated_at
 ```
 
 ---
@@ -247,8 +251,8 @@ bronze:
 
 silver:
   model: cdc_current_tombstone  # How to handle deletes
-  natural_keys: [customer_id]
-  change_timestamp: updated_at
+  unique_columns: [customer_id]
+  last_updated_column: updated_at
 ```
 
 ---
@@ -267,26 +271,45 @@ silver:
 
 ## Pattern Transitions
 
-**⚠️ WARNING: Do not change `load_pattern` mid-stream without understanding the implications.**
+Silver intelligently handles pattern transitions by detecting **partition boundaries**.
 
-Silver determines how to read Bronze partitions based on the **latest partition's** metadata only:
+### How Silver Reads Bronze Partitions
+
+Silver determines how to read Bronze partitions based on the **latest partition's** metadata:
 - Latest is `full_snapshot` → Silver uses `replace_daily` (reads ONLY latest partition)
-- Latest is `incremental` or `cdc` → Silver uses `append_log` (reads ALL partitions)
+- Latest is `incremental` or `cdc` → Silver uses `append_log` with **boundary detection**
+
+### Partition Boundary Detection
+
+When Silver uses `append_log` mode, it scans backwards through partition metadata to find `full_snapshot` boundaries:
+
+```
+Partitions:  dt=01-06 (incr) → dt=01-07 (incr) → dt=01-08 (full) → dt=01-09 (incr) → dt=01-10 (incr)
+                                                      ↑                                      ↑
+                                               BOUNDARY FOUND                    Silver starts here
+                                               (full_snapshot)                   Scans backward...
+                                                                                 Stops at 01-08
+
+Result: Silver reads ONLY dt=01-08, dt=01-09, dt=01-10 (not 01-06, 01-07)
+```
+
+**Why this works:**
+- A `full_snapshot` contains **complete state** at that point in time
+- Partitions before a `full_snapshot` are **obsolete** - their data is already incorporated into the snapshot
+- This is both correct and efficient - no redundant data is read
 
 | Scenario | Latest Pattern | Silver Reads | Result |
 |----------|---------------|--------------|--------|
-| Days 1-5 incremental, Day 6 full_snapshot (STOP) | full_snapshot | Day 6 only | Days 1-5 data IGNORED |
-| Days 1-5 incremental, Day 6 full, Day 7+ incremental | incremental | ALL partitions | All data read, deduped (correct but inefficient) |
-| Days 1-5 full_snapshot, Day 6 incremental | incremental | ALL partitions | Massive duplication across snapshots |
-
-**Key Insight:** When Silver uses `append_log`, it does NOT recognize `full_snapshot` partitions as "boundaries." It reads everything and relies on deduplication by `natural_keys`. This produces correct results but reads more data than necessary.
+| Days 1-5 incremental, Day 6 full_snapshot (STOP) | full_snapshot | Day 6 only | Correct - snapshot has everything |
+| Days 1-5 incremental, Day 6 full, Day 7+ incremental | incremental | Days 6-7+ only | Correct - boundary at day 6 |
+| Days 1-5 full_snapshot, Day 6 incremental | incremental | Days 1-6 (all) | Deduplication handles overlap |
+| Multiple full_snapshots in history | varies | From most recent full_snapshot | Uses latest boundary |
 
 **Safe practices:**
 
-1. **Stay consistent:** Choose a load pattern and stick with it
-2. **Full reset:** If you must change, delete all Bronze partitions and start fresh
-3. **Explicit source path:** Run Silver with a specific date range to control which partitions are read
-4. **Don't end on full_snapshot:** If you insert a `full_snapshot` mid-stream, ensure you add at least one more `incremental` partition so Silver uses `append_log` and includes all data
+1. **Consistent patterns are simplest:** Choose a load pattern and stick with it
+2. **Weekly full refreshes work well:** Insert `full_snapshot` partitions weekly; Silver automatically uses them as boundaries
+3. **Full_snapshot = complete data:** Only use `load_pattern: full_snapshot` when the partition truly contains complete data
 
 ---
 

@@ -247,8 +247,8 @@ class TestPolyBaseCompositeKeys:
             ],
             "entity_kind": "state",
             "history_mode": "full_history",
-            "natural_keys": ["order_id", "line_id"],
-            "change_timestamp": "effective_from",
+            "unique_columns": ["order_id", "line_id"],
+            "last_updated_column": "effective_from",
         }
 
         ddl = generate_from_metadata_dict(
@@ -273,8 +273,8 @@ class TestPolyBaseCompositeKeys:
             ],
             "entity_kind": "state",
             "history_mode": "full_history",
-            "natural_keys": ["customer_id"],
-            "change_timestamp": "effective_from",
+            "unique_columns": ["customer_id"],
+            "last_updated_column": "effective_from",
         }
 
         ddl = generate_from_metadata_dict(

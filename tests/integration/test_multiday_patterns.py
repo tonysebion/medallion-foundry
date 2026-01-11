@@ -218,8 +218,8 @@ def run_silver_pipeline(
     target_prefix: str,
     system: str,
     entity: str,
-    natural_keys: List[str],
-    change_timestamp: str,
+    unique_columns: List[str],
+    last_updated_column: str,
     entity_kind: str = "state",
     history_mode: str = "current_only",
     delete_mode: str = "ignore",
@@ -235,8 +235,8 @@ def run_silver_pipeline(
         target_prefix: S3 prefix for Silver output
         system: System name
         entity: Entity name
-        natural_keys: List of natural key column names
-        change_timestamp: Timestamp column name
+        unique_columns: List of natural key column names
+        last_updated_column: Timestamp column name
         entity_kind: Entity kind (state/event)
         history_mode: History mode (current_only/full_history)
         delete_mode: Delete mode (ignore/tombstone/hard_delete)
@@ -274,8 +274,8 @@ def run_silver_pipeline(
     silver = SilverEntity(
         source_path=source_path,
         target_path=f"s3://{target_bucket}/{target_prefix}/silver/domain={system}/subject={entity}/",
-        natural_keys=natural_keys,
-        change_timestamp=change_timestamp,
+        unique_columns=unique_columns,
+        last_updated_column=last_updated_column,
         entity_kind=kind_map.get(entity_kind, EntityKind.STATE),
         history_mode=history_map.get(history_mode, HistoryMode.CURRENT_ONLY),
         delete_mode=delete_map.get(delete_mode, DeleteMode.IGNORE),
@@ -365,8 +365,8 @@ class TestSnapshotToStateSCD1:
             target_prefix=multiday_prefix,
             system="snapshot_test",
             entity="customers",
-            natural_keys=["id"],
-            change_timestamp="ts",
+            unique_columns=["id"],
+            last_updated_column="ts",
             entity_kind="state",
             history_mode="current_only",
             run_date=date_str,
@@ -420,8 +420,8 @@ class TestSnapshotToStateSCD1:
             target_prefix=multiday_prefix,
             system="snapshot_test_d2",
             entity="customers",
-            natural_keys=["id"],
-            change_timestamp="ts",
+            unique_columns=["id"],
+            last_updated_column="ts",
             entity_kind="state",
             history_mode="current_only",
         )
@@ -467,8 +467,8 @@ class TestSnapshotToStateSCD1:
             target_prefix=multiday_prefix,
             system="snapshot_full",
             entity="customers",
-            natural_keys=["id"],
-            change_timestamp="ts",
+            unique_columns=["id"],
+            last_updated_column="ts",
             entity_kind="state",
             history_mode="current_only",
         )
@@ -554,8 +554,8 @@ class TestSnapshotToStateSCD2:
             target_prefix=multiday_prefix,
             system="snapshot_scd2",
             entity="customers",
-            natural_keys=["id"],
-            change_timestamp="ts",
+            unique_columns=["id"],
+            last_updated_column="ts",
             entity_kind="state",
             history_mode="full_history",
         )
@@ -631,8 +631,8 @@ class TestCDCWithDeleteModes:
             target_prefix=multiday_prefix,
             system=system,
             entity="accounts",
-            natural_keys=["id"],
-            change_timestamp="ts",
+            unique_columns=["id"],
+            last_updated_column="ts",
             entity_kind="state",
             history_mode="current_only",
             delete_mode=delete_mode,
@@ -719,8 +719,8 @@ class TestCDCWithDeleteModes:
             target_prefix=multiday_prefix,
             system=system,
             entity="accounts",
-            natural_keys=["id"],
-            change_timestamp="ts",
+            unique_columns=["id"],
+            last_updated_column="ts",
             entity_kind="state",
             history_mode="current_only",
             delete_mode="tombstone",
@@ -776,8 +776,8 @@ class TestCDCToEvent:
             target_prefix=multiday_prefix,
             system=system,
             entity="operations",
-            natural_keys=["id"],  # For event, this is just for ordering
-            change_timestamp="ts",
+            unique_columns=["id"],  # For event, this is just for ordering
+            last_updated_column="ts",
             entity_kind="event",  # Event entity
             history_mode="current_only",  # N/A for events but required
         )
@@ -837,8 +837,8 @@ class TestIncrementalToState:
             target_prefix=multiday_prefix,
             system=system,
             entity="events",
-            natural_keys=["id"],
-            change_timestamp="ts",
+            unique_columns=["id"],
+            last_updated_column="ts",
             entity_kind="state",
             history_mode="current_only",
         )
@@ -915,8 +915,8 @@ class TestIncrementalToState:
             target_prefix=multiday_prefix,
             system=system,
             entity="events",
-            natural_keys=["id"],
-            change_timestamp="ts",
+            unique_columns=["id"],
+            last_updated_column="ts",
             entity_kind="state",
             history_mode="full_history",
         )
@@ -1006,8 +1006,8 @@ class TestCDCToStateSCD2:
             target_prefix=multiday_prefix,
             system=system,
             entity="accounts",
-            natural_keys=["id"],
-            change_timestamp="ts",
+            unique_columns=["id"],
+            last_updated_column="ts",
             entity_kind="state",
             history_mode="full_history",
             delete_mode="ignore",

@@ -188,8 +188,8 @@ class TestConfigLoaderCDC:
         config = {
             "domain": "test",
             "subject": "test",
-            "natural_keys": ["customer_id"],
-            "change_timestamp": "updated_at",
+            "unique_columns": ["customer_id"],
+            "last_updated_column": "updated_at",
             "delete_mode": "ignore",
         }
         silver = load_silver_from_yaml(config, tmp_path)
@@ -201,8 +201,8 @@ class TestConfigLoaderCDC:
             "model": "cdc_current",  # CDC model is required for tombstone/hard_delete
             "domain": "test",
             "subject": "test",
-            "natural_keys": ["customer_id"],
-            "change_timestamp": "updated_at",
+            "unique_columns": ["customer_id"],
+            "last_updated_column": "updated_at",
             "delete_mode": "tombstone",  # Overrides the model default (ignore)
         }
         silver = load_silver_from_yaml(config, tmp_path)
@@ -214,8 +214,8 @@ class TestConfigLoaderCDC:
             "model": "cdc_current",  # CDC model is required for tombstone/hard_delete
             "domain": "test",
             "subject": "test",
-            "natural_keys": ["customer_id"],
-            "change_timestamp": "updated_at",
+            "unique_columns": ["customer_id"],
+            "last_updated_column": "updated_at",
             "delete_mode": "hard_delete",  # Overrides the model default (ignore)
         }
         silver = load_silver_from_yaml(config, tmp_path)
@@ -226,8 +226,8 @@ class TestConfigLoaderCDC:
         config = {
             "domain": "test",
             "subject": "test",
-            "natural_keys": ["customer_id"],
-            "change_timestamp": "updated_at",
+            "unique_columns": ["customer_id"],
+            "last_updated_column": "updated_at",
         }
         silver = load_silver_from_yaml(config, tmp_path)
         assert silver.delete_mode == DeleteMode.IGNORE
@@ -237,8 +237,8 @@ class TestConfigLoaderCDC:
         config = {
             "domain": "test",
             "subject": "test",
-            "natural_keys": ["customer_id"],
-            "change_timestamp": "updated_at",
+            "unique_columns": ["customer_id"],
+            "last_updated_column": "updated_at",
             "delete_mode": "invalid",
         }
         with pytest.raises(YAMLConfigError, match="Invalid delete_mode"):
@@ -249,8 +249,8 @@ class TestConfigLoaderCDC:
         config = {
             "domain": "test",
             "subject": "test",
-            "natural_keys": ["customer_id"],
-            "change_timestamp": "updated_at",
+            "unique_columns": ["customer_id"],
+            "last_updated_column": "updated_at",
             "cdc_options": {
                 "operation_column": "op",
             },
@@ -264,8 +264,8 @@ class TestConfigLoaderCDC:
         config = {
             "domain": "test",
             "subject": "test",
-            "natural_keys": ["customer_id"],
-            "change_timestamp": "updated_at",
+            "unique_columns": ["customer_id"],
+            "last_updated_column": "updated_at",
             "cdc_options": {
                 "operation_column": "operation",
                 "insert_code": "C",
@@ -284,8 +284,8 @@ class TestConfigLoaderCDC:
         config = {
             "domain": "test",
             "subject": "test",
-            "natural_keys": ["customer_id"],
-            "change_timestamp": "updated_at",
+            "unique_columns": ["customer_id"],
+            "last_updated_column": "updated_at",
             "cdc_options": {
                 "insert_code": "I",
             },
@@ -312,8 +312,8 @@ bronze:
 silver:
   domain: test
   subject: customers
-  natural_keys: [customer_id]
-  change_timestamp: updated_at
+  unique_columns: [customer_id]
+  last_updated_column: updated_at
   delete_mode: tombstone
   cdc_options:
     operation_column: op
@@ -342,8 +342,8 @@ bronze:
 silver:
   domain: test
   subject: products
-  natural_keys: [product_id]
-  change_timestamp: updated_at
+  unique_columns: [product_id]
+  last_updated_column: updated_at
   model: scd_type_2
   delete_mode: tombstone
   cdc_options:

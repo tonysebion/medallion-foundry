@@ -29,6 +29,20 @@ Source → Bronze (raw) → Silver (curated)
 - **Bronze**: Lands raw data exactly as received, with technical metadata
 - **Silver**: Curates data (deduplication, typing, history tracking)
 
+## Don't Know Your Data? Start Here
+
+If you're not sure which columns are unique or when records were updated, run this:
+
+```bash
+python -m pipelines inspect-source --file ./your_data.csv
+```
+
+This will suggest:
+- Which column(s) might uniquely identify each row (`unique_columns`)
+- Which column looks like a "last updated" timestamp (`last_updated_column`)
+
+**TIP:** For a faster path, see [Your First Pipeline](FIRST_PIPELINE.md) - a 5-minute guide for new users.
+
 ## Quick Start (5 minutes)
 
 Pipelines are defined in **YAML** (recommended) or Python. YAML is simpler and provides editor autocomplete.
@@ -55,7 +69,7 @@ Edit the file - the schema provides autocomplete in VSCode:
 - Set `system` and `entity` to identify your data source
 - Set `source_path` to your data location
 - Set `target_path` for output storage (local, S3, or ADLS)
-- Set `natural_keys` and `change_timestamp` for Silver deduplication
+- Set `unique_columns` and `last_updated_column` for Silver deduplication
 
 Example `my_pipeline.yaml`:
 ```yaml
@@ -76,8 +90,8 @@ bronze:
   target_path: ./bronze/system=retail/entity=orders/dt={run_date}/
 
 silver:
-  natural_keys: [order_id]
-  change_timestamp: updated_at
+  unique_columns: [order_id]
+  last_updated_column: updated_at
   target_path: ./silver/domain=retail/subject=orders/
 ```
 
@@ -215,8 +229,8 @@ For slowly changing entities (customers, products):
 from pipelines.lib.silver import SilverEntity, EntityKind, HistoryMode
 
 silver = SilverEntity(
-    natural_keys=["customer_id"],
-    change_timestamp="updated_at",
+    unique_columns=["customer_id"],
+    last_updated_column="updated_at",
     entity_kind=EntityKind.STATE,
     history_mode=HistoryMode.FULL_HISTORY,  # SCD Type 2
 )
@@ -228,8 +242,8 @@ For immutable events (orders, clicks):
 
 ```python
 silver = SilverEntity(
-    natural_keys=["order_id"],
-    change_timestamp="order_date",
+    unique_columns=["order_id"],
+    last_updated_column="order_date",
     entity_kind=EntityKind.EVENT,
     history_mode=HistoryMode.CURRENT_ONLY,
 )
@@ -240,7 +254,7 @@ silver = SilverEntity(
 | Pattern | Use Case |
 |---------|----------|
 | `FULL_SNAPSHOT` | Small tables, daily exports, reference data |
-| `INCREMENTAL_APPEND` | Large tables, transaction logs (requires `watermark_column`) |
+| `INCREMENTAL_APPEND` | Large tables, transaction logs (requires `incremental_column`) |
 
 ## History Modes (Silver)
 

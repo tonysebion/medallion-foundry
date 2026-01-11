@@ -33,8 +33,8 @@ silver:
   subject: orders
   source_path: "s3://{bucket}/{prefix}/bronze/system=test/entity=orders/dt={run_date}/*.parquet"
   target_path: "s3://{bucket}/{prefix}/silver/domain=test/subject=orders/dt={run_date}/"
-  natural_keys: [order_id]
-  change_timestamp: updated_at
+  unique_columns: [order_id]
+  last_updated_column: updated_at
   entity_kind: state
   history_mode: current_only  # SCD Type 1
   attributes:

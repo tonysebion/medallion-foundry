@@ -299,34 +299,34 @@ class TestLoadSilverFromYaml:
         }
         silver = load_silver_from_yaml(config)
 
-        assert silver.natural_keys == ["id"]
-        assert silver.change_timestamp == "updated_at"
+        assert silver.unique_columns == ["id"]
+        assert silver.last_updated_column == "updated_at"
         assert silver.entity_kind == EntityKind.STATE
         assert silver.history_mode == HistoryMode.CURRENT_ONLY
 
     def test_natural_keys_as_string(self):
-        """Single natural key as string (converted to list)."""
+        """Single natural key as string (converted to list) - tests legacy field name support."""
         config = {
             "domain": "test",
             "subject": "test",
-            "natural_keys": "order_id",
-            "change_timestamp": "updated_at",
+            "natural_keys": "order_id",  # Legacy field name
+            "change_timestamp": "updated_at",  # Legacy field name
         }
         silver = load_silver_from_yaml(config)
 
-        assert silver.natural_keys == ["order_id"]
+        assert silver.unique_columns == ["order_id"]
 
     def test_composite_natural_keys(self):
-        """Composite natural keys."""
+        """Composite natural keys - tests legacy field name support."""
         config = {
             "domain": "test",
             "subject": "test",
-            "natural_keys": ["order_id", "line_item_id"],
-            "change_timestamp": "modified_date",
+            "natural_keys": ["order_id", "line_item_id"],  # Legacy field name
+            "change_timestamp": "modified_date",  # Legacy field name
         }
         silver = load_silver_from_yaml(config)
 
-        assert silver.natural_keys == ["order_id", "line_item_id"]
+        assert silver.unique_columns == ["order_id", "line_item_id"]
 
     def test_entity_kind_state(self):
         """Entity kind: state."""
@@ -517,27 +517,27 @@ class TestLoadSilverFromYaml:
             == "https://objects.nutanix.local:443"
         )
 
-    def test_missing_natural_keys_raises(self):
-        """Missing natural_keys should raise."""
+    def test_missing_unique_columns_raises(self):
+        """Missing unique_columns should raise."""
         config = {
-            "change_timestamp": "updated_at",
+            "last_updated_column": "updated_at",
         }
         with pytest.raises(YAMLConfigError) as exc_info:
             load_silver_from_yaml(config)
 
-        assert "natural_keys" in str(exc_info.value).lower()
+        assert "unique_columns" in str(exc_info.value).lower()
 
-    def test_missing_change_timestamp_raises(self):
-        """Missing change_timestamp should raise."""
+    def test_missing_last_updated_column_raises(self):
+        """Missing last_updated_column should raise."""
         config = {
             "domain": "test",
             "subject": "test",
-            "natural_keys": ["id"],
+            "unique_columns": ["id"],
         }
         with pytest.raises(YAMLConfigError) as exc_info:
             load_silver_from_yaml(config)
 
-        assert "change_timestamp" in str(exc_info.value).lower()
+        assert "last_updated_column" in str(exc_info.value).lower()
 
     def test_invalid_entity_kind_raises(self):
         """Invalid entity_kind should raise."""
@@ -590,7 +590,7 @@ bronze:
         assert pipeline.silver is None
 
     def test_load_silver_only(self, tmp_path):
-        """Load pipeline with only silver section."""
+        """Load pipeline with only silver section - tests legacy field names work."""
         yaml_content = """
 silver:
   domain: retail
@@ -607,7 +607,7 @@ silver:
 
         assert pipeline.bronze is None
         assert pipeline.silver is not None
-        assert pipeline.silver.natural_keys == ["order_id"]
+        assert pipeline.silver.unique_columns == ["order_id"]
 
     def test_load_full_pipeline(self, tmp_path):
         """Load pipeline with both bronze and silver."""

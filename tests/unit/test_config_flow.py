@@ -234,8 +234,8 @@ class TestYamlConfigExpansion:
         config: Dict[str, Any] = {
             "domain": "sales",
             "subject": "orders",
-            "natural_keys": ["order_id"],
-            "change_timestamp": "updated_at",
+            "unique_columns": ["order_id"],
+            "last_updated_column": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver",
             # YAML key is s3_endpoint_url, maps to endpoint_url in storage_options

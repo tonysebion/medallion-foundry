@@ -7,8 +7,8 @@ from pipelines.lib.silver import EntityKind, SilverEntity
 
 def _make_entity(**overrides):
     config = {
-        "natural_keys": ["id"],
-        "change_timestamp": "ts",
+        "unique_columns": ["id"],
+        "last_updated_column": "ts",
         "source_path": "bronze/{run_date}.parquet",
         "target_path": "silver/",
     }

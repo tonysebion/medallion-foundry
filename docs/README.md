@@ -41,6 +41,7 @@ python -m pipelines ./pipelines/examples/retail_orders.yaml --date 2025-01-15 --
 
 | Guide | Description |
 |-------|-------------|
+| [FIRST_PIPELINE.md](FIRST_PIPELINE.md) | **Start here!** 5-minute quickstart for new users |
 | [GETTING_STARTED.md](GETTING_STARTED.md) | Pipeline primer, source types, entity kinds |
 | [ADVANCED_PATTERNS.md](ADVANCED_PATTERNS.md) | CDC presets, delete modes, SCD2, curate helpers |
 | [OPERATIONS.md](OPERATIONS.md) | Testing, troubleshooting, error handling |

@@ -430,11 +430,11 @@ silver:
 
         error_msg = str(exc_info.value)
         # Should mention ALL missing fields
-        assert "natural_keys" in error_msg.lower(), (
-            "Error should mention missing 'natural_keys'"
+        assert "unique_columns" in error_msg.lower(), (
+            "Error should mention missing 'unique_columns'"
         )
-        assert "change_timestamp" in error_msg.lower(), (
-            "Error should mention missing 'change_timestamp'"
+        assert "last_updated_column" in error_msg.lower(), (
+            "Error should mention missing 'last_updated_column'"
         )
 
 

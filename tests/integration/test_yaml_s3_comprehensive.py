@@ -104,7 +104,7 @@ class PatternConfig:
     system: str  # Source system name
     entity: str  # Entity name
     natural_key: str  # Primary key column
-    change_timestamp: str  # Timestamp column
+    last_updated_column: str  # Timestamp column
     entity_kind: str  # state or event
     history_mode: str  # current_only or full_history
     expected_dedup_rows: int  # Expected rows after deduplication
@@ -120,7 +120,7 @@ PATTERNS = [
         system="retail",
         entity="orders",
         natural_key="order_id",
-        change_timestamp="updated_at",
+        last_updated_column="updated_at",
         entity_kind="state",
         history_mode="current_only",
         expected_dedup_rows=5,  # 5 unique orders in sample data
@@ -132,7 +132,7 @@ PATTERNS = [
         system="crm",
         entity="customers",
         natural_key="customer_id",
-        change_timestamp="updated_at",
+        last_updated_column="updated_at",
         entity_kind="state",
         history_mode="full_history",
         expected_dedup_rows=6,  # 6 rows with history in sample data
@@ -145,7 +145,7 @@ PATTERNS = [
         system="retail",
         entity="order_events",
         natural_key="order_id",
-        change_timestamp="updated_at",
+        last_updated_column="updated_at",
         entity_kind="event",
         history_mode="current_only",
         expected_dedup_rows=5,  # 5 unique orders
@@ -510,7 +510,7 @@ class TestYamlPatterns:
             "system": pattern.system,
             "entity": pattern.entity,
             "natural_key": pattern.natural_key,
-            "change_timestamp": pattern.change_timestamp,
+            "last_updated_column": pattern.last_updated_column,
         }
 
         yaml_content = load_yaml_with_substitutions(template_path, substitutions)
@@ -657,7 +657,7 @@ class TestSpecializedScenarios:
                 "system": "retail",
                 "entity": "orders",
                 "natural_key": "order_id",
-                "change_timestamp": "updated_at",
+                "last_updated_column": "updated_at",
             }
 
             yaml_content = load_yaml_with_substitutions(template_path, substitutions)
@@ -746,7 +746,7 @@ class TestSpecializedScenarios:
             "system": "test",
             "entity": "orders",
             "natural_key": "order_id",
-            "change_timestamp": "updated_at",
+            "last_updated_column": "updated_at",
         }
 
         yaml_content = load_yaml_with_substitutions(template_path, substitutions)
@@ -803,7 +803,7 @@ class TestSpecializedScenarios:
             "system": "crm",
             "entity": "customers",
             "natural_key": "customer_id",
-            "change_timestamp": "updated_at",
+            "last_updated_column": "updated_at",
         }
 
         yaml_content = load_yaml_with_substitutions(template_path, substitutions)
@@ -882,7 +882,7 @@ class TestSpecializedScenarios:
             "system": "test",
             "entity": "orders",
             "natural_key": "order_id",
-            "change_timestamp": "updated_at",
+            "last_updated_column": "updated_at",
         }
 
         yaml_content = load_yaml_with_substitutions(template_path, substitutions)

@@ -247,16 +247,16 @@ class TestValidate:
                 watermark_column=None,  # Missing!
             )
 
-    def test_validate_silver_entity_missing_natural_keys(self):
+    def test_validate_silver_entity_missing_unique_columns(self):
         """Should raise error when natural keys are missing."""
         from pipelines.lib.silver import SilverEntity
 
-        with pytest.raises(ValueError, match="natural_keys"):
+        with pytest.raises(ValueError, match="unique_columns"):
             SilverEntity(
                 source_path="/bronze/*.parquet",
                 target_path="/silver/",
-                natural_keys=[],  # Missing!
-                change_timestamp="updated_at",
+                unique_columns=[],  # Missing!
+                last_updated_column="updated_at",
             )
 
     def test_validate_bronze_source_valid_config(self):
@@ -281,10 +281,10 @@ class TestValidate:
         entity = SilverEntity(
             source_path="/bronze/*.parquet",
             target_path="/silver/",
-            natural_keys=["id"],
-            change_timestamp="updated_at",
+            unique_columns=["id"],
+            last_updated_column="updated_at",
         )
-        assert entity.natural_keys == ["id"]
+        assert entity.unique_columns == ["id"]
 
 
 class TestRunner:

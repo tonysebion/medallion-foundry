@@ -74,8 +74,8 @@ class TestSilverInputMode:
     def test_silver_entity_with_input_mode(self):
         """Test SilverEntity accepts input_mode."""
         entity = SilverEntity(
-            natural_keys=["order_id"],
-            change_timestamp="updated_at",
+            unique_columns=["order_id"],
+            last_updated_column="updated_at",
             source_path="./bronze/system=test/entity=orders/dt=2025-01-15/*.parquet",
             target_path="./silver/orders/",
             input_mode=InputMode.REPLACE_DAILY,
@@ -85,8 +85,8 @@ class TestSilverInputMode:
     def test_silver_entity_input_mode_append_log(self):
         """Test SilverEntity with append_log mode."""
         entity = SilverEntity(
-            natural_keys=["event_id"],
-            change_timestamp="event_time",
+            unique_columns=["event_id"],
+            last_updated_column="event_time",
             source_path="./bronze/system=test/entity=events/dt=2025-01-15/*.parquet",
             target_path="./silver/events/",
             input_mode=InputMode.APPEND_LOG,
@@ -96,8 +96,8 @@ class TestSilverInputMode:
     def test_silver_entity_input_mode_optional(self):
         """Test SilverEntity input_mode is optional (None by default)."""
         entity = SilverEntity(
-            natural_keys=["order_id"],
-            change_timestamp="updated_at",
+            unique_columns=["order_id"],
+            last_updated_column="updated_at",
             source_path="./bronze/orders/*.parquet",
             target_path="./silver/orders/",
         )
@@ -110,8 +110,8 @@ class TestExpandToAllPartitions:
     def test_expands_date_partition_yyyy_mm_dd(self):
         """Test expansion of YYYY-MM-DD date format."""
         entity = SilverEntity(
-            natural_keys=["order_id"],
-            change_timestamp="updated_at",
+            unique_columns=["order_id"],
+            last_updated_column="updated_at",
             source_path="./bronze/orders/*.parquet",
             target_path="./silver/orders/",
             input_mode=InputMode.APPEND_LOG,
@@ -127,8 +127,8 @@ class TestExpandToAllPartitions:
     def test_expands_date_partition_yyyymmdd(self):
         """Test expansion of YYYYMMDD date format."""
         entity = SilverEntity(
-            natural_keys=["order_id"],
-            change_timestamp="updated_at",
+            unique_columns=["order_id"],
+            last_updated_column="updated_at",
             source_path="./bronze/orders/*.parquet",
             target_path="./silver/orders/",
             input_mode=InputMode.APPEND_LOG,
@@ -140,8 +140,8 @@ class TestExpandToAllPartitions:
     def test_preserves_path_without_date_partition(self):
         """Test path without date partition is preserved with warning."""
         entity = SilverEntity(
-            natural_keys=["order_id"],
-            change_timestamp="updated_at",
+            unique_columns=["order_id"],
+            last_updated_column="updated_at",
             source_path="./bronze/orders/*.parquet",
             target_path="./silver/orders/",
             input_mode=InputMode.APPEND_LOG,

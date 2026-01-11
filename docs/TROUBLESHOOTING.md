@@ -88,44 +88,46 @@ bronze:
 
 ---
 
-### "INCREMENTAL_APPEND requires watermark_column"
+### "Incremental loads require incremental_column"
 
 **Error:**
 ```
-ValueError: INCREMENTAL_APPEND requires watermark_column to track progress
+ValueError: Incremental loads require incremental_column to track which rows have been extracted
 ```
 
 **Cause:** Using incremental load pattern without specifying which column tracks changes.
 
-**Fix:** Add `watermark_column` to your Bronze config:
+**Fix:** Add `incremental_column` to your Bronze config:
 
 ```yaml
 bronze:
   load_pattern: incremental
-  watermark_column: updated_at  # Column that increases over time (timestamp or ID)
+  incremental_column: updated_at  # Column that increases over time (timestamp or ID)
 ```
 
-The watermark column should be a timestamp or monotonically increasing ID that indicates new/changed records.
+The incremental column should be a timestamp or monotonically increasing ID that indicates new/changed records.
 
 ---
 
-### "natural_keys required for state entities"
+### "unique_columns required for state entities"
 
 **Error:**
 ```
-ValueError: natural_keys required for state entities (dimensions). Add natural_keys: [column1, column2] to identify unique records.
+ValueError: unique_columns required for state entities (dimensions). Add unique_columns: [column1, column2] to identify unique records.
 ```
 
 **Cause:** State entities (dimensions) need a primary key for deduplication.
 
-**Fix:** Add `natural_keys` to your Silver config:
+**Fix:** Add `unique_columns` to your Silver config:
 
 ```yaml
 silver:
-  entity_kind: state  # or using model: full_merge_dedupe, scd_type_2, etc.
-  natural_keys: [customer_id]  # Columns that uniquely identify each record
-  change_timestamp: updated_at
+  model: full_merge_dedupe  # or scd_type_2, etc.
+  unique_columns: [customer_id]  # Columns that uniquely identify each record
+  last_updated_column: updated_at
 ```
+
+**Tip:** Run `python -m pipelines inspect-source --file your_data.csv` to help identify which columns to use.
 
 ---
 
@@ -144,8 +146,10 @@ ValueError: Column 'updated_at' not found in table. Available columns: ['id', 'n
 
 ```yaml
 silver:
-  change_timestamp: modified_date  # Use the actual column name from source
+  last_updated_column: modified_date  # Use the actual column name from source
 ```
+
+**Tip:** Run `python -m pipelines inspect-source --file your_data.csv` to see column names in your data.
 
 ---
 

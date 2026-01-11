@@ -58,9 +58,9 @@ Templates use `{placeholder}` syntax for runtime substitution:
 | `{run_date}` | Pipeline run date | `2025-01-15` |
 | `{system}` | Source system name | `retail`, `crm` |
 | `{entity}` | Entity name | `orders`, `customers` |
-| `{natural_key}` | Primary key column | `order_id` |
-| `{change_timestamp}` | Timestamp column | `updated_at` |
-| `{watermark_column}` | Watermark column (incremental) | `updated_at` |
+| `{unique_columns}` | Column(s) that uniquely identify rows | `order_id` |
+| `{last_updated_column}` | Column showing when row was last modified | `updated_at` |
+| `{incremental_column}` | Column to track for incremental loads | `updated_at` |
 
 ## Using the Template Loader
 
@@ -81,8 +81,8 @@ substitutions = {
     "run_date": "2025-01-15",
     "system": "retail",
     "entity": "orders",
-    "natural_key": "order_id",
-    "change_timestamp": "updated_at",
+    "unique_columns": "order_id",
+    "last_updated_column": "updated_at",
 }
 
 # Load and substitute

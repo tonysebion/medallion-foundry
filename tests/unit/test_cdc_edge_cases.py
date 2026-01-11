@@ -208,8 +208,8 @@ class TestDeleteModeWithoutCDC:
             "subject": "data",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/",
-            "natural_keys": ["id"],
-            "change_timestamp": "updated_at",
+            "unique_columns": ["id"],
+            "last_updated_column": "updated_at",
             "delete_mode": "tombstone",
             # No cdc_operation_column - this is a misconfiguration
         }
@@ -227,8 +227,8 @@ class TestDeleteModeWithoutCDC:
             "subject": "data",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/",
-            "natural_keys": ["id"],
-            "change_timestamp": "updated_at",
+            "unique_columns": ["id"],
+            "last_updated_column": "updated_at",
             "delete_mode": "hard_delete",
             # No cdc_operation_column
         }
@@ -245,8 +245,8 @@ class TestDeleteModeWithoutCDC:
             "subject": "data",
             "source_path": str(tmp_path / "bronze" / "*.parquet"),
             "target_path": str(tmp_path / "silver") + "/",
-            "natural_keys": ["id"],
-            "change_timestamp": "updated_at",
+            "unique_columns": ["id"],
+            "last_updated_column": "updated_at",
             # delete_mode defaults to "ignore" which is fine without CDC
         }
 
@@ -303,8 +303,8 @@ class TestInvalidDeleteMode:
             "subject": "data",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/",
-            "natural_keys": ["id"],
-            "change_timestamp": "updated_at",
+            "unique_columns": ["id"],
+            "last_updated_column": "updated_at",
             "delete_mode": "soft_delete",  # Invalid - should be "tombstone"
             "cdc_operation_column": "op",
         }

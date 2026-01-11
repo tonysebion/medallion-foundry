@@ -445,7 +445,7 @@ class TestGenerateEventViews:
             "audit_events_external",
             ["event_id"],
             config,
-            change_timestamp="event_ts",
+            last_updated_column="event_ts",
         )
         assert "vw_audit_events_daily_summary" in ddl
         assert "event_count" in ddl
@@ -585,7 +585,7 @@ class TestGenerateFromMetadata:
                 {"name": "name", "sql_type": "NVARCHAR(255)", "nullable": True},
             ],
             "entity_kind": "state",
-            "natural_keys": ["id"],
+            "unique_columns": ["id"],
             "history_mode": "current_only",
         }
         metadata_path = tmp_path / "orders" / "_metadata.json"
@@ -602,7 +602,7 @@ class TestGenerateFromMetadata:
         metadata = {
             "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
             "entity_kind": "state",
-            "natural_keys": ["id"],
+            "unique_columns": ["id"],
         }
         metadata_path = tmp_path / "original_name" / "_metadata.json"
         metadata_path.parent.mkdir(parents=True)
@@ -635,7 +635,7 @@ class TestGenerateFromMetadataDict:
                 {"name": "id", "sql_type": "BIGINT", "nullable": False},
             ],
             "entity_kind": "state",
-            "natural_keys": ["id"],
+            "unique_columns": ["id"],
             "history_mode": "current_only",
         }
         ddl = generate_from_metadata_dict(metadata, config, entity_name="orders")
@@ -644,7 +644,7 @@ class TestGenerateFromMetadataDict:
 
     def test_requires_entity_name(self, config):
         """Raises error when entity_name not provided."""
-        metadata = {"columns": [], "entity_kind": "state", "natural_keys": []}
+        metadata = {"columns": [], "entity_kind": "state", "unique_columns": []}
         with pytest.raises(ValueError, match="entity_name is required"):
             generate_from_metadata_dict(metadata, config)
 
@@ -669,7 +669,7 @@ class TestWritePolybaseDdlS3:
         return {
             "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
             "entity_kind": "state",
-            "natural_keys": ["id"],
+            "unique_columns": ["id"],
         }
 
     def test_writes_to_storage(self, config, metadata):
@@ -759,7 +759,7 @@ class TestWritePolybaseScript:
         metadata = {
             "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
             "entity_kind": "state",
-            "natural_keys": ["id"],
+            "unique_columns": ["id"],
         }
         metadata_path = tmp_path / "orders" / "_metadata.json"
         metadata_path.parent.mkdir(parents=True)
@@ -775,12 +775,12 @@ class TestWritePolybaseScript:
 
 
 # ============================================
-# Edge Case Tests - None/Empty natural_keys
+# Edge Case Tests - None/Empty unique_columns
 # ============================================
 
 
 class TestNoneNaturalKeysEdgeCases:
-    """Tests for handling None/empty natural_keys (periodic_snapshot model)."""
+    """Tests for handling None/empty unique_columns (periodic_snapshot model)."""
 
     @pytest.fixture
     def config(self):
@@ -790,7 +790,7 @@ class TestNoneNaturalKeysEdgeCases:
         )
 
     def test_state_views_none_keys_current_only(self, config):
-        """State views work with None natural_keys in current_only mode."""
+        """State views work with None unique_columns in current_only mode."""
         ddl = generate_state_views(
             "periodic_data_state_external",
             None,  # None keys (periodic_snapshot without deduplication)
@@ -804,7 +804,7 @@ class TestNoneNaturalKeysEdgeCases:
         assert "GROUP BY ," not in ddl
 
     def test_state_views_empty_keys_current_only(self, config):
-        """State views work with empty natural_keys list in current_only mode."""
+        """State views work with empty unique_columns list in current_only mode."""
         ddl = generate_state_views(
             "snapshot_state_external",
             [],  # Empty list (treated as None)
@@ -844,12 +844,12 @@ class TestNoneNaturalKeysEdgeCases:
         assert "_deleted = 0" in ddl
 
     def test_event_views_none_keys(self, config):
-        """Event views work with None natural_keys."""
+        """Event views work with None unique_columns."""
         ddl = generate_event_views(
             "logs_events_external",
             None,  # None keys
             config,
-            change_timestamp="event_ts",
+            last_updated_column="event_ts",
         )
         # Should generate date range functions
         assert "fn_logs_events_for_dates" in ddl
@@ -858,7 +858,7 @@ class TestNoneNaturalKeysEdgeCases:
         assert "vw_logs_events_daily_summary" in ddl
 
     def test_event_views_empty_keys(self, config):
-        """Event views work with empty natural_keys list."""
+        """Event views work with empty unique_columns list."""
         ddl = generate_event_views(
             "audit_events_external",
             [],  # Empty list
@@ -877,7 +877,7 @@ class TestNoneNaturalKeysEdgeCases:
             "periodic_snapshot",
             columns,
             "state",
-            None,  # None natural_keys
+            None,  # None unique_columns
             config,
             history_mode="current_only",
         )
@@ -897,7 +897,7 @@ class TestNoneNaturalKeysEdgeCases:
             "raw_events",
             columns,
             "event",
-            None,  # None natural_keys
+            None,  # None unique_columns
             config,
         )
         assert "CREATE EXTERNAL TABLE" in ddl
@@ -905,13 +905,13 @@ class TestNoneNaturalKeysEdgeCases:
         assert "fn_raw_events_events_for_dates" in ddl
 
     def test_from_metadata_dict_none_keys(self, config):
-        """generate_from_metadata_dict handles None natural_keys."""
+        """generate_from_metadata_dict handles None unique_columns."""
         metadata = {
             "columns": [
                 {"name": "id", "sql_type": "BIGINT", "nullable": False},
             ],
             "entity_kind": "state",
-            "natural_keys": None,  # Explicitly None
+            "unique_columns": None,  # Explicitly None
             "history_mode": "current_only",
         }
         ddl = generate_from_metadata_dict(metadata, config, entity_name="snapshot")
@@ -919,7 +919,7 @@ class TestNoneNaturalKeysEdgeCases:
         assert "snapshot" in ddl
 
     def test_from_metadata_dict_missing_keys(self, config):
-        """generate_from_metadata_dict handles missing natural_keys field."""
+        """generate_from_metadata_dict handles missing unique_columns field."""
         metadata = {
             "columns": [
                 {"name": "id", "sql_type": "BIGINT", "nullable": False},
@@ -932,14 +932,14 @@ class TestNoneNaturalKeysEdgeCases:
         assert "CREATE EXTERNAL TABLE" in ddl
 
     def test_from_metadata_dict_none_change_timestamp(self, config):
-        """Explicit None change_timestamp uses default, not literal 'None' in SQL."""
+        """Explicit None last_updated_column uses default, not literal 'None' in SQL."""
         metadata = {
             "columns": [
                 {"name": "id", "sql_type": "BIGINT", "nullable": False},
             ],
             "entity_kind": "event",
-            "natural_keys": ["id"],
-            "change_timestamp": None,  # Explicitly None (periodic_snapshot model)
+            "unique_columns": ["id"],
+            "last_updated_column": None,  # Explicitly None (periodic_snapshot model)
         }
         ddl = generate_from_metadata_dict(
             metadata, config, entity_name="snapshot_events"
@@ -965,7 +965,7 @@ class TestDomainSubjectNaming:
         metadata = {
             "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
             "entity_kind": "state",
-            "natural_keys": ["id"],
+            "unique_columns": ["id"],
             "history_mode": "current_only",
             "domain": "sales",
             "subject": "orders",
@@ -980,7 +980,7 @@ class TestDomainSubjectNaming:
         metadata = {
             "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
             "entity_kind": "state",
-            "natural_keys": ["id"],
+            "unique_columns": ["id"],
             "subject": "customers",  # No domain
         }
         ddl = generate_from_metadata_dict(metadata, config)
@@ -991,7 +991,7 @@ class TestDomainSubjectNaming:
         metadata = {
             "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
             "entity_kind": "state",
-            "natural_keys": ["id"],
+            "unique_columns": ["id"],
             "domain": "sales",
             "subject": "orders",
         }
@@ -1020,7 +1020,7 @@ class TestDomainSubjectNaming:
         metadata = {
             "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
             "entity_kind": "state",
-            "natural_keys": ["id"],
+            "unique_columns": ["id"],
             "domain": "retail",
             "subject": "products",
         }
@@ -1146,7 +1146,7 @@ class TestLocationPathConstruction:
         metadata = {
             "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
             "entity_kind": "state",
-            "natural_keys": ["id"],
+            "unique_columns": ["id"],
             "domain": "retail",
             "subject": "products",
         }
@@ -1161,7 +1161,7 @@ class TestLocationPathConstruction:
         metadata = {
             "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
             "entity_kind": "state",
-            "natural_keys": ["id"],
+            "unique_columns": ["id"],
             "domain": "retail",
             "subject": "products",
         }
@@ -1184,7 +1184,7 @@ class TestLocationPathConstruction:
         metadata = {
             "columns": [{"name": "id", "sql_type": "BIGINT", "nullable": False}],
             "entity_kind": "state",
-            "natural_keys": ["id"],
+            "unique_columns": ["id"],
             "domain": "sales",
             "subject": "orders",
         }

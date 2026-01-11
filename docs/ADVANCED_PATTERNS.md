@@ -31,8 +31,8 @@ event_log:           entity_kind=event, history_mode=current_only, input_mode=ap
 ```yaml
 silver:
   model: scd_type_2
-  natural_keys: [customer_id]
-  change_timestamp: updated_at
+  unique_columns: [customer_id]
+  last_updated_column: updated_at
   attributes:
     - name
     - email
@@ -47,8 +47,8 @@ from pipelines.lib.silver import SilverEntity, SilverModel
 # Using from_model() class method
 entity = SilverEntity.from_model(
     model=SilverModel.SCD_TYPE_2,
-    natural_keys=["customer_id"],
-    change_timestamp="updated_at",
+    unique_columns=["customer_id"],
+    last_updated_column="updated_at",
 )
 ```
 
@@ -70,8 +70,8 @@ When processing CDC (Change Data Capture) data with insert/update/delete operati
 
 ```yaml
 silver:
-  natural_keys: [customer_id]
-  change_timestamp: updated_at
+  unique_columns: [customer_id]
+  last_updated_column: updated_at
   delete_mode: tombstone
   cdc_options:
     operation_column: op
@@ -86,8 +86,8 @@ silver:
 from pipelines.lib.silver import SilverEntity, DeleteMode
 
 entity = SilverEntity(
-    natural_keys=["customer_id"],
-    change_timestamp="updated_at",
+    unique_columns=["customer_id"],
+    last_updated_column="updated_at",
     delete_mode=DeleteMode.TOMBSTONE,
     cdc_options={
         "operation_column": "op",
@@ -121,8 +121,8 @@ When using a `Pipeline` with both Bronze and Silver:
 
 ```yaml
 silver:
-  natural_keys: [order_id]
-  change_timestamp: created_at
+  unique_columns: [order_id]
+  last_updated_column: created_at
   input_mode: append_log
 ```
 

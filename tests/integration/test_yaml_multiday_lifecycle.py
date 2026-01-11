@@ -75,8 +75,8 @@ silver:
   subject: {entity}
   source_path: "s3://{bucket}/{prefix}/bronze/system=yaml_lifecycle/entity={entity}/dt=*/*.parquet"
   target_path: "s3://{bucket}/{prefix}/silver/domain=yaml_lifecycle/subject={entity}/dt={{run_date}}/"
-  natural_keys: [id]
-  change_timestamp: ts
+  unique_columns: [id]
+  last_updated_column: ts
   model: {silver_model}
   {delete_mode_line}
   {cdc_options_line}
@@ -103,12 +103,12 @@ def create_yaml_config(
     prefix: str,
     load_pattern: str,
     silver_model: str,
-    watermark_column: Optional[str] = None,
+    incremental_column: Optional[str] = None,
     delete_mode: Optional[str] = None,
     cdc_operation_column: Optional[str] = None,
 ) -> Path:
     """Create a YAML config file from template with substitutions."""
-    watermark_line = f"watermark_column: {watermark_column}" if watermark_column else ""
+    watermark_line = f"incremental_column: {incremental_column}" if watermark_column else ""
     delete_mode_line = f"delete_mode: {delete_mode}" if delete_mode else ""
     cdc_options_line = ""
     if cdc_operation_column:
@@ -741,8 +741,8 @@ class TestSilverMetadataDiscovery:
         silver = SilverEntity(
             source_path=f"s3://{minio_bucket}/{lifecycle_prefix}/bronze/system=yaml_lifecycle/entity={entity}/dt=*/*.parquet",
             target_path=f"s3://{minio_bucket}/{lifecycle_prefix}/silver/domain=yaml_lifecycle/subject={entity}/dt={{run_date}}/",
-            natural_keys=["id"],
-            change_timestamp="ts",
+            unique_columns=["id"],
+            last_updated_column="ts",
             # input_mode NOT set - should be discovered
             storage_options={
                 "endpoint_url": MINIO_ENDPOINT,
@@ -802,8 +802,8 @@ class TestSilverMetadataDiscovery:
         silver = SilverEntity(
             source_path=f"s3://{minio_bucket}/{lifecycle_prefix}/bronze/system=yaml_lifecycle/entity={entity}/dt=*/*.parquet",
             target_path=f"s3://{minio_bucket}/{lifecycle_prefix}/silver/domain=yaml_lifecycle/subject={entity}/dt={{run_date}}/",
-            natural_keys=["id"],
-            change_timestamp="ts",
+            unique_columns=["id"],
+            last_updated_column="ts",
             # input_mode NOT set - should be discovered from metadata
             storage_options={
                 "endpoint_url": MINIO_ENDPOINT,
@@ -857,8 +857,8 @@ class TestSilverMetadataDiscovery:
         silver = SilverEntity(
             source_path=f"s3://{minio_bucket}/{lifecycle_prefix}/bronze/system=yaml_lifecycle/entity={entity}/dt=*/*.parquet",
             target_path=f"s3://{minio_bucket}/{lifecycle_prefix}/silver/domain=yaml_lifecycle/subject={entity}/dt={{run_date}}/",
-            natural_keys=["id"],
-            change_timestamp="ts",
+            unique_columns=["id"],
+            last_updated_column="ts",
             input_mode=InputMode.APPEND_LOG,  # Explicit override
             storage_options={
                 "endpoint_url": MINIO_ENDPOINT,

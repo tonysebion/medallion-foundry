@@ -66,8 +66,8 @@ class TestModelEntityKindCombinations:
             entity_kind=EntityKind.STATE,
             history_mode=HistoryMode.CURRENT_ONLY,
             input_mode=InputMode.REPLACE_DAILY,  # Required for periodic_snapshot
-            natural_keys=None,  # No keys - periodic_snapshot style
-            change_timestamp=None,
+            unique_columns=None,  # No keys - periodic_snapshot style
+            last_updated_column=None,
         )
 
         result = silver.run("2025-01-15")
@@ -90,8 +90,8 @@ class TestModelEntityKindCombinations:
             entity_kind=EntityKind.EVENT,  # Event calls distinct()
             history_mode=HistoryMode.CURRENT_ONLY,
             input_mode=InputMode.REPLACE_DAILY,  # Required for periodic_snapshot
-            natural_keys=None,
-            change_timestamp=None,
+            unique_columns=None,
+            last_updated_column=None,
         )
 
         result = silver.run("2025-01-15")
@@ -100,14 +100,14 @@ class TestModelEntityKindCombinations:
         assert result["row_count"] == 3
 
     def test_full_merge_dedupe_requires_keys(self, tmp_path: Path):
-        """full_merge_dedupe model requires natural_keys and change_timestamp."""
+        """full_merge_dedupe model requires unique_columns and last_updated_column."""
         config = {
             "domain": "test",
             "subject": "data",
             "model": "full_merge_dedupe",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/",
-            # Missing natural_keys and change_timestamp
+            # Missing unique_columns and last_updated_column
         }
 
         from pipelines.lib.config_loader import YAMLConfigError
@@ -116,19 +116,19 @@ class TestModelEntityKindCombinations:
             load_silver_from_yaml(config, tmp_path)
 
         assert (
-            "natural_keys" in str(exc_info.value).lower()
-            or "change_timestamp" in str(exc_info.value).lower()
+            "unique_columns" in str(exc_info.value).lower()
+            or "last_updated_column" in str(exc_info.value).lower()
         )
 
     def test_scd_type_2_requires_keys(self, tmp_path: Path):
-        """scd_type_2 model requires natural_keys and change_timestamp."""
+        """scd_type_2 model requires unique_columns and last_updated_column."""
         config = {
             "domain": "test",
             "subject": "data",
             "model": "scd_type_2",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/",
-            # Missing natural_keys and change_timestamp
+            # Missing unique_columns and last_updated_column
         }
 
         from pipelines.lib.config_loader import YAMLConfigError
@@ -137,8 +137,8 @@ class TestModelEntityKindCombinations:
             load_silver_from_yaml(config, tmp_path)
 
         assert (
-            "natural_keys" in str(exc_info.value).lower()
-            or "change_timestamp" in str(exc_info.value).lower()
+            "unique_columns" in str(exc_info.value).lower()
+            or "last_updated_column" in str(exc_info.value).lower()
         )
 
     def test_event_log_deduplicates_exact(self, tmp_path: Path):
@@ -154,8 +154,8 @@ class TestModelEntityKindCombinations:
             target_path=str(output_path) + "/",
             entity_kind=EntityKind.EVENT,
             history_mode=HistoryMode.CURRENT_ONLY,
-            natural_keys=["id"],
-            change_timestamp="updated_at",
+            unique_columns=["id"],
+            last_updated_column="updated_at",
         )
 
         result = silver.run("2025-01-15")
@@ -170,7 +170,7 @@ class TestModelEntityKindCombinations:
 
 
 class TestMissingKeysTimestamp:
-    """Tests for None/empty natural_keys and change_timestamp."""
+    """Tests for None/empty unique_columns and last_updated_column."""
 
     def _create_simple_parquet(self, tmp_path: Path) -> Path:
         """Create simple test parquet file."""
@@ -200,8 +200,8 @@ class TestMissingKeysTimestamp:
             entity_kind=EntityKind.STATE,
             history_mode=HistoryMode.CURRENT_ONLY,
             input_mode=InputMode.REPLACE_DAILY,
-            natural_keys=None,
-            change_timestamp=None,
+            unique_columns=None,
+            last_updated_column=None,
         )
 
         result = silver.run("2025-01-15")
@@ -224,13 +224,13 @@ class TestMissingKeysTimestamp:
             entity_kind=EntityKind.STATE,
             history_mode=HistoryMode.CURRENT_ONLY,
             input_mode=InputMode.REPLACE_DAILY,
-            natural_keys=["id"],
-            change_timestamp=None,  # Missing timestamp
+            unique_columns=["id"],
+            last_updated_column=None,  # Missing timestamp
         )
 
         result = silver.run("2025-01-15")
 
-        # Should skip deduplication since change_timestamp is missing
+        # Should skip deduplication since last_updated_column is missing
         assert result["row_count"] == 4
 
     def test_timestamp_without_keys_no_dedup(self, tmp_path: Path):
@@ -248,13 +248,13 @@ class TestMissingKeysTimestamp:
             entity_kind=EntityKind.STATE,
             history_mode=HistoryMode.CURRENT_ONLY,
             input_mode=InputMode.REPLACE_DAILY,
-            natural_keys=None,  # Missing keys
-            change_timestamp="updated_at",
+            unique_columns=None,  # Missing keys
+            last_updated_column="updated_at",
         )
 
         result = silver.run("2025-01-15")
 
-        # Should skip deduplication since natural_keys is missing
+        # Should skip deduplication since unique_columns is missing
         assert result["row_count"] == 4
 
     def test_empty_keys_list_treated_as_none(self, tmp_path: Path):
@@ -272,8 +272,8 @@ class TestMissingKeysTimestamp:
             entity_kind=EntityKind.STATE,
             history_mode=HistoryMode.CURRENT_ONLY,
             input_mode=InputMode.REPLACE_DAILY,
-            natural_keys=[],  # Empty list
-            change_timestamp="updated_at",
+            unique_columns=[],  # Empty list
+            last_updated_column="updated_at",
         )
 
         result = silver.run("2025-01-15")
@@ -294,8 +294,8 @@ class TestMissingKeysTimestamp:
             target_path=str(output_path) + "/",
             entity_kind=EntityKind.STATE,
             history_mode=HistoryMode.CURRENT_ONLY,
-            natural_keys=["id"],
-            change_timestamp="updated_at",
+            unique_columns=["id"],
+            last_updated_column="updated_at",
         )
 
         result = silver.run("2025-01-15")
@@ -332,8 +332,8 @@ class TestEmptyDataEdgeCases:
             entity_kind=EntityKind.STATE,
             history_mode=HistoryMode.CURRENT_ONLY,
             input_mode=InputMode.REPLACE_DAILY,
-            natural_keys=None,
-            change_timestamp=None,
+            unique_columns=None,
+            last_updated_column=None,
         )
 
         result = silver.run("2025-01-15")
@@ -354,8 +354,8 @@ class TestEmptyDataEdgeCases:
             entity_kind=EntityKind.STATE,
             history_mode=HistoryMode.CURRENT_ONLY,
             input_mode=InputMode.REPLACE_DAILY,
-            natural_keys=None,
-            change_timestamp=None,
+            unique_columns=None,
+            last_updated_column=None,
         )
 
         # When glob matches no files, Silver logs a warning and returns row_count=0
@@ -396,8 +396,8 @@ class TestEmptyDataEdgeCases:
             entity_kind=EntityKind.EVENT,  # Uses distinct()
             history_mode=HistoryMode.CURRENT_ONLY,
             input_mode=InputMode.REPLACE_DAILY,
-            natural_keys=None,
-            change_timestamp=None,
+            unique_columns=None,
+            last_updated_column=None,
         )
 
         result = silver.run("2025-01-15")
@@ -502,10 +502,10 @@ class TestCurateFunctionEdgeCases:
 
 
 class TestHistoryModeWithoutKeys:
-    """Tests for history_mode=full_history without natural_keys."""
+    """Tests for history_mode=full_history without unique_columns."""
 
     def test_full_history_requires_keys_non_periodic(self, tmp_path: Path):
-        """full_history mode with APPEND_LOG requires natural_keys."""
+        """full_history mode with APPEND_LOG requires unique_columns."""
         # Non-periodic snapshot configs (e.g., APPEND_LOG) require keys
         with pytest.raises(ValueError) as exc_info:
             SilverEntity(
@@ -516,11 +516,11 @@ class TestHistoryModeWithoutKeys:
                 entity_kind=EntityKind.STATE,
                 history_mode=HistoryMode.FULL_HISTORY,  # SCD2 mode
                 input_mode=InputMode.APPEND_LOG,  # Not periodic snapshot
-                natural_keys=None,  # Missing keys
-                change_timestamp=None,
+                unique_columns=None,  # Missing keys
+                last_updated_column=None,
             )
 
-        assert "natural_keys" in str(exc_info.value).lower()
+        assert "unique_columns" in str(exc_info.value).lower()
 
     def test_full_history_with_keys_builds_scd2(self, tmp_path: Path):
         """full_history with keys builds proper SCD2 history."""
@@ -545,8 +545,8 @@ class TestHistoryModeWithoutKeys:
             target_path=str(output_path) + "/",
             entity_kind=EntityKind.STATE,
             history_mode=HistoryMode.FULL_HISTORY,  # SCD2 mode
-            natural_keys=["id"],
-            change_timestamp="updated_at",
+            unique_columns=["id"],
+            last_updated_column="updated_at",
         )
 
         result = silver.run("2025-01-15")

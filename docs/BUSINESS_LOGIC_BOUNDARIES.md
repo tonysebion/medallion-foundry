@@ -40,7 +40,7 @@ bronze:
   source_type: database_mssql
   query: SELECT * FROM dbo.Orders  # Extract everything
   load_pattern: incremental
-  watermark_column: modified_date
+  incremental_column: modified_date
 ```
 
 ### Anti-Pattern: Business Logic in Bronze
@@ -68,8 +68,8 @@ bronze:
 ### Example: Correct Silver Configuration
 ```yaml
 silver:
-  natural_keys: [order_id]
-  change_timestamp: updated_at
+  unique_columns: [order_id]
+  last_updated_column: updated_at
   model: scd_type_2
   attributes:
     - customer_id

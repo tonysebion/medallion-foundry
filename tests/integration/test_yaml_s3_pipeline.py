@@ -99,8 +99,8 @@ def create_pipeline_yaml(
             .replace("{system}", "retail")
             .replace("{entity}", "orders"),
             "target_path": silver_target,
-            "natural_keys": ["order_id"],
-            "change_timestamp": "order_ts",
+            "unique_columns": ["order_id"],
+            "last_updated_column": "order_ts",
             "entity_kind": "state",
             "history_mode": "current_only",
             "attributes": ["customer_id", "product", "quantity", "total"],

@@ -85,13 +85,13 @@ def build_substitutions(
     run_date: str,
     system: str,
     entity: str,
-    natural_key: str = "",
-    change_timestamp: str = "",
+    unique_columns: str = "",
+    last_updated_column: str = "",
     attributes: Optional[list] = None,
     entity_kind: str = "state",
     history_mode: str = "current_only",
     load_pattern: str = "full_snapshot",
-    watermark_column: str = "",
+    incremental_column: str = "",
 ) -> Dict[str, str]:
     """Build a substitutions dictionary with common placeholders.
 
@@ -109,14 +109,14 @@ def build_substitutions(
         "load_pattern": load_pattern,
     }
 
-    if natural_key:
-        subs["natural_key"] = natural_key
-    if change_timestamp:
-        subs["change_timestamp"] = change_timestamp
+    if unique_columns:
+        subs["unique_columns"] = unique_columns
+    if last_updated_column:
+        subs["last_updated_column"] = last_updated_column
     if attributes:
         # Format as YAML list
         subs["attributes"] = "\n".join(f"    - {attr}" for attr in attributes)
-    if watermark_column:
-        subs["watermark_column"] = watermark_column
+    if incremental_column:
+        subs["incremental_column"] = incremental_column
 
     return subs

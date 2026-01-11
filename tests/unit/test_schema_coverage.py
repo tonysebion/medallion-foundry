@@ -113,8 +113,8 @@ def build_minimal_silver_config(**overrides) -> Dict[str, Any]:
     config = {
         "domain": "test",
         "subject": "test",
-        "natural_keys": ["id"],
-        "change_timestamp": "updated_at",
+        "unique_columns": ["id"],
+        "last_updated_column": "updated_at",
         "source_path": "./bronze/test/*.parquet",
         "target_path": "./silver/test/",
     }
@@ -333,8 +333,8 @@ class TestSilverSchemaFields:
         assert len(silver_fields) > 0, "No Silver fields found in schema"
         # Verify some expected fields exist
         field_names = [name for name, _ in silver_fields]
-        assert "natural_keys" in field_names
-        assert "change_timestamp" in field_names
+        assert "unique_columns" in field_names
+        assert "last_updated_column" in field_names
 
     @pytest.mark.parametrize(
         "field_name,field_props", get_silver_fields(), ids=silver_field_ids()
@@ -362,7 +362,7 @@ class TestSilverSchemaFields:
             pytest.skip(f"Nested object field '{field_name}' requires special test")
 
         # Handle oneOf fields (natural_keys can be string or array)
-        if field_name == "natural_keys":
+        if field_name == "unique_columns":
             example = ["test_id"]
 
         if example is not None:
@@ -430,7 +430,7 @@ class TestSchemaCompleteness:
             "source_path",
             "target_path",
             "load_pattern",
-            "watermark_column",
+            "incremental_column",
             "watermark_source",
             "host",
             "database",
@@ -480,8 +480,8 @@ class TestSchemaCompleteness:
         expected_handled = {
             "domain",
             "subject",
-            "natural_keys",
-            "change_timestamp",
+            "unique_columns",
+            "last_updated_column",
             "source_path",
             "target_path",
             "model",

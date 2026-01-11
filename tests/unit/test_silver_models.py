@@ -204,7 +204,7 @@ class TestConfigLoaderModelExpansion:
         assert silver.input_mode == InputMode.REPLACE_DAILY
 
     def test_load_silver_periodic_snapshot_without_keys(self, tmp_path: Path):
-        """Test periodic_snapshot model does not require natural_keys or change_timestamp."""
+        """Test periodic_snapshot model does not require unique_columns or last_updated_column."""
         config = {
             "domain": "test",
             "subject": "orders",
@@ -213,8 +213,8 @@ class TestConfigLoaderModelExpansion:
             "model": "periodic_snapshot",
         }
         silver = load_silver_from_yaml(config, tmp_path)
-        assert silver.natural_keys is None
-        assert silver.change_timestamp is None
+        assert silver.unique_columns is None
+        assert silver.last_updated_column is None
         assert silver.entity_kind == EntityKind.STATE
         assert silver.history_mode == HistoryMode.CURRENT_ONLY
         assert silver.input_mode == InputMode.REPLACE_DAILY
@@ -619,35 +619,35 @@ class TestModelValidationRequirements:
     """Tests for model-specific field requirements."""
 
     @pytest.mark.parametrize("model", list(MODELS_REQUIRING_KEYS))
-    def test_model_requires_natural_keys(self, tmp_path: Path, model: str):
-        """Non-periodic models require natural_keys."""
+    def test_model_requires_unique_columns(self, tmp_path: Path, model: str):
+        """Non-periodic models require unique_columns."""
         config = {
             "model": model,
-            "change_timestamp": "updated_at",
+            "last_updated_column": "updated_at",
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/",
         }
         with pytest.raises(YAMLConfigError) as exc_info:
             load_silver_from_yaml(config, tmp_path)
-        assert "natural_keys" in str(exc_info.value).lower()
+        assert "unique_columns" in str(exc_info.value).lower()
 
     @pytest.mark.parametrize("model", list(MODELS_REQUIRING_KEYS))
-    def test_model_requires_change_timestamp(self, tmp_path: Path, model: str):
-        """Non-periodic models require change_timestamp."""
+    def test_model_requires_last_updated_column(self, tmp_path: Path, model: str):
+        """Non-periodic models require last_updated_column."""
         config = {
             "model": model,
             "domain": "test",
             "subject": "test",
-            "natural_keys": ["id"],
+            "unique_columns": ["id"],
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/",
         }
         with pytest.raises(YAMLConfigError) as exc_info:
             load_silver_from_yaml(config, tmp_path)
-        assert "change_timestamp" in str(exc_info.value).lower()
+        assert "last_updated_column" in str(exc_info.value).lower()
 
     def test_periodic_snapshot_optional_keys(self, tmp_path: Path):
-        """periodic_snapshot does not require natural_keys or change_timestamp."""
+        """periodic_snapshot does not require unique_columns or last_updated_column."""
         config = {
             "domain": "test",
             "subject": "snapshot",
@@ -656,18 +656,18 @@ class TestModelValidationRequirements:
             "target_path": "./silver/",
         }
         silver = load_silver_from_yaml(config, tmp_path)
-        assert silver.natural_keys is None
-        assert silver.change_timestamp is None
+        assert silver.unique_columns is None
+        assert silver.last_updated_column is None
 
     def test_no_model_requires_keys(self, tmp_path: Path):
-        """When no model specified, natural_keys and change_timestamp are required."""
+        """When no model specified, unique_columns and last_updated_column are required."""
         config = {
             "source_path": "./bronze/*.parquet",
             "target_path": "./silver/",
         }
         with pytest.raises(YAMLConfigError) as exc_info:
             load_silver_from_yaml(config, tmp_path)
-        assert "natural_keys" in str(exc_info.value).lower()
+        assert "unique_columns" in str(exc_info.value).lower()
 
     def test_error_message_suggests_periodic_snapshot(self, tmp_path: Path):
         """Error message suggests periodic_snapshot when keys missing."""

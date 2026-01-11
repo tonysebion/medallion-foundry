@@ -131,8 +131,8 @@ def test_silver_entity_curates_state_entity(tmp_path: Path):
         target_path=silver_target.as_posix(),
         domain="tests",
         subject="items",
-        natural_keys=["id"],
-        change_timestamp="updated_at",
+        unique_columns=["id"],
+        last_updated_column="updated_at",
         entity_kind=EntityKind.STATE,
         history_mode=HistoryMode.CURRENT_ONLY,
     )

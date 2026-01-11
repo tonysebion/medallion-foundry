@@ -202,8 +202,8 @@ def run_silver(
     silver = SilverEntity(
         source_path=source_path,
         target_path=f"s3://{bucket}/{prefix}/silver/domain=transitions/subject=test/dt={{run_date}}/",
-        natural_keys=["id"],
-        change_timestamp="ts",
+        unique_columns=["id"],
+        last_updated_column="ts",
         entity_kind=EntityKind.STATE,
         history_mode=history_mode,
         delete_mode=delete_mode,
@@ -692,7 +692,7 @@ class TestIncrementalFullSnapshotIncrementalCycle:
         assert final_df["id"].is_unique, "IDs should be unique after deduplication"
 
         # The overlapping IDs (1-5 from Days 1-3 and 1-8 from Day 4) are deduped
-        # Latest version wins based on change_timestamp
+        # Latest version wins based on last_updated_column
         # We should have: IDs from Day 4 snapshot + new IDs from Days 5-6
 
         # IDs that were ONLY in incremental phase (not in snapshot)
@@ -933,3 +933,277 @@ class TestIncrementalFullSnapshotIncrementalCycle:
             # Exactly one current record per ID
             current_df = final_df[final_df["is_current"] == 1]
             assert current_df["id"].is_unique, "Each ID should have one current record"
+
+
+class TestPartitionBoundaryDetection:
+    """Test that Silver correctly identifies and respects full_snapshot boundaries.
+
+    When Silver scans partitions backwards and finds a full_snapshot, it should
+    use that as a "boundary" and not read partitions before it. This prevents
+    reading redundant data that was superseded by the snapshot.
+
+    Expected behavior:
+    - incr(1) → incr(2) → full(3) → incr(4) → incr(5): Read partitions 3, 4, 5 only
+    - incr(1) → incr(2) → incr(3) → incr(4): Read all partitions (no boundary)
+    - full(1) → incr(2) → full(3) → incr(4) → incr(5): Read partitions 3, 4, 5
+    """
+
+    @pytest.fixture
+    def prefix(self):
+        import uuid
+
+        return f"boundary_{uuid.uuid4().hex[:8]}"
+
+    def test_finds_most_recent_full_snapshot_boundary(
+        self, minio_client, minio_bucket, prefix, tmp_path
+    ):
+        """
+        Partitions: incr(1) → incr(2) → full(3) → incr(4) → incr(5)
+        Expected: Silver reads only partitions 3, 4, 5
+
+        This is the key test for the new boundary detection feature.
+        """
+        gen = PatternTransitionDataGenerator()
+
+        # Days 1-2: Incremental (IDs 1-9)
+        day1_data = gen.generate_full_snapshot(1, record_count=5)
+        csv1 = tmp_path / "day1.csv"
+        day1_data.to_csv(csv1, index=False)
+        run_bronze(
+            csv1, minio_bucket, prefix, date(2025, 1, 6), LoadPattern.INCREMENTAL_APPEND
+        )
+
+        day2_data = gen.generate_incremental(2, new_count=4, update_count=0)
+        csv2 = tmp_path / "day2.csv"
+        day2_data.to_csv(csv2, index=False)
+        run_bronze(
+            csv2, minio_bucket, prefix, date(2025, 1, 7), LoadPattern.INCREMENTAL_APPEND
+        )
+
+        # Track IDs from days 1-2 (pre-boundary)
+        pre_boundary_ids = set(day1_data["id"].tolist()) | set(day2_data["id"].tolist())
+
+        # Day 3: Full snapshot with DIFFERENT IDs (100-109)
+        gen2 = PatternTransitionDataGenerator()
+        gen2._next_id = 100  # Start IDs from 100
+        day3_data = gen2.generate_full_snapshot(3, record_count=10)
+        csv3 = tmp_path / "day3.csv"
+        day3_data.to_csv(csv3, index=False)
+        run_bronze(
+            csv3, minio_bucket, prefix, date(2025, 1, 8), LoadPattern.FULL_SNAPSHOT
+        )
+
+        # Days 4-5: Incremental from day 3's state (IDs 100-112)
+        day4_data = gen2.generate_incremental(4, new_count=2, update_count=1)
+        csv4 = tmp_path / "day4.csv"
+        day4_data.to_csv(csv4, index=False)
+        run_bronze(
+            csv4, minio_bucket, prefix, date(2025, 1, 9), LoadPattern.INCREMENTAL_APPEND
+        )
+
+        day5_data = gen2.generate_incremental(5, new_count=1, update_count=1)
+        csv5 = tmp_path / "day5.csv"
+        day5_data.to_csv(csv5, index=False)
+        run_bronze(
+            csv5, minio_bucket, prefix, date(2025, 1, 10), LoadPattern.INCREMENTAL_APPEND
+        )
+
+        # Run Silver - should only read partitions 3, 4, 5
+        run_silver(minio_bucket, prefix, date(2025, 1, 10))
+
+        silver_df = get_silver_data(minio_client, minio_bucket, prefix, "2025-01-10")
+        actual_ids = set(silver_df["id"].tolist())
+
+        # Pre-boundary IDs (1-9) should NOT be present
+        # (because Silver found the full_snapshot boundary at day 3)
+        for pre_id in pre_boundary_ids:
+            assert pre_id not in actual_ids, (
+                f"ID {pre_id} from pre-boundary partitions should NOT be present. "
+                "Silver should recognize full_snapshot as boundary and skip earlier partitions."
+            )
+
+        # Post-boundary IDs (100+) SHOULD be present
+        post_boundary_ids = set(day3_data["id"].tolist())
+        for post_id in post_boundary_ids:
+            assert post_id in actual_ids, (
+                f"ID {post_id} from post-boundary partitions should be present"
+            )
+
+        assert silver_df["id"].is_unique, "IDs should be unique after deduplication"
+
+    def test_no_boundary_reads_all_partitions(
+        self, minio_client, minio_bucket, prefix, tmp_path
+    ):
+        """
+        Partitions: incr(1) → incr(2) → incr(3) → incr(4)
+        Expected: Silver reads all partitions (no full_snapshot boundary)
+        """
+        gen = PatternTransitionDataGenerator()
+
+        # All days: Incremental
+        all_ids = set()
+        for day in range(1, 5):
+            if day == 1:
+                day_data = gen.generate_full_snapshot(day, record_count=5)
+            else:
+                day_data = gen.generate_incremental(day, new_count=3, update_count=1)
+
+            csv = tmp_path / f"day{day}.csv"
+            day_data.to_csv(csv, index=False)
+            run_bronze(
+                csv,
+                minio_bucket,
+                prefix,
+                date(2025, 1, 5 + day),
+                LoadPattern.INCREMENTAL_APPEND,
+            )
+            all_ids.update(day_data["id"].tolist())
+
+        # Run Silver - should read ALL partitions (no boundary)
+        run_silver(minio_bucket, prefix, date(2025, 1, 9))
+
+        silver_df = get_silver_data(minio_client, minio_bucket, prefix, "2025-01-09")
+        actual_ids = set(silver_df["id"].tolist())
+
+        # All IDs should be present (no boundary to filter)
+        for expected_id in all_ids:
+            assert expected_id in actual_ids, (
+                f"ID {expected_id} should be present when no boundary exists"
+            )
+
+        # Count should be total unique IDs: 5 + 3*3 = 14
+        expected_count = 5 + (3 * 3)  # Day 1 (5) + days 2-4 (3 new each)
+        assert len(silver_df) == expected_count, (
+            f"Expected {expected_count} unique records, got {len(silver_df)}"
+        )
+
+    def test_multiple_full_snapshots_uses_most_recent(
+        self, minio_client, minio_bucket, prefix, tmp_path
+    ):
+        """
+        Partitions: full(1) → incr(2) → full(3) → incr(4) → incr(5)
+        Expected: Silver reads partitions 3, 4, 5 (uses MOST RECENT full_snapshot)
+        """
+        gen = PatternTransitionDataGenerator()
+
+        # Day 1: First full snapshot (IDs 1-5)
+        day1_data = gen.generate_full_snapshot(1, record_count=5)
+        csv1 = tmp_path / "day1.csv"
+        day1_data.to_csv(csv1, index=False)
+        run_bronze(
+            csv1, minio_bucket, prefix, date(2025, 1, 6), LoadPattern.FULL_SNAPSHOT
+        )
+
+        # Day 2: Incremental (IDs 6-8)
+        day2_data = gen.generate_incremental(2, new_count=3, update_count=0)
+        csv2 = tmp_path / "day2.csv"
+        day2_data.to_csv(csv2, index=False)
+        run_bronze(
+            csv2, minio_bucket, prefix, date(2025, 1, 7), LoadPattern.INCREMENTAL_APPEND
+        )
+
+        first_batch_ids = set(day1_data["id"].tolist()) | set(day2_data["id"].tolist())
+
+        # Day 3: Second full snapshot with DIFFERENT IDs (200-209)
+        gen2 = PatternTransitionDataGenerator()
+        gen2._next_id = 200
+        day3_data = gen2.generate_full_snapshot(3, record_count=10)
+        csv3 = tmp_path / "day3.csv"
+        day3_data.to_csv(csv3, index=False)
+        run_bronze(
+            csv3, minio_bucket, prefix, date(2025, 1, 8), LoadPattern.FULL_SNAPSHOT
+        )
+
+        # Days 4-5: Incremental from day 3
+        day4_data = gen2.generate_incremental(4, new_count=2, update_count=1)
+        csv4 = tmp_path / "day4.csv"
+        day4_data.to_csv(csv4, index=False)
+        run_bronze(
+            csv4, minio_bucket, prefix, date(2025, 1, 9), LoadPattern.INCREMENTAL_APPEND
+        )
+
+        day5_data = gen2.generate_incremental(5, new_count=1, update_count=0)
+        csv5 = tmp_path / "day5.csv"
+        day5_data.to_csv(csv5, index=False)
+        run_bronze(
+            csv5, minio_bucket, prefix, date(2025, 1, 10), LoadPattern.INCREMENTAL_APPEND
+        )
+
+        # Run Silver
+        run_silver(minio_bucket, prefix, date(2025, 1, 10))
+
+        silver_df = get_silver_data(minio_client, minio_bucket, prefix, "2025-01-10")
+        actual_ids = set(silver_df["id"].tolist())
+
+        # IDs from days 1-2 should NOT be present
+        # (boundary is at day 3, the MOST RECENT full_snapshot)
+        for old_id in first_batch_ids:
+            assert old_id not in actual_ids, (
+                f"ID {old_id} from before most recent full_snapshot should NOT be present"
+            )
+
+        # IDs from day 3 onwards should be present
+        day3_ids = set(day3_data["id"].tolist())
+        for new_id in day3_ids:
+            assert new_id in actual_ids, (
+                f"ID {new_id} from most recent full_snapshot should be present"
+            )
+
+    def test_full_snapshot_at_end_reads_only_latest(
+        self, minio_client, minio_bucket, prefix, tmp_path
+    ):
+        """
+        Partitions: incr(1) → incr(2) → full(3)
+        Expected: Silver reads only partition 3 (REPLACE_DAILY mode)
+
+        This tests that when the LATEST partition is full_snapshot,
+        Silver uses REPLACE_DAILY and only reads that partition.
+        """
+        gen = PatternTransitionDataGenerator()
+
+        # Days 1-2: Incremental
+        day1_data = gen.generate_full_snapshot(1, record_count=5)
+        csv1 = tmp_path / "day1.csv"
+        day1_data.to_csv(csv1, index=False)
+        run_bronze(
+            csv1, minio_bucket, prefix, date(2025, 1, 6), LoadPattern.INCREMENTAL_APPEND
+        )
+
+        day2_data = gen.generate_incremental(2, new_count=5, update_count=0)
+        csv2 = tmp_path / "day2.csv"
+        day2_data.to_csv(csv2, index=False)
+        run_bronze(
+            csv2, minio_bucket, prefix, date(2025, 1, 7), LoadPattern.INCREMENTAL_APPEND
+        )
+
+        incr_ids = set(day1_data["id"].tolist()) | set(day2_data["id"].tolist())
+
+        # Day 3: Full snapshot with DIFFERENT IDs (50-54)
+        gen2 = PatternTransitionDataGenerator()
+        gen2._next_id = 50
+        day3_data = gen2.generate_full_snapshot(3, record_count=5)
+        csv3 = tmp_path / "day3.csv"
+        day3_data.to_csv(csv3, index=False)
+        run_bronze(
+            csv3, minio_bucket, prefix, date(2025, 1, 8), LoadPattern.FULL_SNAPSHOT
+        )
+
+        snapshot_ids = set(day3_data["id"].tolist())
+
+        # Run Silver - should use REPLACE_DAILY (latest is full_snapshot)
+        run_silver(minio_bucket, prefix, date(2025, 1, 8))
+
+        silver_df = get_silver_data(minio_client, minio_bucket, prefix, "2025-01-08")
+        actual_ids = set(silver_df["id"].tolist())
+
+        # Should have ONLY day 3 IDs
+        assert actual_ids == snapshot_ids, (
+            f"Expected only snapshot IDs {snapshot_ids}, got {actual_ids}"
+        )
+
+        # Days 1-2 IDs should NOT be present (REPLACE_DAILY ignores earlier partitions)
+        for incr_id in incr_ids:
+            assert incr_id not in actual_ids, (
+                f"ID {incr_id} from incremental phase should NOT be present "
+                "(REPLACE_DAILY mode reads only latest partition)"
+            )

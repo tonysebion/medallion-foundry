@@ -91,10 +91,10 @@ GROUP BY c.customer_id, c.customer_segment, p.category
 
 ### Technical Deduplication
 ```yaml
-# Silver: Keep latest record per natural key
+# Silver: Keep latest record per unique columns
 silver:
-  natural_keys: [customer_id]
-  change_timestamp: updated_at
+  unique_columns: [customer_id]
+  last_updated_column: updated_at
   model: full_merge_dedupe  # Technical deduplication
 ```
 
@@ -102,8 +102,8 @@ silver:
 ```yaml
 # Silver: Track all historical versions
 silver:
-  natural_keys: [product_id]
-  change_timestamp: modified_date
+  unique_columns: [product_id]
+  last_updated_column: modified_date
   model: scd_type_2  # Technical history tracking
 ```
 
@@ -136,7 +136,7 @@ silver:
 ```yaml
 # WRONG: Business filtering in Silver
 silver:
-  natural_keys: [order_id]
+  unique_columns: [order_id]
   # This filters to "active" orders - that's a business decision!
   filter: "status = 'active'"  # DON'T DO THIS
 ```
@@ -154,8 +154,8 @@ silver:
 ```yaml
 # CORRECT: Silver just curates
 silver:
-  natural_keys: [order_id]
-  change_timestamp: updated_at
+  unique_columns: [order_id]
+  last_updated_column: updated_at
   attributes:
     - customer_id
     - order_total

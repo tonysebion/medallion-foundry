@@ -149,8 +149,8 @@ def run_silver(
     silver = SilverEntity(
         source_path=source_path,
         target_path=f"s3://{bucket}/{prefix}/silver/domain=recovery/subject=test/dt={{run_date}}/",
-        natural_keys=["id"],
-        change_timestamp="ts",
+        unique_columns=["id"],
+        last_updated_column="ts",
         entity_kind=EntityKind.STATE,
         history_mode=HistoryMode.CURRENT_ONLY,
         delete_mode=DeleteMode.IGNORE,
