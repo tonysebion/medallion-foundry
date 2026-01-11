@@ -233,14 +233,17 @@ class TestCDCSnapshotEquivalenceEdgeCases:
         """Empty CDC stream should produce empty result."""
         con = ibis.duckdb.connect()
 
+        # Create empty dataframe with explicit schema using PyArrow for string types
+        # to avoid DuckDB NULL type inference issues
+        import pyarrow as pa
         cdc_data = pd.DataFrame(
-            columns=["id", "name", "op", "updated_at"]
+            {
+                "id": pd.array([], dtype=pd.Int64Dtype()),
+                "name": pd.array([], dtype=pd.StringDtype()),
+                "op": pd.array([], dtype=pd.StringDtype()),
+                "updated_at": pd.array([], dtype=pd.StringDtype()),
+            }
         )
-        # Need to specify types for empty dataframe
-        cdc_data["id"] = cdc_data["id"].astype(int)
-        cdc_data["name"] = cdc_data["name"].astype(str)
-        cdc_data["op"] = cdc_data["op"].astype(str)
-        cdc_data["updated_at"] = cdc_data["updated_at"].astype(str)
 
         cdc_table = con.create_table("cdc", cdc_data)
         result = apply_cdc(

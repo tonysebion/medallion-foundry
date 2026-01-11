@@ -60,9 +60,10 @@ class TestCDCNullKeys:
         be deduped just like any other key value.
         """
         con = ibis.duckdb.connect()
+        # Use explicit nullable int type to avoid DuckDB type inference issue
         df = pd.DataFrame(
             {
-                "id": [None, None, None],
+                "id": pd.array([None, None, None], dtype=pd.Int64Dtype()),
                 "name": ["V1", "V2", "V3"],
                 "op": ["I", "U", "U"],
                 "updated_at": ["2025-01-10", "2025-01-11", "2025-01-12"],
@@ -86,9 +87,10 @@ class TestCDCNullKeys:
     def test_null_key_with_delete(self):
         """NULL key can be deleted."""
         con = ibis.duckdb.connect()
+        # Use explicit nullable int type to avoid DuckDB type inference issue
         df = pd.DataFrame(
             {
-                "id": [None, None],
+                "id": pd.array([None, None], dtype=pd.Int64Dtype()),
                 "name": ["NullRecord", "NullRecord"],
                 "op": ["I", "D"],
                 "updated_at": ["2025-01-10", "2025-01-11"],
@@ -111,9 +113,10 @@ class TestCDCNullKeys:
     def test_null_key_tombstone_mode(self):
         """NULL key with tombstone mode."""
         con = ibis.duckdb.connect()
+        # Use explicit nullable int type to avoid DuckDB type inference issue
         df = pd.DataFrame(
             {
-                "id": [None, None],
+                "id": pd.array([None, None], dtype=pd.Int64Dtype()),
                 "name": ["NullRecord", "NullRecord"],
                 "op": ["I", "D"],
                 "updated_at": ["2025-01-10", "2025-01-11"],
@@ -253,9 +256,10 @@ class TestCDCNullKeyEdgeCases:
     def test_all_null_keys(self):
         """All records have NULL keys."""
         con = ibis.duckdb.connect()
+        # Use explicit nullable int type to avoid DuckDB type inference issue
         df = pd.DataFrame(
             {
-                "id": [None, None, None],
+                "id": pd.array([None, None, None], dtype=pd.Int64Dtype()),
                 "name": ["A", "B", "C"],
                 "op": ["I", "I", "I"],
                 "updated_at": ["2025-01-10", "2025-01-11", "2025-01-12"],

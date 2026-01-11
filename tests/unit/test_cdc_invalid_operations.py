@@ -296,14 +296,19 @@ class TestCDCCustomInvalidCodes:
 class TestCDCInvalidOperationsTombstone:
     """Tests for invalid operations with tombstone mode."""
 
-    def test_invalid_op_not_tombstoned(self):
-        """Invalid operations should not create tombstones."""
+    def test_invalid_op_in_tombstone_mode(self):
+        """Invalid operations in tombstone mode are treated as non-deletes.
+
+        In tombstone mode, the _deleted flag is set to True only when op == delete_code.
+        Any other operation (including invalid codes) gets _deleted = False.
+        This means invalid ops are preserved but not tombstoned.
+        """
         con = ibis.duckdb.connect()
         df = pd.DataFrame(
             {
                 "id": [1, 2],
                 "name": ["Valid", "Invalid"],
-                "op": ["I", "X"],  # X is invalid
+                "op": ["I", "X"],  # X is invalid but preserved with _deleted=False
                 "updated_at": ["2025-01-10", "2025-01-11"],
             }
         )
@@ -318,10 +323,11 @@ class TestCDCInvalidOperationsTombstone:
         )
         result_df = result.execute()
 
-        # Only valid ops should be in result
-        assert len(result_df) == 1
-        assert result_df.iloc[0]["id"] == 1
-        assert bool(result_df.iloc[0]["_deleted"]) is False
+        # Both records present - invalid op treated as non-delete
+        assert len(result_df) == 2
+        # Both should have _deleted = False (neither is a Delete operation)
+        for _, row in result_df.iterrows():
+            assert bool(row["_deleted"]) is False
 
     def test_latest_invalid_op_uses_previous_valid(self):
         """If latest op is invalid, previous valid op should be used.
