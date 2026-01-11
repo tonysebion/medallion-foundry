@@ -126,7 +126,9 @@ bronze:
   cdc_operation_column: op
 
 silver:
-  model: cdc_current_tombstone  # Technical CDC handling
+  model: cdc
+  keep_history: false     # Current state only
+  handle_deletes: flag    # Technical CDC handling - soft deletes
 ```
 
 ## Anti-Patterns: Business Logic in Silver

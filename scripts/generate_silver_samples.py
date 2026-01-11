@@ -79,7 +79,7 @@ SILVER_CONFIGS = {
         "history_mode": None,
         "input_mode": "replace_daily",
         "description": "Full periodic snapshots - each batch is a complete view",
-        "natural_keys": ["record_id"],
+        "unique_columns": ["record_id"],
         "event_ts_column": "created_at",
     },
     # pattern8: snapshot_state_scd1 - Keep only latest snapshot as current state
@@ -89,7 +89,7 @@ SILVER_CONFIGS = {
         "history_mode": "scd1",
         "input_mode": None,
         "description": "Full snapshot as current state - overwrites previous, no history",
-        "natural_keys": ["record_id"],
+        "unique_columns": ["record_id"],
         "change_ts_column": "created_at",
     },
     # pattern9: snapshot_state_scd2 - Track changes between snapshots with history
@@ -99,7 +99,7 @@ SILVER_CONFIGS = {
         "history_mode": "scd2",
         "input_mode": None,
         "description": "Full snapshot with SCD2 history - tracks changes between snapshots",
-        "natural_keys": ["record_id"],
+        "unique_columns": ["record_id"],
         "change_ts_column": "created_at",
     },
     # =========================================================================
@@ -113,7 +113,7 @@ SILVER_CONFIGS = {
         "history_mode": None,
         "input_mode": "append_log",
         "description": "Incremental events - append new events, no deduplication",
-        "natural_keys": ["record_id"],
+        "unique_columns": ["record_id"],
         "event_ts_column": "created_at",
     },
     # pattern6: incremental_state_scd1 - Dedupe incremental to latest state
@@ -123,7 +123,7 @@ SILVER_CONFIGS = {
         "history_mode": "scd1",
         "input_mode": None,
         "description": "Incremental append treated as state - latest only",
-        "natural_keys": ["record_id"],
+        "unique_columns": ["record_id"],
         "change_ts_column": "updated_at",
     },
     # pattern7: incremental_state_scd2 - Build history from incremental appends
@@ -133,7 +133,7 @@ SILVER_CONFIGS = {
         "history_mode": "scd2",
         "input_mode": None,
         "description": "Incremental append as state with full history",
-        "natural_keys": ["record_id"],
+        "unique_columns": ["record_id"],
         "change_ts_column": "updated_at",
     },
     # =========================================================================
@@ -147,7 +147,7 @@ SILVER_CONFIGS = {
         "history_mode": None,
         "input_mode": "append_log",
         "description": "CDC operations as events - each I/U/D is an immutable event",
-        "natural_keys": ["record_id"],
+        "unique_columns": ["record_id"],
         "event_ts_column": "updated_at",
     },
     # pattern4: cdc_state_scd1 - Apply CDC to get current state only
@@ -157,7 +157,7 @@ SILVER_CONFIGS = {
         "history_mode": "scd1",
         "input_mode": None,
         "description": "CDC with deduplication - latest version per key",
-        "natural_keys": ["record_id"],
+        "unique_columns": ["record_id"],
         "change_ts_column": "updated_at",
     },
     # pattern5: cdc_state_scd2 - Build full history from CDC stream
@@ -167,7 +167,7 @@ SILVER_CONFIGS = {
         "history_mode": "scd2",
         "input_mode": None,
         "description": "CDC with full history tracking",
-        "natural_keys": ["record_id"],
+        "unique_columns": ["record_id"],
         "change_ts_column": "updated_at",
     },
     # =========================================================================
@@ -181,7 +181,7 @@ SILVER_CONFIGS = {
         "history_mode": "scd2",
         "input_mode": None,
         "description": "SCD Type 2 state - full history with effective dates",
-        "natural_keys": ["entity_id"],
+        "unique_columns": ["entity_id"],
         "change_ts_column": "effective_from",
     },
 }
@@ -232,8 +232,8 @@ def write_silver_metadata(
         written_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         entity_kind=silver_config["entity_kind"],
         history_mode=history_mode,
-        natural_keys=silver_config["natural_keys"],
-        change_timestamp=change_ts,
+        unique_columns=silver_config["unique_columns"],
+        last_updated_column=change_ts,
         source_path=str(out_dir.parent),
         pipeline_name=f"silver_synthetic_{silver_config['bronze_pattern']}_ingest",
         run_date=run_date.isoformat(),
@@ -254,7 +254,9 @@ def write_silver_metadata(
     return metadata_path
 
 
-def load_bronze_batch(bronze_dir: Path, pattern: str, batch_date: str) -> Optional[pd.DataFrame]:
+def load_bronze_batch(
+    bronze_dir: Path, pattern: str, batch_date: str
+) -> Optional[pd.DataFrame]:
     """Load a Bronze batch from the sample data directory."""
     batch_path = bronze_dir / f"sample={pattern}" / f"dt={batch_date}"
     parquet_file = batch_path / "chunk_0.parquet"
@@ -303,7 +305,7 @@ def process_state_pattern(
     State entities have current view and optionally history.
     Returns dict with 'current' and optionally 'history' DataFrames.
     """
-    natural_keys = config["natural_keys"]
+    unique_columns = config["unique_columns"]
     change_ts = config.get("change_ts_column", "updated_at")
 
     if not dfs:
@@ -316,25 +318,27 @@ def process_state_pattern(
         # SCD1: Keep only latest version per key (overwrite)
         if change_ts in combined.columns:
             combined = combined.sort_values(change_ts)
-        current = combined.drop_duplicates(subset=natural_keys, keep="last")
+        current = combined.drop_duplicates(subset=unique_columns, keep="last")
         return {"current": current}
 
     elif history_mode == "scd2":
         # SCD2: Build full history with effective dates
         if change_ts in combined.columns:
-            combined = combined.sort_values(natural_keys + [change_ts])
+            combined = combined.sort_values(unique_columns + [change_ts])
 
         # Add SCD2 columns
         combined = combined.copy()
-        combined["_version"] = combined.groupby(natural_keys).cumcount() + 1
+        combined["_version"] = combined.groupby(unique_columns).cumcount() + 1
 
         # Mark current records (last per key)
         combined["_is_current"] = False
-        last_idx = combined.groupby(natural_keys)[change_ts].idxmax()
+        last_idx = combined.groupby(unique_columns)[change_ts].idxmax()
         combined.loc[last_idx, "_is_current"] = True
 
         # Build current view (just latest records)
-        current = combined[combined["_is_current"]].drop(columns=["_is_current", "_version"])
+        current = combined[combined["_is_current"]].drop(
+            columns=["_is_current", "_version"]
+        )
 
         # Build history view (all records with version info)
         history = combined.copy()
@@ -353,11 +357,17 @@ def inject_duplicates_if_requested(
     if df.empty:
         return df
 
-    natural_keys = config["natural_keys"]
-    change_ts = config.get("change_ts_column") or config.get("event_ts_column", "updated_at")
+    unique_columns = config["unique_columns"]
+    change_ts = config.get("change_ts_column") or config.get(
+        "event_ts_column", "updated_at"
+    )
 
     # Determine mutable columns (columns that can change in near-duplicates)
-    mutable_cols = [c for c in df.columns if c not in natural_keys and "amount" in c.lower() or "status" in c.lower()]
+    mutable_cols = [
+        c
+        for c in df.columns
+        if c not in unique_columns and "amount" in c.lower() or "status" in c.lower()
+    ]
 
     dup_config = DuplicateConfig(
         exact_duplicate_rate=0.05,
@@ -371,7 +381,7 @@ def inject_duplicates_if_requested(
     # Inject all types of duplicates
     result = injector.inject_all_duplicate_types(
         df=df,
-        key_columns=natural_keys,
+        key_columns=unique_columns,
         mutable_columns=mutable_cols if mutable_cols else None,
         timestamp_column=change_ts if change_ts in df.columns else None,
     )
@@ -412,7 +422,9 @@ def generate_silver_samples(
     bronze_pattern_dir = bronze_dir / f"sample={bronze_pattern}"
     if not bronze_pattern_dir.exists():
         if verbose:
-            print(f"  WARNING: Bronze pattern directory not found: {bronze_pattern_dir}")
+            print(
+                f"  WARNING: Bronze pattern directory not found: {bronze_pattern_dir}"
+            )
         return summary
 
     batch_dirs = sorted(bronze_pattern_dir.glob("dt=*"))
@@ -438,7 +450,9 @@ def generate_silver_samples(
 
     # Inject duplicates if requested (for dedup testing)
     if with_duplicates:
-        bronze_dfs = [inject_duplicates_if_requested(df, config, seed) for df in bronze_dfs]
+        bronze_dfs = [
+            inject_duplicates_if_requested(df, config, seed) for df in bronze_dfs
+        ]
 
     # Process according to entity kind
     entity_kind = config["entity_kind"]
@@ -695,7 +709,8 @@ def parse_args() -> argparse.Namespace:
         help="Show what would be generated without writing files",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Verbose output",
     )
@@ -776,7 +791,9 @@ def main() -> int:
 
     for pattern in patterns:
         config = SILVER_CONFIGS[pattern]
-        print(f"Generating {pattern} ({config['entity_kind']}, {config.get('history_mode', 'N/A')})...")
+        print(
+            f"Generating {pattern} ({config['entity_kind']}, {config.get('history_mode', 'N/A')})..."
+        )
 
         summary = generate_silver_samples(
             silver_pattern=pattern,

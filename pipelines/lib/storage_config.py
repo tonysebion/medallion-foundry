@@ -11,7 +11,7 @@ from enum import Enum
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
-import ibis
+import ibis  # type: ignore[import-untyped]
 
 from pipelines.lib.env import expand_env_vars
 from pipelines.lib.observability import get_structlog_logger
@@ -140,7 +140,9 @@ def get_bool_config_value(
     return default
 
 
-def _extract_storage_options(options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def _extract_storage_options(
+    options: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Extract S3/ADLS storage options from pipeline options.
 
     Maps YAML option names to storage backend option names:
@@ -200,7 +202,9 @@ def _extract_storage_options(options: Optional[Dict[str, Any]] = None) -> Dict[s
     return storage_opts
 
 
-def _configure_duckdb_s3(con: ibis.BaseBackend, options: Optional[Dict[str, Any]] = None) -> None:
+def _configure_duckdb_s3(
+    con: ibis.BaseBackend, options: Optional[Dict[str, Any]] = None
+) -> None:
     """Configure DuckDB's httpfs extension for S3/MinIO access.
 
     DuckDB does not automatically pick up AWS_ENDPOINT_URL environment variable,
@@ -243,7 +247,9 @@ def _configure_duckdb_s3(con: ibis.BaseBackend, options: Optional[Dict[str, Any]
 
     # Get verify_ssl using shared helper (handles bool/string/env var)
     # Default to False for self-signed certificates
-    verify_ssl = get_bool_config_value(options, "verify_ssl", "AWS_S3_VERIFY_SSL", default=False)
+    verify_ssl = get_bool_config_value(
+        options, "verify_ssl", "AWS_S3_VERIFY_SSL", default=False
+    )
 
     # Configure DuckDB S3 settings
     settings = [

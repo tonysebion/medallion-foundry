@@ -48,9 +48,7 @@ from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
 
 import httpx
-import requests_toolbelt
 import tenacity
-from requests_toolbelt.utils.user_agent import user_agent
 from tenacity import (
     before_sleep_log,
     retry,
@@ -62,10 +60,16 @@ from tenacity import (
 from pipelines.lib._path_utils import path_has_data, resolve_target_path
 from pipelines.lib.artifact_writer import write_artifacts
 from pipelines.lib.env import expand_env_vars, expand_options, parse_iso_datetime
-from pipelines.lib.io import OutputMetadata, infer_column_types, maybe_dry_run, maybe_skip_if_exists
+from pipelines.lib.io import (
+    OutputMetadata,
+    infer_column_types,
+    maybe_dry_run,
+    maybe_skip_if_exists,
+)
+from pipelines.lib.observability import get_structlog_logger
 from pipelines.lib.state import get_watermark, save_watermark
 
-logger = logging.getLogger(__name__)
+logger = get_structlog_logger(__name__)
 
 # ============================================================================
 # Authentication (formerly auth.py)
@@ -138,7 +142,9 @@ class AuthConfig:
             )
 
 
-def _handle_bearer_auth(config: AuthConfig, headers: Dict[str, str]) -> Tuple[Dict[str, str], None]:
+def _handle_bearer_auth(
+    config: AuthConfig, headers: Dict[str, str]
+) -> Tuple[Dict[str, str], None]:
     """Handle bearer token authentication."""
     token = expand_env_vars(config.token or "", strict=True)
     if not token:
@@ -148,7 +154,9 @@ def _handle_bearer_auth(config: AuthConfig, headers: Dict[str, str]) -> Tuple[Di
     return headers, None
 
 
-def _handle_api_key_auth(config: AuthConfig, headers: Dict[str, str]) -> Tuple[Dict[str, str], None]:
+def _handle_api_key_auth(
+    config: AuthConfig, headers: Dict[str, str]
+) -> Tuple[Dict[str, str], None]:
     """Handle API key authentication."""
     api_key = expand_env_vars(config.api_key or "", strict=True)
     if not api_key:
@@ -158,7 +166,9 @@ def _handle_api_key_auth(config: AuthConfig, headers: Dict[str, str]) -> Tuple[D
     return headers, None
 
 
-def _handle_basic_auth(config: AuthConfig, headers: Dict[str, str]) -> Tuple[Dict[str, str], Tuple[str, str]]:
+def _handle_basic_auth(
+    config: AuthConfig, headers: Dict[str, str]
+) -> Tuple[Dict[str, str], Tuple[str, str]]:
     """Handle basic authentication."""
     username = expand_env_vars(config.username or "", strict=True)
     password = expand_env_vars(config.password or "", strict=True)
@@ -520,7 +530,11 @@ class CursorPaginationState(PaginationState):
 
     def describe(self) -> str:
         if self.cursor:
-            return f"(cursor={self.cursor[:20]}...)" if len(self.cursor) > 20 else f"(cursor={self.cursor})"
+            return (
+                f"(cursor={self.cursor[:20]}...)"
+                if len(self.cursor) > 20
+                else f"(cursor={self.cursor})"
+            )
         return "(cursor pagination, first page)"
 
     def _extract_cursor(self, data: Any) -> Optional[str]:
@@ -740,15 +754,7 @@ def rate_limited(
 
 RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
-_USER_AGENT = user_agent(
-    "bronze-foundry",
-    "dev",
-    extras=[
-        ("httpx", getattr(httpx, "__version__", "unknown")),
-        ("tenacity", getattr(tenacity, "__version__", "unknown")),
-        ("requests-toolbelt", getattr(requests_toolbelt, "__version__", "unknown")),
-    ],
-)
+_USER_AGENT = f"bronze-foundry/dev httpx/{getattr(httpx, '__version__', 'unknown')} tenacity/{getattr(tenacity, '__version__', 'unknown')}"
 
 __all__ = [
     # Authentication
@@ -923,7 +929,13 @@ class ApiSource:
             dry_run=dry_run,
             logger=logger,
             message="[DRY RUN] Would extract %s.%s from %s%s to %s",
-            message_args=(self.system, self.entity, self.base_url, self.endpoint, target),
+            message_args=(
+                self.system,
+                self.entity,
+                self.base_url,
+                self.endpoint,
+                target,
+            ),
             target=target,
             extra={"base_url": self.base_url, "endpoint": self.endpoint},
         )
@@ -948,7 +960,9 @@ class ApiSource:
         )
 
         if not records:
-            logger.warning("No records fetched from API for %s.%s", self.system, self.entity)
+            logger.warning(
+                "No records fetched from API for %s.%s", self.system, self.entity
+            )
             return {
                 "row_count": 0,
                 "target": target,
@@ -965,7 +979,9 @@ class ApiSource:
             record["_source_entity"] = self.entity
 
         # Write to target
-        result = self._write(records, target, run_date, last_watermark, pages_fetched, total_requests)
+        result = self._write(
+            records, target, run_date, last_watermark, pages_fetched, total_requests
+        )
 
         # Save new watermark if applicable
         if self.watermark_column and records:
@@ -1067,10 +1083,7 @@ class ApiSource:
                 if not state.on_response(records, data):
                     break
 
-        if (
-            isinstance(state, PagePaginationState)
-            and state.max_pages_limit_hit
-        ):
+        if isinstance(state, PagePaginationState) and state.max_pages_limit_hit:
             logger.info("Reached max_pages limit of %d", pagination_config.max_pages)
 
         logger.info(
@@ -1097,15 +1110,17 @@ class ApiSource:
             data = extracted
 
         # Convert to list of records
+        from typing import cast
+
         if isinstance(data, list):
-            return data
+            return cast(List[Dict[str, Any]], data)
         elif isinstance(data, dict):
             # Try common patterns
             for key in ("items", "data", "results", "records"):
                 if key in data and isinstance(data[key], list):
-                    return data[key]
+                    return cast(List[Dict[str, Any]], data[key])
             # Wrap single record
-            return [data]
+            return cast(List[Dict[str, Any]], [data])
         else:
             logger.warning("Unexpected data type: %s", type(data))
             return []
@@ -1121,7 +1136,7 @@ class ApiSource:
             return parse_iso_datetime(value)
         except ValueError:
             try:
-                return datetime.strptime(str(value)[:10], '%Y-%m-%d')
+                return datetime.strptime(str(value)[:10], "%Y-%m-%d")
             except ValueError:
                 return str(value)
 
@@ -1141,9 +1156,15 @@ class ApiSource:
 
         try:
             max_val = max(values, key=self._watermark_sort_key)
-            return max_val.isoformat() if hasattr(max_val, 'isoformat') else str(max_val)
+            return (
+                max_val.isoformat() if hasattr(max_val, "isoformat") else str(max_val)
+            )
         except (TypeError, ValueError) as e:
-            logger.warning("Could not compute max watermark from '%s': %s", self.watermark_column, e)
+            logger.warning(
+                "Could not compute max watermark from '%s': %s",
+                self.watermark_column,
+                e,
+            )
             return None
 
     def _write(
@@ -1156,7 +1177,7 @@ class ApiSource:
         total_requests: int,
     ) -> Dict[str, Any]:
         """Write records to target with metadata and checksums."""
-        import ibis
+        import ibis  # type: ignore[import-untyped]
 
         if not records:
             logger.warning("api_no_records", system=self.system, entity=self.entity)
@@ -1262,7 +1283,7 @@ class ApiSource:
             ),
             retry=retry_if_exception(self._should_retry),
             reraise=True,
-            before_sleep=before_sleep_log(logger, logging.WARNING),
+            before_sleep=before_sleep_log(logging.getLogger(__name__), logging.WARNING),
         )
         def do_request() -> httpx.Response:
             nonlocal attempts

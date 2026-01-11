@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import fnmatch
-import logging
 from typing import Any, List, Optional
 
 import boto3
@@ -19,7 +18,9 @@ from pipelines.lib.storage.base import (
 )
 from pipelines.lib.storage_config import get_bool_config_value, get_config_value
 
-logger = logging.getLogger(__name__)
+from pipelines.lib.observability import get_structlog_logger
+
+logger = get_structlog_logger(__name__)
 
 __all__ = ["S3Storage"]
 
@@ -97,7 +98,7 @@ class S3Storage(StorageBackend):
         """Lazy-load the boto3 S3 client."""
         if self._client is None:
             # Build client configuration
-            client_kwargs = {}
+            client_kwargs: dict[str, Any] = {}
 
             # Credentials (using shared helper that handles ${VAR} expansion)
             key = get_config_value(self.options, "key", "AWS_ACCESS_KEY_ID")
@@ -111,7 +112,9 @@ class S3Storage(StorageBackend):
             client_kwargs["region_name"] = region
 
             # Custom endpoint (MinIO, LocalStack, Nutanix Objects, etc.)
-            endpoint_url = get_config_value(self.options, "endpoint_url", "AWS_ENDPOINT_URL")
+            endpoint_url = get_config_value(
+                self.options, "endpoint_url", "AWS_ENDPOINT_URL"
+            )
             if endpoint_url:
                 client_kwargs["endpoint_url"] = endpoint_url
 
@@ -121,16 +124,22 @@ class S3Storage(StorageBackend):
             )
             if not verify_ssl:
                 client_kwargs["verify"] = False
-                logger.debug("s3_ssl_verification_disabled", endpoint=endpoint_url)
+                logger.debug(
+                    "s3_ssl_verification_disabled", endpoint=endpoint_url or "default"
+                )
 
             # Build botocore Config for signature version and addressing style
-            config_kwargs = {}
+            config_kwargs: dict[str, Any] = {}
 
-            signature_version = get_config_value(self.options, "signature_version", "AWS_S3_SIGNATURE_VERSION")
+            signature_version = get_config_value(
+                self.options, "signature_version", "AWS_S3_SIGNATURE_VERSION"
+            )
             if signature_version:
                 config_kwargs["signature_version"] = signature_version
 
-            addressing_style = get_config_value(self.options, "addressing_style", "AWS_S3_ADDRESSING_STYLE")
+            addressing_style = get_config_value(
+                self.options, "addressing_style", "AWS_S3_ADDRESSING_STYLE"
+            )
             if addressing_style:
                 config_kwargs["s3"] = {"addressing_style": addressing_style}
 
@@ -221,13 +230,17 @@ class S3Storage(StorageBackend):
                 # Check if it's a "directory" (has objects under it)
                 paginator = self.client.get_paginator("list_objects_v2")
                 prefix = s3_key.rstrip("/") + "/"
-                for page in paginator.paginate(Bucket=self._bucket, Prefix=prefix, MaxKeys=1):
+                for page in paginator.paginate(
+                    Bucket=self._bucket, Prefix=prefix, MaxKeys=1
+                ):
                     if page.get("KeyCount", 0) > 0:
                         return True
                 return False
             raise
         except Exception as e:
-            logger.warning("Error checking existence of s3://%s/%s: %s", self._bucket, s3_key, e)
+            logger.warning(
+                "Error checking existence of s3://%s/%s: %s", self._bucket, s3_key, e
+            )
             return False
 
     def list_files(
@@ -301,11 +314,25 @@ class S3Storage(StorageBackend):
                 bytes_written=len(data),
             )
         except Exception as e:
-            logger.error("Failed to write s3://%s/%s: %s", self._bucket, s3_key, e)
+            error_msg = str(e)
+            # Provide actionable guidance for common errors
+            if (
+                "NoCredentialsError" in type(e).__name__
+                or "credentials" in error_msg.lower()
+            ):
+                error_msg = (
+                    f"{e}. Check AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables, "
+                    "or configure credentials via 'aws configure'."
+                )
+            elif "AccessDenied" in error_msg:
+                error_msg = f"{e}. Verify IAM permissions include s3:PutObject for bucket '{self._bucket}'."
+            logger.error(
+                "Failed to write s3://%s/%s: %s", self._bucket, s3_key, error_msg
+            )
             return StorageResult(
                 success=False,
                 path=f"s3://{self._bucket}/{s3_key}",
-                error=str(e),
+                error=error_msg,
             )
 
     def delete(self, path: str) -> bool:

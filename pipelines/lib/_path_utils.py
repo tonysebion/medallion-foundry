@@ -97,6 +97,7 @@ def parse_s3_uri(path: str) -> tuple[str, str]:
     prefix = parts[1] if len(parts) > 1 else ""
     return bucket, prefix
 
+
 def resolve_target_path(
     template: str,
     *,
@@ -105,11 +106,7 @@ def resolve_target_path(
     format_vars: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Resolve a templated target path with overrides/env vars."""
-    base = (
-        target_override
-        or (os.environ.get(env_var) if env_var else None)
-        or template
-    )
+    base = target_override or (os.environ.get(env_var) if env_var else None) or template
     format_vars = format_vars or {}
     try:
         return base.format(**format_vars)
@@ -121,7 +118,7 @@ def resolve_target_path(
 
 def _s3_has_data(path: str) -> bool:
     try:
-        import fsspec
+        import fsspec  # type: ignore[import-untyped]
 
         fs = fsspec.filesystem("s3")
         exists = fs.exists(path)
@@ -167,9 +164,7 @@ def storage_path_exists(path: str) -> bool:
             pattern = Path(path).name if "/" in path or "\\" in path else path
             return storage.exists(pattern)
 
-        storage = get_storage(
-            str(Path(path).parent) if Path(path).suffix else path
-        )
+        storage = get_storage(str(Path(path).parent) if Path(path).suffix else path)
         relative = Path(path).name if Path(path).suffix else ""
         return storage.exists(relative) if relative else True
     except Exception:

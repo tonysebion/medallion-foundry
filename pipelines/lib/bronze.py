@@ -11,17 +11,28 @@ Bronze layer rules:
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Generator, IO, List, Optional
 
-import ibis
+import ibis  # type: ignore[import-untyped]
 import pandas as pd
 
 from pipelines.lib.artifact_writer import write_artifacts
 from pipelines.lib.connections import get_connection
-from pipelines.lib.env import expand_env_vars, expand_options, extract_nested_value, utc_now_iso
-from pipelines.lib.io import OutputMetadata, infer_column_types, maybe_dry_run, maybe_skip_if_exists
+from pipelines.lib.env import (
+    expand_env_vars,
+    expand_options,
+    extract_nested_value,
+    utc_now_iso,
+)
+from pipelines.lib.io import (
+    OutputMetadata,
+    infer_column_types,
+    maybe_dry_run,
+    maybe_skip_if_exists,
+)
 from pipelines.lib.state import (
     WatermarkSource,
     delete_watermark,
@@ -47,7 +58,14 @@ from pipelines.lib.storage_config import (
 logger = get_structlog_logger(__name__)
 
 # Re-export InputMode and WatermarkSource for backward compatibility (external code may import from bronze)
-__all__ = ["BronzeOutputMetadata", "BronzeSource", "InputMode", "LoadPattern", "SourceType", "WatermarkSource"]
+__all__ = [
+    "BronzeOutputMetadata",
+    "BronzeSource",
+    "InputMode",
+    "LoadPattern",
+    "SourceType",
+    "WatermarkSource",
+]
 
 
 # Backwards compatibility: BronzeOutputMetadata is now OutputMetadata
@@ -145,9 +163,13 @@ class BronzeSource:
 
     # Behavior
     load_pattern: LoadPattern = LoadPattern.FULL_SNAPSHOT
-    input_mode: Optional[InputMode] = None  # How Silver interprets partitions (required in YAML)
+    input_mode: Optional[InputMode] = (
+        None  # How Silver interprets partitions (required in YAML)
+    )
     watermark_column: Optional[str] = None  # For incremental loads
-    watermark_source: WatermarkSource = WatermarkSource.DESTINATION  # Where to read watermarks
+    watermark_source: WatermarkSource = (
+        WatermarkSource.DESTINATION
+    )  # Where to read watermarks
 
     # Database connection params (convenience - merged into options)
     # These are simpler than nesting in options dict
@@ -185,6 +207,7 @@ class BronzeSource:
 
         # Validate configuration
         from pipelines.lib.validators import validate_and_raise
+
         try:
             validate_and_raise(source=self)
         except ValueError as exc:
@@ -347,7 +370,9 @@ class BronzeSource:
 
             # Check if periodic full refresh is due
             is_full_refresh = False
-            if should_force_full_refresh(self.system, self.entity, self.full_refresh_days):
+            if should_force_full_refresh(
+                self.system, self.entity, self.full_refresh_days
+            ):
                 logger.info(
                     "bronze_full_refresh_triggered",
                     system=self.system,
@@ -400,7 +425,9 @@ class BronzeSource:
             # Write to target
             with step(PipelineStep.BRONZE_WRITE_OUTPUT):
                 result = self._write(t, target, run_date, last_watermark)
-                tracer.detail(f"Wrote {result.get('row_count', 0):,} records to {target}")
+                tracer.detail(
+                    f"Wrote {result.get('row_count', 0):,} records to {target}"
+                )
 
             # Save new watermark for incremental
             if self.watermark_column and result.get("row_count", 0) > 0:
@@ -436,18 +463,26 @@ class BronzeSource:
         return path_has_data(target)
 
     # Database source types - grouped for dispatch
-    _DATABASE_TYPES = frozenset({
-        SourceType.DATABASE_MSSQL,
-        SourceType.DATABASE_POSTGRES,
-        SourceType.DATABASE_MYSQL,
-        SourceType.DATABASE_DB2,
-    })
+    _DATABASE_TYPES = frozenset(
+        {
+            SourceType.DATABASE_MSSQL,
+            SourceType.DATABASE_POSTGRES,
+            SourceType.DATABASE_MYSQL,
+            SourceType.DATABASE_DB2,
+        }
+    )
 
     # Fixed-width indicator keys in options
-    _FIXED_WIDTH_KEYS = frozenset({
-        "widths", "field_widths", "column_widths",
-        "colspecs", "column_specs", "column_specifications",
-    })
+    _FIXED_WIDTH_KEYS = frozenset(
+        {
+            "widths",
+            "field_widths",
+            "column_widths",
+            "colspecs",
+            "column_specs",
+            "column_specifications",
+        }
+    )
 
     def _read_source(
         self,
@@ -456,7 +491,11 @@ class BronzeSource:
         last_watermark: Optional[str],
     ) -> ibis.Table:
         """Read from source based on source type."""
-        source_path = self.source_path.format(run_date=run_date)
+        source_path = self.source_path.format(
+            run_date=run_date,
+            system=self.system,
+            entity=self.entity,
+        )
         st = self.source_type
 
         # Database sources
@@ -480,18 +519,56 @@ class BronzeSource:
         # Space-delimited can be fixed-width or character-delimited
         if st == SourceType.FILE_SPACE_DELIMITED:
             csv_opts = self.options.get("csv_options", {})
-            has_fixed_width = self._FIXED_WIDTH_KEYS & (csv_opts.keys() | self.options.keys())
-            return self._read_fixed_width(source_path) if has_fixed_width else self._read_character_delimited(source_path)
+            has_fixed_width = self._FIXED_WIDTH_KEYS & (
+                csv_opts.keys() | self.options.keys()
+            )
+            return (
+                self._read_fixed_width(source_path)
+                if has_fixed_width
+                else self._read_character_delimited(source_path)
+            )
 
         # API source
         if st == SourceType.API_REST:
             return ibis.memtable(self._fetch_api(run_date, last_watermark))
 
-        raise ValueError(f"Unsupported source type: {st}")
+        valid_types = [t.value for t in SourceType]
+        raise ValueError(
+            f"Unsupported source type: {st}. "
+            f"Valid types are: {', '.join(valid_types)}. "
+            "Check your source_type configuration."
+        )
 
     def _get_expanded_options(self) -> Dict[str, Any]:
         """Get options with environment variables expanded."""
         return expand_options(self.options)
+
+    @contextmanager
+    def _open_file(
+        self, source_path: str, mode: str = "r"
+    ) -> Generator[IO, None, None]:
+        """Open file from local or remote storage (S3, ADLS).
+
+        Provides a unified interface for reading files regardless of storage location.
+        Uses fsspec for remote paths (s3://, az://, abfs://) and standard open() for local.
+
+        Args:
+            source_path: Path to the file (local or remote URL)
+            mode: File open mode ('r' for text, 'rb' for binary)
+
+        Yields:
+            File-like object that can be used with pandas read functions
+        """
+        if is_object_storage_path(source_path):
+            import fsspec  # type: ignore[import-untyped]
+
+            storage_options = _extract_storage_options(self.options)
+            with fsspec.open(source_path, mode=mode, **storage_options) as f:
+                yield f
+        else:
+            encoding = "utf-8" if "b" not in mode else None
+            with open(source_path, mode, encoding=encoding) as f:
+                yield f
 
     def _read_database(
         self,
@@ -501,9 +578,7 @@ class BronzeSource:
     ) -> ibis.Table:
         """Read from database source using connection pooling."""
         opts = self._get_expanded_options()
-        connection_name = opts.get(
-            "connection_name", f"{self.system}_{self.entity}"
-        )
+        connection_name = opts.get("connection_name", f"{self.system}_{self.entity}")
         db_con = get_connection(connection_name, self.source_type, opts)
 
         query = self.options.get("query")
@@ -529,6 +604,8 @@ class BronzeSource:
         1. Single record type: All lines have the same format (standard mode)
         2. Multi-record type: Parent-child patterns (ABABBB) where different
            line types have different formats
+
+        Supports both local files and remote storage (S3, ADLS).
         """
         # Check for multi-record-type configuration
         record_type_position = self.options.get("record_type_position")
@@ -538,9 +615,11 @@ class BronzeSource:
             from pipelines.lib.fixed_width import read_parent_child_fixed_width
 
             output_mode = self.options.get("output_mode", "flatten")
-            return read_parent_child_fixed_width(
-                source_path, record_type_position, record_types, output_mode=output_mode
-            )
+            # Pass file handle for S3 support
+            with self._open_file(source_path, "r") as f:
+                return read_parent_child_fixed_width(
+                    f, record_type_position, record_types, output_mode=output_mode
+                )
 
         # Original single-record-type logic
         csv_opts: Dict[str, Any] = dict(self.options.get("csv_options", {}))
@@ -560,7 +639,10 @@ class BronzeSource:
 
         if widths is None and colspecs is None:
             raise ValueError(
-                "Fixed-width files require 'widths', 'field_widths', or 'colspecs' in options"
+                "Fixed-width files require column width specifications. "
+                "Add 'widths: [10, 20, 15]' (list of character widths) "
+                "or 'colspecs: [[0,10], [10,30], [30,45]]' (start/end positions) to options. "
+                "See pipelines/examples/fixed_width.yaml for examples."
             )
 
         pandas_opts: Dict[str, Any] = {}
@@ -573,16 +655,22 @@ class BronzeSource:
         if columns:
             pandas_opts["names"] = columns
 
-        df = pd.read_fwf(source_path, **pandas_opts)
+        with self._open_file(source_path, "r") as f:
+            df = pd.read_fwf(f, **pandas_opts)
         return ibis.memtable(df)
 
     def _read_character_delimited(self, source_path: str) -> ibis.Table:
-        """Read files where columns are separated by characters (spaces, pipes, tabs)."""
+        """Read files where columns are separated by characters (spaces, pipes, tabs).
+
+        Supports both local files and remote storage (S3, ADLS).
+        """
         csv_opts = dict(self.options.get("csv_options", {}))
 
-        column_names = csv_opts.pop("columns", None) or csv_opts.pop(
-            "column_names", None
-        ) or csv_opts.pop("col_names", None)
+        column_names = (
+            csv_opts.pop("columns", None)
+            or csv_opts.pop("column_names", None)
+            or csv_opts.pop("col_names", None)
+        )
         # Allow overriding delimiter/sep via options
         delimiter = csv_opts.pop("delimiter", None)
         sep = csv_opts.pop("sep", None)
@@ -603,11 +691,14 @@ class BronzeSource:
         elif "sep" not in pandas_opts:
             pandas_opts["sep"] = " "
 
-        df = pd.read_csv(source_path, **pandas_opts)
+        with self._open_file(source_path, "r") as f:
+            df = pd.read_csv(f, **pandas_opts)
         return ibis.memtable(df)
 
     def _read_json(self, _con: ibis.BaseBackend, source_path: str) -> ibis.Table:
         """Read JSON file.
+
+        Supports both local files and remote storage (S3, ADLS).
 
         Options:
             data_path: Dot-notation path to extract data (e.g., "response.data.items")
@@ -615,7 +706,7 @@ class BronzeSource:
         """
         import json
 
-        with open(source_path, "r", encoding="utf-8") as f:
+        with self._open_file(source_path, "r") as f:
             data = json.load(f)
 
         # Navigate to nested data if data_path specified
@@ -624,22 +715,41 @@ class BronzeSource:
             try:
                 data = extract_nested_value(data, data_path, raise_on_missing=True)
             except KeyError:
-                raise ValueError(f"Path '{data_path}' not found in JSON structure")
+                # Show available top-level keys to help user fix the path
+                if isinstance(data, dict):
+                    available = list(data.keys())[:10]  # Show first 10 keys
+                    available_str = ", ".join(f"'{k}'" for k in available)
+                    raise ValueError(
+                        f"Path '{data_path}' not found in JSON structure. "
+                        f"Available top-level keys: {available_str}"
+                    )
+                raise ValueError(
+                    f"Path '{data_path}' not found in JSON structure. "
+                    "Check your data_path configuration matches the JSON response structure."
+                )
 
         # Ensure we have a list of records
         if isinstance(data, dict):
             data = [data]
         elif not isinstance(data, list):
-            raise ValueError(f"Expected list or dict, got {type(data)}")
+            raise ValueError(
+                f"Expected list or dict at data path, got {type(data).__name__}. "
+                "JSON source should contain an array of records or a single object."
+            )
 
         # Flatten nested structures if requested
         if self.options.get("flatten", False):
-            data = [pd.json_normalize(record).to_dict(orient="records")[0] for record in data]
+            data = [
+                pd.json_normalize(record).to_dict(orient="records")[0]
+                for record in data
+            ]
 
         return ibis.memtable(data)
 
     def _read_jsonl(self, _con: ibis.BaseBackend, source_path: str) -> ibis.Table:
         """Read JSON Lines (newline-delimited JSON) file.
+
+        Supports both local files and remote storage (S3, ADLS).
 
         Each line is a separate JSON object.
 
@@ -649,7 +759,7 @@ class BronzeSource:
         import json
 
         records = []
-        with open(source_path, "r", encoding="utf-8") as f:
+        with self._open_file(source_path, "r") as f:
             for line in f:
                 line = line.strip()
                 if line:  # Skip empty lines
@@ -657,12 +767,17 @@ class BronzeSource:
 
         # Flatten nested structures if requested
         if self.options.get("flatten", False):
-            records = [pd.json_normalize(record).to_dict(orient="records")[0] for record in records]
+            records = [
+                pd.json_normalize(record).to_dict(orient="records")[0]
+                for record in records
+            ]
 
         return ibis.memtable(records)
 
     def _read_excel(self, source_path: str) -> ibis.Table:
         """Read Excel file (.xlsx, .xls).
+
+        Supports both local files and remote storage (S3, ADLS).
 
         Options:
             sheet: Sheet name or index (default: 0, first sheet)
@@ -673,12 +788,14 @@ class BronzeSource:
         header_row = self.options.get("header_row", 0)
         skip_rows = self.options.get("skip_rows", 0)
 
-        df = pd.read_excel(
-            source_path,
-            sheet_name=sheet,
-            header=header_row,
-            skiprows=skip_rows if skip_rows else None,
-        )
+        # Use binary mode for Excel files
+        with self._open_file(source_path, "rb") as f:
+            df = pd.read_excel(
+                f,
+                sheet_name=sheet,
+                header=header_row,
+                skiprows=skip_rows if skip_rows else None,
+            )
         return ibis.memtable(df)
 
     def _fetch_api(
@@ -688,10 +805,10 @@ class BronzeSource:
     ) -> List[Dict[str, Any]]:
         """Fetch from REST API.
 
-        For now, delegates to a simple requests-based fetch.
+        For now, delegates to a simple httpx-based fetch.
         Complex pagination/auth can be extended here.
         """
-        import requests
+        import httpx
 
         opts = self._get_expanded_options()
         url = expand_env_vars(self.source_path.format(run_date=run_date))
@@ -701,7 +818,7 @@ class BronzeSource:
         if last_watermark and self.watermark_column:
             params[self.watermark_column] = last_watermark
 
-        response = requests.get(url, headers=headers, params=params, timeout=60)
+        response = httpx.get(url, headers=headers, params=params, timeout=60)
         response.raise_for_status()
 
         data = response.json()
@@ -765,6 +882,7 @@ class BronzeSource:
         # Only partition for cloud storage (original behavior)
         # Local writes use single file (partition_by only applies to S3/ADLS)
         from pipelines.lib._path_utils import is_object_storage_path
+
         partition_by = self.partition_by if is_object_storage_path(target) else None
 
         # Write using unified artifact writer

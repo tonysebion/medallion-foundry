@@ -16,8 +16,8 @@ Example:
     )
 
     silver = SilverEntity(
-        natural_keys=["order_id"],
-        change_timestamp="updated_at",
+        unique_columns=["order_id"],
+        last_updated_column="updated_at",
     )
 
     # Pipeline auto-wires Bronze → Silver and generates run functions
@@ -82,22 +82,20 @@ class Pipeline:
     before_bronze: Optional[Callable[[str, Dict[str, Any]], None]] = field(
         default=None, repr=False
     )
-    after_bronze: Optional[Callable[[str, Dict[str, Any], Dict[str, Any]], None]] = field(
-        default=None, repr=False
+    after_bronze: Optional[Callable[[str, Dict[str, Any], Dict[str, Any]], None]] = (
+        field(default=None, repr=False)
     )
     before_silver: Optional[Callable[[str, Dict[str, Any]], None]] = field(
         default=None, repr=False
     )
-    after_silver: Optional[Callable[[str, Dict[str, Any], Dict[str, Any]], None]] = field(
-        default=None, repr=False
+    after_silver: Optional[Callable[[str, Dict[str, Any], Dict[str, Any]], None]] = (
+        field(default=None, repr=False)
     )
 
     def __post_init__(self) -> None:
         """Validate and auto-wire configuration."""
         if self.bronze is None and self.silver is None:
-            raise ValueError(
-                "Pipeline requires at least one of: bronze, silver"
-            )
+            raise ValueError("Pipeline requires at least one of: bronze, silver")
 
         # Auto-wire Silver's source_path from Bronze's target_path if not specified
         if self.bronze is not None and self.silver is not None:
@@ -142,9 +140,7 @@ class Pipeline:
 
             # Update Silver's source_path using object.__setattr__ for frozen dataclass compatibility
             object.__setattr__(self.silver, "source_path", auto_source)
-            logger.debug(
-                "Auto-wired Silver source_path from Bronze: %s", auto_source
-            )
+            logger.debug("Auto-wired Silver source_path from Bronze: %s", auto_source)
 
     def run(self, run_date: str, **kwargs: Any) -> Dict[str, Any]:
         """Run full pipeline: Bronze → Silver.
@@ -292,32 +288,36 @@ class Pipeline:
         ]
 
         if self.bronze is not None:
-            lines.extend([
-                "",
-                "BRONZE LAYER:",
-                f"  System:       {self.bronze.system}",
-                f"  Entity:       {self.bronze.entity}",
-                f"  Source Type:  {self.bronze.source_type.value}",
-                f"  Source:       {self.bronze.source_path or '(database query)'}",
-                f"  Target:       {self.bronze.target_path}",
-                f"  Load Pattern: {self.bronze.load_pattern.value}",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "BRONZE LAYER:",
+                    f"  System:       {self.bronze.system}",
+                    f"  Entity:       {self.bronze.entity}",
+                    f"  Source Type:  {self.bronze.source_type.value}",
+                    f"  Source:       {self.bronze.source_path or '(database query)'}",
+                    f"  Target:       {self.bronze.target_path}",
+                    f"  Load Pattern: {self.bronze.load_pattern.value}",
+                ]
+            )
             if self.bronze.watermark_column:
                 lines.append(f"  Watermark:    {self.bronze.watermark_column}")
 
         if self.silver is not None:
-            lines.extend([
-                "",
-                "SILVER LAYER:",
-                f"  Domain:       {self.silver.domain}",
-                f"  Subject:      {self.silver.subject}",
-                f"  Source:       {self.silver.source_path}",
-                f"  Target:       {self.silver.target_path}",
-                f"  Natural Keys: {', '.join(self.silver.natural_keys or [])}",
-                f"  Change Col:   {self.silver.change_timestamp}",
-                f"  Entity Kind:  {self.silver.entity_kind.value}",
-                f"  History Mode: {self.silver.history_mode.value}",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "SILVER LAYER:",
+                    f"  Domain:       {self.silver.domain}",
+                    f"  Subject:      {self.silver.subject}",
+                    f"  Source:       {self.silver.source_path}",
+                    f"  Target:       {self.silver.target_path}",
+                    f"  Unique Columns:     {', '.join(self.silver.unique_columns or [])}",
+                    f"  Last Updated Col:   {self.silver.last_updated_column}",
+                    f"  Entity Kind:  {self.silver.entity_kind.value}",
+                    f"  History Mode: {self.silver.history_mode.value}",
+                ]
+            )
             if self.silver.attributes:
                 lines.append(f"  Attributes:   {', '.join(self.silver.attributes)}")
 

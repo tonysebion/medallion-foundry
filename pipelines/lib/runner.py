@@ -121,7 +121,9 @@ class PipelineResult:
     @property
     def was_skipped(self) -> bool:
         """Check if the pipeline was skipped."""
-        return bool(self.bronze.get("skipped", False)) or bool(self.silver.get("skipped", False))
+        return bool(self.bronze.get("skipped", False)) or bool(
+            self.silver.get("skipped", False)
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""

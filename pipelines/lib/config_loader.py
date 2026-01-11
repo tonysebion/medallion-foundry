@@ -11,8 +11,8 @@ Example YAML (retail_orders.yaml):
       source_path: "./data/orders_{run_date}.csv"
 
     silver:
-      natural_keys: [order_id]
-      change_timestamp: updated_at
+      unique_columns: [order_id]
+      last_updated_column: updated_at
       attributes: [customer_id, order_total, status]
 
 Usage:
@@ -32,13 +32,20 @@ import os
 import warnings
 from pathlib import Path
 from enum import Enum
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Type, TypeVar, Union
 
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from pipelines.lib.bronze import BronzeSource, InputMode, LoadPattern, SourceType, WatermarkSource
+from pipelines.lib.bronze import (
+    BronzeSource,
+    InputMode,
+    LoadPattern,
+    SourceType,
+    WatermarkSource,
+)
+from pipelines.lib.deprecation import warn_deprecated_fields
 from pipelines.lib.env import load_env_file
 from pipelines.lib.silver import (
     DeleteMode,
@@ -55,6 +62,7 @@ from pipelines.lib.validators import (
     ValidationSeverity,
     format_validation_report,
     validate_and_raise,
+    validate_bronze_silver_compatibility,
     validate_bronze_source,
     validate_silver_entity,
 )
@@ -66,7 +74,7 @@ logger = logging.getLogger(__name__)
 # Model Validation Constants - Derived from MODEL_SPECS (single source of truth)
 # ============================================
 
-# Models that require natural_keys and change_timestamp
+# Models that require unique_columns and last_updated_column
 # Derived from MODEL_SPECS.requires_keys
 MODELS_REQUIRING_KEYS: frozenset[str] = frozenset(
     name for name, spec in MODEL_SPECS.items() if spec.requires_keys
@@ -109,13 +117,25 @@ class BronzeConfig(BaseModel):
 
     system: str = Field(..., min_length=1, description="Source system name")
     entity: str = Field(..., min_length=1, description="Entity/table name")
-    source_type: str = Field(..., description="Source type (DATABASE_MSSQL, FILE_CSV, etc.)")
-    target_path: str = Field(..., min_length=1, description="Output path for Bronze data")
+    source_type: str = Field(
+        ..., description="Source type (DATABASE_MSSQL, FILE_CSV, etc.)"
+    )
+    target_path: str = Field(
+        ..., min_length=1, description="Output path for Bronze data"
+    )
     load_pattern: str = Field(default="FULL_SNAPSHOT", description="Load pattern")
-    source_path: Optional[str] = Field(default=None, description="Source file path for file sources")
-    query: Optional[str] = Field(default=None, description="SQL query for database sources")
-    watermark_column: Optional[str] = Field(default=None, description="Column for incremental loads")
-    options: Dict[str, Any] = Field(default_factory=dict, description="Source-specific options")
+    source_path: Optional[str] = Field(
+        default=None, description="Source file path for file sources"
+    )
+    query: Optional[str] = Field(
+        default=None, description="SQL query for database sources"
+    )
+    watermark_column: Optional[str] = Field(
+        default=None, description="Column for incremental loads"
+    )
+    options: Dict[str, Any] = Field(
+        default_factory=dict, description="Source-specific options"
+    )
 
     @field_validator("source_type")
     @classmethod
@@ -133,7 +153,10 @@ class BronzeConfig(BaseModel):
             "API_REST",
         ]
         if v.upper() not in valid_types:
-            raise ValueError(f"source_type must be one of: {valid_types}")
+            raise ValueError(
+                f"source_type '{v}' is not valid. Must be one of: {', '.join(valid_types)}. "
+                "See pipelines/examples/ for examples of each source type."
+            )
         return v.upper()
 
     @field_validator("load_pattern")
@@ -142,7 +165,10 @@ class BronzeConfig(BaseModel):
         """Validate load_pattern is a known value."""
         valid_patterns = ["FULL_SNAPSHOT", "INCREMENTAL_APPEND", "INCREMENTAL_MERGE"]
         if v.upper() not in valid_patterns:
-            raise ValueError(f"load_pattern must be one of: {valid_patterns}")
+            raise ValueError(
+                f"load_pattern '{v}' is not valid. Must be one of: {', '.join(valid_patterns)}. "
+                "Use FULL_SNAPSHOT for complete refreshes, INCREMENTAL_APPEND for new records only."
+            )
         return v.upper()
 
     @model_validator(mode="after")
@@ -150,24 +176,45 @@ class BronzeConfig(BaseModel):
         """Validate database sources have required options."""
         if self.source_type in ("DATABASE_MSSQL", "DATABASE_POSTGRES"):
             if "host" not in self.options:
-                raise ValueError("Database sources require 'host' in options")
+                raise ValueError(
+                    "Database sources require 'host' in options. "
+                    "Add 'host: your-server.database.com' under bronze.options in your YAML."
+                )
             if "database" not in self.options:
-                raise ValueError("Database sources require 'database' in options")
+                raise ValueError(
+                    "Database sources require 'database' in options. "
+                    "Add 'database: YourDatabaseName' under bronze.options in your YAML."
+                )
         return self
 
     @model_validator(mode="after")
     def validate_file_source_path(self) -> "BronzeConfig":
         """Validate file sources have source_path."""
-        file_types = ("FILE_CSV", "FILE_PARQUET", "FILE_FIXED_WIDTH", "FILE_SPACE_DELIMITED", "FILE_JSON", "FILE_EXCEL")
+        file_types = (
+            "FILE_CSV",
+            "FILE_PARQUET",
+            "FILE_FIXED_WIDTH",
+            "FILE_SPACE_DELIMITED",
+            "FILE_JSON",
+            "FILE_EXCEL",
+        )
         if self.source_type in file_types and not self.source_path:
-            raise ValueError(f"{self.source_type} requires source_path")
+            raise ValueError(
+                f"{self.source_type} requires source_path. "
+                "Add 'source_path: ./data/myfile.csv' to your bronze config. "
+                "Use {{run_date}} placeholder for date-partitioned files."
+            )
         return self
 
     @model_validator(mode="after")
     def validate_incremental_watermark(self) -> "BronzeConfig":
         """Validate incremental loads have watermark_column."""
         if self.load_pattern == "INCREMENTAL_APPEND" and not self.watermark_column:
-            raise ValueError("INCREMENTAL_APPEND requires watermark_column")
+            raise ValueError(
+                "INCREMENTAL_APPEND requires watermark_column to track progress. "
+                "Set watermark_column to a timestamp or ID column that increases over time "
+                "(e.g., 'updated_at' or 'id')."
+            )
         return self
 
 
@@ -178,20 +225,28 @@ class SilverConfig(BaseModel):
         >>> config = SilverConfig(
         ...     source_path="s3://bronze/claims/header/",
         ...     target_path="s3://silver/claims_header/",
-        ...     natural_keys=["claim_id"],
-        ...     change_timestamp="updated_at"
+        ...     unique_columns=["claim_id"],
+        ...     last_updated_column="updated_at"
         ... )
         >>> entity = SilverEntity(**config.model_dump())
     """
 
     source_path: str = Field(..., min_length=1, description="Bronze source path")
     target_path: str = Field(..., min_length=1, description="Silver output path")
-    natural_keys: List[str] = Field(..., min_length=1, description="Natural key columns")
-    change_timestamp: str = Field(..., min_length=1, description="Timestamp column for changes")
+    unique_columns: List[str] = Field(
+        ..., min_length=1, description="Columns that uniquely identify each row"
+    )
+    last_updated_column: str = Field(
+        ..., min_length=1, description="Column showing when each row was last modified"
+    )
     entity_kind: str = Field(default="STATE", description="Entity kind (STATE, EVENT)")
     history_mode: str = Field(default="CURRENT_ONLY", description="History mode")
-    attributes: Optional[List[str]] = Field(default=None, description="Columns to include")
-    exclude_columns: Optional[List[str]] = Field(default=None, description="Columns to exclude")
+    attributes: Optional[List[str]] = Field(
+        default=None, description="Columns to include"
+    )
+    exclude_columns: Optional[List[str]] = Field(
+        default=None, description="Columns to exclude"
+    )
     validate_source: str = Field(default="skip", description="Source validation mode")
 
     @field_validator("entity_kind")
@@ -200,7 +255,10 @@ class SilverConfig(BaseModel):
         """Validate entity_kind is a known value."""
         valid_kinds = ["STATE", "EVENT"]
         if v.upper() not in valid_kinds:
-            raise ValueError(f"entity_kind must be one of: {valid_kinds}")
+            raise ValueError(
+                f"entity_kind '{v}' is not valid. Must be one of: {', '.join(valid_kinds)}. "
+                "Use STATE for dimensions (customers, products), EVENT for facts (orders, clicks)."
+            )
         return v.upper()
 
     @field_validator("history_mode")
@@ -209,7 +267,10 @@ class SilverConfig(BaseModel):
         """Validate history_mode is a known value."""
         valid_modes = ["CURRENT_ONLY", "FULL_HISTORY"]
         if v.upper() not in valid_modes:
-            raise ValueError(f"history_mode must be one of: {valid_modes}")
+            raise ValueError(
+                f"history_mode '{v}' is not valid. Must be one of: {', '.join(valid_modes)}. "
+                "Use CURRENT_ONLY for SCD Type 1, FULL_HISTORY for SCD Type 2 with effective dates."
+            )
         return v.upper()
 
     @field_validator("validate_source")
@@ -218,7 +279,10 @@ class SilverConfig(BaseModel):
         """Validate validate_source mode."""
         valid_modes = ["skip", "warn", "strict"]
         if v.lower() not in valid_modes:
-            raise ValueError(f"validate_source must be one of: {valid_modes}")
+            raise ValueError(
+                f"validate_source '{v}' is not valid. Must be one of: {', '.join(valid_modes)}. "
+                "Use 'skip' to disable, 'warn' to log warnings, 'strict' to fail on invalid checksums."
+            )
         return v.lower()
 
     @model_validator(mode="after")
@@ -252,12 +316,23 @@ class LoggingConfig(BaseModel):
         ... )
     """
 
-    level: str = Field(default="INFO", description="Log level (DEBUG, INFO, WARNING, ERROR)")
-    format: str = Field(default="console", description="Output format: 'json' for Splunk, 'console' for human-readable")
+    level: str = Field(
+        default="INFO", description="Log level (DEBUG, INFO, WARNING, ERROR)"
+    )
+    format: str = Field(
+        default="console",
+        description="Output format: 'json' for Splunk, 'console' for human-readable",
+    )
     file: Optional[str] = Field(default=None, description="Optional log file path")
-    console: bool = Field(default=True, description="Output to console (in addition to file)")
-    include_timestamp: bool = Field(default=True, description="Include ISO timestamp in logs")
-    include_source: bool = Field(default=True, description="Include source file/line info")
+    console: bool = Field(
+        default=True, description="Output to console (in addition to file)"
+    )
+    include_timestamp: bool = Field(
+        default=True, description="Include ISO timestamp in logs"
+    )
+    include_source: bool = Field(
+        default=True, description="Include source file/line info"
+    )
 
     @field_validator("level")
     @classmethod
@@ -265,7 +340,9 @@ class LoggingConfig(BaseModel):
         """Validate log level is a known value."""
         valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
         if v.upper() not in valid_levels:
-            raise ValueError(f"level must be one of: {valid_levels}")
+            raise ValueError(
+                f"logging level '{v}' is not valid. Must be one of: {', '.join(valid_levels)}."
+            )
         return v.upper()
 
     @field_validator("format")
@@ -274,7 +351,10 @@ class LoggingConfig(BaseModel):
         """Validate format is a known value."""
         valid_formats = ["json", "console", "text"]
         if v.lower() not in valid_formats:
-            raise ValueError(f"format must be one of: {valid_formats}")
+            raise ValueError(
+                f"logging format '{v}' is not valid. Must be one of: {', '.join(valid_formats)}. "
+                "Use 'json' for Splunk/log aggregation, 'console' for human-readable output."
+            )
         return v.lower()
 
 
@@ -293,15 +373,27 @@ class PipelineSettings(BaseSettings):
         s3://bronze/
     """
 
-    bronze_path: str = Field(default="./bronze", description="Default Bronze output path")
-    silver_path: str = Field(default="./silver", description="Default Silver output path")
+    bronze_path: str = Field(
+        default="./bronze", description="Default Bronze output path"
+    )
+    silver_path: str = Field(
+        default="./silver", description="Default Silver output path"
+    )
     log_level: str = Field(default="INFO", description="Logging level")
-    log_format: str = Field(default="console", description="Log format: 'json' or 'console'")
+    log_format: str = Field(
+        default="console", description="Log format: 'json' or 'console'"
+    )
     log_file: Optional[str] = Field(default=None, description="Optional log file path")
     max_retries: int = Field(default=3, ge=1, le=10, description="Max retry attempts")
-    retry_delay: float = Field(default=1.0, ge=0.1, le=60.0, description="Retry delay in seconds")
-    chunk_size: int = Field(default=100000, ge=1000, description="Default chunk size for writes")
-    validate_checksums: bool = Field(default=True, description="Validate Bronze checksums")
+    retry_delay: float = Field(
+        default=1.0, ge=0.1, le=60.0, description="Retry delay in seconds"
+    )
+    chunk_size: int = Field(
+        default=100000, ge=1000, description="Default chunk size for writes"
+    )
+    validate_checksums: bool = Field(
+        default=True, description="Validate Bronze checksums"
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="PIPELINE_",
@@ -353,13 +445,16 @@ def _enum_to_map(enum_class: Type[Enum]) -> Dict[str, Enum]:
     return {member.value: member for member in enum_class}
 
 
+T = TypeVar("T", bound=Enum)
+
+
 def _convert_enum(
     config: Dict[str, Any],
     key: str,
-    enum_map: Dict[str, Enum],
-    default: Optional[Enum] = None,
+    enum_map: Dict[str, T],
+    default: Optional[T] = None,
     fallback_dict: Optional[Dict[str, str]] = None,
-) -> Optional[Enum]:
+) -> Optional[T]:
     """Convert YAML string value to enum with validation.
 
     This helper consolidates the repeated pattern of:
@@ -407,8 +502,13 @@ INPUT_MODE_MAP = _enum_to_map(InputMode)
 WATERMARK_SOURCE_MAP = _enum_to_map(WatermarkSource)
 
 # Maps with aliases (base auto-generated + explicit aliases)
-LOAD_PATTERN_MAP = _enum_to_map(LoadPattern) | {"incremental_append": LoadPattern.INCREMENTAL_APPEND}
-HISTORY_MODE_MAP = _enum_to_map(HistoryMode) | {"scd1": HistoryMode.CURRENT_ONLY, "scd2": HistoryMode.FULL_HISTORY}
+LOAD_PATTERN_MAP = _enum_to_map(LoadPattern) | {
+    "incremental_append": LoadPattern.INCREMENTAL_APPEND
+}
+HISTORY_MODE_MAP = _enum_to_map(HistoryMode) | {
+    "scd1": HistoryMode.CURRENT_ONLY,
+    "scd2": HistoryMode.FULL_HISTORY,
+}
 
 # Pattern name aliases for validation (incremental_append is internal, exposed as "incremental")
 _LOAD_PATTERN_ALIASES = {"incremental_append": "incremental"}
@@ -436,11 +536,7 @@ def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any
     result = dict(base)
 
     for key, value in override.items():
-        if (
-            key in result
-            and isinstance(result[key], dict)
-            and isinstance(value, dict)
-        ):
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
             # Recursively merge nested dicts
             result[key] = _deep_merge(result[key], value)
         else:
@@ -499,8 +595,7 @@ def load_with_inheritance(
 
     if not parent_path.exists():
         raise FileNotFoundError(
-            f"Parent config not found: {parent_path} "
-            f"(referenced from {config_path})"
+            f"Parent config not found: {parent_path} (referenced from {config_path})"
         )
 
     with open(parent_path, "r", encoding="utf-8") as f:
@@ -520,7 +615,7 @@ def load_with_inheritance(
         extra={
             "child_path": str(config_path),
             "parent_path": str(parent_path),
-        }
+        },
     )
 
     return merged, parent_config
@@ -621,7 +716,9 @@ def load_bronze_from_yaml(
     if "entity" not in config:
         errors.append("bronze.entity is required (e.g., 'customers', 'orders')")
     if "source_type" not in config:
-        errors.append("bronze.source_type is required (e.g., 'file_csv', 'database_mssql')")
+        errors.append(
+            "bronze.source_type is required (e.g., 'file_csv', 'database_mssql')"
+        )
 
     # If required fields are missing, report ALL of them at once
     if errors:
@@ -629,11 +726,32 @@ def load_bronze_from_yaml(
             "Missing required fields in bronze section:\n  - " + "\n  - ".join(errors)
         )
 
+    from typing import cast
+
     # Convert enum fields using shared helper
-    source_type = _convert_enum(config, "source_type", SOURCE_TYPE_MAP)
-    load_pattern = _convert_enum(config, "load_pattern", LOAD_PATTERN_MAP, LoadPattern.FULL_SNAPSHOT)
-    input_mode = _convert_enum(config, "input_mode", INPUT_MODE_MAP)
-    watermark_source = _convert_enum(config, "watermark_source", WATERMARK_SOURCE_MAP, WatermarkSource.DESTINATION)
+    source_type_enum = _convert_enum(config, "source_type", SOURCE_TYPE_MAP)
+    if source_type_enum is None:
+        raise YAMLConfigError("source_type is required")
+    source_type = cast(SourceType, source_type_enum)
+
+    load_pattern_enum = _convert_enum(
+        config, "load_pattern", LOAD_PATTERN_MAP, LoadPattern.FULL_SNAPSHOT
+    )
+    if load_pattern_enum is None:
+        raise YAMLConfigError("load_pattern is required")
+    load_pattern = cast(LoadPattern, load_pattern_enum)
+
+    from typing import cast
+
+    input_mode_val = _convert_enum(config, "input_mode", INPUT_MODE_MAP)
+    input_mode = cast(Optional[InputMode], input_mode_val)
+
+    watermark_source_enum = _convert_enum(
+        config, "watermark_source", WATERMARK_SOURCE_MAP, WatermarkSource.DESTINATION
+    )
+    if watermark_source_enum is None:
+        raise YAMLConfigError("watermark_source is required")
+    watermark_source = cast(WatermarkSource, watermark_source_enum)
 
     # Resolve source_path relative to config file
     source_path = config.get("source_path", "")
@@ -663,7 +781,9 @@ def load_bronze_from_yaml(
         target_path=target_path,
         load_pattern=load_pattern,
         input_mode=input_mode,
-        watermark_column=config.get("watermark_column"),
+        # Accept either 'incremental_column' (preferred) or 'watermark_column' (legacy)
+        watermark_column=config.get("incremental_column")
+        or config.get("watermark_column"),
         watermark_source=watermark_source,
         connection=config.get("connection"),
         host=config.get("host"),
@@ -700,15 +820,24 @@ def _validate_silver_model_config(
     errors: List[str] = []
 
     # Check required fields based on model spec
+    # Accept both new names (unique_columns, last_updated_column) and legacy names (natural_keys, change_timestamp)
     if requires_keys:
-        if "natural_keys" not in config:
+        has_unique_cols = "unique_columns" in config or "natural_keys" in config
+        has_last_updated = (
+            "last_updated_column" in config or "change_timestamp" in config
+        )
+        if not has_unique_cols:
             errors.append(
-                f"silver.natural_keys is required for model '{model_str or 'default'}'. "
+                f"silver.unique_columns is required for model '{model_str or 'default'}'. "
+                "This is the column(s) that uniquely identify each row (like order_id). "
+                "Run 'python -m pipelines inspect-source --file your_data.csv' for suggestions. "
                 "Use model: periodic_snapshot if you don't need deduplication."
             )
-        if "change_timestamp" not in config:
+        if not has_last_updated:
             errors.append(
-                f"silver.change_timestamp is required for model '{model_str or 'default'}'. "
+                f"silver.last_updated_column is required for model '{model_str or 'default'}'. "
+                "This is the column showing when each row was last modified (like updated_at). "
+                "Run 'python -m pipelines inspect-source --file your_data.csv' for suggestions. "
                 "Use model: periodic_snapshot if you don't need change tracking."
             )
 
@@ -725,9 +854,8 @@ def _validate_silver_model_config(
     # Delete mode requires CDC
     delete_mode_str = config.get("delete_mode", "ignore").lower()
     if delete_mode_str in ("tombstone", "hard_delete"):
-        is_cdc = (
-            (bronze is not None and bronze.load_pattern == LoadPattern.CDC)
-            or (model_spec is not None and model_spec.requires_cdc_bronze)
+        is_cdc = (bronze is not None and bronze.load_pattern == LoadPattern.CDC) or (
+            model_spec is not None and model_spec.requires_cdc_bronze
         )
         if not is_cdc:
             errors.append(
@@ -784,7 +912,11 @@ def _emit_silver_warnings(
                 )
 
     # Warning: Bronze CDC pattern with no model specified
-    if bronze is not None and bronze.load_pattern == LoadPattern.CDC and model_spec is None:
+    if (
+        bronze is not None
+        and bronze.load_pattern == LoadPattern.CDC
+        and model_spec is None
+    ):
         warnings.warn(
             f"bronze.load_pattern: cdc but silver.model: {model_str or 'default'} is not CDC-aware. "
             "Consider using a cdc_* model (cdc_current, cdc_history, etc.) to properly handle "
@@ -796,7 +928,11 @@ def _emit_silver_warnings(
     # Warning: Explicit input_mode conflicts with Bronze pattern
     if bronze is not None and "input_mode" in config:
         explicit_input = config["input_mode"].lower()
-        expected_input = "append_log" if bronze.load_pattern in (LoadPattern.INCREMENTAL_APPEND, LoadPattern.CDC) else "replace_daily"
+        expected_input = (
+            "append_log"
+            if bronze.load_pattern in (LoadPattern.INCREMENTAL_APPEND, LoadPattern.CDC)
+            else "replace_daily"
+        )
         if explicit_input != expected_input:
             warnings.warn(
                 f"Explicit silver.input_mode: {explicit_input} conflicts with "
@@ -839,15 +975,78 @@ def _build_silver_storage_options(
 
     # Auto-wire from Bronze if Silver doesn't have its own
     if storage_options is None and bronze and bronze.options:
-        storage_keys = frozenset({
-            "s3_signature_version", "s3_addressing_style", "s3_verify_ssl",
-            "endpoint_url", "key", "secret", "region",
-        })
+        storage_keys = frozenset(
+            {
+                "s3_signature_version",
+                "s3_addressing_style",
+                "s3_verify_ssl",
+                "endpoint_url",
+                "key",
+                "secret",
+                "region",
+            }
+        )
         storage_options = {k: v for k, v in bronze.options.items() if k in storage_keys}
         if not storage_options:
             storage_options = None
 
     return storage_options
+
+
+# Mapping of handle_deletes values to delete_mode values
+# handle_deletes is the user-friendly name, delete_mode is the internal name
+HANDLE_DELETES_MAP: Dict[str, str] = {
+    "ignore": "ignore",
+    "flag": "tombstone",  # "flag" = add _deleted flag (more intuitive name)
+    "remove": "hard_delete",  # "remove" = remove from Silver (more intuitive name)
+    # Also accept the internal names for backwards compatibility
+    "tombstone": "tombstone",
+    "hard_delete": "hard_delete",
+}
+
+
+def _build_cdc_model_defaults(config: Dict[str, Any]) -> Dict[str, str]:
+    """Build model defaults for the unified CDC model based on explicit options.
+
+    When model: cdc is used, the user can specify:
+    - keep_history: true/false (default: false)
+      - false = current_only (SCD Type 1)
+      - true = full_history (SCD Type 2)
+    - handle_deletes: ignore/flag/remove (default: ignore)
+      - ignore = filter out delete records
+      - flag = add _deleted=true flag (tombstone)
+      - remove = remove records from Silver (hard_delete)
+
+    Args:
+        config: Silver config dict
+
+    Returns:
+        Dict with entity_kind, history_mode, input_mode, delete_mode
+    """
+    # Parse keep_history option (default: false = current_only)
+    keep_history = config.get("keep_history", False)
+    if isinstance(keep_history, str):
+        keep_history = keep_history.lower() in ("true", "yes", "1")
+    history_mode = "full_history" if keep_history else "current_only"
+
+    # Parse handle_deletes option (default: ignore)
+    handle_deletes = str(config.get("handle_deletes", "ignore")).lower()
+    if handle_deletes not in HANDLE_DELETES_MAP:
+        valid_options = ", ".join(
+            sorted(set(HANDLE_DELETES_MAP.keys()) - {"tombstone", "hard_delete"})
+        )
+        raise YAMLConfigError(
+            f"Invalid handle_deletes value '{handle_deletes}'. "
+            f"Valid options: {valid_options}"
+        )
+    delete_mode = HANDLE_DELETES_MAP[handle_deletes]
+
+    return {
+        "entity_kind": "state",
+        "history_mode": history_mode,
+        "input_mode": "append_log",
+        "delete_mode": delete_mode,
+    }
 
 
 def load_silver_from_yaml(
@@ -879,17 +1078,54 @@ def load_silver_from_yaml(
     if "model" in config:
         model = _convert_enum(config, "model", SILVER_MODEL_MAP)
         if model:
-            model_defaults = SILVER_MODEL_PRESETS[model.value]
-            logger.debug(
-                "Expanding Silver model preset",
-                extra={"model": model.value, "defaults": model_defaults}
-            )
+            if model.value == "cdc":
+                # Handle unified CDC model with explicit options
+                model_defaults = _build_cdc_model_defaults(config)
+                logger.debug(
+                    "Expanding unified CDC model with options",
+                    extra={"defaults": model_defaults},
+                )
+            else:
+                model_defaults = SILVER_MODEL_PRESETS[model.value]
+                logger.debug(
+                    "Expanding Silver model preset",
+                    extra={"model": model.value, "defaults": model_defaults},
+                )
 
     # Convert enum fields with model preset fallback
-    entity_kind = _convert_enum(config, "entity_kind", ENTITY_KIND_MAP, EntityKind.STATE, model_defaults)
-    history_mode = _convert_enum(config, "history_mode", HISTORY_MODE_MAP, HistoryMode.CURRENT_ONLY, model_defaults)
-    input_mode = _convert_enum(config, "input_mode", INPUT_MODE_MAP, None, model_defaults)
-    delete_mode = _convert_enum(config, "delete_mode", DELETE_MODE_MAP, DeleteMode.IGNORE, model_defaults)
+    from typing import cast
+
+    entity_kind_enum = _convert_enum(
+        config, "entity_kind", ENTITY_KIND_MAP, EntityKind.STATE, model_defaults
+    )
+    if entity_kind_enum is None:
+        raise YAMLConfigError("entity_kind is required")
+    entity_kind = cast(EntityKind, entity_kind_enum)
+
+    history_mode_enum = _convert_enum(
+        config,
+        "history_mode",
+        HISTORY_MODE_MAP,
+        HistoryMode.CURRENT_ONLY,
+        model_defaults,
+    )
+    if history_mode_enum is None:
+        raise YAMLConfigError("history_mode is required")
+    history_mode = cast(HistoryMode, history_mode_enum)
+
+    from typing import cast
+
+    input_mode_val = _convert_enum(
+        config, "input_mode", INPUT_MODE_MAP, None, model_defaults
+    )
+    input_mode = cast(Optional[InputMode], input_mode_val)
+
+    delete_mode_enum = _convert_enum(
+        config, "delete_mode", DELETE_MODE_MAP, DeleteMode.IGNORE, model_defaults
+    )
+    if delete_mode_enum is None:
+        raise YAMLConfigError("delete_mode is required")
+    delete_mode = cast(DeleteMode, delete_mode_enum)
 
     # Resolve paths
     source_path = config.get("source_path", "")
@@ -900,7 +1136,13 @@ def load_silver_from_yaml(
         target_path = _resolve_path(target_path, config_dir)
 
     # Normalize list fields
-    natural_keys = _normalize_list_field(config, "natural_keys")
+    # Accept both new names and legacy names (unique_columns/natural_keys, last_updated_column/change_timestamp)
+    unique_columns = _normalize_list_field(
+        config, "unique_columns"
+    ) or _normalize_list_field(config, "natural_keys")
+    last_updated_column = config.get("last_updated_column") or config.get(
+        "change_timestamp"
+    )
     attributes = _normalize_list_field(config, "attributes")
     exclude_columns = _normalize_list_field(config, "exclude_columns")
     partition_by = _normalize_list_field(config, "partition_by")
@@ -923,8 +1165,8 @@ def load_silver_from_yaml(
             raise YAMLConfigError("cdc_options.operation_column is required")
 
     return SilverEntity(
-        natural_keys=natural_keys,
-        change_timestamp=config.get("change_timestamp"),
+        unique_columns=unique_columns,
+        last_updated_column=last_updated_column,
         domain=config.get("domain", ""),
         subject=config.get("subject", ""),
         source_path=source_path,
@@ -986,11 +1228,14 @@ def load_pipeline(
     if parent_config:
         logger.info(
             "Loaded config with inheritance from parent",
-            extra={"config_path": str(config_path)}
+            extra={"config_path": str(config_path)},
         )
 
     if not config:
         raise YAMLConfigError("Empty configuration file")
+
+    # Check for deprecated fields and emit warnings
+    warn_deprecated_fields(config, str(config_path))
 
     # Load environment file if specified (before any ${VAR} expansion happens)
     if "env_file" in config:
@@ -1011,12 +1256,12 @@ def load_pipeline(
         if loaded:
             logger.info(
                 "Loaded environment variables from file",
-                extra={"env_file": str(env_file_path)}
+                extra={"env_file": str(env_file_path)},
             )
         else:
             logger.warning(
                 "Failed to load environment file",
-                extra={"env_file": str(env_file_path)}
+                extra={"env_file": str(env_file_path)},
             )
 
     # Parse logging section (optional)
@@ -1038,6 +1283,17 @@ def load_pipeline(
         raise YAMLConfigError(
             "Configuration must have at least 'bronze' or 'silver' section"
         )
+
+    # Validate Bronze/Silver compatibility
+    if bronze and silver and "bronze" in config and "silver" in config:
+        compatibility_issues = validate_bronze_silver_compatibility(
+            config["bronze"], config["silver"]
+        )
+        for issue in compatibility_issues:
+            if issue.severity == ValidationSeverity.ERROR:
+                raise YAMLConfigError(str(issue))
+            else:
+                logger.warning(str(issue))
 
     # Create and return pipeline wrapper
     return PipelineFromYAML(
@@ -1125,7 +1381,12 @@ class PipelineFromYAML:
             silver.target_path = f"./silver/domain={silver.domain}/subject={silver.subject}/dt={{run_date}}/"
 
         # Auto-wire input_mode from Bronze to Silver if not explicitly set
-        if bronze and silver and silver.input_mode is None and bronze.input_mode is not None:
+        if (
+            bronze
+            and silver
+            and silver.input_mode is None
+            and bronze.input_mode is not None
+        ):
             silver.input_mode = bronze.input_mode
 
     def setup_logging(self) -> None:
@@ -1157,7 +1418,8 @@ class PipelineFromYAML:
     def name(self) -> str:
         """Get pipeline name from config or derive from file."""
         if "name" in self.config:
-            return self.config["name"]
+            name_val = self.config["name"]
+            return str(name_val) if name_val is not None else "unnamed"
         if self.bronze:
             return f"{self.bronze.system}.{self.bronze.entity}"
         return self.config_path.stem
@@ -1291,29 +1553,35 @@ class PipelineFromYAML:
         ]
 
         if self.bronze:
-            input_mode_str = self.bronze.input_mode.value if self.bronze.input_mode else "(not set)"
-            lines.extend([
-                "BRONZE LAYER:",
-                f"  System:       {self.bronze.system}",
-                f"  Entity:       {self.bronze.entity}",
-                f"  Source Type:  {self.bronze.source_type.value}",
-                f"  Source Path:  {self.bronze.source_path or '(from database)'}",
-                f"  Target Path:  {self.bronze.target_path}",
-                f"  Load Pattern: {self.bronze.load_pattern.value}",
-                f"  Input Mode:   {input_mode_str}",
-                "",
-            ])
+            input_mode_str = (
+                self.bronze.input_mode.value if self.bronze.input_mode else "(not set)"
+            )
+            lines.extend(
+                [
+                    "BRONZE LAYER:",
+                    f"  System:       {self.bronze.system}",
+                    f"  Entity:       {self.bronze.entity}",
+                    f"  Source Type:  {self.bronze.source_type.value}",
+                    f"  Source Path:  {self.bronze.source_path or '(from database)'}",
+                    f"  Target Path:  {self.bronze.target_path}",
+                    f"  Load Pattern: {self.bronze.load_pattern.value}",
+                    f"  Input Mode:   {input_mode_str}",
+                    "",
+                ]
+            )
 
         if self.silver:
-            lines.extend([
-                "SILVER LAYER:",
-                f"  Natural Keys: {', '.join(self.silver.natural_keys)}",
-                f"  Change Col:   {self.silver.change_timestamp}",
-                f"  Entity Kind:  {self.silver.entity_kind.value}",
-                f"  History Mode: {self.silver.history_mode.value}",
-                f"  Source Path:  {self.silver.source_path}",
-                f"  Target Path:  {self.silver.target_path}",
-                "",
-            ])
+            lines.extend(
+                [
+                    "SILVER LAYER:",
+                    f"  Unique Columns:     {', '.join(self.silver.unique_columns or [])}",
+                    f"  Last Updated Col:   {self.silver.last_updated_column}",
+                    f"  Entity Kind:  {self.silver.entity_kind.value}",
+                    f"  History Mode: {self.silver.history_mode.value}",
+                    f"  Source Path:  {self.silver.source_path}",
+                    f"  Target Path:  {self.silver.target_path}",
+                    "",
+                ]
+            )
 
         return "\n".join(lines)

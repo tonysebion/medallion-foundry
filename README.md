@@ -5,7 +5,7 @@
 ## Highlights
 
 - **YAML-first configuration** — Define pipelines in declarative YAML files with JSON Schema validation for editor autocomplete. Python is available for advanced use cases requiring custom logic.
-- **Declarative layers** — Bronze lands raw data with telemetry, metadata, and checksums. Silver deduplicates by natural keys and applies SCD1/SCD2 history tracking.
+- **Declarative layers** — Bronze lands raw data with telemetry, metadata, and checksums. Silver deduplicates by unique columns and applies SCD1/SCD2 history tracking.
 - **Rich source coverage** — Files (CSV, Parquet, JSON, Excel, fixed-width), databases (MSSQL, Postgres, MySQL, DB2), and REST APIs all use the same interface with pagination, retry, rate limiting, and watermark support.
 - **Pluggable storage** — Target local paths, S3 buckets, or Azure Blob/ADLS via storage helpers.
 - **Pipeline-first CLI** — `python -m pipelines` discovers YAML and Python pipelines, supports Bronze-only/Silver-only runs, dry runs, pre-flight checks, and interactive pipeline creation.
@@ -91,8 +91,8 @@ bronze:
   source_path: ./data/orders_{run_date}.csv
 
 silver:
-  natural_keys: [order_id]
-  change_timestamp: updated_at
+  unique_columns: [order_id]
+  last_updated_column: updated_at
   attributes:
     - customer_id
     - order_total
@@ -100,6 +100,8 @@ silver:
 ```
 
 Run with: `python -m pipelines ./my_pipeline.yaml --date 2025-01-15`
+
+**Not sure which columns to use?** Run `python -m pipelines inspect-source --file your_data.csv` to get suggestions.
 
 ### Python Pipeline (Advanced)
 
@@ -121,7 +123,7 @@ def run(run_date: str, **kwargs):
     }
 ```
 
-Templates and examples for both formats are in `pipelines/templates/` and `pipelines/examples/`.
+Templates and examples for both formats are in `pipelines/examples/`.
 
 ## CLI at a glance
 
@@ -139,7 +141,7 @@ Templates and examples for both formats are in `pipelines/templates/` and `pipel
 | `-v`, `--json-log`, `--log-file` | Logging controls. |
 | `python -m pipelines --list` | Show every discovered pipeline (YAML and Python). |
 | `python -m pipelines test-connection <name>` | Validate a database connection (supports `--host`, `--database`, `--type`). |
-| `python -m pipelines inspect-source --file ./data.csv` | Inspect an input file and suggest natural keys/timestamps. |
+| `python -m pipelines inspect-source --file ./data.csv` | Inspect a file and suggest unique columns / last updated column. |
 | `python -m pipelines.create` | Interactive wizard (generates YAML by default, use `--format python` for Python). |
 
 ## Sample data and helpers
@@ -158,7 +160,9 @@ Templates and examples for both formats are in `pipelines/templates/` and `pipel
 
 ## Documentation & further reading
 
-- `docs/index.md` — Guided table of contents for beginners, owners, and developers.
+**New here?** Start with [Your First Pipeline](docs/FIRST_PIPELINE.md) — a 5-minute guide to creating your first pipeline.
+
+- `docs/FIRST_PIPELINE.md` — 5-minute quickstart (assumes environment is already set up).
 - `docs/GETTING_STARTED.md` — Pipeline-specific walkthrough with Bronze/Silver snippets and patterns.
 - `pipelines/QUICKREF.md` — CLI cheatsheet and operational tips.
 - `docs/scripts/README.md` — Sample data generation & tooling reference.

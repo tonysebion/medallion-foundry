@@ -179,11 +179,13 @@ def write_checksum_manifest(
             logger.warning("File not found for checksum: %s", file_path)
             continue
 
-        file_entries.append({
-            "path": file_path.name,
-            "size_bytes": file_path.stat().st_size,
-            "sha256": compute_file_sha256(file_path),
-        })
+        file_entries.append(
+            {
+                "path": file_path.name,
+                "size_bytes": file_path.stat().st_size,
+                "sha256": compute_file_sha256(file_path),
+            }
+        )
 
     manifest = ChecksumManifest(
         timestamp=now,
@@ -197,7 +199,9 @@ def write_checksum_manifest(
     manifest_path = out_dir / "_checksums.json"
     manifest_path.write_text(manifest.to_json(), encoding="utf-8")
 
-    logger.info("Wrote checksum manifest to %s (%d files)", manifest_path, len(file_entries))
+    logger.info(
+        "Wrote checksum manifest to %s (%d files)", manifest_path, len(file_entries)
+    )
     return manifest_path
 
 

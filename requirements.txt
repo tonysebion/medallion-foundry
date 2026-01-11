@@ -1,23 +1,2 @@
-# Core dependencies - required for all installations
-polars>=1.0.0
-pandera>=0.20.0
-pydantic-settings>=2.1.0
-structlog>=24.1.0
-boto3==1.35.36
-pandas>=1.5.0
-pyyaml>=6.0
-requests>=2.28.0
-httpx>=0.27.0
-requests-toolbelt>=1.0.0
-tenacity>=8.0.0
-ibis-framework[duckdb]>=9.0.0  # Portable dataframe library with DuckDB backend
-pyodbc>=4.0.0  # ODBC support for database extractors (DB2)
-fsspec>=2023.1.0
-python-dotenv>=1.0.0
-
-# Install with: pip install -r requirements.txt
-#
-# Optional dependencies (install separately if needed):
-# - Azure: pip install azure-identity azure-storage-blob adlfs
-# - TUI: pip install -r requirements-tui.txt
-# - Dev: pip install -r requirements-dev.txt
+# Core dependencies - install from pyproject.toml
+-e .

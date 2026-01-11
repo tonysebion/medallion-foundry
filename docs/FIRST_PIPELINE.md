@@ -147,6 +147,20 @@ This becomes `./data/customers_2025-01-15.csv` when you run with `--date 2025-01
 
 See the [Getting Started Guide](GETTING_STARTED.md) for database examples, or copy `pipelines/examples/mssql_dimension.yaml`.
 
+## Quick Glossary
+
+| Term | Plain English |
+|------|---------------|
+| **Bronze layer** | Raw data exactly as extracted from your source (CSV, database, API) |
+| **Silver layer** | Cleaned data with duplicates removed, ready for analysis |
+| **unique_columns** | The column(s) that uniquely identify each row (like a primary key) |
+| **last_updated_column** | The column that shows when a row was last changed |
+| **load_pattern** | How data is loaded: `full_snapshot` (everything), `incremental` (only new), `cdc` (changes only) |
+| **model** | How Silver processes data: `periodic_snapshot` (simple), `full_merge_dedupe` (deduplicated), `scd_type_2` (full history), `cdc` (change stream) |
+| **SCD Type 1** | Keep only the latest version of each record |
+| **SCD Type 2** | Keep all versions with effective dates (history tracking) |
+| **CDC** | Change Data Capture - source sends Insert/Update/Delete markers |
+
 ## Next Steps
 
 - [Concepts Guide](CONCEPTS.md) - Understand Bronze/Silver layers

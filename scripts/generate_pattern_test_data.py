@@ -54,7 +54,12 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument(
         "--pattern",
-        choices=["snapshot", "incremental_append", "incremental_merge", "current_history"],
+        choices=[
+            "snapshot",
+            "incremental_append",
+            "incremental_merge",
+            "current_history",
+        ],
         help="Load pattern to generate data for",
     )
     parser.add_argument(
@@ -127,7 +132,8 @@ def parse_args() -> argparse.Namespace:
         help="Show what would be generated without writing files",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Verbose output",
     )
@@ -208,7 +214,9 @@ def write_assertions(
         )
     elif scenario.pattern == "current_history":
         assertions = create_scd2_assertions(
-            current_rows=scenario.metadata.get("expected_current_rows", len(scenario.t0)),
+            current_rows=scenario.metadata.get(
+                "expected_current_rows", len(scenario.t0)
+            ),
             history_rows=len(scenario.t0),
             columns=columns,
         )

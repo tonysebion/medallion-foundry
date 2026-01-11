@@ -21,7 +21,13 @@ from tenacity.wait import wait_base
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["with_retry", "RetryConfig", "retry_operation", "CircuitBreaker", "CircuitBreakerOpen"]
+__all__ = [
+    "with_retry",
+    "RetryConfig",
+    "retry_operation",
+    "CircuitBreaker",
+    "CircuitBreakerOpen",
+]
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -66,7 +72,9 @@ def with_retry(
         # Tenacity exponential: multiplier * 2^(attempt-1)
         # To match our original: backoff_seconds * 2^(attempt-1)
         # We use multiplier=backoff_seconds
-        wait_strategy = tenacity.wait_exponential(multiplier=backoff_seconds, min=backoff_seconds)
+        wait_strategy = tenacity.wait_exponential(
+            multiplier=backoff_seconds, min=backoff_seconds
+        )
     else:
         wait_strategy = tenacity.wait_fixed(backoff_seconds)
 
@@ -192,7 +200,9 @@ def retry_operation(
         wait_strategy = tenacity.wait_fixed(config.backoff_seconds)
 
     if config.jitter:
-        wait_strategy = wait_strategy + tenacity.wait_random(0, config.backoff_seconds * 0.5)
+        wait_strategy = wait_strategy + tenacity.wait_random(
+            0, config.backoff_seconds * 0.5
+        )
 
     def before_sleep_handler(retry_state: tenacity.RetryCallState) -> None:
         """Log retry attempts."""

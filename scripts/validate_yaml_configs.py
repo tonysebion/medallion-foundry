@@ -15,7 +15,7 @@ Examples:
     python scripts/validate_yaml_configs.py -v
 
     # Validate specific directories
-    python scripts/validate_yaml_configs.py --dirs pipelines/examples pipelines/templates
+    python scripts/validate_yaml_configs.py --dirs pipelines/examples
 
 Exit codes:
     0 - All validations passed
@@ -36,7 +36,9 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 
-def validate_schema(yaml_file: Path, schema: dict, verbose: bool = False) -> Tuple[bool, str]:
+def validate_schema(
+    yaml_file: Path, schema: dict, verbose: bool = False
+) -> Tuple[bool, str]:
     """Validate a YAML file against the JSON schema.
 
     Args:
@@ -51,7 +53,10 @@ def validate_schema(yaml_file: Path, schema: dict, verbose: bool = False) -> Tup
         import yaml
         import jsonschema
     except ImportError as e:
-        return False, f"Missing dependency: {e}. Install with: pip install pyyaml jsonschema"
+        return (
+            False,
+            f"Missing dependency: {e}. Install with: pip install pyyaml jsonschema",
+        )
 
     try:
         config = yaml.safe_load(yaml_file.read_text(encoding="utf-8"))
@@ -65,7 +70,9 @@ def validate_schema(yaml_file: Path, schema: dict, verbose: bool = False) -> Tup
         return False, f"Error: {e}"
 
 
-def validate_dry_run(yaml_file: Path, python_exe: Path, verbose: bool = False) -> Tuple[bool, str]:
+def validate_dry_run(
+    yaml_file: Path, python_exe: Path, verbose: bool = False
+) -> Tuple[bool, str]:
     """Run dry-run validation on a YAML file.
 
     Args:
@@ -84,7 +91,15 @@ def validate_dry_run(yaml_file: Path, python_exe: Path, verbose: bool = False) -
             rel_path = yaml_file
 
         result = subprocess.run(
-            [str(python_exe), "-m", "pipelines", str(rel_path), "--date", "2025-01-15", "--dry-run"],
+            [
+                str(python_exe),
+                "-m",
+                "pipelines",
+                str(rel_path),
+                "--date",
+                "2025-01-15",
+                "--dry-run",
+            ],
             capture_output=True,
             text=True,
             timeout=60,
@@ -95,7 +110,9 @@ def validate_dry_run(yaml_file: Path, python_exe: Path, verbose: bool = False) -
         else:
             # Extract last meaningful error line
             lines = (result.stderr or result.stdout).strip().split("\n")
-            error_lines = [line for line in lines if line.strip() and not line.startswith("2")][-3:]
+            error_lines = [
+                line for line in lines if line.strip() and not line.startswith("2")
+            ][-3:]
             return False, "\n".join(error_lines)
     except subprocess.TimeoutExpired:
         return False, "Timeout (60s)"
@@ -131,9 +148,8 @@ def main():
         type=Path,
         default=[
             project_root / "pipelines" / "examples",
-            project_root / "pipelines" / "templates",
         ],
-        help="Directories to search for YAML files (default: pipelines/examples, pipelines/templates)",
+        help="Directories to search for YAML files (default: pipelines/examples)",
     )
     parser.add_argument(
         "--dry-run",
@@ -141,7 +157,8 @@ def main():
         help="Also run dry-run validation (slower but more thorough)",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Verbose output",
     )
@@ -159,7 +176,9 @@ def main():
         import yaml  # noqa: F401
         import jsonschema  # noqa: F401
     except ImportError:
-        print("ERROR: Missing dependencies. Install with: pip install pyyaml jsonschema")
+        print(
+            "ERROR: Missing dependencies. Install with: pip install pyyaml jsonschema"
+        )
         sys.exit(1)
 
     # Load schema

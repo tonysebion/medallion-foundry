@@ -1,4 +1,4 @@
-﻿"""State helpers for pipelines: watermarks and late data management."""
+"""State helpers for pipelines: watermarks and late data management."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from pipelines.lib._path_utils import is_s3_path
 from pipelines.lib.env import parse_iso_datetime, utc_now_iso
 
 if TYPE_CHECKING:
-    import ibis
+    import ibis  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 
@@ -291,7 +291,9 @@ def get_late_records(
 DEFAULT_STATE_DIR = ".state"
 
 
-def _load_json_safe(path: Path, default: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def _load_json_safe(
+    path: Path, default: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """Load JSON file, returning default if missing or invalid.
 
     Args:
@@ -304,7 +306,8 @@ def _load_json_safe(path: Path, default: Optional[Dict[str, Any]] = None) -> Dic
     if default is None:
         default = {}
     try:
-        return json.loads(path.read_text())
+        data = json.loads(path.read_text())
+        return data if isinstance(data, dict) else default
     except (FileNotFoundError, json.JSONDecodeError):
         return default
 
@@ -462,7 +465,9 @@ def get_last_full_refresh(system: str, entity: str) -> Optional[datetime]:
     try:
         return parse_iso_datetime(last_full)
     except ValueError as exc:
-        logger.warning("Invalid full refresh timestamp for %s.%s: %s", system, entity, exc)
+        logger.warning(
+            "Invalid full refresh timestamp for %s.%s: %s", system, entity, exc
+        )
         return None
 
 
@@ -587,9 +592,9 @@ def _find_latest_partition(
                 logger.debug("Base path does not exist: %s", base_path)
                 return None
 
-            for item in base.iterdir():
-                if item.is_dir() and item.name.startswith(partition_prefix):
-                    value = item.name[len(partition_prefix) :]
+            for entry in base.iterdir():
+                if entry.is_dir() and entry.name.startswith(partition_prefix):
+                    value = entry.name[len(partition_prefix) :]
                     partition_values.append(value)
         else:
             # For cloud storage (S3, ADLS), use storage backend
@@ -599,11 +604,14 @@ def _find_latest_partition(
 
             # Extract unique partition directories from file paths
             seen_partitions = set()
-            for item in items:
+            for file_info in items:
                 # Path like "dt=2025-01-15/data.parquet" or "dt=2025-01-15/_metadata.json"
-                parts = item.path.replace("\\", "/").split("/")
+                parts = file_info.path.replace("\\", "/").split("/")
                 for part in parts:
-                    if part.startswith(partition_prefix) and part not in seen_partitions:
+                    if (
+                        part.startswith(partition_prefix)
+                        and part not in seen_partitions
+                    ):
                         value = part[len(partition_prefix) :]
                         partition_values.append(value)
                         seen_partitions.add(part)

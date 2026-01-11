@@ -68,13 +68,15 @@ def generate_orders_data(
         minute = random.randint(0, 59)
         updated_at = f"{run_date}T{hour:02d}:{minute:02d}:00"
 
-        orders.append({
-            "order_id": order_id,
-            "customer_id": customer_id,
-            "order_total": order_total,
-            "status": status,
-            "updated_at": updated_at,
-        })
+        orders.append(
+            {
+                "order_id": order_id,
+                "customer_id": customer_id,
+                "order_total": order_total,
+                "status": status,
+                "updated_at": updated_at,
+            }
+        )
 
     return pd.DataFrame(orders)
 
@@ -121,45 +123,53 @@ def generate_customers_data(
         if include_history and i <= 2:
             # Create historical versions for first 2 customers
             # Version 1: Original record from a year ago
-            customers.append({
-                "customer_id": customer_id,
-                "name": base_name,
-                "email": f"old_{email_base}",
-                "tier": "bronze",
-                "status": "active",
-                "updated_at": "2024-01-01T00:00:00",
-            })
+            customers.append(
+                {
+                    "customer_id": customer_id,
+                    "name": base_name,
+                    "email": f"old_{email_base}",
+                    "tier": "bronze",
+                    "status": "active",
+                    "updated_at": "2024-01-01T00:00:00",
+                }
+            )
 
             # Version 2: Email changed mid-year
-            customers.append({
-                "customer_id": customer_id,
-                "name": base_name,
-                "email": email_base,
-                "tier": "bronze",
-                "status": "active",
-                "updated_at": "2024-06-15T10:30:00",
-            })
+            customers.append(
+                {
+                    "customer_id": customer_id,
+                    "name": base_name,
+                    "email": email_base,
+                    "tier": "bronze",
+                    "status": "active",
+                    "updated_at": "2024-06-15T10:30:00",
+                }
+            )
 
             # Version 3: Current version with tier upgrade
-            customers.append({
-                "customer_id": customer_id,
-                "name": base_name,
-                "email": email_base,
-                "tier": random.choice(["silver", "gold"]),
-                "status": random.choice(statuses),
-                "updated_at": f"{run_date}T09:00:00",
-            })
+            customers.append(
+                {
+                    "customer_id": customer_id,
+                    "name": base_name,
+                    "email": email_base,
+                    "tier": random.choice(["silver", "gold"]),
+                    "status": random.choice(statuses),
+                    "updated_at": f"{run_date}T09:00:00",
+                }
+            )
         else:
             # Single current record
             hour = random.randint(8, 20)
-            customers.append({
-                "customer_id": customer_id,
-                "name": base_name,
-                "email": email_base,
-                "tier": random.choice(tiers),
-                "status": random.choice(statuses),
-                "updated_at": f"{run_date}T{hour:02d}:00:00",
-            })
+            customers.append(
+                {
+                    "customer_id": customer_id,
+                    "name": base_name,
+                    "email": email_base,
+                    "tier": random.choice(tiers),
+                    "status": random.choice(statuses),
+                    "updated_at": f"{run_date}T{hour:02d}:00:00",
+                }
+            )
 
     return pd.DataFrame(customers)
 
@@ -230,7 +240,8 @@ def parse_args() -> argparse.Namespace:
         help="Don't include historical versions for customers",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Verbose output",
     )

@@ -113,8 +113,7 @@ Silver `model` controls **how Silver reads Bronze partitions** and **what output
 | **full_merge_dedupe** | All partitions | Current state (SCD1) | Accumulated changes → latest version |
 | **scd_type_2** | All partitions | Full history | Audit trail with effective dates |
 | **event_log** | All partitions | All events | Immutable event streams |
-| **cdc_current** | All partitions | Current state | CDC → current state |
-| **cdc_history** | All partitions | Full history | CDC → full audit trail |
+| **cdc** | All partitions | Current or history | CDC → configurable output |
 
 ### periodic_snapshot - Simple Table Refresh
 
@@ -198,16 +197,14 @@ silver:
   last_updated_column: event_time
 ```
 
-### CDC Models - For CDC Bronze Streams
+### CDC Model - For CDC Bronze Streams
 
-| Model | Deletes Handling | History |
-|-------|-----------------|---------|
-| `cdc_current` | Ignored | Current only |
-| `cdc_current_tombstone` | Soft delete (`_deleted=true`) | Current only |
-| `cdc_current_hard_delete` | Removed from output | Current only |
-| `cdc_history` | Ignored | Full history |
-| `cdc_history_tombstone` | Soft delete in history | Full history |
-| `cdc_history_hard_delete` | Removed from output | Full history |
+Use `model: cdc` with explicit options to control CDC processing:
+
+| Option | Values | Description |
+|--------|--------|-------------|
+| `keep_history` | `false` (default), `true` | `false` = current state only (SCD1), `true` = full history (SCD2) |
+| `handle_deletes` | `ignore` (default), `flag`, `remove` | `ignore` = skip deletes, `flag` = soft delete with `_deleted=true`, `remove` = hard delete |
 
 **Configuration:**
 ```yaml
@@ -216,10 +213,23 @@ bronze:
   cdc_operation_column: op
 
 silver:
-  model: cdc_current_tombstone  # or any cdc_* model
+  model: cdc
+  keep_history: false     # SCD Type 1 - current state only
+  handle_deletes: flag    # Soft deletes with _deleted column
   unique_columns: [customer_id]
   last_updated_column: updated_at
 ```
+
+**Common combinations:**
+
+| keep_history | handle_deletes | Result |
+|--------------|----------------|--------|
+| `false` | `ignore` | Current state, deletes ignored |
+| `false` | `flag` | Current state with `_deleted=true` for deleted records |
+| `false` | `remove` | Current state, deleted records removed |
+| `true` | `ignore` | Full history, deletes ignored |
+| `true` | `flag` | Full history with `_deleted=true` on deleted versions |
+| `true` | `remove` | Full history, deleted records removed |
 
 ---
 
@@ -304,11 +314,11 @@ START: What kind of source data do you have?
 └─► "CDC stream with Insert/Update/Delete markers"
     │
     └─► What should happen to deleted records?
-        ├─► Ignore them → cdc + cdc_current
-        ├─► Mark as deleted → cdc + cdc_current_tombstone
-        ├─► Remove from Silver → cdc + cdc_current_hard_delete
+        ├─► Ignore them → cdc + model: cdc, handle_deletes: ignore
+        ├─► Mark as deleted → cdc + model: cdc, handle_deletes: flag
+        ├─► Remove from Silver → cdc + model: cdc, handle_deletes: remove
         │
-        └─► Need full history? Use cdc_history variants instead
+        └─► Need full history? Add keep_history: true
 ```
 
 ---
@@ -404,7 +414,9 @@ bronze:
   cdc_operation_column: op
 
 silver:
-  model: cdc_current_tombstone
+  model: cdc
+  keep_history: false     # Current state only
+  handle_deletes: flag    # Soft deletes with _deleted column
   unique_columns: [customer_id]
   last_updated_column: updated_at
 ```
@@ -413,14 +425,14 @@ silver:
 
 ## Querying Silver Output
 
-### Current State (full_merge_dedupe, cdc_current)
+### Current State (full_merge_dedupe, cdc with keep_history: false)
 
 ```sql
 -- Direct query - all records are current
 SELECT * FROM silver_customers
 ```
 
-### Point-in-Time (scd_type_2, cdc_history)
+### Point-in-Time (scd_type_2, cdc with keep_history: true)
 
 ```sql
 -- State as of a specific date

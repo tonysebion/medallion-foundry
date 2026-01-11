@@ -12,7 +12,6 @@ These scenarios can occur in real CDC streams due to:
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 import ibis
 
 from pipelines.lib.curate import apply_cdc

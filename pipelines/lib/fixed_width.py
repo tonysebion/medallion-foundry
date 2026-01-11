@@ -6,9 +6,10 @@ commonly found in mainframe data extracts and legacy systems.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from contextlib import contextmanager
+from typing import Any, Dict, IO, Iterator, List, Optional, Union
 
-import ibis
+import ibis  # type: ignore[import-untyped]
 import pandas as pd
 
 __all__ = [
@@ -39,8 +40,22 @@ def parse_fixed_width_line(line: str, widths: List[int]) -> List[str]:
     return values
 
 
+@contextmanager
+def _ensure_file_handle(source: Union[str, IO]) -> Iterator[IO]:
+    """Context manager that ensures we have a file handle.
+
+    If source is a string path, opens it. If it's already a file handle, yields it directly.
+    """
+    if isinstance(source, str):
+        with open(source, "r", encoding="utf-8") as f:
+            yield f
+    else:
+        # Already a file handle, yield it directly (caller manages lifecycle)
+        yield source
+
+
 def read_parent_child_fixed_width(
-    source_path: str,
+    source: Union[str, IO],
     type_position: List[int],
     record_types: List[Dict[str, Any]],
     *,
@@ -53,8 +68,10 @@ def read_parent_child_fixed_width(
     - Child (B) lines belong to the most recent parent
     - Output: flattened rows with parent columns repeated on each child
 
+    Supports both local files and remote storage (S3, ADLS) when passed a file handle.
+
     Args:
-        source_path: Path to the fixed-width file
+        source: Path to the fixed-width file or an open file handle
         type_position: [start, end] character positions for type indicator
         record_types: List of record type definitions with type, role, columns, widths
         output_mode: How to output records - "flatten", "parent_only", or "child_only"
@@ -81,9 +98,7 @@ def read_parent_child_fixed_width(
     parent_config = next(
         (rt for rt in record_types if rt.get("role") == "parent"), None
     )
-    child_config = next(
-        (rt for rt in record_types if rt.get("role") == "child"), None
-    )
+    child_config = next((rt for rt in record_types if rt.get("role") == "child"), None)
 
     if not parent_config or not child_config:
         raise ValueError(
@@ -108,7 +123,7 @@ def read_parent_child_fixed_width(
     rows: List[List[str]] = []
     current_parent: Optional[List[str]] = None
 
-    with open(source_path, "r", encoding="utf-8") as f:
+    with _ensure_file_handle(source) as f:
         for line_num, line in enumerate(f, 1):
             line = line.rstrip("\n\r")
             if not line:
@@ -131,9 +146,7 @@ def read_parent_child_fixed_width(
 
             elif config.get("role") == "child":
                 if current_parent is None:
-                    raise ValueError(
-                        f"Child record at line {line_num} has no parent"
-                    )
+                    raise ValueError(f"Child record at line {line_num} has no parent")
 
                 child_values = parse_fixed_width_line(data_portion, child_widths)
 

@@ -54,14 +54,12 @@ bronze:
 silver:
   domain: sales
   subject: orders
-  # cdc_current_tombstone: CDC -> SCD1 with soft deletes (_deleted flag)
-  # Other CDC models available:
-  #   - cdc_current: ignores deletes
-  #   - cdc_current_hard_delete: removes deleted records
-  #   - cdc_history: full SCD2 history, ignores deletes
-  #   - cdc_history_tombstone: full SCD2 with soft deletes
-  #   - cdc_history_hard_delete: full SCD2, removes deleted records
-  model: cdc_current_tombstone
+  # CDC model with explicit options (recommended):
+  #   keep_history: false = current state only (SCD1), true = full history (SCD2)
+  #   handle_deletes: flag = soft delete (_deleted column), remove = hard delete, ignore = skip
+  model: cdc
+  keep_history: false   # SCD Type 1 - current state only
+  handle_deletes: flag  # Soft deletes with _deleted flag
   unique_columns: [order_id]
   last_updated_column: updated_at
   attributes:

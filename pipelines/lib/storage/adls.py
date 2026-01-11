@@ -93,7 +93,9 @@ class ADLSStorage(StorageBackend):
             parts = path.split("/", 1)
             self._container = parts[0]
             self._prefix = parts[1] if len(parts) > 1 else ""
-            self._account = self.options.get("account_name") or os.environ.get("AZURE_STORAGE_ACCOUNT")
+            self._account = self.options.get("account_name") or os.environ.get(
+                "AZURE_STORAGE_ACCOUNT"
+            )
 
     @property
     def scheme(self) -> str:
@@ -104,7 +106,7 @@ class ADLSStorage(StorageBackend):
         """Lazy-load the ADLS filesystem."""
         if self._fs is None:
             try:
-                import adlfs
+                import adlfs  # type: ignore[import-not-found]
             except ImportError:
                 raise ImportError(
                     "adlfs is required for ADLS storage. "
@@ -113,26 +115,35 @@ class ADLSStorage(StorageBackend):
 
             # Build options from environment and passed options
             # Using shared helper that handles ${VAR} expansion from YAML
-            fs_options = {}
+            fs_options: dict[str, Any] = {}
 
             # Account name
-            account_name = get_config_value(self.options, "account_name", "AZURE_STORAGE_ACCOUNT") or self._account
+            account_name = (
+                get_config_value(self.options, "account_name", "AZURE_STORAGE_ACCOUNT")
+                or self._account
+            )
             if account_name:
                 fs_options["account_name"] = account_name
 
             # Account key
-            account_key = get_config_value(self.options, "account_key", "AZURE_STORAGE_KEY")
+            account_key = get_config_value(
+                self.options, "account_key", "AZURE_STORAGE_KEY"
+            )
             if account_key:
                 fs_options["account_key"] = account_key
 
             # Connection string
-            connection_string = get_config_value(self.options, "connection_string", "AZURE_STORAGE_CONNECTION_STRING")
+            connection_string = get_config_value(
+                self.options, "connection_string", "AZURE_STORAGE_CONNECTION_STRING"
+            )
             if connection_string:
                 fs_options["connection_string"] = connection_string
 
             # Service principal auth
             client_id = get_config_value(self.options, "client_id", "AZURE_CLIENT_ID")
-            client_secret = get_config_value(self.options, "client_secret", "AZURE_CLIENT_SECRET")
+            client_secret = get_config_value(
+                self.options, "client_secret", "AZURE_CLIENT_SECRET"
+            )
             tenant_id = get_config_value(self.options, "tenant_id", "AZURE_TENANT_ID")
 
             if client_id and client_secret and tenant_id:
@@ -141,7 +152,8 @@ class ADLSStorage(StorageBackend):
                 fs_options["tenant_id"] = tenant_id
 
             # Anonymous access
-            if self.options.get("anon"):
+            anon_access = self.options.get("anon")
+            if anon_access:
                 fs_options["anon"] = True
 
             self._fs = adlfs.AzureBlobFileSystem(**fs_options)
@@ -155,7 +167,7 @@ class ADLSStorage(StorageBackend):
             parsed = path
             for prefix in ("abfss://", "wasbs://", "az://"):
                 if parsed.startswith(prefix):
-                    parsed = parsed[len(prefix):]
+                    parsed = parsed[len(prefix) :]
                     break
             if "@" in parsed:
                 _, rest = parsed.split("/", 1) if "/" in parsed else (parsed, "")
@@ -165,7 +177,10 @@ class ADLSStorage(StorageBackend):
         if not path:
             return f"{self._container}/{self._prefix}".rstrip("/")
 
-        return join_storage_path(f"{self._container}/{self._prefix}" if self._prefix else self._container, path)
+        return join_storage_path(
+            f"{self._container}/{self._prefix}" if self._prefix else self._container,
+            path,
+        )
 
     def exists(self, path: str) -> bool:
         """Check if a path exists."""

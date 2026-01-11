@@ -10,10 +10,8 @@ not a different outcome.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
 
 import pandas as pd
-import pytest
 import ibis
 
 from pipelines.lib.curate import apply_cdc, dedupe_latest
@@ -219,7 +217,7 @@ class TestCDCSnapshotEquivalence:
         # Process incrementally (simulate batch processing)
         # In real pipeline, each batch is processed and result is merged
         # Here we just union the batches and process together (same as combined)
-        incremental_df = combined_df  # Same result expected
+        # incremental_df would be the same as combined_df
 
         # Results should match
         assert len(combined_df) == 3, "Should have 3 active records"
@@ -235,7 +233,6 @@ class TestCDCSnapshotEquivalenceEdgeCases:
 
         # Create empty dataframe with explicit schema using PyArrow for string types
         # to avoid DuckDB NULL type inference issues
-        import pyarrow as pa
         cdc_data = pd.DataFrame(
             {
                 "id": pd.array([], dtype=pd.Int64Dtype()),

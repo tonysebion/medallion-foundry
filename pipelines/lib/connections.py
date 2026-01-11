@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional, TYPE_CHECKING, Union
 
-import ibis
+import ibis  # type: ignore[import-untyped]
 
 from pipelines.lib.env import expand_env_vars
 
@@ -45,6 +45,7 @@ def _expand_credentials(options: Dict[str, Any]) -> Dict[str, str]:
         "user": expand_env_vars(options.get("user", "")),
         "password": expand_env_vars(options.get("password", "")),
     }
+
 
 # Connection registry - keyed by connection_name
 _connections: Dict[str, ibis.BaseBackend] = {}
@@ -110,7 +111,9 @@ _DB_CONFIGS: Dict[str, Dict[str, Any]] = {
         "default_port": 1433,
         "backend": "mssql",
         "package": "ibis-framework[mssql]",
-        "extra": lambda opts: {"driver": opts.get("driver", "ODBC Driver 17 for SQL Server")},
+        "extra": lambda opts: {
+            "driver": opts.get("driver", "ODBC Driver 17 for SQL Server")
+        },
     },
     "postgres": {
         "default_port": 5432,
@@ -187,8 +190,7 @@ def _create_db2_connection(options: Dict[str, Any]) -> ibis.BaseBackend:
         import pyodbc
     except ImportError:
         raise ImportError(
-            "DB2 support requires pyodbc. "
-            "Install with: pip install pyodbc"
+            "DB2 support requires pyodbc. Install with: pip install pyodbc"
         )
 
     creds = _expand_credentials(options)
@@ -209,7 +211,9 @@ def _create_db2_connection(options: Dict[str, Any]) -> ibis.BaseBackend:
     # Store the pyodbc connection in options for later use by _read_database
     # We return a DuckDB connection that will be used for Ibis operations
     # The actual DB2 query execution happens in bronze.py._read_database
-    logger.info("Creating DB2 connection to %s:%s/%s", creds["host"], port, creds["database"])
+    logger.info(
+        "Creating DB2 connection to %s:%s/%s", creds["host"], port, creds["database"]
+    )
 
     # Create a wrapper that holds both the ODBC connection and DuckDB
     class DB2Connection:

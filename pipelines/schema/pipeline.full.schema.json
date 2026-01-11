@@ -151,9 +151,14 @@
         },
         "load_pattern": {
           "type": "string",
-          "description": "How Bronze extracts data from the source. This determines how Silver processes partitions.\n\n- full_snapshot: Extract ALL records each run. Use with Silver model: periodic_snapshot.\n- incremental: Extract only NEW/CHANGED records since last watermark. Use with Silver models: full_merge_dedupe, scd_type_2, event_log.\n- cdc: Change Data Capture with I/U/D markers. Use with Silver models: cdc_current, cdc_history, etc.\n\nWARNING: Do not change load_pattern mid-stream! Silver determines input_mode from the LATEST partition only. Mixing patterns causes data loss or duplicates.\n\nSee docs/CONCEPTS.md#load-pattern and docs/MODEL_SELECTION.md for guidance.",
+          "description": "How to load data from source. IMPORTANT: This affects which Silver models are compatible!\n\n- full_snapshot: Extract ALL records each run. Each Bronze partition contains a complete snapshot. Use with Silver model: periodic_snapshot.\n\n- incremental: Extract only NEW/CHANGED records since last run (requires watermark_column). Bronze partitions are additive. Use with Silver models: full_merge_dedupe, scd_type_2, event_log.\n\n- cdc: Change Data Capture with Insert/Update/Delete markers (requires cdc_operation_column). Use with Silver models: cdc_current, cdc_history, etc.\n\nSee docs/MODEL_SELECTION.md for detailed guidance.",
           "enum": ["full_snapshot", "incremental", "incremental_append", "cdc"],
           "default": "full_snapshot"
+        },
+        "input_mode": {
+          "type": "string",
+          "description": "How Silver should interpret Bronze partitions. 'replace_daily' means each partition is a complete snapshot (Silver reads latest). 'append_log' means partitions are additive (Silver unions all partitions).",
+          "enum": ["replace_daily", "append_log"]
         },
         "cdc_options": {
           "type": "object",
@@ -187,7 +192,7 @@
         },
         "incremental_column": {
           "type": "string",
-          "description": "Column to track for incremental loads. Required when load_pattern is 'incremental'. Bronze uses this column as a bookmark: each run extracts only rows where this column > the last extracted value. Typically a timestamp like 'updated_at' or a monotonically increasing ID.",
+          "description": "Column to track for incremental loads. Required when load_pattern is 'incremental'. Bronze uses this column as a bookmark: each run extracts only rows where this column > the last extracted value.",
           "examples": ["updated_at", "modified_date", "LastModified", "id"]
         },
         "watermark_source": {
@@ -195,6 +200,11 @@
           "description": "Where to read watermark state. 'destination' (default) reads from Bronze _metadata.json in the target location (S3, ADLS, or local). 'local' reads from .state/ directory. 'auto' tries destination first, then local.",
           "enum": ["destination", "local", "auto"],
           "default": "destination"
+        },
+        "connection": {
+          "type": "string",
+          "description": "Named connection for reuse across multiple entities",
+          "examples": ["crm_prod", "warehouse_readonly"]
         },
         "host": {
           "type": "string",
@@ -210,6 +220,24 @@
           "type": "string",
           "description": "Custom SQL query (optional - defaults to SELECT * FROM entity)",
           "examples": ["SELECT * FROM Customers WHERE active = 1", "SELECT id, name, updated_at FROM orders"]
+        },
+        "chunk_size": {
+          "type": "integer",
+          "description": "Number of rows per chunk for large data (null = load all at once)",
+          "minimum": 1000,
+          "examples": [100000, 500000]
+        },
+        "full_refresh_days": {
+          "type": "integer",
+          "description": "Force full refresh every N days (null = never auto-refresh)",
+          "minimum": 1,
+          "examples": [7, 30]
+        },
+        "partition_by": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Columns to partition output by",
+          "default": ["_load_date"]
         },
         "write_checksums": {
           "type": "boolean",
@@ -507,12 +535,12 @@
             { "type": "string" },
             { "type": "array", "items": { "type": "string" }, "minItems": 1 }
           ],
-          "description": "Column(s) that uniquely identify each row in your data. If two rows have the same value(s) in these columns, they're considered the same record. Example: 'order_id' for an orders table, or ['customer_id', 'order_id'] for order line items. Run 'python -m pipelines inspect-source --file your_data.csv' to help identify these columns.",
+          "description": "Column(s) that uniquely identify each row in your data. If two rows have the same value(s) in these columns, they're considered the same record.",
           "examples": ["order_id", ["customer_id", "account_id"]]
         },
         "last_updated_column": {
           "type": "string",
-          "description": "Column that shows when each row was last modified (like 'updated_at' or 'modified_date'). When duplicate rows are found, the one with the most recent date in this column is kept. Run 'python -m pipelines inspect-source --file your_data.csv' to help identify this column.",
+          "description": "Column that shows when each row was last modified (like 'updated_at' or 'modified_date'). When duplicate rows are found, the one with the most recent date in this column is kept.",
           "examples": ["updated_at", "modified_date", "LastModified"]
         },
         "source_path": {
@@ -529,14 +557,20 @@
         },
         "model": {
           "type": "string",
-          "description": "Pre-built transformation pattern. MUST match Bronze load_pattern!\n\nFor full_snapshot Bronze:\n- periodic_snapshot: Reads only today's Bronze partition (simple refresh)\n\nFor incremental Bronze:\n- full_merge_dedupe: Reads ALL partitions, keeps latest version per key (SCD1)\n- scd_type_2: Reads ALL partitions, keeps full history with effective dates\n- event_log: Reads ALL partitions, keeps immutable events\n\nFor cdc Bronze (RECOMMENDED):\n- cdc: Unified CDC model - configure with keep_history and handle_deletes options\n\nSee docs/CONCEPTS.md for plain-English explanations and docs/MODEL_SELECTION.md for detailed guidance.",
+          "description": "Pre-built transformation pattern. MUST be compatible with Bronze load_pattern!\n\nFor full_snapshot Bronze:\n- periodic_snapshot: Simple refresh, reads only today's Bronze partition\n\nFor incremental Bronze:\n- full_merge_dedupe: Reads ALL Bronze partitions, dedupes to current state (SCD1)\n- scd_type_2: Reads ALL Bronze partitions, keeps full history with effective dates\n- event_log: Reads ALL Bronze partitions, keeps immutable events\n\nFor cdc Bronze (RECOMMENDED):\n- cdc: Unified CDC model - configure with keep_history and handle_deletes options\n\nDeprecated CDC models (still work but use 'cdc' with options instead):\n- cdc_current, cdc_current_tombstone, cdc_current_hard_delete\n- cdc_history, cdc_history_tombstone, cdc_history_hard_delete\n\nSee docs/MODEL_SELECTION.md for detailed guidance.",
           "enum": [
             "periodic_snapshot",
             "full_merge_dedupe",
             "incremental_merge",
             "scd_type_2",
             "event_log",
-            "cdc"
+            "cdc",
+            "cdc_current",
+            "cdc_current_tombstone",
+            "cdc_current_hard_delete",
+            "cdc_history",
+            "cdc_history_tombstone",
+            "cdc_history_hard_delete"
           ]
         },
         "keep_history": {
@@ -550,15 +584,67 @@
           "enum": ["ignore", "flag", "remove"],
           "default": "ignore"
         },
+        "entity_kind": {
+          "type": "string",
+          "description": "What kind of entity this represents",
+          "enum": ["state", "event"],
+          "default": "state"
+        },
+        "history_mode": {
+          "type": "string",
+          "description": "How to handle historical changes. 'current_only' (SCD1) or 'full_history' (SCD2)",
+          "enum": ["current_only", "scd1", "full_history", "scd2"],
+          "default": "current_only"
+        },
+        "input_mode": {
+          "type": "string",
+          "description": "How to interpret Bronze partitions. Usually auto-wired from Bronze layer.",
+          "enum": ["replace_daily", "append_log"]
+        },
+        "delete_mode": {
+          "type": "string",
+          "description": "How to handle Delete operations in CDC data. 'ignore' filters out deletes, 'tombstone' keeps records with _deleted=true, 'hard_delete' removes records from Silver.",
+          "enum": ["ignore", "tombstone", "hard_delete"],
+          "default": "ignore"
+        },
         "attributes": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Columns to include in Silver output. If not specified, all columns are included."
+          "description": "Columns to include (null = all columns). Cannot be used with exclude_columns."
         },
-        "bronze_source": {
+        "exclude_columns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Columns to exclude (null = none). Cannot be used with attributes."
+        },
+        "column_mapping": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Rename columns from Bronze to Silver. Keys are original column names, values are new names.",
+          "examples": [
+            { "ORDER_ID": "order_id", "CUST_NBR": "customer_number" },
+            { "LastModified": "updated_at" }
+          ]
+        },
+        "partition_by": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Columns to partition output by (optional)"
+        },
+        "output_formats": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["parquet", "csv"]
+          },
+          "description": "Output file formats",
+          "default": ["parquet"]
+        },
+        "parquet_compression": {
           "type": "string",
-          "description": "Explicit reference to Bronze source for Silver layer. Use when Silver needs to reference a specific Bronze output.",
-          "examples": ["./bronze/system=retail/entity=orders/"]
+          "description": "Compression codec for Parquet files",
+          "enum": ["snappy", "gzip", "zstd", "lz4", "none"],
+          "default": "snappy"
         },
         "validate_source": {
           "type": "string",
@@ -605,7 +691,13 @@
                   "incremental_merge",
                   "scd_type_2",
                   "event_log",
-                  "cdc"
+                  "cdc",
+                  "cdc_current",
+                  "cdc_current_tombstone",
+                  "cdc_current_hard_delete",
+                  "cdc_history",
+                  "cdc_history_tombstone",
+                  "cdc_history_hard_delete"
                 ]
               }
             },

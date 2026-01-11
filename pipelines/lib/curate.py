@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-import ibis
+import ibis  # type: ignore[import-untyped]
 
 __all__ = [
     "apply_cdc",
@@ -275,7 +275,9 @@ def apply_cdc(
         ... )
     """
     if not cdc_options or "operation_column" not in cdc_options:
-        raise ValueError("cdc_options with operation_column is required for CDC processing")
+        raise ValueError(
+            "cdc_options with operation_column is required for CDC processing"
+        )
 
     op_col = cdc_options["operation_column"]
     insert_code = cdc_options.get("insert_code", "I")
@@ -283,7 +285,9 @@ def apply_cdc(
     delete_code = cdc_options.get("delete_code", "D")
 
     if op_col not in t.columns:
-        raise ValueError(f"Operation column '{op_col}' not found in table. Available: {t.columns}")
+        raise ValueError(
+            f"Operation column '{op_col}' not found in table. Available: {t.columns}"
+        )
 
     # First, dedupe to get latest operation per key
     deduped = dedupe_latest(t, keys, order_by)
@@ -299,8 +303,12 @@ def apply_cdc(
         result = deduped.mutate(_deleted=(deduped[op_col] == delete_code))
     elif delete_mode in ("ignore", "hard_delete"):
         # Filter out deletes, keep only I/U (hard_delete semantic handled in Silver layer)
-        result = deduped.filter((deduped[op_col] == insert_code) | (deduped[op_col] == update_code))
+        result = deduped.filter(
+            (deduped[op_col] == insert_code) | (deduped[op_col] == update_code)
+        )
     else:
-        raise ValueError(f"Unknown delete_mode: {delete_mode}. Valid: ignore, tombstone, hard_delete")
+        raise ValueError(
+            f"Unknown delete_mode: {delete_mode}. Valid: ignore, tombstone, hard_delete"
+        )
 
     return drop_op_col(result)

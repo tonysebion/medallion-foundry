@@ -124,7 +124,9 @@ def write_metadata(
 
     metadata_dict = metadata.to_dict()
     if scenario_metadata:
-        metadata_dict["pattern_info"] = scenario_metadata.get(load_pattern) or scenario_metadata
+        metadata_dict["pattern_info"] = (
+            scenario_metadata.get(load_pattern) or scenario_metadata
+        )
     metadata_dict["seed"] = seed
 
     metadata_path = out_dir / "_metadata.json"
@@ -365,7 +367,8 @@ def parse_args() -> argparse.Namespace:
         help="Show what would be generated without writing files",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Verbose output",
     )
@@ -454,8 +457,7 @@ def main() -> int:
         summaries[pattern] = summary
 
         batch_summary = ", ".join(
-            f"{name}={info['row_count']}"
-            for name, info in summary["batches"].items()
+            f"{name}={info['row_count']}" for name, info in summary["batches"].items()
         )
         print(f"  Generated: {batch_summary} rows (total: {summary['total_rows']})")
 

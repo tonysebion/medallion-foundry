@@ -22,7 +22,15 @@ from pandera.pandas import Column, Check, DataFrameSchema
 import pandas as pd
 
 if TYPE_CHECKING:
+    import ibis  # type: ignore[import-untyped]
+
+
+# Some functions import ibis inside for optional dependency checks
+try:
     import ibis
+except Exception:
+    ibis = None
+
 
 logger = logging.getLogger(__name__)
 
@@ -423,20 +431,24 @@ def check_quality_pandera(
     except pa.errors.SchemaErrors as e:
         # Collect all validation errors
         for failure_case in e.failure_cases.to_dict("records"):
-            violations.append({
-                "rule": failure_case.get("check", "unknown"),
-                "column": failure_case.get("column", "unknown"),
-                "error": failure_case.get("failure_case", "validation failed"),
-                "severity": "error",
-            })
+            violations.append(
+                {
+                    "rule": failure_case.get("check", "unknown"),
+                    "column": failure_case.get("column", "unknown"),
+                    "error": failure_case.get("failure_case", "validation failed"),
+                    "severity": "error",
+                }
+            )
         failed_rows = len(e.failure_cases)
     except Exception as e:
         logger.warning("Pandera validation error: %s", e)
-        violations.append({
-            "rule": "pandera_validation",
-            "error": str(e),
-            "severity": "error",
-        })
+        violations.append(
+            {
+                "rule": "pandera_validation",
+                "error": str(e),
+                "severity": "error",
+            }
+        )
 
     passed = len(violations) == 0
 

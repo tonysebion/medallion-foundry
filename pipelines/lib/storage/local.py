@@ -46,6 +46,7 @@ class LocalStorage(StorageBackend):
         # Handle glob patterns
         if "*" in str(resolved) or "?" in str(resolved):
             import glob
+
             return len(glob.glob(str(resolved))) > 0
 
         return resolved.exists()

@@ -114,6 +114,7 @@ def utc_now_iso() -> str:
     """
     return datetime.now(timezone.utc).isoformat()
 
+
 # Pattern for ${VAR_NAME} or $VAR_NAME
 ENV_VAR_PATTERN = re.compile(r"\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)")
 
@@ -197,9 +198,7 @@ def expand_options(options: Dict[str, Any], *, strict: bool = False) -> Dict[str
             result[key] = expand_options(value, strict=strict)
         elif isinstance(value, list):
             result[key] = [
-                expand_env_vars(item, strict=strict)
-                if isinstance(item, str)
-                else item
+                expand_env_vars(item, strict=strict) if isinstance(item, str) else item
                 for item in value
             ]
         else:

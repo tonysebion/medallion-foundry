@@ -25,10 +25,9 @@ Usage:
 from __future__ import annotations
 
 import io
-import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, TYPE_CHECKING, Tuple, Union
 
 import pyarrow.parquet as pq
 
@@ -38,15 +37,41 @@ from pipelines.lib.checksum import (
     write_checksum_manifest_s3,
 )
 from pipelines.lib.io import OutputMetadata, utc_now_iso
+from pipelines.lib.observability import get_structlog_logger
 from pipelines.lib.storage import get_storage, parse_uri
 from pipelines.lib.storage_config import _configure_duckdb_s3, _extract_storage_options
 
 if TYPE_CHECKING:
-    import ibis
+    import ibis  # type: ignore[import-untyped]
 
-logger = logging.getLogger(__name__)
+logger = get_structlog_logger(__name__)
 
 __all__ = ["write_artifacts", "WriteResult"]
+
+
+# Helper wrappers to avoid mypy false positives around Ibis bindings
+
+
+def _duck_to_parquet(
+    duck_table: Any, target: str, partition_cols: Optional[Union[str, Tuple[str, ...]]]
+) -> List[str]:
+    """Write parquet via DuckDB Ibis table and return generated path list."""
+    duck_table.to_parquet(target, partition_by=partition_cols)
+    return [target]
+
+
+def _table_to_parquet_local(
+    table: Any,
+    output_dir: Path,
+    output_file: Path,
+    partition_cols: Optional[Union[str, Tuple[str, ...]]] = None,
+) -> List[str]:
+    """Write parquet locally, optionally partitioned."""
+    if partition_cols is None:
+        table.to_parquet(str(output_file))
+    else:
+        table.to_parquet(str(output_dir), partition_by=partition_cols)
+    return [str(output_file)]
 
 
 @dataclass
@@ -112,7 +137,9 @@ def write_artifacts(
     """
     # Execute count before writing (Ibis is lazy)
     count_result = table.count().execute()
-    row_count = int(count_result.iloc[0] if hasattr(count_result, "iloc") else count_result)
+    row_count = int(
+        count_result.iloc[0] if hasattr(count_result, "iloc") else count_result
+    )
 
     if row_count == 0:
         logger.warning("write_artifacts_no_rows", target=target)
@@ -207,16 +234,8 @@ def _write_cloud(
     storage = get_storage(target, **storage_opts)
     storage.makedirs("")
 
-    if partition_by:
-        # Partitioned writes need DuckDB with S3 configured
-        con = ibis.duckdb.connect()
-        _configure_duckdb_s3(con, storage_options)
-        arrow_table = table.to_pyarrow()
-        duck_table = con.create_table("_temp_write", arrow_table)
-        duck_table.to_parquet(target, partition_by=partition_by)
-        return [target]
-    else:
-        # Non-partitioned - write via boto3 for reliable S3 endpoint handling
+    # Non-partitioned - write via boto3 for reliable S3 endpoint handling
+    if partition_by is None or not partition_by:
         arrow_table = table.to_pyarrow()
         buffer = io.BytesIO()
         pq.write_table(arrow_table, buffer, compression=compression)
@@ -226,6 +245,22 @@ def _write_cloud(
         if not result.success:
             raise RuntimeError(f"Failed to write parquet to cloud: {result.error}")
         return [f"{target.rstrip('/')}/{parquet_filename}"]
+
+    # Partitioned writes need DuckDB with S3 configured
+    con = ibis.duckdb.connect()
+    _configure_duckdb_s3(con, storage_options)
+    arrow_table = table.to_pyarrow()
+    duck_table = con.create_table("_temp_write", arrow_table)
+    # Ibis 11.0.0 has a bug with list syntax for partition_by
+    # Single column: pass as string; multiple columns: pass as tuple
+    if isinstance(partition_by, list):
+        partition_cols = (
+            partition_by[0] if len(partition_by) == 1 else tuple(partition_by)
+        )
+    else:
+        partition_cols = partition_by  # type: ignore[unreachable]
+
+    return _duck_to_parquet(duck_table, target, partition_cols)
 
 
 def _write_local(
@@ -239,12 +274,19 @@ def _write_local(
     output_dir.mkdir(parents=True, exist_ok=True)
     output_file = output_dir / parquet_filename
 
-    if partition_by:
-        table.to_parquet(str(output_dir), partition_by=partition_by)
-    else:
+    if partition_by is None or not partition_by:
         table.to_parquet(str(output_file))
+        return [str(output_file)]
 
-    return [str(output_file)]
+    # Ibis 11.0.0 has a bug with list syntax for partition_by
+    # Single column: pass as string; multiple columns: pass as tuple
+    if isinstance(partition_by, list):
+        partition_cols = (
+            partition_by[0] if len(partition_by) == 1 else tuple(partition_by)
+        )
+    else:
+        partition_cols = partition_by  # type: ignore[unreachable]
+    return _table_to_parquet_local(table, output_dir, output_file, partition_cols)
 
 
 def _write_checksums_cloud(
@@ -256,11 +298,13 @@ def _write_checksums_cloud(
     """Write checksum manifest to cloud storage."""
     try:
         parquet_data = storage.read_bytes(parquet_filename)
-        file_checksum_data = [{
-            "path": parquet_filename,
-            "size_bytes": len(parquet_data),
-            "sha256": compute_bytes_sha256(parquet_data),
-        }]
+        file_checksum_data = [
+            {
+                "path": parquet_filename,
+                "size_bytes": len(parquet_data),
+                "sha256": compute_bytes_sha256(parquet_data),
+            }
+        ]
         write_checksum_manifest_s3(
             storage,
             file_checksum_data,
@@ -268,4 +312,4 @@ def _write_checksums_cloud(
             extra_metadata=extra_metadata or {},
         )
     except Exception as e:
-        logger.warning("checksum_write_failed", error=str(e))
+        logger.warning("checksum_write_failed: %s", str(e))

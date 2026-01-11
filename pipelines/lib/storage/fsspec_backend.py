@@ -14,8 +14,8 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import fsspec
-from fsspec.spec import AbstractFileSystem
+import fsspec  # type: ignore[import-untyped]
+from fsspec.spec import AbstractFileSystem  # type: ignore[import-untyped]
 
 from pipelines.lib.storage.base import (
     FileInfo,
@@ -222,7 +222,9 @@ class FsspecStorage(StorageBackend):
                         item_name: str = str(item.get("name", item.get("Key", "")))
                         file_items.append((item_name, item))
                     else:
-                        file_items.append((str(item), {"name": str(item), "type": "file", "size": 0}))
+                        file_items.append(
+                            (str(item), {"name": str(item), "type": "file", "size": 0})
+                        )
 
             for name, info in file_items:
                 # Skip directories
@@ -236,17 +238,20 @@ class FsspecStorage(StorageBackend):
 
                 # Extract file info using helpers
                 size = extract_file_size(info)
-                modified = extract_modified_time(info)
+                modified_time = extract_modified_time(info)
 
                 # Convert mtime to datetime if it's a timestamp
-                if isinstance(modified, (int, float)):
-                    modified = datetime.fromtimestamp(modified)
+                modified_dt: Optional[datetime] = None
+                if isinstance(modified_time, (int, float)):
+                    modified_dt = datetime.fromtimestamp(modified_time)
+                elif modified_time is None:
+                    modified_dt = None
 
                 files.append(
                     FileInfo(
                         path=name,
                         size=size,
-                        modified=modified,
+                        modified=modified_dt,
                     )
                 )
 

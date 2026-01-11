@@ -250,7 +250,9 @@ bronze:
   cdc_operation_column: op  # Column containing I/U/D codes
 
 silver:
-  model: cdc_current_tombstone  # How to handle deletes
+  model: cdc
+  keep_history: false     # false = current only (SCD1), true = full history (SCD2)
+  handle_deletes: flag    # flag = soft delete, remove = hard delete, ignore = skip
   unique_columns: [customer_id]
   last_updated_column: updated_at
 ```

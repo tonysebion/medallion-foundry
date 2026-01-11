@@ -179,10 +179,7 @@ class PipelineMetrics:
             },
             "timing": {
                 "total_seconds": round(self.total_duration, 3),
-                "phases": {
-                    p.name: round(p.duration, 3)
-                    for p in self._phases
-                },
+                "phases": {p.name: round(p.duration, 3) for p in self._phases},
             },
             "metrics": [m.to_dict() for m in self._metrics],
             "timestamp": utc_now_iso(),
@@ -277,9 +274,7 @@ class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         """Format a record as JSON."""
         payload: Dict[str, Any] = {
-            "timestamp": datetime.now(timezone.utc)
-            .isoformat()
-            .replace("+00:00", "Z"),
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -380,9 +375,13 @@ def setup_logging(
     """Configure the root logger with optional JSON formatting."""
     level = logging.DEBUG if verbose else logging.INFO
 
-    formatter = JSONFormatter() if json_format else logging.Formatter(
-        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
+    formatter = (
+        JSONFormatter()
+        if json_format
+        else logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
     )
 
     root_logger = logging.getLogger()
@@ -456,7 +455,8 @@ def setup_structlog(
 
     # Configure structlog
     structlog.configure(
-        processors=shared_processors + [
+        processors=shared_processors
+        + [
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
         logger_factory=structlog.stdlib.LoggerFactory(),

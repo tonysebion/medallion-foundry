@@ -96,14 +96,16 @@ def discover_pipelines() -> List[Dict[str, Any]]:
             # Get docstring if available
             doc = module.__doc__.strip().split("\n")[0] if module.__doc__ else ""
 
-            pipelines.append({
-                "name": module_name,
-                "path": str(rel_path),
-                "has_bronze": has_bronze,
-                "has_silver": has_silver,
-                "has_run": has_run,
-                "description": doc,
-            })
+            pipelines.append(
+                {
+                    "name": module_name,
+                    "path": str(rel_path),
+                    "has_bronze": has_bronze,
+                    "has_silver": has_silver,
+                    "has_run": has_run,
+                    "description": doc,
+                }
+            )
         except ImportError as e:
             # Log import errors so developers know why a pipeline isn't listed
             logger.warning(
@@ -148,6 +150,7 @@ def discover_yaml_pipelines() -> List[Dict[str, Any]]:
 
         try:
             import yaml as yaml_lib
+
             with open(yaml_file, "r", encoding="utf-8") as f:
                 config = yaml_lib.safe_load(f)
 
@@ -157,15 +160,17 @@ def discover_yaml_pipelines() -> List[Dict[str, Any]]:
                 has_bronze = "bronze" in config
                 has_silver = "silver" in config
 
-                yaml_pipelines.append({
-                    "name": name,
-                    "path": str(rel_path),
-                    "full_path": str(yaml_file),
-                    "has_bronze": has_bronze,
-                    "has_silver": has_silver,
-                    "description": description[:60] if description else "",
-                    "type": "yaml",
-                })
+                yaml_pipelines.append(
+                    {
+                        "name": name,
+                        "path": str(rel_path),
+                        "full_path": str(yaml_file),
+                        "has_bronze": has_bronze,
+                        "has_silver": has_silver,
+                        "description": description[:60] if description else "",
+                        "type": "yaml",
+                    }
+                )
         except Exception as e:
             logger.warning(
                 "Failed to parse YAML pipeline '%s': %s",
@@ -182,6 +187,7 @@ def discover_yaml_pipelines() -> List[Dict[str, Any]]:
 
         try:
             import yaml as yaml_lib
+
             with open(yml_file, "r", encoding="utf-8") as f:
                 config = yaml_lib.safe_load(f)
 
@@ -191,15 +197,17 @@ def discover_yaml_pipelines() -> List[Dict[str, Any]]:
                 has_bronze = "bronze" in config
                 has_silver = "silver" in config
 
-                yaml_pipelines.append({
-                    "name": name,
-                    "path": str(rel_path),
-                    "full_path": str(yml_file),
-                    "has_bronze": has_bronze,
-                    "has_silver": has_silver,
-                    "description": description[:60] if description else "",
-                    "type": "yaml",
-                })
+                yaml_pipelines.append(
+                    {
+                        "name": name,
+                        "path": str(rel_path),
+                        "full_path": str(yml_file),
+                        "has_bronze": has_bronze,
+                        "has_silver": has_silver,
+                        "description": description[:60] if description else "",
+                        "type": "yaml",
+                    }
+                )
         except Exception as e:
             logger.warning(
                 "Failed to parse YAML pipeline '%s': %s",
@@ -211,9 +219,21 @@ def discover_yaml_pipelines() -> List[Dict[str, Any]]:
 
 
 def is_yaml_pipeline(spec: str) -> bool:
-    """Check if the pipeline specification refers to a YAML file."""
-    # Remove layer suffix if present
-    base_spec = spec.rsplit(":", 1)[0] if ":" in spec else spec
+    """Check if the pipeline specification refers to a YAML file.
+
+    Note:
+        On Windows, paths like C:\\path\\to\\file.yaml contain colons.
+        We only strip the last segment if it's a valid layer name (bronze/silver).
+    """
+    # Remove layer suffix if present, but only if it's actually a layer name
+    # This handles Windows paths like C:\Users\...\file.yaml:bronze
+    if ":" in spec:
+        base_spec, potential_layer = spec.rsplit(":", 1)
+        if potential_layer not in ("bronze", "silver"):
+            # Not a layer suffix, use full spec
+            base_spec = spec
+    else:
+        base_spec = spec
     return base_spec.endswith((".yaml", ".yml"))
 
 
@@ -294,7 +314,11 @@ def explain_yaml_pipeline(yaml_path: str, layer: Optional[str], run_date: str) -
 
 def check_yaml_pipeline(yaml_path: str, layer: Optional[str], run_date: str) -> None:
     """Validate a YAML pipeline configuration and connectivity."""
-    from pipelines.lib.config_loader import load_pipeline, validate_yaml_config, YAMLConfigError
+    from pipelines.lib.config_loader import (
+        load_pipeline,
+        validate_yaml_config,
+        YAMLConfigError,
+    )
 
     print()
     print("=" * 60)
@@ -369,7 +393,7 @@ def list_pipelines() -> None:
         print("  - YAML (recommended): Add a .yaml file to the pipelines/ directory")
         print("  - Python: Add a .py file to the pipelines/ directory")
         print()
-        print("See pipelines/templates/ for examples.")
+        print("See pipelines/examples/ for examples.")
         return
 
     print("Available pipelines:")
@@ -398,7 +422,9 @@ def list_pipelines() -> None:
 
     print()
     print("Usage:")
-    print("  python -m pipelines.create              # Launch interactive pipeline creator")
+    print(
+        "  python -m pipelines.create              # Launch interactive pipeline creator"
+    )
     print()
     print("  # YAML pipelines (recommended)")
     print("  python -m pipelines ./path/to/pipeline.yaml --date YYYY-MM-DD")
@@ -418,13 +444,17 @@ def parse_pipeline_spec(spec: str) -> tuple[str, Optional[str]]:
 
     Returns:
         Tuple of (module_path, layer) where layer is "bronze", "silver", or None
+
+    Note:
+        On Windows, paths like C:\\path\\to\\file.yaml contain colons.
+        We only treat the last segment as a layer if it's "bronze" or "silver".
     """
     if ":" in spec:
-        module_path, layer = spec.rsplit(":", 1)
-        if layer not in ("bronze", "silver"):
-            print(f"Error: Invalid layer '{layer}'. Must be 'bronze' or 'silver'.")
-            sys.exit(1)
-        return module_path, layer
+        module_path, potential_layer = spec.rsplit(":", 1)
+        # Only treat as layer separator if it's actually a valid layer name
+        # This handles Windows paths like C:\Users\...\file.yaml
+        if potential_layer in ("bronze", "silver"):
+            return module_path, potential_layer
     return spec, None
 
 
@@ -484,18 +514,22 @@ def run_pipeline(
 
     if layer == "bronze":
         if hasattr(module, "run_bronze"):
-            return module.run_bronze(run_date, **kwargs)
+            result: Dict[str, Any] = module.run_bronze(run_date, **kwargs)
+            return result
         elif hasattr(module, "bronze"):
-            return module.bronze.run(run_date, **kwargs)
+            result = module.bronze.run(run_date, **kwargs)
+            return result
         else:
             print("Error: Pipeline has no 'run_bronze' function or 'bronze' object")
             sys.exit(1)
 
     elif layer == "silver":
         if hasattr(module, "run_silver"):
-            return module.run_silver(run_date, **kwargs)
+            result = module.run_silver(run_date, **kwargs)
+            return result
         elif hasattr(module, "silver"):
-            return module.silver.run(run_date, **kwargs)
+            result = module.silver.run(run_date, **kwargs)
+            return result
         else:
             print("Error: Pipeline has no 'run_silver' function or 'silver' object")
             sys.exit(1)
@@ -503,7 +537,8 @@ def run_pipeline(
     else:
         # Run full pipeline
         if hasattr(module, "run"):
-            return module.run(run_date, **kwargs)
+            result = module.run(run_date, **kwargs)
+            return result
         else:
             print("Error: Pipeline has no 'run' function")
             print("  Define a run(run_date: str) function in your pipeline")
@@ -800,7 +835,9 @@ def test_connection_command(connection_name: str, args: Any) -> None:
         sys.exit(1)
 
 
-def generate_sample_command(pipeline_name: str, rows: int = 100, output_dir: str = "./sample_data") -> None:
+def generate_sample_command(
+    pipeline_name: str, rows: int = 100, output_dir: str = "./sample_data"
+) -> None:
     """Generate sample data for testing a pipeline.
 
     Creates synthetic data matching the pipeline's expected schema.
@@ -808,7 +845,7 @@ def generate_sample_command(pipeline_name: str, rows: int = 100, output_dir: str
     Usage:
         python -m pipelines generate-sample claims.header --rows 1000
     """
-    import polars as pl
+    import pandas as pd
     import random
     import string
     from datetime import datetime, timedelta
@@ -842,11 +879,15 @@ def generate_sample_command(pipeline_name: str, rows: int = 100, output_dir: str
                 system = bronze.system
                 entity = bronze.entity
             else:
-                system = module_path.split(".")[0] if "." in module_path else module_path
+                system = (
+                    module_path.split(".")[0] if "." in module_path else module_path
+                )
                 entity = module_path.split(".")[-1] if "." in module_path else "data"
         except ModuleNotFoundError:
             # Pipeline doesn't exist yet - use name-based defaults
-            print(f"Note: Pipeline '{pipeline_name}' not found, generating generic sample data.")
+            print(
+                f"Note: Pipeline '{pipeline_name}' not found, generating generic sample data."
+            )
             print()
             system = module_path.split(".")[0] if "." in module_path else module_path
             entity = module_path.split(".")[-1] if "." in module_path else "data"
@@ -867,13 +908,15 @@ def generate_sample_command(pipeline_name: str, rows: int = 100, output_dir: str
     data = {
         "id": list(range(1, rows + 1)),
         f"{entity}_name": [f"{entity.title()}_{random_string(6)}" for _ in range(rows)],
-        "status": [random.choice(["active", "inactive", "pending"]) for _ in range(rows)],
+        "status": [
+            random.choice(["active", "inactive", "pending"]) for _ in range(rows)
+        ],
         "amount": [round(random.uniform(10, 10000), 2) for _ in range(rows)],
         "created_at": [random_timestamp() for _ in range(rows)],
         "updated_at": [random_timestamp() for _ in range(rows)],
     }
 
-    df = pl.DataFrame(data)
+    df = pd.DataFrame(data)
 
     # Write to output
     from pathlib import Path
@@ -885,8 +928,8 @@ def generate_sample_command(pipeline_name: str, rows: int = 100, output_dir: str
     csv_file = output_path / f"{system}_{entity}_sample.csv"
     parquet_file = output_path / f"{system}_{entity}_sample.parquet"
 
-    df.write_csv(csv_file)
-    df.write_parquet(parquet_file)
+    df.to_csv(csv_file, index=False)
+    df.to_parquet(parquet_file, index=False)
 
     print(f"Generated {rows} sample rows")
     print(f"CSV: {csv_file}")
@@ -894,7 +937,7 @@ def generate_sample_command(pipeline_name: str, rows: int = 100, output_dir: str
     print()
     print("Columns generated:")
     for col in df.columns:
-        print(f"  - {col} ({df.schema[col]})")
+        print(f"  - {col} ({df[col].dtype})")
     print()
     print("=" * 60)
 
@@ -1084,14 +1127,16 @@ def run_silver(run_date: str, *, dry_run: bool = False, target_override: str = N
     print("=" * 60)
 
 
-def inspect_source_command(source_path: str = None, file_type: str = None) -> None:
+def inspect_source_command(
+    source_path: Optional[str] = None, file_type: Optional[str] = None
+) -> None:
     """Inspect a data source and suggest pipeline configuration.
 
     Usage:
         python -m pipelines inspect-source --file ./data.csv
         python -m pipelines inspect-source --file ./data.parquet
     """
-    import polars as pl
+    import pandas as pd
     from pathlib import Path
 
     print()
@@ -1112,14 +1157,14 @@ def inspect_source_command(source_path: str = None, file_type: str = None) -> No
     print(f"File: {source_path}")
     print()
 
-    # Read the file using Polars for better performance
+    # Read the file using pandas
     try:
         if path.suffix.lower() == ".csv":
-            df = pl.read_csv(path, n_rows=1000)
+            df = pd.read_csv(path, nrows=1000)
         elif path.suffix.lower() in (".parquet", ".pq"):
-            df = pl.read_parquet(path)
+            df = pd.read_parquet(path)
         elif path.suffix.lower() == ".json":
-            df = pl.read_ndjson(path, n_rows=1000)
+            df = pd.read_json(path, lines=True, nrows=1000)
         else:
             print(f"Unsupported file type: {path.suffix}")
             print("Supported: .csv, .parquet, .json")
@@ -1131,10 +1176,12 @@ def inspect_source_command(source_path: str = None, file_type: str = None) -> No
     print("SCHEMA:")
     print("-" * 40)
     for col in df.columns:
-        dtype = df.schema[col]
-        null_count = df[col].is_null().sum()
-        unique_count = df[col].n_unique()
-        print(f"  {col:<25} {str(dtype):<15} nulls={null_count:<5} unique={unique_count}")
+        dtype = df[col].dtype
+        null_count = df[col].isna().sum()
+        unique_count = df[col].nunique()
+        print(
+            f"  {col:<25} {str(dtype):<15} nulls={null_count:<5} unique={unique_count}"
+        )
     print()
 
     print("STATISTICS:")
@@ -1150,7 +1197,7 @@ def inspect_source_command(source_path: str = None, file_type: str = None) -> No
     # Find potential primary keys
     pk_candidates = []
     for col in df.columns:
-        if df[col].n_unique() == len(df) and df[col].is_null().sum() == 0:
+        if df[col].nunique() == len(df) and df[col].isna().sum() == 0:
             pk_candidates.append(col)
 
     if pk_candidates:
@@ -1163,13 +1210,13 @@ def inspect_source_command(source_path: str = None, file_type: str = None) -> No
     for col in df.columns:
         if "date" in col.lower() or "time" in col.lower() or "updated" in col.lower():
             timestamp_cols.append(col)
-        elif df.schema[col] in (pl.Datetime, pl.Date):
+        elif pd.api.types.is_datetime64_any_dtype(df[col]):
             timestamp_cols.append(col)
 
     if timestamp_cols:
-        print(f"  change_timestamp = \"{timestamp_cols[0]}\"")
+        print(f'  change_timestamp = "{timestamp_cols[0]}"')
     else:
-        print("  change_timestamp = \"???\"  # No timestamp column found")
+        print('  change_timestamp = "???"  # No timestamp column found')
 
     # Suggest source type
     source_type = {
@@ -1234,7 +1281,6 @@ def print_welcome_message() -> None:
     print()
     print("Quick Start:")
     print("  python -m pipelines --list              List available pipelines")
-    print("  python -m pipelines new --tui           Launch interactive TUI wizard")
     print("  python -m pipelines.create              Launch text-based wizard")
     print()
     print("Run a YAML Pipeline (recommended for non-Python users):")
@@ -1245,8 +1291,6 @@ def print_welcome_message() -> None:
     print("  python -m pipelines <module.name> --date YYYY-MM-DD")
     print()
     print("Common Commands:")
-    print("  python -m pipelines new --tui           Interactive TUI for creating pipelines")
-    print("  python -m pipelines edit ./config.yaml  Edit existing YAML in TUI editor")
     print("  python -m pipelines new <name>          Create pipeline from template")
     print("  python -m pipelines generate-samples    Generate sample data for examples")
     print("  python -m pipelines inspect-source --file <path>")
@@ -1262,7 +1306,9 @@ def print_welcome_message() -> None:
     print()
     print("Try an Example:")
     print("  python -m pipelines generate-samples")
-    print("  python -m pipelines ./pipelines/templates/retail_orders.yaml --date 2025-01-15")
+    print(
+        "  python -m pipelines ./pipelines/examples/retail_orders.yaml --date 2025-01-15"
+    )
     print()
     print("Documentation: python -m pipelines --help")
     print()
@@ -1308,23 +1354,12 @@ Examples:
     # Dry run (validate without writing data)
     python -m pipelines ./my_pipeline.yaml --date 2025-01-15 --dry-run
 
-    # Interactive TUI (Terminal User Interface)
-    # -----------------------------------------
-    # Launch TUI wizard to create new pipeline
-    python -m pipelines new --tui
-
-    # Create child pipeline inheriting from parent
-    python -m pipelines new --tui --extends ./base_config.yaml
-
-    # Edit existing YAML in TUI editor
-    python -m pipelines edit ./pipelines/my_pipeline.yaml
-
     # Other Commands
     # --------------
     # Test database connection
     python -m pipelines test-connection claims_db --host myserver.com --database ClaimsDB
 
-    # Create a new pipeline from template (non-TUI)
+    # Create a new pipeline from template
     python -m pipelines new claims.header --source-type database_mssql
 
     # Generate sample test data
@@ -1413,16 +1448,6 @@ Examples:
         help="File path for inspect-source command",
     )
     parser.add_argument(
-        "--tui",
-        action="store_true",
-        help="Launch interactive TUI wizard (for 'new' command)",
-    )
-    parser.add_argument(
-        "--extends",
-        dest="extends_path",
-        help="Parent config path for child pipeline (with --tui)",
-    )
-    parser.add_argument(
         "extra_args",
         nargs="*",
         help=argparse.SUPPRESS,  # Hidden - for command arguments
@@ -1452,55 +1477,26 @@ Examples:
         if args.pipeline == "generate-sample":
             if not args.extra_args:
                 print("Usage: python -m pipelines generate-sample <pipeline_name>")
-                print("  Options: --rows (default 100), --output (default ./sample_data)")
+                print(
+                    "  Options: --rows (default 100), --output (default ./sample_data)"
+                )
                 sys.exit(1)
             pipeline_name = args.extra_args[0]
-            generate_sample_command(pipeline_name, rows=args.rows, output_dir=args.output)
+            generate_sample_command(
+                pipeline_name, rows=args.rows, output_dir=args.output
+            )
             return
 
         # Handle new command
         if args.pipeline == "new":
-            # Check for --tui flag
-            if args.tui:
-                # Launch TUI wizard
-                try:
-                    from pipelines.tui.app import run_create_wizard
-                    run_create_wizard(parent_path=args.extends_path)
-                except ImportError as e:
-                    print("ERROR: TUI requires the 'textual' package")
-                    print("Install with: pip install textual>=0.47.0")
-                    print(f"Import error: {e}")
-                    sys.exit(1)
-                return
-
             if not args.extra_args:
                 print("Usage: python -m pipelines new <pipeline_name>")
-                print("  Options: --source-type (file_csv, file_parquet, database_mssql, database_postgres, api_rest)")
-                print("           --tui          Launch interactive TUI wizard")
-                print("           --extends      Parent config for child pipeline (with --tui)")
+                print(
+                    "  Options: --source-type (file_csv, file_parquet, database_mssql, database_postgres, api_rest)"
+                )
                 sys.exit(1)
             pipeline_name = args.extra_args[0]
             new_pipeline_command(pipeline_name, source_type=args.source_type)
-            return
-
-        # Handle edit command (TUI editor)
-        if args.pipeline == "edit":
-            if not args.extra_args:
-                print("Usage: python -m pipelines edit <path/to/config.yaml>")
-                print("  Opens the interactive TUI editor for the YAML configuration")
-                sys.exit(1)
-            yaml_path = args.extra_args[0]
-            try:
-                from pipelines.tui.app import run_editor
-                run_editor(yaml_path)
-            except ImportError as e:
-                print("ERROR: TUI requires the 'textual' package")
-                print("Install with: pip install textual>=0.47.0")
-                print(f"Import error: {e}")
-                sys.exit(1)
-            except FileNotFoundError as e:
-                print(f"ERROR: {e}")
-                sys.exit(1)
             return
 
         # Handle inspect-source command
@@ -1532,6 +1528,7 @@ Examples:
     # Initialize debug tracer if requested
     if args.debug:
         from pipelines.lib.trace import init_tracer
+
         init_tracer(enabled=True)
 
     # Check if CLI logging flags were explicitly set
@@ -1582,6 +1579,7 @@ Examples:
             # Print debug summary if enabled
             if args.debug:
                 from pipelines.lib.trace import get_tracer
+
                 get_tracer().print_summary()
 
         except KeyboardInterrupt:
@@ -1631,6 +1629,7 @@ Examples:
             # Print debug summary if enabled
             if args.debug:
                 from pipelines.lib.trace import get_tracer
+
                 get_tracer().print_summary()
 
         except KeyboardInterrupt:

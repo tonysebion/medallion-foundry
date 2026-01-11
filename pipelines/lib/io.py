@@ -12,10 +12,13 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from structlog.stdlib import BoundLogger
+
 from pipelines.lib.env import utc_now_iso
 
 if TYPE_CHECKING:
-    import ibis
+    import ibis  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +70,8 @@ class OutputMetadata:
             extra={
                 "entity_kind": "state",
                 "history_mode": "current_only",
-                "natural_keys": ["id"],
-                "change_timestamp": "updated_at",
+                "unique_columns": ["id"],
+                "last_updated_column": "updated_at",
             },
         )
     """
@@ -416,8 +419,8 @@ class SilverOutputMetadata:
     # Entity information
     entity_kind: str  # "state" or "event"
     history_mode: str  # "current_only" or "full_history"
-    natural_keys: List[str]
-    change_timestamp: str
+    unique_columns: List[str]
+    last_updated_column: str
 
     # Domain/subject for table naming (matches YAML config field names)
     domain: Optional[str] = None
@@ -516,7 +519,9 @@ def _infer_column_types_from_ibis(
     return columns
 
 
-def _infer_column_types_from_records(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _infer_column_types_from_records(
+    records: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
     """Infer column types from a list of records (dicts).
 
     Column order is preserved based on first appearance across records,
@@ -547,11 +552,13 @@ def _infer_column_types_from_records(records: List[Dict[str, Any]]) -> List[Dict
         else:
             type_name = type(sample_value).__name__
 
-        columns.append({
-            "name": key,
-            "type": type_name,
-            "nullable": True,
-        })
+        columns.append(
+            {
+                "name": key,
+                "type": type_name,
+                "nullable": True,
+            }
+        )
 
     return columns
 
@@ -639,8 +646,8 @@ def write_silver_with_artifacts(
     *,
     entity_kind: str,
     history_mode: str,
-    natural_keys: List[str],
-    change_timestamp: str,
+    unique_columns: List[str],
+    last_updated_column: str,
     format: str = "parquet",
     compression: str = "snappy",
     partition_by: Optional[List[str]] = None,
@@ -662,8 +669,8 @@ def write_silver_with_artifacts(
         path: Output directory path
         entity_kind: "state" or "event"
         history_mode: "current_only" or "full_history"
-        natural_keys: Primary key columns
-        change_timestamp: Timestamp column name
+        unique_columns: Primary key columns that uniquely identify each row
+        last_updated_column: Column showing when each row was last modified
         format: Output format ("parquet" or "csv")
         compression: Compression codec for parquet
         partition_by: Columns to partition by
@@ -684,8 +691,8 @@ def write_silver_with_artifacts(
         ...     "./silver/orders/",
         ...     entity_kind="state",
         ...     history_mode="current_only",
-        ...     natural_keys=["order_id"],
-        ...     change_timestamp="updated_at",
+        ...     unique_columns=["order_id"],
+        ...     last_updated_column="updated_at",
         ...     subject_name="orders",  # Creates orders.parquet
         ... )
     """
@@ -723,8 +730,8 @@ def write_silver_with_artifacts(
         written_at=now,
         entity_kind=entity_kind,
         history_mode=history_mode,
-        natural_keys=natural_keys,
-        change_timestamp=change_timestamp,
+        unique_columns=unique_columns,
+        last_updated_column=last_updated_column,
         domain=domain,
         subject=subject,
         partition_by=partition_by,
@@ -766,7 +773,7 @@ def maybe_skip_if_exists(
     skip_if_exists: bool,
     exists_fn: ExistsFn,
     target: str,
-    logger: logging.Logger,
+    logger: logging.Logger | "BoundLogger",
     context: Optional[str] = None,
     reason: str = "already_exists",
 ) -> Optional[Dict[str, Any]]:
@@ -797,7 +804,7 @@ def maybe_skip_if_exists(
 def maybe_dry_run(
     *,
     dry_run: bool,
-    logger: logging.Logger,
+    logger: logging.Logger | "BoundLogger",
     message: str,
     message_args: Tuple[Any, ...] = (),
     message_kwargs: Optional[Dict[str, Any]] = None,

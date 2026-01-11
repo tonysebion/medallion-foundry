@@ -14,9 +14,7 @@ NULL handling in keys is important because:
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 import ibis
-import numpy as np
 
 from pipelines.lib.curate import apply_cdc
 

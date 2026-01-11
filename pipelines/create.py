@@ -70,6 +70,70 @@ def prompt_yes_no(message: str, default: bool = False) -> bool:
     return result in ("y", "yes", "true", "1")
 
 
+def guided_pattern_selection() -> dict:
+    """Ask questions to determine optimal load_pattern and model.
+
+    Returns a dict with load_pattern, model, and optional CDC options.
+    """
+    print("\n--- Let's figure out the best approach for your data ---\n")
+
+    # Question 1: Data source behavior
+    source_behavior = prompt_choice(
+        "How does your source provide data?",
+        [
+            ("snapshot", "Complete file/table each time (daily export, full dump)"),
+            ("incremental", "Only new/changed records (has an updated_at timestamp)"),
+            ("cdc", "Change stream with I/U/D operation codes (CDC, Debezium, etc.)"),
+        ],
+    )
+
+    # Question 2: History needs
+    history_need = prompt_choice(
+        "Do you need to track how records change over time?",
+        [
+            ("current", "No - I only need the current version of each record"),
+            ("history", "Yes - I need to see all historical versions"),
+        ],
+    )
+
+    result: dict = {}
+
+    if source_behavior == "snapshot":
+        result["load_pattern"] = "full_snapshot"
+        if history_need == "current":
+            result["model"] = "periodic_snapshot"
+        else:
+            result["model"] = "scd_type_2"
+
+    elif source_behavior == "incremental":
+        result["load_pattern"] = "incremental"
+        if history_need == "current":
+            result["model"] = "full_merge_dedupe"
+        else:
+            result["model"] = "scd_type_2"
+
+    elif source_behavior == "cdc":
+        result["load_pattern"] = "cdc"
+        result["model"] = "cdc"
+        result["keep_history"] = history_need == "history"
+
+        # Ask about delete handling for CDC
+        delete_handling = prompt_choice(
+            "How should deleted records be handled?",
+            [
+                ("ignore", "Ignore deletes (filter them out)"),
+                ("flag", "Soft delete (add _deleted=true column)"),
+                ("remove", "Hard delete (remove from Silver)"),
+            ],
+        )
+        result["handle_deletes"] = delete_handling
+
+    print(
+        f"\n  Recommended: load_pattern={result['load_pattern']}, model={result['model']}"
+    )
+    return result
+
+
 def create_pipeline() -> Dict[str, Any]:
     """Interactive pipeline creation wizard.
 
@@ -167,51 +231,36 @@ def create_pipeline() -> Dict[str, Any]:
             f"https://api.example.com/{config['entity']}",
         )
 
-    # Step 4: Load pattern
-    load_choices = [
-        ("full_snapshot", "Full snapshot (replace all each run)"),
-        ("incremental", "Incremental (only new records via watermark)"),
-        ("cdc", "CDC (change data capture with I/U/D flags)"),
-    ]
-    config["load_pattern"] = prompt_choice("How should data be loaded?", load_choices)
+    # Step 4: Load pattern and model (guided decision tree)
+    print("\nSTEP 3: Data Pattern")
+    print("-" * 40)
 
+    pattern_config = guided_pattern_selection()
+    config["load_pattern"] = pattern_config["load_pattern"]
+    config["model"] = pattern_config["model"]
+
+    # CDC-specific options
+    if config["model"] == "cdc":
+        config["keep_history"] = pattern_config.get("keep_history", False)
+        config["handle_deletes"] = pattern_config.get("handle_deletes", "ignore")
+
+    # Watermark column for incremental/CDC
     if config["load_pattern"] in ("incremental", "cdc"):
         config["watermark_column"] = prompt(
             "Watermark column (e.g., LastUpdated, modified_at)"
         )
 
-    # Ask about periodic full refresh for incremental loads
-    if config["load_pattern"] == "incremental":
-        if prompt_yes_no("Enable periodic full refresh?", False):
-            days = prompt("Full refresh every N days", "7")
-            config["full_refresh_days"] = int(days)
-
-    # Ask about chunking for large datasets
-    if prompt_yes_no("Enable chunking for large data?", False):
-        chunk_size = prompt("Rows per chunk", "100000")
-        config["chunk_size"] = int(chunk_size)
-
     # Step 5: Silver configuration
-    print("\nSTEP 3: Silver Configuration")
+    print("\nSTEP 4: Silver Configuration")
     print("-" * 40)
 
-    config["natural_keys"] = prompt_list("Primary key column(s)", "id")
-    if not config["natural_keys"]:
-        config["natural_keys"] = ["id"]
+    config["unique_columns"] = prompt_list("Primary key column(s)", "id")
+    if not config["unique_columns"]:
+        config["unique_columns"] = ["id"]
 
-    config["change_timestamp"] = prompt("Change timestamp column", "updated_at")
-
-    entity_choices = [
-        ("state", "Dimension (customer, product) - slowly changing"),
-        ("event", "Fact/Event (orders, clicks) - immutable"),
-    ]
-    config["entity_kind"] = prompt_choice("What kind of entity is this?", entity_choices)
-
-    history_choices = [
-        ("current_only", "SCD Type 1 - Keep only latest version"),
-        ("full_history", "SCD Type 2 - Keep all versions with effective dates"),
-    ]
-    config["history_mode"] = prompt_choice("How to handle history?", history_choices)
+    config["last_updated_column"] = prompt(
+        "Last updated timestamp column", "updated_at"
+    )
 
     # Optional: specify attributes
     if prompt_yes_no("Specify which columns to include?", False):
@@ -243,7 +292,7 @@ def generate_yaml_config(config: dict) -> str:
 
     # Source path
     if config.get("source_path"):
-        lines.append(f"  source_path: \"{config['source_path']}\"")
+        lines.append(f'  source_path: "{config["source_path"]}"')
 
     # Database connection
     if config.get("host"):
@@ -283,29 +332,34 @@ def generate_yaml_config(config: dict) -> str:
                 lines.append(f"    {key}: {value}")
 
     # Silver layer
-    lines.extend([
-        "",
-        "# Silver layer - data curation",
-        "silver:",
-    ])
+    lines.extend(
+        [
+            "",
+            "# Silver layer - data curation",
+            "silver:",
+        ]
+    )
 
-    # Natural keys
-    if len(config["natural_keys"]) == 1:
-        lines.append(f"  natural_keys: [{config['natural_keys'][0]}]")
+    # Model
+    if config.get("model"):
+        lines.append(f"  model: {config['model']}")
+
+    # CDC-specific options
+    if config.get("model") == "cdc":
+        if config.get("keep_history"):
+            lines.append(f"  keep_history: {str(config['keep_history']).lower()}")
+        if config.get("handle_deletes") and config["handle_deletes"] != "ignore":
+            lines.append(f"  handle_deletes: {config['handle_deletes']}")
+
+    # Unique columns (primary keys)
+    if len(config["unique_columns"]) == 1:
+        lines.append(f"  unique_columns: [{config['unique_columns'][0]}]")
     else:
-        lines.append("  natural_keys:")
-        for key in config["natural_keys"]:
+        lines.append("  unique_columns:")
+        for key in config["unique_columns"]:
             lines.append(f"    - {key}")
 
-    lines.append(f"  change_timestamp: {config['change_timestamp']}")
-
-    # Entity kind (only if not default)
-    if config.get("entity_kind") != "state":
-        lines.append(f"  entity_kind: {config['entity_kind']}")
-
-    # History mode (only if not default)
-    if config.get("history_mode") != "current_only":
-        lines.append(f"  history_mode: {config['history_mode']}")
+    lines.append(f"  last_updated_column: {config['last_updated_column']}")
 
     # Attributes
     if config.get("attributes"):
@@ -339,13 +393,19 @@ def generate_python_code(config: dict) -> str:
         "incremental": "INCREMENTAL_APPEND",
         "cdc": "CDC",
     }
-    entity_kind_map = {"state": "STATE", "event": "EVENT"}
-    history_mode_map = {"current_only": "CURRENT_ONLY", "full_history": "FULL_HISTORY"}
+    model_map = {
+        "periodic_snapshot": "PERIODIC_SNAPSHOT",
+        "full_merge_dedupe": "FULL_MERGE_DEDUPE",
+        "scd_type_2": "SCD_TYPE_2",
+        "event_log": "EVENT_LOG",
+        "cdc": "CDC",
+    }
 
     source_type = source_type_map.get(config["source_type"], "FILE_CSV")
-    load_pattern = load_pattern_map.get(config.get("load_pattern", "full_snapshot"), "FULL_SNAPSHOT")
-    entity_kind = entity_kind_map.get(config.get("entity_kind", "state"), "STATE")
-    history_mode = history_mode_map.get(config.get("history_mode", "current_only"), "CURRENT_ONLY")
+    load_pattern = load_pattern_map.get(
+        config.get("load_pattern", "full_snapshot"), "FULL_SNAPSHOT"
+    )
+    model = model_map.get(config.get("model", "full_merge_dedupe"), "FULL_MERGE_DEDUPE")
 
     # Build options dict
     options_parts = []
@@ -353,7 +413,11 @@ def generate_python_code(config: dict) -> str:
         for key, value in config["options"].items():
             options_parts.append(f'        "{key}": {repr(value)},')
 
-    options_code = "options={},\n" if not options_parts else "options={\n" + "\n".join(options_parts) + "\n    },\n"
+    options_code = (
+        "options={},\n"
+        if not options_parts
+        else "options={\n" + "\n".join(options_parts) + "\n    },\n"
+    )
 
     # Build source path line
     source_path_line = ""
@@ -374,56 +438,53 @@ def generate_python_code(config: dict) -> str:
     if config.get("watermark_column"):
         watermark_line = f'    watermark_column="{config["watermark_column"]}",\n'
 
-    # Build full refresh line
-    full_refresh_line = ""
-    if config.get("full_refresh_days"):
-        full_refresh_line = f"    full_refresh_days={config['full_refresh_days']},\n"
-
-    # Build chunk size line
-    chunk_size_line = ""
-    if config.get("chunk_size"):
-        chunk_size_line = f"    chunk_size={config['chunk_size']},\n"
-
     # Build attributes line
     attributes_line = ""
     if config.get("attributes"):
         attributes_line = f"    attributes={config['attributes']},\n"
 
+    # Build model options for CDC
+    model_options_line = ""
+    if config.get("model") == "cdc":
+        if config.get("keep_history"):
+            model_options_line += f"    keep_history={config['keep_history']},\n"
+        if config.get("handle_deletes") and config["handle_deletes"] != "ignore":
+            model_options_line += f'    handle_deletes="{config["handle_deletes"]}",\n'
+
     return f'''"""
-Pipeline: {config['name']}
-{config.get('description', '')}
+Pipeline: {config["name"]}
+{config.get("description", "")}
 
 Generated by pipeline creator.
 
 To run:
-    python -m pipelines {config['name']} --date 2025-01-15
+    python -m pipelines {config["name"]} --date 2025-01-15
 """
 
 from pipelines.lib import Pipeline
 from pipelines.lib.bronze import BronzeSource, LoadPattern, SourceType
-from pipelines.lib.silver import EntityKind, HistoryMode, SilverEntity
+from pipelines.lib.silver import SilverEntity, SilverModel
 
 # ============================================
 # BRONZE
 # ============================================
 
 bronze = BronzeSource(
-    system="{config['system']}",
-    entity="{config['entity']}",
+    system="{config["system"]}",
+    entity="{config["entity"]}",
     source_type=SourceType.{source_type},
 {source_path_line}{db_lines}    {options_code}    load_pattern=LoadPattern.{load_pattern},
-{watermark_line}{full_refresh_line}{chunk_size_line})
+{watermark_line})
 
 # ============================================
 # SILVER
 # ============================================
 
 silver = SilverEntity(
-    natural_keys={config['natural_keys']},
-    change_timestamp="{config['change_timestamp']}",
-    entity_kind=EntityKind.{entity_kind},
-    history_mode=HistoryMode.{history_mode},
-{attributes_line})
+    model=SilverModel.{model},
+    unique_columns={config["unique_columns"]},
+    last_updated_column="{config["last_updated_column"]}",
+{model_options_line}{attributes_line})
 
 # ============================================
 # PIPELINE
@@ -500,9 +561,13 @@ Examples:
             print(f"\n{code}")
             print("\nTo save this pipeline, run with --output:")
             if args.format == "yaml":
-                print(f"  python -m pipelines.create --output ./pipelines/{config['name']}.yaml")
+                print(
+                    f"  python -m pipelines.create --output ./pipelines/{config['name']}.yaml"
+                )
             else:
-                print(f"  python -m pipelines.create --format python --output ./pipelines/{config['name']}.py")
+                print(
+                    f"  python -m pipelines.create --format python --output ./pipelines/{config['name']}.py"
+                )
 
     except KeyboardInterrupt:
         print("\n\nCancelled.")

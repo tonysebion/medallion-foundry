@@ -196,9 +196,9 @@ silver:
   #   - model: event_log           # Immutable events (no deduplication)
   #
   # For CDC (change data capture):
-  #   - model: cdc_current         # Current state only
-  #   - model: cdc_current_tombstone  # Current state with soft deletes
-  #   - model: cdc_history         # Full history
+  #   model: cdc
+  #   keep_history: false      # false = current only (SCD1), true = full history (SCD2)
+  #   handle_deletes: flag     # flag = soft delete, remove = hard delete, ignore = skip
   #
   # Uncomment one of these (or omit for default SCD Type 1 behavior):
   # model: full_merge_dedupe

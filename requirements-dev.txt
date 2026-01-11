@@ -1,25 +1,2 @@
--r requirements-tui.txt
-
-# Development dependencies for medallion-foundry
-
-# Testing
-pytest>=7.0.0
-pytest-cov>=7.0.0
-pytest-mock>=3.10.0
-pytest-mypy>=1.0.1
-
-# Code quality
-mypy>=0.990
-ruff>=0.3.0
-
-# Pre-commit hooks
-pre-commit>=3.6.0
-
-# Type stubs
-types-PyYAML>=6.0.0
-types-requests>=2.28.0
-
-# Documentation
-mkdocs-material>=9.0.0
-
-import-linter>=2.0.0
+# Dev dependencies - install from pyproject.toml
+-e .[dev]

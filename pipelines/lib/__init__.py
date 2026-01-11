@@ -23,7 +23,12 @@ from pipelines.lib.api import (
     create_api_source_from_options,
     rate_limited,
 )
-from pipelines.lib.bronze import BronzeOutputMetadata, BronzeSource, LoadPattern, SourceType
+from pipelines.lib.bronze import (
+    BronzeOutputMetadata,
+    BronzeSource,
+    LoadPattern,
+    SourceType,
+)
 from pipelines.lib.pipeline import Pipeline
 from pipelines.lib.checksum import (
     ChecksumManifest,
@@ -35,7 +40,12 @@ from pipelines.lib.checksum import (
     write_checksum_manifest,
 )
 from pipelines.lib.connections import close_all_connections, get_connection
-from pipelines.lib.env import expand_env_vars, expand_options, load_env_file, utc_now_iso
+from pipelines.lib.env import (
+    expand_env_vars,
+    expand_options,
+    load_env_file,
+    utc_now_iso,
+)
 from pipelines.lib.polybase import (
     PolyBaseConfig,
     generate_external_table_ddl,

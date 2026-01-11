@@ -36,7 +36,9 @@ def main() -> int:
 
     # Validate configuration
     if S3_ACCESS_KEY == "your-access-key-here":
-        print("\nERROR: Please edit the configuration values at the top of this script.")
+        print(
+            "\nERROR: Please edit the configuration values at the top of this script."
+        )
         return 1
 
     # Create test path with timestamp to avoid collisions
